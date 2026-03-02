@@ -7,6 +7,7 @@ import 'tabs/dashboard_tab.dart';
 import 'tabs/drive_tab.dart';
 import 'tabs/gallery_tab.dart';
 import 'tabs/timetable_tab.dart';
+import 'tabs/community_tab.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -20,7 +21,13 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
 
-  static const _labels = <String>['Dashboard', 'Timetable', 'Gallery', 'Drive'];
+  static const _labels = <String>[
+    'Dashboard',
+    'Timetable',
+    'Community',
+    'Gallery',
+    'Drive',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +37,7 @@ class _HomePageState extends State<HomePage> {
         final pages = [
           DashboardTab(controller: widget.controller),
           TimetableTab(controller: widget.controller),
+          CommunityTab(controller: widget.controller),
           GalleryTab(controller: widget.controller),
           DriveTab(controller: widget.controller),
         ];
@@ -506,6 +514,7 @@ Icon _iconForLabel(String label, {required bool filled}) {
   return switch (label) {
     'Dashboard' => Icon(filled ? Icons.dashboard : Icons.dashboard_outlined),
     'Timetable' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
+    'Community' => Icon(filled ? Icons.forum : Icons.forum_outlined),
     'Gallery' => Icon(
       filled ? Icons.photo_library : Icons.photo_library_outlined,
     ),

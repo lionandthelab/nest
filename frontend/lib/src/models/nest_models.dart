@@ -321,6 +321,101 @@ class GalleryItem {
   }
 }
 
+class CommunityPost {
+  const CommunityPost({
+    required this.id,
+    required this.homeschoolId,
+    required this.classGroupId,
+    required this.authorUserId,
+    required this.authorDisplayName,
+    required this.content,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String? classGroupId;
+  final String authorUserId;
+  final String authorDisplayName;
+  final String content;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory CommunityPost.fromMap(Map<String, dynamic> map) {
+    return CommunityPost(
+      id: map['id'] as String,
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      classGroupId: map['class_group_id'] as String?,
+      authorUserId: (map['author_user_id'] as String?) ?? '',
+      authorDisplayName: (map['author_display_name'] as String?) ?? 'Unknown',
+      content: (map['content'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+}
+
+class CommunityPostMedia {
+  const CommunityPostMedia({
+    required this.postId,
+    required this.mediaAssetId,
+    required this.mediaType,
+    required this.driveWebViewLink,
+    required this.title,
+    required this.description,
+  });
+
+  final String postId;
+  final String mediaAssetId;
+  final String mediaType;
+  final String? driveWebViewLink;
+  final String title;
+  final String description;
+
+  bool get isVideo => mediaType == 'VIDEO';
+
+  factory CommunityPostMedia.fromMap(Map<String, dynamic> map) {
+    return CommunityPostMedia(
+      postId: (map['post_id'] as String?) ?? '',
+      mediaAssetId: (map['media_asset_id'] as String?) ?? '',
+      mediaType: (map['media_type'] as String?) ?? 'PHOTO',
+      driveWebViewLink: map['drive_web_view_link'] as String?,
+      title: (map['title'] as String?) ?? '',
+      description: (map['description'] as String?) ?? '',
+    );
+  }
+}
+
+class CommunityComment {
+  const CommunityComment({
+    required this.id,
+    required this.postId,
+    required this.authorUserId,
+    required this.authorDisplayName,
+    required this.content,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String postId;
+  final String authorUserId;
+  final String authorDisplayName;
+  final String content;
+  final DateTime? createdAt;
+
+  factory CommunityComment.fromMap(Map<String, dynamic> map) {
+    return CommunityComment(
+      id: map['id'] as String,
+      postId: (map['post_id'] as String?) ?? '',
+      authorUserId: (map['author_user_id'] as String?) ?? '',
+      authorDisplayName: (map['author_display_name'] as String?) ?? 'Unknown',
+      content: (map['content'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
 class PendingMediaFile {
   const PendingMediaFile({
     required this.name,

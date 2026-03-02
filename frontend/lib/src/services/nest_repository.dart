@@ -27,6 +27,16 @@ class DriveUploadResult {
   final String? driveWebViewLink;
 }
 
+class CommunityReactionSnapshot {
+  const CommunityReactionSnapshot({
+    required this.likeCountsByPostId,
+    required this.likedPostIds,
+  });
+
+  final Map<String, int> likeCountsByPostId;
+  final Set<String> likedPostIds;
+}
+
 class NestRepository {
   NestRepository(this.client);
 
@@ -550,6 +560,193 @@ class NestRepository {
     }
 
     return grouped;
+  }
+
+  Future<List<CommunityPost>> fetchCommunityPosts({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('community_posts')
+        .select(
+          'id, homeschool_id, class_group_id, author_user_id, author_display_name, content, created_at, updated_at',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false)
+        .limit(80);
+
+    return _asRows(data).map(CommunityPost.fromMap).toList(growable: false);
+  }
+
+  Future<Map<String, List<CommunityPostMedia>>> fetchCommunityMediaByPost({
+    required List<String> postIds,
+  }) async {
+    if (postIds.isEmpty) {
+      return const {};
+    }
+
+    final data = await client
+        .from('community_post_media')
+        .select(
+          'post_id, media_assets(id, media_type, drive_web_view_link, title, description)',
+        )
+        .inFilter('post_id', postIds);
+
+    final out = <String, List<CommunityPostMedia>>{};
+
+    for (final row in _asRows(data)) {
+      final postId = row['post_id'] as String?;
+      final mediaMap = _asMap(row['media_assets']);
+      final mediaAssetId = mediaMap['id'] as String?;
+
+      if (postId == null || mediaAssetId == null) {
+        continue;
+      }
+
+      out.putIfAbsent(postId, () => <CommunityPostMedia>[]);
+      out[postId]!.add(
+        CommunityPostMedia.fromMap({
+          'post_id': postId,
+          'media_asset_id': mediaAssetId,
+          'media_type': mediaMap['media_type'],
+          'drive_web_view_link': mediaMap['drive_web_view_link'],
+          'title': mediaMap['title'],
+          'description': mediaMap['description'],
+        }),
+      );
+    }
+
+    return out;
+  }
+
+  Future<Map<String, List<CommunityComment>>> fetchCommunityCommentsByPost({
+    required List<String> postIds,
+  }) async {
+    if (postIds.isEmpty) {
+      return const {};
+    }
+
+    final data = await client
+        .from('community_post_comments')
+        .select(
+          'id, post_id, author_user_id, author_display_name, content, created_at',
+        )
+        .inFilter('post_id', postIds)
+        .order('created_at', ascending: true);
+
+    final out = <String, List<CommunityComment>>{};
+    for (final row in _asRows(data)) {
+      final comment = CommunityComment.fromMap(row);
+      out.putIfAbsent(comment.postId, () => <CommunityComment>[]);
+      out[comment.postId]!.add(comment);
+    }
+
+    return out;
+  }
+
+  Future<CommunityReactionSnapshot> fetchCommunityReactions({
+    required List<String> postIds,
+    required String currentUserId,
+  }) async {
+    if (postIds.isEmpty) {
+      return const CommunityReactionSnapshot(
+        likeCountsByPostId: <String, int>{},
+        likedPostIds: <String>{},
+      );
+    }
+
+    final data = await client
+        .from('community_post_reactions')
+        .select('post_id, user_id, reaction_type')
+        .inFilter('post_id', postIds)
+        .eq('reaction_type', 'LIKE');
+
+    final counts = <String, int>{};
+    final liked = <String>{};
+
+    for (final row in _asRows(data)) {
+      final postId = row['post_id'] as String?;
+      final userId = row['user_id'] as String?;
+      if (postId == null || userId == null) {
+        continue;
+      }
+
+      counts[postId] = (counts[postId] ?? 0) + 1;
+      if (userId == currentUserId) {
+        liked.add(postId);
+      }
+    }
+
+    return CommunityReactionSnapshot(
+      likeCountsByPostId: counts,
+      likedPostIds: liked,
+    );
+  }
+
+  Future<String> insertCommunityPost({
+    required String homeschoolId,
+    required String? classGroupId,
+    required String authorUserId,
+    required String authorDisplayName,
+    required String content,
+  }) async {
+    final row = await client
+        .from('community_posts')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'class_group_id': classGroupId,
+          'author_user_id': authorUserId,
+          'author_display_name': authorDisplayName,
+          'content': content,
+        })
+        .select('id')
+        .single();
+
+    return _asMap(row)['id'] as String;
+  }
+
+  Future<void> linkCommunityPostMedia({
+    required String postId,
+    required String mediaAssetId,
+  }) {
+    return client.from('community_post_media').insert({
+      'post_id': postId,
+      'media_asset_id': mediaAssetId,
+    });
+  }
+
+  Future<void> addCommunityComment({
+    required String postId,
+    required String authorUserId,
+    required String authorDisplayName,
+    required String content,
+  }) {
+    return client.from('community_post_comments').insert({
+      'post_id': postId,
+      'author_user_id': authorUserId,
+      'author_display_name': authorDisplayName,
+      'content': content,
+    });
+  }
+
+  Future<void> upsertCommunityLike({
+    required String postId,
+    required String userId,
+  }) {
+    return client.from('community_post_reactions').upsert(
+      {'post_id': postId, 'user_id': userId, 'reaction_type': 'LIKE'},
+      onConflict: 'post_id,user_id',
+    );
+  }
+
+  Future<void> removeCommunityLike({
+    required String postId,
+    required String userId,
+  }) {
+    return client
+        .from('community_post_reactions')
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', userId);
   }
 
   Future<DriveIntegration?> fetchDriveIntegration({

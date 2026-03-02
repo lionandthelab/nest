@@ -53,6 +53,13 @@ class NestController extends ChangeNotifier {
   Map<String, List<String>> mediaChildrenByAsset = const {};
   PendingMediaFile? pendingMediaFile;
 
+  List<CommunityPost> communityPosts = const [];
+  Map<String, List<CommunityPostMedia>> communityMediaByPost = const {};
+  Map<String, List<CommunityComment>> communityCommentsByPost = const {};
+  Map<String, int> communityLikeCountsByPost = const {};
+  Set<String> likedCommunityPostIds = const <String>{};
+  PendingMediaFile? pendingCommunityMediaFile;
+
   bool get isBusy => _isBusy;
   bool get isLoggedIn => user != null;
   bool get isBootstrapped => _isBootstrapped;
@@ -68,6 +75,15 @@ class NestController extends ChangeNotifier {
     'STAFF',
     'TEACHER',
     'GUEST_TEACHER',
+    'PARENT',
+  }.contains(currentRole);
+
+  bool get canWriteCommunity => const {
+    'HOMESCHOOL_ADMIN',
+    'STAFF',
+    'TEACHER',
+    'GUEST_TEACHER',
+    'PARENT',
   }.contains(currentRole);
 
   Future<void> initialize() async {
@@ -145,6 +161,7 @@ class NestController extends ChangeNotifier {
       await _loadTermAndBelow();
       await loadDriveIntegration();
       await loadGalleryItems();
+      await loadCommunityFeed();
     });
   }
 
@@ -158,6 +175,7 @@ class NestController extends ChangeNotifier {
       await _loadSessions();
       await _loadProposals();
       await loadGalleryItems();
+      await loadCommunityFeed();
     });
   }
 
@@ -168,6 +186,7 @@ class NestController extends ChangeNotifier {
     await _runBusy('수업 및 갤러리를 갱신하는 중...', () async {
       await _loadSessions();
       await loadGalleryItems();
+      await loadCommunityFeed();
     });
   }
 
@@ -640,6 +659,12 @@ class NestController extends ChangeNotifier {
       proposalSessionsById = const {};
       galleryItems = const [];
       mediaChildrenByAsset = const {};
+      communityPosts = const [];
+      communityMediaByPost = const {};
+      communityCommentsByPost = const {};
+      communityLikeCountsByPost = const {};
+      likedCommunityPostIds = const <String>{};
+      pendingCommunityMediaFile = null;
       driveIntegration = null;
 
       _setStatus('소속 홈스쿨이 없습니다. 대시보드에서 초기 세팅을 진행하세요.');
@@ -661,6 +686,7 @@ class NestController extends ChangeNotifier {
     await loadDriveIntegration();
     await syncOauthResult();
     await loadGalleryItems();
+    await loadCommunityFeed();
 
     _setStatus('운영 컨텍스트 로드 완료');
     notifyListeners();
@@ -703,6 +729,251 @@ class NestController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadCommunityFeed() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      communityPosts = const [];
+      communityMediaByPost = const {};
+      communityCommentsByPost = const {};
+      communityLikeCountsByPost = const {};
+      likedCommunityPostIds = const <String>{};
+      pendingCommunityMediaFile = null;
+      notifyListeners();
+      return;
+    }
+
+    final postRows = await _repository.fetchCommunityPosts(
+      homeschoolId: homeschoolId,
+    );
+
+    final selectedClassId = selectedClassGroupId;
+    final filteredPosts = selectedClassId == null
+        ? postRows
+        : postRows
+              .where(
+                (post) =>
+                    post.classGroupId == null ||
+                    post.classGroupId == selectedClassId,
+              )
+              .toList(growable: false);
+
+    final postIds = filteredPosts
+        .map((post) => post.id)
+        .toList(growable: false);
+
+    communityPosts = filteredPosts;
+    communityMediaByPost = await _repository.fetchCommunityMediaByPost(
+      postIds: postIds,
+    );
+    communityCommentsByPost = await _repository.fetchCommunityCommentsByPost(
+      postIds: postIds,
+    );
+
+    if (user != null) {
+      final reactionSnapshot = await _repository.fetchCommunityReactions(
+        postIds: postIds,
+        currentUserId: user!.id,
+      );
+      communityLikeCountsByPost = reactionSnapshot.likeCountsByPostId;
+      likedCommunityPostIds = reactionSnapshot.likedPostIds;
+    } else {
+      communityLikeCountsByPost = const {};
+      likedCommunityPostIds = const <String>{};
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> pickCommunityMediaFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.media,
+      allowMultiple: false,
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      throw StateError('파일 바이트를 읽지 못했습니다. 다시 시도하세요.');
+    }
+
+    pendingCommunityMediaFile = PendingMediaFile(
+      name: file.name,
+      mimeType: _guessMimeType(file.name),
+      bytes: bytes,
+    );
+
+    _setStatus('커뮤니티 첨부 파일 선택: ${file.name}');
+    notifyListeners();
+  }
+
+  Future<void> clearPendingCommunityFile() async {
+    pendingCommunityMediaFile = null;
+    notifyListeners();
+  }
+
+  Future<void> publishCommunityPost({
+    required String content,
+    String? classGroupId,
+  }) async {
+    if (!canWriteCommunity || user == null) {
+      throw StateError('커뮤니티 작성 권한이 없습니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final trimmedContent = content.trim();
+    final pendingFile = pendingCommunityMediaFile;
+    if (trimmedContent.isEmpty && pendingFile == null) {
+      throw StateError('게시글 내용 또는 첨부 파일을 입력하세요.');
+    }
+
+    final authorName = _authorDisplayName(user!);
+    final targetClassGroupId =
+        _normalizeNullable(classGroupId) ?? selectedClassGroupId;
+
+    await _runBusy('커뮤니티 게시글 업로드 중...', () async {
+      final postId = await _repository.insertCommunityPost(
+        homeschoolId: homeschoolId,
+        classGroupId: targetClassGroupId,
+        authorUserId: user!.id,
+        authorDisplayName: authorName,
+        content: trimmedContent.isEmpty ? '(사진/영상 공유)' : trimmedContent,
+      );
+
+      if (pendingFile != null) {
+        final uploadSessionId = await _repository.createUploadSession(
+          homeschoolId: homeschoolId,
+          uploaderUserId: user!.id,
+          mimeType: pendingFile.mimeType,
+          sizeBytes: pendingFile.sizeBytes,
+        );
+
+        try {
+          final uploadResult = await _repository.uploadToDrive(
+            homeschoolId: homeschoolId,
+            uploadSessionId: uploadSessionId,
+            file: pendingFile,
+          );
+
+          final mediaAssetId = await _repository.insertMediaAsset(
+            homeschoolId: homeschoolId,
+            uploadSessionId: uploadSessionId,
+            uploaderUserId: user!.id,
+            classGroupId: targetClassGroupId,
+            uploadResult: uploadResult,
+            title: pendingFile.name,
+            description: trimmedContent,
+            mediaType: pendingFile.isVideo ? 'VIDEO' : 'PHOTO',
+          );
+
+          await _repository.linkCommunityPostMedia(
+            postId: postId,
+            mediaAssetId: mediaAssetId,
+          );
+
+          await _repository.updateUploadStatus(
+            uploadSessionId: uploadSessionId,
+            status: 'COMPLETED',
+          );
+        } catch (_) {
+          await _repository.updateUploadStatus(
+            uploadSessionId: uploadSessionId,
+            status: 'FAILED',
+          );
+          rethrow;
+        }
+      }
+
+      pendingCommunityMediaFile = null;
+      await loadGalleryItems();
+      await loadCommunityFeed();
+      _setStatus('커뮤니티 게시글이 등록되었습니다.');
+    });
+  }
+
+  Future<void> toggleCommunityLike(String postId) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final currentlyLiked = likedCommunityPostIds.contains(postId);
+
+    await _runBusy('좋아요 반영 중...', () async {
+      if (currentlyLiked) {
+        await _repository.removeCommunityLike(postId: postId, userId: user!.id);
+      } else {
+        await _repository.upsertCommunityLike(postId: postId, userId: user!.id);
+      }
+
+      final nextLiked = Set<String>.from(likedCommunityPostIds);
+      final nextCounts = Map<String, int>.from(communityLikeCountsByPost);
+
+      if (currentlyLiked) {
+        nextLiked.remove(postId);
+        final currentCount = nextCounts[postId] ?? 0;
+        nextCounts[postId] = currentCount > 0 ? currentCount - 1 : 0;
+      } else {
+        nextLiked.add(postId);
+        nextCounts[postId] = (nextCounts[postId] ?? 0) + 1;
+      }
+
+      likedCommunityPostIds = nextLiked;
+      communityLikeCountsByPost = nextCounts;
+      _setStatus(currentlyLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.');
+    });
+  }
+
+  Future<void> addCommunityComment({
+    required String postId,
+    required String content,
+  }) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('댓글 내용을 입력하세요.');
+    }
+
+    await _runBusy('댓글 등록 중...', () async {
+      await _repository.addCommunityComment(
+        postId: postId,
+        authorUserId: user!.id,
+        authorDisplayName: _authorDisplayName(user!),
+        content: trimmed,
+      );
+
+      final comments = List<CommunityComment>.from(
+        communityCommentsByPost[postId] ?? const [],
+      );
+      comments.add(
+        CommunityComment(
+          id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+          postId: postId,
+          authorUserId: user!.id,
+          authorDisplayName: _authorDisplayName(user!),
+          content: trimmed,
+          createdAt: DateTime.now().toUtc(),
+        ),
+      );
+
+      communityCommentsByPost = Map<String, List<CommunityComment>>.from(
+        communityCommentsByPost,
+      )..[postId] = comments;
+
+      _setStatus('댓글을 등록했습니다.');
+    });
+  }
+
   String findCourseName(String courseId) {
     return courses
             .where((course) => course.id == courseId)
@@ -723,6 +994,34 @@ class NestController extends ChangeNotifier {
     return sessions
         .where((session) => session.timeSlotId == slotId)
         .toList(growable: false);
+  }
+
+  List<CommunityPostMedia> mediaForCommunityPost(String postId) {
+    return communityMediaByPost[postId] ?? const [];
+  }
+
+  List<CommunityComment> commentsForCommunityPost(String postId) {
+    return communityCommentsByPost[postId] ?? const [];
+  }
+
+  int likesForCommunityPost(String postId) {
+    return communityLikeCountsByPost[postId] ?? 0;
+  }
+
+  bool isCommunityPostLiked(String postId) {
+    return likedCommunityPostIds.contains(postId);
+  }
+
+  String findClassGroupName(String? classGroupId) {
+    if (classGroupId == null || classGroupId.isEmpty) {
+      return '전체 공개';
+    }
+
+    return classGroups
+            .where((group) => group.id == classGroupId)
+            .map((group) => group.name)
+            .firstOrNull ??
+        '지정 반';
   }
 
   Future<void> _loadTermAndBelow() async {
@@ -899,6 +1198,12 @@ class NestController extends ChangeNotifier {
     galleryItems = const [];
     mediaChildrenByAsset = const {};
     pendingMediaFile = null;
+    communityPosts = const [];
+    communityMediaByPost = const {};
+    communityCommentsByPost = const {};
+    communityLikeCountsByPost = const {};
+    likedCommunityPostIds = const <String>{};
+    pendingCommunityMediaFile = null;
   }
 
   void _setStatus(String text) {
@@ -910,6 +1215,35 @@ class NestController extends ChangeNotifier {
     _authSubscription?.cancel();
     super.dispose();
   }
+}
+
+String _authorDisplayName(User user) {
+  final metadata = user.userMetadata ?? const <String, dynamic>{};
+  final fromName = _metadataString(metadata, 'name');
+  if (fromName != null) {
+    return fromName;
+  }
+
+  final fromFullName = _metadataString(metadata, 'full_name');
+  if (fromFullName != null) {
+    return fromFullName;
+  }
+
+  final email = _normalizeNullable(user.email);
+  if (email != null) {
+    return email.split('@').first;
+  }
+
+  return 'Member';
+}
+
+String? _metadataString(Map<String, dynamic> metadata, String key) {
+  final value = metadata[key];
+  if (value is String) {
+    return _normalizeNullable(value);
+  }
+
+  return null;
 }
 
 String? _normalizeNullable(String? input) {
