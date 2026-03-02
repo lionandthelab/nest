@@ -1,0 +1,1649 @@
+openapi: 3.1.0
+info:
+  title: Nest API
+  version: 1.0.0
+  description: |
+    Nest(네스트) 홈스쿨링 플랫폼 API 명세.
+    핵심 범위: 인증, 홈스쿨 운영, 시간표 스튜디오(채팅/수동), Google Drive 연동, 미디어 업로드/갤러리.
+servers:
+  - url: https://api.nest.example.com
+tags:
+  - name: Auth
+  - name: Homeschool
+  - name: Timetable Studio
+  - name: Google Drive
+  - name: Media
+  - name: Teaching
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: 로그인
+      description: 이메일/비밀번호 기반 로그인
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 토큰 갱신
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: 토큰 갱신 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/me:
+    get:
+      tags: [Auth]
+      summary: 내 정보 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      responses:
+        '200':
+          description: 사용자 정보
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/homeschools:
+    get:
+      tags: [Homeschool]
+      summary: 내 홈스쿨 목록 조회
+      responses:
+        '200':
+          description: 홈스쿨 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Homeschool'
+    post:
+      tags: [Homeschool]
+      summary: 홈스쿨 생성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHomeschoolRequest'
+      responses:
+        '201':
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Homeschool'
+
+  /api/v1/homeschools/{homeschoolId}/invite-links:
+    post:
+      tags: [Homeschool]
+      summary: 초대 링크 생성
+      parameters:
+        - $ref: '#/components/parameters/HomeschoolId'
+      responses:
+        '201':
+          description: 초대 링크 발급
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      invite_url:
+                        type: string
+                        format: uri
+                      expires_at:
+                        type: string
+                        format: date-time
+
+  /api/v1/families:
+    get:
+      tags: [Homeschool]
+      summary: 가정 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      responses:
+        '200':
+          description: 가정 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Family'
+    post:
+      tags: [Homeschool]
+      summary: 가정 생성
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [family_name]
+              properties:
+                family_name:
+                  type: string
+                note:
+                  type: string
+      responses:
+        '201':
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Family'
+
+  /api/v1/children:
+    get:
+      tags: [Homeschool]
+      summary: 아이 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - in: query
+          name: family_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 아이 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Child'
+    post:
+      tags: [Homeschool]
+      summary: 아이 등록
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [family_id, name, birth_date]
+              properties:
+                family_id:
+                  type: string
+                name:
+                  type: string
+                birth_date:
+                  type: string
+                  format: date
+                profile_note:
+                  type: string
+      responses:
+        '201':
+          description: 등록 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Child'
+
+  /api/v1/teacher-profiles:
+    get:
+      tags: [Homeschool]
+      summary: 교사 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      responses:
+        '200':
+          description: 교사 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeacherProfile'
+    post:
+      tags: [Homeschool]
+      summary: 교사 등록
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [display_name, teacher_type]
+              properties:
+                user_id:
+                  type: string
+                  nullable: true
+                display_name:
+                  type: string
+                teacher_type:
+                  type: string
+                  enum: [PARENT_TEACHER, GUEST_TEACHER]
+                specialties:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: 등록 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TeacherProfile'
+
+  /api/v1/terms:
+    get:
+      tags: [Homeschool]
+      summary: 학기 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      responses:
+        '200':
+          description: 학기 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Term'
+    post:
+      tags: [Homeschool]
+      summary: 학기 생성
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, start_date, end_date]
+              properties:
+                name:
+                  type: string
+                start_date:
+                  type: string
+                  format: date
+                end_date:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Term'
+
+  /api/v1/class-groups:
+    post:
+      tags: [Homeschool]
+      summary: 반 생성
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [term_id, name]
+              properties:
+                term_id:
+                  type: string
+                name:
+                  type: string
+                capacity:
+                  type: integer
+                  minimum: 1
+      responses:
+        '201':
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ClassGroup'
+
+  /api/v1/courses:
+    post:
+      tags: [Homeschool]
+      summary: 수업 생성
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, default_duration_min]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                default_duration_min:
+                  type: integer
+                  minimum: 20
+      responses:
+        '201':
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Course'
+
+  /api/v1/terms/{termId}/timetable/assistant/generate:
+    post:
+      tags: [Timetable Studio]
+      summary: 채팅 프롬프트 기반 시간표 생성안 생성
+      description: 관리자 전용. 프롬프트를 바탕으로 제안안(proposal)을 생성하고 충돌/경고를 함께 반환한다.
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/TermId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateProposalRequest'
+      responses:
+        '200':
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TimetableProposal'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/terms/{termId}/timetable/proposals/{proposalId}:
+    get:
+      tags: [Timetable Studio]
+      summary: 시간표 생성안 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/TermId'
+        - $ref: '#/components/parameters/ProposalId'
+      responses:
+        '200':
+          description: 생성안 상세
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TimetableProposal'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/terms/{termId}/timetable/proposals/{proposalId}/apply:
+    post:
+      tags: [Timetable Studio]
+      summary: 생성안 적용
+      description: 전체 또는 일부(반/세션 단위) 적용 가능
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/TermId'
+        - $ref: '#/components/parameters/ProposalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyProposalRequest'
+      responses:
+        '200':
+          description: 적용 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ApplyProposalResponse'
+        '409':
+          $ref: '#/components/responses/TimetableConflict'
+
+  /api/v1/terms/{termId}/timetable/validate:
+    post:
+      tags: [Timetable Studio]
+      summary: 시간표 검증
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/TermId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateTimetableRequest'
+      responses:
+        '200':
+          description: 검증 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ValidateTimetableResponse'
+
+  /api/v1/terms/{termId}/timetable/commit:
+    post:
+      tags: [Timetable Studio]
+      summary: 시간표 확정
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/TermId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timetable_version]
+              properties:
+                timetable_version:
+                  type: integer
+      responses:
+        '200':
+          description: 확정 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      committed_version:
+                        type: integer
+        '409':
+          $ref: '#/components/responses/TermVersionConflict'
+
+  /api/v1/class-groups/{classGroupId}/timetable:
+    get:
+      tags: [Timetable Studio]
+      summary: 반 시간표 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/ClassGroupId'
+        - in: query
+          name: term_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 시간표 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TimetableSession'
+
+  /api/v1/class-sessions/{sessionId}:
+    patch:
+      tags: [Timetable Studio]
+      summary: 수동 드래그앤드롭 편집 반영
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchClassSessionRequest'
+      responses:
+        '200':
+          description: 수정 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TimetableSession'
+        '409':
+          $ref: '#/components/responses/TimetableConflict'
+    delete:
+      tags: [Timetable Studio]
+      summary: 세션 삭제
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204':
+          description: 삭제 성공
+
+  /api/v1/integrations/google-drive/connect/start:
+    post:
+      tags: [Google Drive]
+      summary: Google Drive OAuth 시작 URL 발급
+      description: 관리자 전용
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      responses:
+        '200':
+          description: OAuth URL 발급
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      auth_url:
+                        type: string
+                        format: uri
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/integrations/google-drive/connect/complete:
+    post:
+      tags: [Google Drive]
+      summary: Google Drive OAuth 코드 교환 완료
+      description: 관리자 전용. authorization code를 access/refresh token으로 교환해 저장한다.
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [homeschool_id, code]
+              properties:
+                homeschool_id:
+                  type: string
+                code:
+                  type: string
+                root_folder_id:
+                  type: string
+                folder_policy:
+                  type: string
+                  enum: [TERM_CLASS_DATE, CLASS_CHILD_DATE]
+      responses:
+        '200':
+          description: 연결 완료
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                      expires_at:
+                        type: string
+                        format: date-time
+                      has_refresh_token:
+                        type: boolean
+        '400':
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/integrations/google-drive/status:
+    get:
+      tags: [Google Drive]
+      summary: Drive 연동 상태 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      responses:
+        '200':
+          description: 상태 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DriveIntegrationStatus'
+
+  /api/v1/integrations/google-drive/settings:
+    patch:
+      tags: [Google Drive]
+      summary: Drive 설정 변경
+      description: 관리자 전용. 루트 폴더/폴더 정책 변경
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [root_folder_id]
+              properties:
+                root_folder_id:
+                  type: string
+                folder_policy:
+                  type: string
+                  enum: [TERM_CLASS_DATE, CLASS_CHILD_DATE]
+      responses:
+        '200':
+          description: 설정 변경 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DriveIntegrationStatus'
+
+  /api/v1/integrations/google-drive/disconnect:
+    post:
+      tags: [Google Drive]
+      summary: Drive 연결 해제
+      description: 관리자 전용
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      responses:
+        '200':
+          description: 해제 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      disconnected:
+                        type: boolean
+
+  /api/v1/media/upload-sessions:
+    post:
+      tags: [Media]
+      summary: 업로드 세션 생성
+      description: 교사/초청교사/관리자 업로드용
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUploadSessionRequest'
+      responses:
+        '201':
+          description: 세션 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UploadSession'
+        '409':
+          $ref: '#/components/responses/DriveNotConnected'
+
+  /api/v1/media/upload-sessions/{uploadSessionId}/binary:
+    put:
+      tags: [Media]
+      summary: 바이너리 업로드
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/UploadSessionId'
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '202':
+          description: 업로드 수신
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [UPLOADING]
+
+  /api/v1/media/upload-sessions/{uploadSessionId}/complete:
+    post:
+      tags: [Media]
+      summary: 업로드 완료 처리
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/UploadSessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, media_type]
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                media_type:
+                  type: string
+                  enum: [PHOTO, VIDEO]
+                captured_at:
+                  type: string
+                  format: date-time
+                class_group_id:
+                  type: string
+                  nullable: true
+                class_session_id:
+                  type: string
+                  nullable: true
+                child_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 완료 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GalleryItem'
+        '500':
+          $ref: '#/components/responses/UploadFailed'
+
+  /api/v1/gallery/items:
+    get:
+      tags: [Media]
+      summary: 갤러리 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - in: query
+          name: term_id
+          schema:
+            type: string
+        - in: query
+          name: class_group_id
+          schema:
+            type: string
+        - in: query
+          name: child_id
+          schema:
+            type: string
+        - in: query
+          name: media_type
+          schema:
+            type: string
+            enum: [PHOTO, VIDEO]
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GalleryItem'
+                  meta:
+                    $ref: '#/components/schemas/CursorMeta'
+
+  /api/v1/gallery/items/{itemId}:
+    get:
+      tags: [Media]
+      summary: 갤러리 상세 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '200':
+          description: 상세 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GalleryItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/class-sessions/{sessionId}/plans:
+    post:
+      tags: [Teaching]
+      summary: 수업 계획표 작성
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTeachingPlanRequest'
+      responses:
+        '201':
+          description: 작성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TeachingPlan'
+    get:
+      tags: [Teaching]
+      summary: 수업 계획표 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeachingPlan'
+
+  /api/v1/children/{childId}/activity-logs:
+    post:
+      tags: [Teaching]
+      summary: 학생 활동 기록 작성
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/ChildId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityLogRequest'
+      responses:
+        '201':
+          description: 작성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ActivityLog'
+    get:
+      tags: [Teaching]
+      summary: 학생 활동 기록 조회
+      parameters:
+        - $ref: '#/components/parameters/XHomeschoolId'
+        - $ref: '#/components/parameters/ChildId'
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivityLog'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XHomeschoolId:
+      in: header
+      name: X-Homeschool-Id
+      required: true
+      schema:
+        type: string
+      description: 현재 활성 홈스쿨 ID
+    HomeschoolId:
+      in: path
+      name: homeschoolId
+      required: true
+      schema:
+        type: string
+    TermId:
+      in: path
+      name: termId
+      required: true
+      schema:
+        type: string
+    ProposalId:
+      in: path
+      name: proposalId
+      required: true
+      schema:
+        type: string
+    SessionId:
+      in: path
+      name: sessionId
+      required: true
+      schema:
+        type: string
+    ClassGroupId:
+      in: path
+      name: classGroupId
+      required: true
+      schema:
+        type: string
+    UploadSessionId:
+      in: path
+      name: uploadSessionId
+      required: true
+      schema:
+        type: string
+    ItemId:
+      in: path
+      name: itemId
+      required: true
+      schema:
+        type: string
+    ChildId:
+      in: path
+      name: childId
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: 인증 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 권한 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 리소스 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TimetableConflict:
+      description: 시간표 충돌
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TermVersionConflict:
+      description: 학기 버전 충돌
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    DriveNotConnected:
+      description: Drive 미연결
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UploadFailed:
+      description: 업로드 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    LoginResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          required: [access_token, refresh_token, user]
+          properties:
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            user:
+              $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      required: [id, email, name]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        memberships:
+          type: array
+          items:
+            type: object
+            properties:
+              homeschool_id:
+                type: string
+              role:
+                type: string
+                enum: [HOMESCHOOL_ADMIN, PARENT, TEACHER, GUEST_TEACHER, STAFF]
+
+    Homeschool:
+      type: object
+      required: [id, name, timezone]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        timezone:
+          type: string
+        invite_code:
+          type: string
+
+    CreateHomeschoolRequest:
+      type: object
+      required: [name, timezone]
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+
+    Family:
+      type: object
+      properties:
+        id:
+          type: string
+        family_name:
+          type: string
+        note:
+          type: string
+
+    Child:
+      type: object
+      properties:
+        id:
+          type: string
+        family_id:
+          type: string
+        name:
+          type: string
+        birth_date:
+          type: string
+          format: date
+        profile_note:
+          type: string
+
+    TeacherProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+          nullable: true
+        display_name:
+          type: string
+        teacher_type:
+          type: string
+          enum: [PARENT_TEACHER, GUEST_TEACHER]
+        specialties:
+          type: array
+          items:
+            type: string
+
+    Term:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+        timetable_version:
+          type: integer
+
+    ClassGroup:
+      type: object
+      properties:
+        id:
+          type: string
+        term_id:
+          type: string
+        name:
+          type: string
+        capacity:
+          type: integer
+
+    Course:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        default_duration_min:
+          type: integer
+
+    TeacherAssignment:
+      type: object
+      required: [teacher_profile_id, assignment_role]
+      properties:
+        teacher_profile_id:
+          type: string
+        assignment_role:
+          type: string
+          enum: [MAIN, ASSISTANT]
+
+    TimetableSession:
+      type: object
+      required: [id, class_group_id, course_id, time_slot_id]
+      properties:
+        id:
+          type: string
+        class_group_id:
+          type: string
+        course_id:
+          type: string
+        time_slot_id:
+          type: string
+        title:
+          type: string
+        source_type:
+          type: string
+          enum: [MANUAL, AI_PROMPT]
+        teacher_assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeacherAssignment'
+
+    TimetableConflict:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [CLASS_SLOT_DUPLICATE, TEACHER_SLOT_DUPLICATE, MAIN_TEACHER_MISSING]
+        message:
+          type: string
+        related_ids:
+          type: array
+          items:
+            type: string
+
+    TimetableWarning:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [TEACHER_UNAVAILABLE, COURSE_CONTINUITY_RISK, TEACHER_WORKLOAD_HIGH]
+        message:
+          type: string
+
+    GenerateProposalRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+        constraints:
+          type: object
+          properties:
+            lock_existing_sessions:
+              type: boolean
+            prefer_teacher_ids:
+              type: array
+              items:
+                type: string
+            fixed_slots:
+              type: array
+              items:
+                type: object
+                properties:
+                  class_group_id:
+                    type: string
+                  course_id:
+                    type: string
+                  time_slot_id:
+                    type: string
+
+    TimetableProposal:
+      type: object
+      properties:
+        proposal_id:
+          type: string
+        term_id:
+          type: string
+        prompt:
+          type: string
+        is_valid:
+          type: boolean
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableSession'
+        hard_conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableConflict'
+        soft_warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableWarning'
+        explanation:
+          type: string
+
+    ApplyProposalRequest:
+      type: object
+      required: [apply_scope]
+      properties:
+        apply_scope:
+          type: string
+          enum: [ALL, CLASS_GROUPS, SESSIONS]
+        class_group_ids:
+          type: array
+          items:
+            type: string
+        session_ids:
+          type: array
+          items:
+            type: string
+
+    ApplyProposalResponse:
+      type: object
+      properties:
+        applied_count:
+          type: integer
+        skipped_count:
+          type: integer
+        skipped_reasons:
+          type: array
+          items:
+            type: string
+
+    ValidateTimetableRequest:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            type: object
+            required: [class_group_id, course_id, time_slot_id, teacher_assignments]
+            properties:
+              class_group_id:
+                type: string
+              course_id:
+                type: string
+              time_slot_id:
+                type: string
+              teacher_assignments:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeacherAssignment'
+
+    ValidateTimetableResponse:
+      type: object
+      properties:
+        is_valid:
+          type: boolean
+        hard_conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableConflict'
+        soft_warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableWarning'
+
+    PatchClassSessionRequest:
+      type: object
+      properties:
+        time_slot_id:
+          type: string
+        teacher_assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeacherAssignment'
+        title:
+          type: string
+
+    DriveIntegrationStatus:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: [GOOGLE_DRIVE]
+        status:
+          type: string
+          enum: [CONNECTED, DISCONNECTED, ERROR]
+        root_folder_id:
+          type: string
+          nullable: true
+        folder_policy:
+          type: string
+          enum: [TERM_CLASS_DATE, CLASS_CHILD_DATE]
+          nullable: true
+        connected_at:
+          type: string
+          format: date-time
+          nullable: true
+        has_access_token:
+          type: boolean
+          nullable: true
+        has_refresh_token:
+          type: boolean
+          nullable: true
+
+    CreateUploadSessionRequest:
+      type: object
+      required: [mime_type, size_bytes]
+      properties:
+        mime_type:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 1
+        class_group_id:
+          type: string
+          nullable: true
+        class_session_id:
+          type: string
+          nullable: true
+
+    UploadSession:
+      type: object
+      properties:
+        upload_session_id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, UPLOADING, COMPLETED, FAILED]
+        expires_at:
+          type: string
+          format: date-time
+
+    GalleryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        media_type:
+          type: string
+          enum: [PHOTO, VIDEO]
+        title:
+          type: string
+        description:
+          type: string
+        drive_file_id:
+          type: string
+        drive_web_view_link:
+          type: string
+          format: uri
+        uploader:
+          type: object
+          properties:
+            user_id:
+              type: string
+            name:
+              type: string
+        class_group_id:
+          type: string
+          nullable: true
+        class_session_id:
+          type: string
+          nullable: true
+        child_ids:
+          type: array
+          items:
+            type: string
+        captured_at:
+          type: string
+          format: date-time
+
+    CursorMeta:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    CreateTeachingPlanRequest:
+      type: object
+      required: [objectives]
+      properties:
+        objectives:
+          type: string
+        materials:
+          type: string
+        activities:
+          type: string
+
+    TeachingPlan:
+      type: object
+      properties:
+        id:
+          type: string
+        class_session_id:
+          type: string
+        teacher_profile_id:
+          type: string
+        objectives:
+          type: string
+        materials:
+          type: string
+        activities:
+          type: string
+
+    CreateActivityLogRequest:
+      type: object
+      required: [activity_type, content]
+      properties:
+        class_session_id:
+          type: string
+          nullable: true
+        activity_type:
+          type: string
+          enum: [ATTENDANCE, OBSERVATION, ASSIGNMENT]
+        content:
+          type: string
+
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: string
+        child_id:
+          type: string
+        class_session_id:
+          type: string
+          nullable: true
+        activity_type:
+          type: string
+          enum: [ATTENDANCE, OBSERVATION, ASSIGNMENT]
+        content:
+          type: string
+        recorded_at:
+          type: string
+          format: date-time

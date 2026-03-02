@@ -1,0 +1,17 @@
+# Environment & secrets
+.env
+.env.*
+*.secret*.json
+nest_client_secret_*.json
+
+# Supabase temp
+supabase/.temp/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+
+# IDE / tools
+.omc/
