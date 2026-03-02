@@ -5,6 +5,7 @@ Nest 홈스쿨링 플랫폼의 모바일/웹 공통 프론트엔드입니다.
 ## 핵심 기능
 
 - Supabase 이메일 로그인/로그아웃
+- Supabase 이메일 회원가입/로그인/로그아웃
 - 홈스쿨/학기/반 컨텍스트 전환
 - 빠른 초기 세팅(홈스쿨 + 학기 + 반 + 과목 + 시간 슬롯)
 - 시간표 스튜디오
@@ -48,6 +49,23 @@ flutter run -d chrome
 flutter run -d ios
 flutter run -d android
 ```
+
+## 기본 Admin 계정 생성
+
+아래 스크립트로 기본 관리자 계정과 기본 홈스쿨을 생성할 수 있습니다.
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
+node scripts/create_default_admin.mjs
+```
+
+기본값:
+
+- Email: `admin@nest.local`
+- Password: `NestAdmin!2026`
+- Homeschool: `Nest Default Homeschool`
+
+운영 환경에서는 생성 직후 비밀번호를 변경하세요.
 
 ## 웹 OAuth 콜백
 

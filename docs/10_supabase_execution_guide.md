@@ -66,8 +66,19 @@ flutter build web --release --base-href /nest/
 
 ## 5) 권장 운영 순서
 
-1. 관리자 계정 회원가입/로그인
-2. Dashboard에서 `빠른 초기 세팅` 실행
-3. Drive 탭에서 OAuth 시작 후 Google 인증
-4. Timetable 탭에서 프롬프트 생성안 + 드래그앤드롭 편집
-5. Gallery 탭에서 업로드/열람 검증
+1. 기본 관리자 계정 자동 생성(선택)
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY> \
+node scripts/create_default_admin.mjs
+```
+
+기본 admin 계정:
+- Email: `admin@nest.local`
+- Password: `NestAdmin!2026`
+
+2. 관리자 계정 회원가입/로그인
+3. Dashboard에서 `빠른 초기 세팅` 실행
+4. Drive 탭에서 OAuth 시작 후 Google 인증
+5. Timetable 탭에서 프롬프트 생성안 + 드래그앤드롭 편집
+6. Gallery 탭에서 업로드/열람 검증

@@ -17,11 +17,14 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isSignUpMode = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -32,10 +35,17 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      await widget.controller.signIn(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
+      if (_isSignUpMode) {
+        await widget.controller.signUp(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+      } else {
+        await widget.controller.signIn(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -121,10 +131,38 @@ class _LoginPageState extends State<LoginPage> {
                                     if (value == null || value.trim().isEmpty) {
                                       return '비밀번호를 입력하세요.';
                                     }
+                                    if (_isSignUpMode &&
+                                        value.trim().length < 8) {
+                                      return '비밀번호는 8자 이상으로 입력하세요.';
+                                    }
                                     return null;
                                   },
                                   onFieldSubmitted: (_) => _onSubmit(),
                                 ),
+                                if (_isSignUpMode) ...[
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _confirmPasswordController,
+                                    obscureText: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Password 확인',
+                                    ),
+                                    validator: (value) {
+                                      if (!_isSignUpMode) {
+                                        return null;
+                                      }
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return '비밀번호 확인을 입력하세요.';
+                                      }
+                                      if (value != _passwordController.text) {
+                                        return '비밀번호가 일치하지 않습니다.';
+                                      }
+                                      return null;
+                                    },
+                                    onFieldSubmitted: (_) => _onSubmit(),
+                                  ),
+                                ],
                                 const SizedBox(height: 20),
                                 ElevatedButton.icon(
                                   onPressed: widget.controller.isBusy
@@ -139,7 +177,23 @@ class _LoginPageState extends State<LoginPage> {
                                           ),
                                         )
                                       : const Icon(Icons.login),
-                                  label: const Text('로그인'),
+                                  label: Text(_isSignUpMode ? '회원가입' : '로그인'),
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: widget.controller.isBusy
+                                      ? null
+                                      : () {
+                                          setState(() {
+                                            _isSignUpMode = !_isSignUpMode;
+                                            _confirmPasswordController.clear();
+                                          });
+                                        },
+                                  child: Text(
+                                    _isSignUpMode
+                                        ? '이미 계정이 있나요? 로그인'
+                                        : '계정이 없나요? 회원가입',
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(

@@ -98,6 +98,29 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> signUp({required String email, required String password}) async {
+    await _runBusy('회원가입 중...', () async {
+      final response = await _repository.signUp(
+        email: email.trim(),
+        password: password.trim(),
+      );
+
+      final currentSession = _repository.currentSession;
+
+      if (currentSession != null) {
+        await _onAuthStateChanged(currentSession);
+        _setStatus('회원가입 및 로그인 완료');
+        return;
+      }
+
+      _setStatus(
+        response.user != null
+            ? '회원가입 완료. 이메일 인증 설정이 켜져 있으면 인증 후 로그인하세요.'
+            : '회원가입을 완료하지 못했습니다.',
+      );
+    });
+  }
+
   Future<void> signOut() async {
     await _runBusy('로그아웃 중...', () async {
       await _repository.signOut();

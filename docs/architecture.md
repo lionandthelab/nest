@@ -70,7 +70,7 @@ frontend/
 
 ### 5.1 인증/컨텍스트
 
-1. `Supabase.auth` 로그인
+1. `Supabase.auth` 회원가입/로그인
 2. `homeschool_memberships` 로 사용자 소속 조회
 3. 선택된 홈스쿨 기준으로 학기/반/권한 로딩
 

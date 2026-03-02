@@ -46,6 +46,19 @@ class NestRepository {
     }
   }
 
+  Future<AuthResponse> signUp({
+    required String email,
+    required String password,
+  }) async {
+    final response = await client.auth.signUp(email: email, password: password);
+
+    if (response.user == null) {
+      throw const AuthException('회원가입 계정을 생성하지 못했습니다.');
+    }
+
+    return response;
+  }
+
   Future<void> signOut() => client.auth.signOut();
 
   Future<List<Membership>> fetchMemberships({required String userId}) async {
