@@ -39,6 +39,9 @@
 11. `10_supabase_execution_guide.md`
 - Supabase 마이그레이션/함수 배포/프론트 실행 가이드
 
+12. `architecture.md`
+- Flutter 프론트엔드 구조, 상태관리, OAuth/Drive 흐름, 배포/검증 가이드
+
 ## 권장 읽기 순서
 
 1. 비전/브랜드
