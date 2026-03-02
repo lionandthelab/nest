@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/app_config.dart';
 import '../models/nest_models.dart';
 
 class BootstrapResult {
@@ -50,7 +51,11 @@ class NestRepository {
     required String email,
     required String password,
   }) async {
-    final response = await client.auth.signUp(email: email, password: password);
+    final response = await client.auth.signUp(
+      email: email,
+      password: password,
+      emailRedirectTo: AppConfig.authEmailRedirectUrl,
+    );
 
     if (response.user == null) {
       throw const AuthException('회원가입 계정을 생성하지 못했습니다.');

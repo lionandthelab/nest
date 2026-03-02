@@ -17,4 +17,9 @@ class AppConfig {
 
   static const String oauthStoragePrefix = 'nest.oauth';
   static const String oauthCallbackPath = '/oauth/google/callback.html';
+
+  static const String authEmailRedirectUrl = String.fromEnvironment(
+    'AUTH_EMAIL_REDIRECT_URL',
+    defaultValue: 'https://lionandthelab.github.io/nest/',
+  );
 }

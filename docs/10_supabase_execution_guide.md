@@ -50,8 +50,17 @@ flutter run -d chrome
 ```bash
 flutter run -d chrome \
   --dart-define=SUPABASE_URL=https://<project>.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=<anon-key>
+  --dart-define=SUPABASE_ANON_KEY=<anon-key> \
+  --dart-define=AUTH_EMAIL_REDIRECT_URL=https://lionandthelab.github.io/nest/
 ```
+
+Authentication > URL Configuration도 함께 설정합니다.
+
+- Site URL: `https://lionandthelab.github.io/nest/`
+- Redirect URLs:
+  - `https://lionandthelab.github.io/nest/`
+  - `http://localhost:3000/`
+  - `http://localhost:8080/`
 
 ## 4) GitHub Pages 빌드/배포
 

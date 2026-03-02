@@ -26,14 +26,26 @@ Nest 홈스쿨링 플랫폼의 모바일/웹 공통 프론트엔드입니다.
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
+- `AUTH_EMAIL_REDIRECT_URL`
 
 예시:
 
 ```bash
 flutter run \
   --dart-define=SUPABASE_URL=https://<project>.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=<anon-key>
+  --dart-define=SUPABASE_ANON_KEY=<anon-key> \
+  --dart-define=AUTH_EMAIL_REDIRECT_URL=https://lionandthelab.github.io/nest/
 ```
+
+## Supabase Auth URL 설정(필수)
+
+Supabase Dashboard > Authentication > URL Configuration에서 아래를 확인하세요.
+
+- Site URL: `https://lionandthelab.github.io/nest/`
+- Redirect URLs 포함:
+  - `https://lionandthelab.github.io/nest/`
+  - `http://localhost:3000/` (로컬 개발 시)
+  - `http://localhost:8080/` (로컬 개발 시)
 
 ## 로컬 실행
 
