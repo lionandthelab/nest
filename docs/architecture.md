@@ -199,18 +199,21 @@ Admin dashboard onboarding:
 
 - Admin view:
   - schedule concierge (few-question wizard) -> multi-option drafts
+  - step-based draft wizard (기본 설정 -> 리소스 조건 -> 생성/검토)
   - course-frequency weighting controls (per course low/medium/high)
   - teacher preference strategy controls (balanced/preferred-first/parent-first)
   - parent/teacher blocked-time constraints are auto-avoided in draft generation
   - draft/board conflict checks include parent-blocked and teacher-blocked slot issues
   - draft session editor (course/slot/main teacher) with immediate conflict feedback
   - draft apply flow with slot-collision skip and teacher conflict reporting
+  - prompt action bar from main board (prompt edit -> draft generate / proposal save)
   - prompt generation + apply/discard proposals (legacy path)
   - drag-and-drop visual schedule studio:
     - course palette
     - timetable grid (day columns x period rows)
     - slot-level drop targets and session card drag-move
     - compact session cards with teacher badges/conflict indicators
+    - status insight panel (class/teacher) in desktop sidebar and mobile modal sheet
   - board-level health summary (teacher conflict + missing main teacher)
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)

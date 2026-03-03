@@ -56,6 +56,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | 시간표 편집 UX 재설계: 과목 팔레트 + 그리드 시간표(day x period) 기반 드래그앤드롭 스튜디오 및 시각적 세션 카드 개선 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-03 | 부모/교사 허브 UX 통일(공통 섹션형 레이아웃) + 전역 로딩/전환 모션 시스템 적용 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-03 | Parent Hub 아이별 뷰(소속 반/반별 시간표/상태 로그) + Teacher Hub 담당 반별 뷰(시간표/공지/아동 상태 관리) 고도화 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-03 | 시간표 UX 강화: 단계형 초안 위자드 + 메인보드 프롬프트 액션바 + 반/교사 상황패널(웹 사이드바/모바일 모달) 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 
