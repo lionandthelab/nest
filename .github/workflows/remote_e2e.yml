@@ -12,6 +12,10 @@ on:
 jobs:
   remote-e2e:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,13 +26,9 @@ jobs:
           node-version: "20"
 
       - name: Skip when secrets are missing
-        if: ${{ secrets.SUPABASE_ANON_KEY == '' || secrets.SUPABASE_SERVICE_ROLE_KEY == '' }}
-        run: echo "Remote E2E skipped because SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY is not configured."
+        if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_ANON_KEY == '' || env.SUPABASE_SERVICE_ROLE_KEY == '' }}
+        run: echo "Remote E2E skipped because SUPABASE_URL, SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY is not configured."
 
       - name: Run remote E2E script
-        if: ${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: node scripts/e2e_remote.mjs
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

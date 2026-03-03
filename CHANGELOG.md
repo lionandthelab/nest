@@ -69,6 +69,9 @@
   - 역할 전환 구조, 동적 탭, 권한관리, 커뮤니티 이중 모드 반영
 - 실행 추적 문서 추가 (`docs/execution_tracker.md`)
   - 다국어/결제 제외 기준 체크리스트와 반복 검증 로그 누적
+- 원격 E2E 워크플로 조건식 수정 (`.github/workflows/remote_e2e.yml`)
+  - `if`에서 `secrets.*` 직접 참조 제거
+  - job `env` 주입 후 `env.*` 기반으로 실행/스킵 분기하도록 변경
 
 ### Verification
 

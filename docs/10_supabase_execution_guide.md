@@ -80,6 +80,9 @@ flutter build web --release --base-href /nest/
 
 원격 Supabase 통합 검증은 `.github/workflows/remote_e2e.yml`로 실행합니다.
 
+리포지토리 Secrets(`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`)가 비어 있으면
+워크플로우는 자동으로 E2E를 스킵하고 성공적으로 종료됩니다.
+
 ## 5) 권장 운영 순서
 
 1. 기본 관리자 계정 자동 생성(선택)

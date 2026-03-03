@@ -317,6 +317,7 @@ flutter build web --release --base-href /nest/
 - GitHub Pages workflow: `.github/workflows/flutter_web_pages.yml`
 - Artifact: `frontend/build/web` to `gh-pages`
 - Remote integration workflow: `.github/workflows/remote_e2e.yml`
+  - workflow condition guards use `env.*` (not direct `secrets.*` in `if`) to avoid GitHub Actions workflow validation failures.
 
 ## 10. OAuth Redirect URI
 
