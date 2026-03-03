@@ -82,6 +82,14 @@
   - 상단 KPI 카드 + 섹션 칩 전환 + 카드형 본문 구성
   - 부모: `개요`/`내 불가 시간`/`활동 타임라인`
   - 교사: `수업 운영`/`계획 작성`/`활동 기록`
+- Parent Hub 아이 중심 뷰 강화
+  - 내 아이 selector 기반으로 child-specific 화면 제공
+  - 아이 소속 반 목록 + 반별 시간표 + 아이 상태 로그를 한 흐름으로 제공
+  - 반별 세션/교사배정/공지 데이터를 on-demand 로드해 정확한 아이 단위 정보 제공
+- Teacher Hub 담당 반 중심 뷰 강화
+  - 내 교사 프로필 배정 기준으로 담당 반 자동 식별
+  - 반 운영보드에서 반별 시간표를 직접 확인
+  - 반 컨텍스트에서 공지 작성/수업계획/아동 상태 기록을 일관 흐름으로 제공
 - 전역 모션/로딩 컴포넌트 추가
   - `nest_motion.dart` (`NestLoadingScreen`, `NestBusyOverlay`, 공통 fade+slide 전환)
   - 루트 부트스트랩/로그인/홈 전환 애니메이션
@@ -160,6 +168,9 @@
   - 충돌 배너 가시성 강화 및 읽기/수정 모드 구분 강화
 - 디자인 시스템 확장
   - `NestTheme`에 페이지 전환/Progress 스타일을 추가해 애니메이션 톤 통일
+- `NestController` 확장
+  - parent/teacher 허브를 위한 `myChildren`, `classGroupsForChild`, `childrenForClassGroup` 헬퍼 추가
+  - class/session/plan/announcement on-demand 조회용 controller API 추가
 
 ### Verification
 

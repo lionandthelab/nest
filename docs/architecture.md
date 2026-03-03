@@ -229,12 +229,15 @@ Admin dashboard onboarding:
 ### 6.4 Parent/Teacher Hub UX
 
 - Parent Hub (`parent_hub_tab.dart`)
-  - sections: `개요` / `내 불가 시간` / `활동 타임라인`
-  - compact announcement digest + recent activity summary
-  - self-service blocked-time management with responsive input layout
+  - sections: `아이 정보` / `아이 시간표` / `아이 상태` / `내 불가 시간`
+  - parent-owned children 중심으로 child selector 제공
+  - 선택 아이 기준으로 소속 반 목록, 반별 시간표, 상태 로그 요약 제공
+  - class-level sessions/teacher assignments/announcements on-demand fetch
 - Teacher Hub (`teacher_hub_tab.dart`)
-  - sections: `수업 운영` / `계획 작성` / `활동 기록`
-  - teacher blocked-time, announcement authoring, teaching plan and activity logging in one flow
+  - sections: `반 운영보드` / `수업 운영` / `아이 상태`
+  - current teacher profiles를 기준으로 담당 반 자동 식별
+  - 반별 시간표/공지/아동 상태를 한 반 컨텍스트로 관리
+  - class-specific teaching plan, announcement, activity log authoring flow
 - Both hubs use:
   - card-first layout with low cognitive load
   - section switching through `ChoiceChip` controls

@@ -2738,12 +2738,63 @@ class NestController extends ChangeNotifier {
         .toList(growable: false);
   }
 
+  List<ChildProfile> get myChildren {
+    final currentUserId = user?.id;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return const [];
+    }
+
+    final mine = children
+        .where((child) {
+          final guardians = familyGuardianUserIdsByFamily[child.familyId];
+          if (guardians == null || guardians.isEmpty) {
+            return false;
+          }
+          return guardians.contains(currentUserId);
+        })
+        .toList(growable: false);
+
+    if (mine.isNotEmpty) {
+      return mine;
+    }
+
+    if (isParentView) {
+      return children;
+    }
+    return const [];
+  }
+
   List<String> enrolledChildIdsForClassGroup(String classGroupId) {
     return classEnrollments
         .where((row) => row.classGroupId == classGroupId)
         .map((row) => row.childId)
         .toSet()
         .toList(growable: false);
+  }
+
+  List<ClassGroup> classGroupsForChild(String childId) {
+    final classGroupIds = classEnrollments
+        .where((row) => row.childId == childId)
+        .map((row) => row.classGroupId)
+        .toSet();
+
+    final rows = classGroups
+        .where((row) => classGroupIds.contains(row.id))
+        .toList(growable: false);
+    rows.sort((a, b) => a.name.compareTo(b.name));
+    return rows;
+  }
+
+  List<ChildProfile> childrenForClassGroup(String classGroupId) {
+    final childIds = enrolledChildIdsForClassGroup(classGroupId).toSet();
+    if (childIds.isEmpty) {
+      return const [];
+    }
+    final rows = children
+        .where((child) => childIds.contains(child.id))
+        .toList(growable: false);
+    rows.sort((a, b) => a.name.compareTo(b.name));
+    return rows;
   }
 
   bool isChildEnrolledInClass({
@@ -2992,6 +3043,35 @@ class NestController extends ChangeNotifier {
             .map((group) => group.name)
             .firstOrNull ??
         '지정 반';
+  }
+
+  Future<List<ClassSession>> fetchSessionsForClassGroup({
+    required String classGroupId,
+  }) {
+    return _repository.fetchSessions(classGroupId: classGroupId);
+  }
+
+  Future<List<SessionTeacherAssignment>>
+  fetchSessionTeacherAssignmentsForSessions({
+    required List<String> classSessionIds,
+  }) {
+    return _repository.fetchSessionTeacherAssignments(
+      classSessionIds: classSessionIds,
+    );
+  }
+
+  Future<List<TeachingPlan>> fetchTeachingPlansForSessions({
+    required List<String> classSessionIds,
+  }) {
+    return _repository.fetchTeachingPlans(classSessionIds: classSessionIds);
+  }
+
+  Future<List<Announcement>> fetchAnnouncementsForHomeschool() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return const [];
+    }
+    return _repository.fetchAnnouncements(homeschoolId: homeschoolId);
   }
 
   Future<void> _loadTermAndBelow() async {
