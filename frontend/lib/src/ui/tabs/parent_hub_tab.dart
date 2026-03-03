@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
@@ -12,7 +13,7 @@ class ParentHubTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final sessions = controller.sessions.length;
     final gallery = controller.galleryItems.length;
-    final reports = controller.openCommunityReportCount;
+    final announcements = controller.announcements.length;
 
     return ListView(
       children: [
@@ -28,7 +29,7 @@ class ParentHubTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '부모 뷰에서는 우리 아이 학습 흐름과 활동 공유를 쉽게 확인할 수 있습니다.',
+                  '우리 아이 반 운영 상황, 공지, 활동 기록을 한 곳에서 확인합니다.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: NestColors.deepWood.withValues(alpha: 0.72),
                   ),
@@ -40,7 +41,7 @@ class ParentHubTab extends StatelessWidget {
                   children: [
                     _MetricCard(label: '이번 반 수업 수', value: '$sessions'),
                     _MetricCard(label: '갤러리 항목', value: '$gallery'),
-                    _MetricCard(label: '미처리 신고', value: '$reports'),
+                    _MetricCard(label: '공지', value: '$announcements'),
                   ],
                 ),
               ],
@@ -48,22 +49,136 @@ class ParentHubTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('부모 권장 흐름'),
-                SizedBox(height: 8),
-                Text('1. Timetable 탭에서 반 시간표를 확인합니다.'),
-                Text('2. Gallery 탭에서 활동 사진/영상을 확인합니다.'),
-                Text('3. Community 탭에서 소통하고 필요한 경우 신고합니다.'),
-              ],
-            ),
-          ),
-        ),
+        _AnnouncementCard(controller: controller),
+        const SizedBox(height: 12),
+        _ActivityTimelineCard(controller: controller),
       ],
+    );
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard({required this.controller});
+
+  final NestController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('공지', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (controller.announcements.isEmpty)
+              const Text('등록된 공지가 없습니다.')
+            else
+              ...controller.announcements.take(20).map((row) {
+                final when = row.createdAt == null
+                    ? '-'
+                    : DateFormat('yyyy-MM-dd HH:mm').format(row.createdAt!);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (row.pinned) const Chip(label: Text('PINNED')),
+                            Chip(
+                              label: Text(
+                                row.classGroupId == null
+                                    ? '전체'
+                                    : controller.findClassGroupName(
+                                        row.classGroupId,
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          row.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(row.body),
+                        const SizedBox(height: 4),
+                        Text(
+                          when,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityTimelineCard extends StatelessWidget {
+  const _ActivityTimelineCard({required this.controller});
+
+  final NestController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final logs = controller.studentActivityLogs.toList(growable: false)
+      ..sort((a, b) {
+        final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
+        final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
+        return right.compareTo(left);
+      });
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('아동 활동 기록', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (logs.isEmpty)
+              const Text('등록된 활동 기록이 없습니다.')
+            else
+              ...logs.take(40).map((log) {
+                final childName =
+                    controller.children
+                        .where((child) => child.id == log.childId)
+                        .map((child) => child.name)
+                        .firstOrNull ??
+                    log.childId;
+                final when = log.recordedAt == null
+                    ? '-'
+                    : DateFormat('yyyy-MM-dd HH:mm').format(log.recordedAt!);
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('$childName · ${log.activityType}'),
+                  subtitle: Text(log.content),
+                  trailing: Text(
+                    when,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -93,4 +208,8 @@ class _MetricCard extends StatelessWidget {
       ),
     );
   }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

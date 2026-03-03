@@ -13,6 +13,8 @@ const now = Date.now();
 const runTag = `e2e_${now}`;
 const email = `${runTag}@nest.local`;
 const password = `Nest!${Math.random().toString(36).slice(2)}A1`;
+const invitedEmail = `parent_${runTag}@nest.local`;
+const invitedPassword = `Nest!${Math.random().toString(36).slice(2)}B1`;
 
 const report = {
   runTag,
@@ -127,6 +129,46 @@ async function main() {
     ]);
 
     report.ids.classGroupId = rows[0].id;
+    return rows[0];
+  });
+
+  const family = await step("create_family", async () => {
+    const rows = await restInsert(accessToken, "families", [
+      {
+        homeschool_id: homeschool.id,
+        family_name: `E2E Family ${runTag}`,
+        note: "integration test family"
+      }
+    ]);
+    report.ids.familyId = rows[0].id;
+    return rows[0];
+  });
+
+  const child = await step("create_child", async () => {
+    const row = await api("POST", `/rest/v1/rpc/create_child_admin`, {
+      headers: {
+        apikey: ANON_KEY,
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: {
+        p_family_id: family.id,
+        p_name: `E2E Child ${runTag}`,
+        p_birth_date: "2018-03-01",
+        p_profile_note: "integration child"
+      }
+    });
+    report.ids.childId = row.id;
+    return row;
+  });
+
+  await step("create_class_enrollment", async () => {
+    const rows = await restInsert(accessToken, "class_enrollments", [
+      {
+        class_group_id: classGroup.id,
+        child_id: child.id
+      }
+    ]);
+    report.ids.classEnrollmentId = rows[0].id;
     return rows[0];
   });
 
@@ -287,6 +329,150 @@ async function main() {
     return rows[0];
   });
 
+  await step("create_teaching_plan", async () => {
+    const rows = await restInsert(accessToken, "teaching_plans", [
+      {
+        class_session_id: sessions[0].id,
+        teacher_profile_id: teacher.id,
+        objectives: "국어 읽기 기초",
+        materials: "교재, 읽기 카드",
+        activities: "읽기 및 발표"
+      }
+    ]);
+    report.ids.teachingPlanId = rows[0].id;
+    return rows[0];
+  });
+
+  await step("create_student_activity_log", async () => {
+    const rows = await restInsert(accessToken, "student_activity_logs", [
+      {
+        child_id: child.id,
+        class_session_id: sessions[0].id,
+        recorded_by_teacher_id: teacher.id,
+        activity_type: "OBSERVATION",
+        content: "발표 참여도가 높음"
+      }
+    ]);
+    report.ids.activityLogId = rows[0].id;
+    return rows[0];
+  });
+
+  await step("create_announcement", async () => {
+    const rows = await restInsert(accessToken, "announcements", [
+      {
+        homeschool_id: homeschool.id,
+        class_group_id: classGroup.id,
+        author_user_id: userId,
+        title: `E2E Notice ${runTag}`,
+        body: "이번 주 수업 준비물을 확인하세요.",
+        pinned: true
+      }
+    ]);
+    report.ids.announcementId = rows[0].id;
+    return rows[0];
+  });
+
+  await step("create_audit_log", async () => {
+    const rows = await restInsert(accessToken, "audit_logs", [
+      {
+        homeschool_id: homeschool.id,
+        actor_user_id: userId,
+        action_type: "E2E_ACTION",
+        resource_type: "e2e",
+        resource_id: runTag,
+        after_json: { ok: true }
+      }
+    ]);
+    report.ids.auditLogId = rows[0].id;
+    return rows[0];
+  });
+
+  const invitedUser = await step("create_invited_parent_user", async () => {
+    const res = await api("POST", `/auth/v1/admin/users`, {
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`
+      },
+      body: {
+        email: invitedEmail,
+        password: invitedPassword,
+        email_confirm: true,
+        user_metadata: { full_name: `Nest Parent ${runTag}` }
+      }
+    });
+
+    const createdUserId = res.user?.id || res.id;
+    if (!createdUserId) {
+      throw new Error(`invited user id missing in response: ${JSON.stringify(res)}`);
+    }
+
+    report.ids.invitedUserId = createdUserId;
+    return { user_id: createdUserId };
+  });
+
+  const invited = await step("create_invite_row", async () => {
+    const rows = await restInsert(accessToken, "homeschool_invites", [
+      {
+        homeschool_id: homeschool.id,
+        invite_email: invitedEmail,
+        role: "PARENT",
+        invited_by_user_id: userId,
+        status: "PENDING"
+      }
+    ]);
+
+    report.ids.inviteId = rows[0].id;
+    report.ids.inviteToken = rows[0].invite_token;
+    return rows[0];
+  });
+
+  const invitedAuth = await step("login_invited_parent", async () => {
+    const res = await api("POST", `/auth/v1/token?grant_type=password`, {
+      headers: {
+        apikey: ANON_KEY,
+        Authorization: `Bearer ${ANON_KEY}`
+      },
+      body: {
+        email: invitedEmail,
+        password: invitedPassword
+      }
+    });
+
+    if (!res.access_token) {
+      throw new Error("invited parent access token missing");
+    }
+    return res;
+  });
+
+  await step("accept_homeschool_invite_rpc", async () => {
+    const accepted = await api("POST", `/rest/v1/rpc/accept_homeschool_invite`, {
+      headers: {
+        apikey: ANON_KEY,
+        Authorization: `Bearer ${invitedAuth.access_token}`
+      },
+      body: {
+        p_invite_token: invited.invite_token
+      }
+    });
+
+    if (!accepted) {
+      throw new Error("invite accept rpc returned empty result");
+    }
+    return accepted;
+  });
+
+  await step("verify_invited_membership_created", async () => {
+    const rows = await restSelect(
+      invitedAuth.access_token,
+      `homeschool_memberships?homeschool_id=eq.${homeschool.id}&user_id=eq.${invitedUser.user_id}&role=eq.PARENT&select=id,role,status`
+    );
+
+    if (!rows.length) {
+      throw new Error("invited parent membership was not created");
+    }
+    return rows[0];
+  });
+
   await step("assign_teacher_success", async () => {
     const rows = await restInsert(accessToken, "session_teacher_assignments", [
       {
@@ -413,7 +599,8 @@ async function main() {
   report.summary = {
     success: true,
     generated_sessions: generated.session_count,
-    oauth_url_ready: Boolean(oauthStart.auth_url_prefix)
+    oauth_url_ready: Boolean(oauthStart.auth_url_prefix),
+    invite_flow: true
   };
 }
 

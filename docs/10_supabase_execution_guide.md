@@ -12,6 +12,11 @@ supabase db push
 
 1. `supabase/migrations/20260302160000_init_nest.sql`
 2. `supabase/migrations/20260302173000_constraints_and_drive_tokens.sql`
+3. `supabase/migrations/20260303060000_community_sns.sql`
+4. `supabase/migrations/20260303130000_homeschool_invites.sql`
+5. `supabase/migrations/20260303143000_children_policy_fix.sql`
+6. `supabase/migrations/20260303145000_child_admin_rpc.sql`
+7. `supabase/migrations/20260303150000_invite_rpc_fix.sql`
 
 ## 2) Edge Functions 배포
 
@@ -72,6 +77,8 @@ flutter build web --release --base-href /nest/
 ```
 
 원격 배포는 `.github/workflows/flutter_web_pages.yml`가 `main` 푸시 시 자동 처리.
+
+원격 Supabase 통합 검증은 `.github/workflows/remote_e2e.yml`로 실행합니다.
 
 ## 5) 권장 운영 순서
 

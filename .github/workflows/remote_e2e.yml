@@ -1,0 +1,30 @@
+name: Remote Supabase E2E
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "scripts/e2e_remote.mjs"
+      - "supabase/**"
+      - ".github/workflows/remote_e2e.yml"
+  workflow_dispatch:
+
+jobs:
+  remote-e2e:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run remote E2E script
+        run: node scripts/e2e_remote.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

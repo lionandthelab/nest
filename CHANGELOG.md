@@ -22,6 +22,23 @@
 - 일반 사용자용 커뮤니티 피드 탭 추가
   - `Community` (`community_feed_tab.dart`)
   - 글/첨부/좋아요/댓글/신고 기능 제공
+- 운영/행정 완성 탭 추가
+  - `Families` (`family_admin_tab.dart`) 가정/아이/반 배정 + 교사 프로필 등록
+  - `Ops` (`ops_tab.dart`) 공지 작성/감사로그 모니터링
+- 교사 운영 기능 확장
+  - `Teacher Hub`에서 수업계획(Teaching Plan) 등록
+  - `Teacher Hub`에서 아동 활동기록(Activity Log) 등록
+  - `Teacher Hub`에서 교사 공지 작성
+- 시간표 교사 배정 UI 강화
+  - 세션별 주강사/보조교사 배정 다이얼로그
+  - 충돌 경고 배지 표시 + DB 충돌 메시지 가이드
+- Supabase 마이그레이션 추가
+  - `20260303143000_children_policy_fix.sql`
+  - `20260303145000_child_admin_rpc.sql`
+  - `20260303150000_invite_rpc_fix.sql`
+- 원격 E2E 자동화 워크플로 추가
+  - `.github/workflows/remote_e2e.yml`
+  - `scripts/e2e_remote.mjs`에 가족/아이/배정/계획/활동/공지/초대수락 검증 시나리오 확장
 
 ### Changed
 
@@ -34,10 +51,16 @@
   - 교사: Teacher Hub
   - 사용자: Community
   - 관리자/스태프: SNS Admin
+  - 관리자/스태프: Families, Ops
   - 관리자 전용: Drive, Members
 - 시간표 탭을 권한 기반 UX로 개선
   - 관리자: Prompt + Manual 편집
   - 부모/교사: 읽기 전용 시간표
+- `NestRepository`/`NestController` 운영 도메인 확장
+  - families/children/class_enrollments
+  - teacher_profiles/session_teacher_assignments
+  - teaching_plans/student_activity_logs
+  - announcements/audit_logs
 - 멤버십/권한 API 확장 (`nest_repository.dart`)
   - 홈스쿨 전체 멤버십 조회
   - 역할 부여/회수 API
@@ -52,7 +75,8 @@
 - `cd frontend && flutter analyze` 통과
 - `cd frontend && flutter test` 통과
 - `cd frontend && flutter build web --release --base-href /nest/` 통과
-- `supabase db push` 통과 (`20260303130000_homeschool_invites.sql` 반영)
+- `supabase db push` 통과 (`20260303130000`, `20260303143000`, `20260303145000`, `20260303150000`)
+- `node scripts/e2e_remote.mjs` 통과 (`summary.success: true`, invite_flow 포함)
 
 ## 2026-03-02
 

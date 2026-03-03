@@ -339,6 +339,10 @@ class _TimetableTabState extends State<TimetableTab> {
                                 : session.title,
                             subtitle:
                                 '${controller.findCourseName(session.courseId)} · ${session.sourceType}',
+                            teacherBadges: const [],
+                            conflictMessages: const [],
+                            canManageTeachers: false,
+                            onManageTeachers: null,
                             canDelete: false,
                             onDelete: null,
                           ),
@@ -351,6 +355,10 @@ class _TimetableTabState extends State<TimetableTab> {
                                 : session.title,
                             subtitle:
                                 '${controller.findCourseName(session.courseId)} · ${session.sourceType}',
+                            teacherBadges: const [],
+                            conflictMessages: const [],
+                            canManageTeachers: false,
+                            onManageTeachers: null,
                             canDelete: false,
                             onDelete: null,
                           ),
@@ -361,6 +369,23 @@ class _TimetableTabState extends State<TimetableTab> {
                               : session.title,
                           subtitle:
                               '${controller.findCourseName(session.courseId)} · ${session.sourceType}',
+                          teacherBadges: controller
+                              .teacherAssignmentsForSession(session.id)
+                              .map(
+                                (row) =>
+                                    '${row.assignmentRole == 'MAIN' ? '주' : '보조'} · ${controller.findTeacherName(row.teacherProfileId)}',
+                              )
+                              .toList(growable: false),
+                          conflictMessages: controller
+                              .teacherConflictMessagesForSession(session.id),
+                          canManageTeachers:
+                              controller.canManageTeacherAssignments,
+                          onManageTeachers:
+                              controller.canManageTeacherAssignments
+                              ? () => _openTeacherAssignDialog(
+                                  sessionId: session.id,
+                                )
+                              : null,
                           canDelete: controller.isAdminLike,
                           onDelete: () => _safeCall(
                             () => controller.cancelSession(session.id),
@@ -393,6 +418,163 @@ class _TimetableTabState extends State<TimetableTab> {
 
   Future<void> _discardProposal(String proposalId) async {
     await _safeCall(() => widget.controller.discardProposal(proposalId));
+  }
+
+  Future<void> _openTeacherAssignDialog({required String sessionId}) async {
+    final controller = widget.controller;
+    String? selectedTeacherId = controller.teacherProfiles.firstOrNull?.id;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            final assignmentRows = controller.teacherAssignmentsForSession(
+              sessionId,
+            );
+            final teacherItems = controller.teacherProfiles
+                .map(
+                  (teacher) => DropdownMenuItem(
+                    value: teacher.id,
+                    child: Text(teacher.displayName),
+                  ),
+                )
+                .toList(growable: false);
+
+            if (selectedTeacherId == null && teacherItems.isNotEmpty) {
+              selectedTeacherId = teacherItems.first.value;
+            }
+
+            return AlertDialog(
+              title: const Text('교사 배정 관리'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (teacherItems.isEmpty)
+                      const Text('먼저 교사 프로필을 등록하세요.')
+                    else ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedTeacherId,
+                        decoration: const InputDecoration(labelText: '교사 선택'),
+                        items: teacherItems,
+                        onChanged: controller.isBusy
+                            ? null
+                            : (value) {
+                                setLocalState(() {
+                                  selectedTeacherId = value;
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ElevatedButton(
+                            onPressed:
+                                controller.isBusy || selectedTeacherId == null
+                                ? null
+                                : () async {
+                                    await _safeCall(
+                                      () => controller.assignTeacherToSession(
+                                        classSessionId: sessionId,
+                                        teacherProfileId: selectedTeacherId!,
+                                        assignmentRole: 'MAIN',
+                                      ),
+                                    );
+                                    if (!context.mounted) {
+                                      return;
+                                    }
+                                    setLocalState(() {});
+                                  },
+                            child: const Text('주강사 지정'),
+                          ),
+                          FilledButton.tonal(
+                            onPressed:
+                                controller.isBusy || selectedTeacherId == null
+                                ? null
+                                : () async {
+                                    await _safeCall(
+                                      () => controller.assignTeacherToSession(
+                                        classSessionId: sessionId,
+                                        teacherProfileId: selectedTeacherId!,
+                                        assignmentRole: 'ASSISTANT',
+                                      ),
+                                    );
+                                    if (!context.mounted) {
+                                      return;
+                                    }
+                                    setLocalState(() {});
+                                  },
+                            child: const Text('보조 추가'),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      '현재 배정',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    if (assignmentRows.isEmpty)
+                      const Text('배정된 교사가 없습니다.')
+                    else
+                      ...assignmentRows.map((row) {
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '${row.assignmentRole == 'MAIN' ? '주강사' : '보조'} · ${controller.findTeacherName(row.teacherProfileId)}',
+                          ),
+                          trailing: IconButton(
+                            onPressed: controller.isBusy
+                                ? null
+                                : () async {
+                                    await _safeCall(
+                                      () => controller.removeTeacherFromSession(
+                                        classSessionId: sessionId,
+                                        teacherProfileId: row.teacherProfileId,
+                                      ),
+                                    );
+                                    if (!context.mounted) {
+                                      return;
+                                    }
+                                    setLocalState(() {});
+                                  },
+                            icon: const Icon(Icons.close),
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 8),
+                    if (controller
+                        .teacherConflictMessagesForSession(sessionId)
+                        .isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: controller
+                            .teacherConflictMessagesForSession(sessionId)
+                            .map((text) => Chip(label: Text(text)))
+                            .toList(growable: false),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('닫기'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _safeCall(Future<void> Function() action) async {
@@ -442,12 +624,20 @@ class _SessionCard extends StatelessWidget {
   const _SessionCard({
     required this.title,
     required this.subtitle,
+    required this.teacherBadges,
+    required this.conflictMessages,
+    required this.canManageTeachers,
+    required this.onManageTeachers,
     required this.canDelete,
     required this.onDelete,
   });
 
   final String title;
   final String subtitle;
+  final List<String> teacherBadges;
+  final List<String> conflictMessages;
+  final bool canManageTeachers;
+  final VoidCallback? onManageTeachers;
   final bool canDelete;
   final VoidCallback? onDelete;
 
@@ -461,24 +651,70 @@ class _SessionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: NestColors.roseMist),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.bodyLarge),
-                const SizedBox(height: 2),
-                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.bodyLarge),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (canManageTeachers)
+                IconButton(
+                  onPressed: onManageTeachers,
+                  icon: const Icon(Icons.person_add_alt_1, size: 18),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '교사 배정',
+                ),
+              if (canDelete)
+                IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.close, size: 18),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
           ),
-          if (canDelete)
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.close, size: 18),
-              visualDensity: VisualDensity.compact,
+          if (teacherBadges.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: teacherBadges
+                  .map(
+                    (text) => Chip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text(text),
+                    ),
+                  )
+                  .toList(growable: false),
             ),
+          ],
+          if (conflictMessages.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: conflictMessages
+                  .map(
+                    (text) => Chip(
+                      backgroundColor: Colors.amber.shade100,
+                      visualDensity: VisualDensity.compact,
+                      label: Text(text),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
         ],
       ),
     );
@@ -505,4 +741,8 @@ String _shortTime(String value) {
     return fallback == null ? value : DateFormat('HH:mm').format(fallback);
   }
   return DateFormat('HH:mm').format(parsed);
+}
+
+extension _FirstOrNull<T> on List<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

@@ -34,6 +34,15 @@ class NestController extends ChangeNotifier {
   List<Membership> homeschoolMemberships = const [];
   List<HomeschoolInvite> homeschoolInvites = const [];
   List<HomeschoolInvite> pendingInvites = const [];
+  List<Family> families = const [];
+  List<ChildProfile> children = const [];
+  List<ClassEnrollment> classEnrollments = const [];
+  List<TeacherProfile> teacherProfiles = const [];
+  List<SessionTeacherAssignment> sessionTeacherAssignments = const [];
+  List<TeachingPlan> teachingPlans = const [];
+  List<StudentActivityLog> studentActivityLogs = const [];
+  List<Announcement> announcements = const [];
+  List<AuditLog> auditLogs = const [];
   String? selectedHomeschoolId;
   String? currentRole;
   final Map<String, String> _viewRoleByHomeschool = <String, String>{};
@@ -123,6 +132,11 @@ class NestController extends ChangeNotifier {
   }.contains(currentRole);
 
   bool get canModerateCommunity => isAdminLike;
+  bool get canManageFamilies => isAdminLike;
+  bool get canManageTeacherAssignments => isAdminLike;
+  bool get canWriteTeachingPlan => isTeacherView || isAdminLike;
+  bool get canWriteActivityLog => isTeacherView || isAdminLike;
+  bool get canWriteAnnouncement => isTeacherView || isAdminLike;
 
   Future<void> initialize() async {
     if (_isBootstrapped) {
@@ -199,6 +213,7 @@ class NestController extends ChangeNotifier {
       await _loadTermAndBelow();
       await loadHomeschoolMemberships();
       await loadHomeschoolInvites();
+      await _loadOperationalData();
       await loadDriveIntegration();
       await loadGalleryItems();
       await loadCommunityFeed();
@@ -223,6 +238,7 @@ class NestController extends ChangeNotifier {
     await _runBusy('뷰 전환 중...', () async {
       await loadHomeschoolMemberships();
       await loadHomeschoolInvites();
+      await _loadOperationalData();
       await loadCommunityFeed();
       _setStatus('현재 뷰: $nextRole');
     });
@@ -236,7 +252,11 @@ class NestController extends ChangeNotifier {
       await _loadClassGroups();
       await _loadTimetableAssets();
       await _loadSessions();
+      await loadClassEnrollments();
+      await loadSessionTeacherAssignments();
       await _loadProposals();
+      await loadTeachingPlans();
+      await loadAnnouncements();
       await loadGalleryItems();
       await loadCommunityFeed();
     });
@@ -248,6 +268,10 @@ class NestController extends ChangeNotifier {
 
     await _runBusy('수업 및 갤러리를 갱신하는 중...', () async {
       await _loadSessions();
+      await loadClassEnrollments();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
+      await loadAnnouncements();
       await loadGalleryItems();
       await loadCommunityFeed();
     });
@@ -384,9 +408,20 @@ class NestController extends ChangeNotifier {
           proposalId: proposalId,
           status: 'APPLIED',
         );
+        await _logAudit(
+          actionType: 'TIMETABLE_PROPOSAL_APPLY',
+          resourceType: 'timetable_proposals',
+          resourceId: proposalId,
+          afterJson: {
+            'applied_sessions': successCount,
+            'failed_sessions': failedCount,
+          },
+        );
       }
 
       await _loadSessions();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
       await _loadProposals();
 
       _setStatus('적용 결과: 성공 $successCount, 실패 $failedCount');
@@ -435,6 +470,8 @@ class NestController extends ChangeNotifier {
         createdByUserId: user!.id,
       );
       await _loadSessions();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
       _setStatus('수업 생성 완료');
     });
   }
@@ -462,6 +499,8 @@ class NestController extends ChangeNotifier {
         targetSlotId: targetSlotId,
       );
       await _loadSessions();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
       _setStatus('수업 이동 완료');
     });
   }
@@ -474,6 +513,8 @@ class NestController extends ChangeNotifier {
     await _runBusy('수업을 취소하는 중...', () async {
       await _repository.cancelSession(sessionId: sessionId);
       await _loadSessions();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
       _setStatus('수업 취소 완료');
     });
   }
@@ -732,6 +773,15 @@ class NestController extends ChangeNotifier {
       communityReports = const [];
       homeschoolMemberships = const [];
       homeschoolInvites = const [];
+      families = const [];
+      children = const [];
+      classEnrollments = const [];
+      teacherProfiles = const [];
+      sessionTeacherAssignments = const [];
+      teachingPlans = const [];
+      studentActivityLogs = const [];
+      announcements = const [];
+      auditLogs = const [];
       pendingCommunityMediaFile = null;
       driveIntegration = null;
 
@@ -759,6 +809,7 @@ class NestController extends ChangeNotifier {
     await _loadTermAndBelow();
     await loadHomeschoolMemberships();
     await loadHomeschoolInvites();
+    await _loadOperationalData();
     await loadDriveIntegration();
     await syncOauthResult();
     await loadGalleryItems();
@@ -858,6 +909,147 @@ class NestController extends ChangeNotifier {
       email: email,
     );
     notifyListeners();
+  }
+
+  Future<void> loadFamilies() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      families = const [];
+      notifyListeners();
+      return;
+    }
+
+    families = await _repository.fetchFamilies(homeschoolId: homeschoolId);
+    notifyListeners();
+  }
+
+  Future<void> loadChildren() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      children = const [];
+      notifyListeners();
+      return;
+    }
+
+    children = await _repository.fetchChildren(homeschoolId: homeschoolId);
+    notifyListeners();
+  }
+
+  Future<void> loadClassEnrollments() async {
+    final classGroupIds = classGroups
+        .map((group) => group.id)
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    classEnrollments = await _repository.fetchClassEnrollments(
+      classGroupIds: classGroupIds,
+    );
+    notifyListeners();
+  }
+
+  Future<void> loadTeacherProfiles() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      teacherProfiles = const [];
+      notifyListeners();
+      return;
+    }
+
+    teacherProfiles = await _repository.fetchTeacherProfiles(
+      homeschoolId: homeschoolId,
+    );
+    notifyListeners();
+  }
+
+  Future<void> loadSessionTeacherAssignments() async {
+    final sessionIds = sessions
+        .map((session) => session.id)
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    sessionTeacherAssignments = await _repository
+        .fetchSessionTeacherAssignments(classSessionIds: sessionIds);
+    notifyListeners();
+  }
+
+  Future<void> loadTeachingPlans() async {
+    final sessionIds = sessions
+        .map((session) => session.id)
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    teachingPlans = await _repository.fetchTeachingPlans(
+      classSessionIds: sessionIds,
+    );
+    notifyListeners();
+  }
+
+  Future<void> loadStudentActivityLogs() async {
+    final childIds = children
+        .map((child) => child.id)
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    studentActivityLogs = await _repository.fetchStudentActivityLogs(
+      childIds: childIds,
+    );
+    notifyListeners();
+  }
+
+  Future<void> loadAnnouncements() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      announcements = const [];
+      notifyListeners();
+      return;
+    }
+
+    final rows = await _repository.fetchAnnouncements(
+      homeschoolId: homeschoolId,
+    );
+    final selectedClassId = selectedClassGroupId;
+
+    announcements = selectedClassId == null
+        ? rows
+        : rows
+              .where(
+                (row) =>
+                    row.classGroupId == null ||
+                    row.classGroupId == selectedClassId,
+              )
+              .toList(growable: false);
+
+    notifyListeners();
+  }
+
+  Future<void> loadAuditLogs() async {
+    if (!isAdminLike) {
+      auditLogs = const [];
+      notifyListeners();
+      return;
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      auditLogs = const [];
+      notifyListeners();
+      return;
+    }
+
+    auditLogs = await _repository.fetchAuditLogs(homeschoolId: homeschoolId);
+    notifyListeners();
+  }
+
+  Future<void> _loadOperationalData() async {
+    await loadFamilies();
+    await loadChildren();
+    await loadClassEnrollments();
+    await loadTeacherProfiles();
+    await loadSessionTeacherAssignments();
+    await loadTeachingPlans();
+    await loadStudentActivityLogs();
+    await loadAnnouncements();
+    await loadAuditLogs();
   }
 
   Future<void> loadCommunityFeed() async {
@@ -1158,6 +1350,12 @@ class NestController extends ChangeNotifier {
         handledByUserId: user!.id,
       );
       await loadCommunityFeed();
+      await _logAudit(
+        actionType: 'COMMUNITY_REPORT_STATUS',
+        resourceType: 'community_reports',
+        resourceId: reportId,
+        afterJson: {'status': status},
+      );
       _setStatus('신고 상태를 업데이트했습니다.');
     });
   }
@@ -1214,6 +1412,323 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> createFamily({
+    required String familyName,
+    required String note,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final trimmedName = familyName.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('가정 이름을 입력하세요.');
+    }
+
+    await _runBusy('가정을 생성하는 중...', () async {
+      final created = await _repository.createFamily(
+        homeschoolId: homeschoolId,
+        familyName: trimmedName,
+        note: note,
+      );
+
+      await loadFamilies();
+      await _logAudit(
+        actionType: 'FAMILY_CREATE',
+        resourceType: 'families',
+        resourceId: created.id,
+        afterJson: {'family_name': created.familyName},
+      );
+      _setStatus('가정을 생성했습니다.');
+    });
+  }
+
+  Future<void> createChild({
+    required String familyId,
+    required String name,
+    required String birthDate,
+    required String profileNote,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('아이 이름을 입력하세요.');
+    }
+    if (DateTime.tryParse(birthDate.trim()) == null) {
+      throw StateError('생년월일은 YYYY-MM-DD 형식으로 입력하세요.');
+    }
+
+    await _runBusy('아이 정보를 등록하는 중...', () async {
+      final created = await _repository.createChild(
+        familyId: familyId,
+        name: trimmedName,
+        birthDate: birthDate.trim(),
+        profileNote: profileNote,
+      );
+      await loadChildren();
+      await loadStudentActivityLogs();
+      await _logAudit(
+        actionType: 'CHILD_CREATE',
+        resourceType: 'children',
+        resourceId: created.id,
+        afterJson: {'name': created.name, 'family_id': created.familyId},
+      );
+      _setStatus('아이 정보를 등록했습니다.');
+    });
+  }
+
+  Future<void> assignChildToClass({
+    required String classGroupId,
+    required String childId,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('반 배정을 추가하는 중...', () async {
+      await _repository.upsertClassEnrollment(
+        classGroupId: classGroupId,
+        childId: childId,
+      );
+      await loadClassEnrollments();
+      await _logAudit(
+        actionType: 'CLASS_ENROLLMENT_ADD',
+        resourceType: 'class_enrollments',
+        resourceId: '$classGroupId:$childId',
+      );
+      _setStatus('반 배정을 추가했습니다.');
+    });
+  }
+
+  Future<void> unassignChildFromClass({
+    required String classGroupId,
+    required String childId,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('반 배정을 해제하는 중...', () async {
+      await _repository.deleteClassEnrollment(
+        classGroupId: classGroupId,
+        childId: childId,
+      );
+      await loadClassEnrollments();
+      await _logAudit(
+        actionType: 'CLASS_ENROLLMENT_REMOVE',
+        resourceType: 'class_enrollments',
+        resourceId: '$classGroupId:$childId',
+      );
+      _setStatus('반 배정을 해제했습니다.');
+    });
+  }
+
+  Future<void> createTeacherProfile({
+    required String displayName,
+    required String teacherType,
+    String? userId,
+  }) async {
+    if (!canManageTeacherAssignments) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final trimmedName = displayName.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('교사 표시 이름을 입력하세요.');
+    }
+
+    await _runBusy('교사 프로필을 생성하는 중...', () async {
+      final created = await _repository.createTeacherProfile(
+        homeschoolId: homeschoolId,
+        displayName: trimmedName,
+        teacherType: teacherType,
+        userId: _normalizeNullable(userId),
+      );
+      await loadTeacherProfiles();
+      await _logAudit(
+        actionType: 'TEACHER_PROFILE_CREATE',
+        resourceType: 'teacher_profiles',
+        resourceId: created.id,
+        afterJson: {'display_name': created.displayName, 'type': teacherType},
+      );
+      _setStatus('교사 프로필을 생성했습니다.');
+    });
+  }
+
+  Future<void> assignTeacherToSession({
+    required String classSessionId,
+    required String teacherProfileId,
+    required String assignmentRole,
+  }) async {
+    if (!canManageTeacherAssignments) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('교사를 시간표에 배정하는 중...', () async {
+      try {
+        if (assignmentRole == 'MAIN') {
+          await _repository.setSessionMainTeacher(
+            classSessionId: classSessionId,
+            teacherProfileId: teacherProfileId,
+          );
+        } else {
+          await _repository.upsertSessionTeacherAssignment(
+            classSessionId: classSessionId,
+            teacherProfileId: teacherProfileId,
+            assignmentRole: 'ASSISTANT',
+          );
+        }
+      } on PostgrestException catch (error) {
+        if (error.message.contains('TEACHER_SLOT_CONFLICT')) {
+          throw StateError('선택한 교사는 같은 시간대 다른 수업에 이미 배정되어 있습니다.');
+        }
+        rethrow;
+      }
+
+      await loadSessionTeacherAssignments();
+      await _logAudit(
+        actionType: 'SESSION_TEACHER_ASSIGN',
+        resourceType: 'session_teacher_assignments',
+        resourceId: '$classSessionId:$teacherProfileId:$assignmentRole',
+      );
+      _setStatus('교사 배정을 반영했습니다.');
+    });
+  }
+
+  Future<void> removeTeacherFromSession({
+    required String classSessionId,
+    required String teacherProfileId,
+  }) async {
+    if (!canManageTeacherAssignments) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('교사 배정을 해제하는 중...', () async {
+      await _repository.deleteSessionTeacherAssignment(
+        classSessionId: classSessionId,
+        teacherProfileId: teacherProfileId,
+      );
+      await loadSessionTeacherAssignments();
+      await _logAudit(
+        actionType: 'SESSION_TEACHER_REMOVE',
+        resourceType: 'session_teacher_assignments',
+        resourceId: '$classSessionId:$teacherProfileId',
+      );
+      _setStatus('교사 배정을 해제했습니다.');
+    });
+  }
+
+  Future<void> createTeachingPlan({
+    required String classSessionId,
+    required String teacherProfileId,
+    required String objectives,
+    required String materials,
+    required String activities,
+  }) async {
+    if (!canWriteTeachingPlan) {
+      throw StateError('교사/관리자 권한이 필요합니다.');
+    }
+
+    final trimmedObjectives = objectives.trim();
+    if (trimmedObjectives.isEmpty) {
+      throw StateError('수업 목표를 입력하세요.');
+    }
+
+    await _runBusy('수업 계획을 등록하는 중...', () async {
+      await _repository.createTeachingPlan(
+        classSessionId: classSessionId,
+        teacherProfileId: teacherProfileId,
+        objectives: trimmedObjectives,
+        materials: materials,
+        activities: activities,
+      );
+      await loadTeachingPlans();
+      _setStatus('수업 계획을 등록했습니다.');
+    });
+  }
+
+  Future<void> createStudentActivityLog({
+    required String childId,
+    required String? classSessionId,
+    required String teacherProfileId,
+    required String activityType,
+    required String content,
+  }) async {
+    if (!canWriteActivityLog) {
+      throw StateError('교사/관리자 권한이 필요합니다.');
+    }
+
+    final trimmedContent = content.trim();
+    if (trimmedContent.isEmpty) {
+      throw StateError('활동 내용을 입력하세요.');
+    }
+
+    await _runBusy('아동 활동 기록을 등록하는 중...', () async {
+      await _repository.createStudentActivityLog(
+        childId: childId,
+        classSessionId: classSessionId,
+        recordedByTeacherId: teacherProfileId,
+        activityType: activityType,
+        content: trimmedContent,
+      );
+      await loadStudentActivityLogs();
+      _setStatus('아동 활동 기록을 등록했습니다.');
+    });
+  }
+
+  Future<void> createAnnouncement({
+    required String title,
+    required String body,
+    required String? classGroupId,
+    required bool pinned,
+  }) async {
+    if (!canWriteAnnouncement || user == null) {
+      throw StateError('교사/관리자 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final trimmedTitle = title.trim();
+    final trimmedBody = body.trim();
+    if (trimmedTitle.isEmpty || trimmedBody.isEmpty) {
+      throw StateError('공지 제목과 본문을 모두 입력하세요.');
+    }
+
+    await _runBusy('공지사항을 등록하는 중...', () async {
+      await _repository.createAnnouncement(
+        homeschoolId: homeschoolId,
+        classGroupId: _normalizeNullable(classGroupId),
+        authorUserId: user!.id,
+        title: trimmedTitle,
+        body: trimmedBody,
+        pinned: pinned,
+      );
+      await loadAnnouncements();
+      await _logAudit(
+        actionType: 'ANNOUNCEMENT_CREATE',
+        resourceType: 'announcements',
+        resourceId: trimmedTitle,
+      );
+      _setStatus('공지사항을 등록했습니다.');
+    });
+  }
+
   Future<void> createHomeschoolInvite({
     required String inviteEmail,
     required String role,
@@ -1246,6 +1761,12 @@ class NestController extends ChangeNotifier {
 
       await loadHomeschoolInvites();
       await loadPendingInvites();
+      await _logAudit(
+        actionType: 'MEMBER_INVITE_CREATE',
+        resourceType: 'homeschool_invites',
+        resourceId: normalizedEmail,
+        afterJson: {'role': role},
+      );
       _setStatus('$normalizedEmail 에게 $role 초대를 보냈습니다.');
     });
   }
@@ -1263,6 +1784,11 @@ class NestController extends ChangeNotifier {
     await _runBusy('초대를 취소하는 중...', () async {
       await _repository.cancelHomeschoolInvite(inviteId: normalizedId);
       await loadHomeschoolInvites();
+      await _logAudit(
+        actionType: 'MEMBER_INVITE_CANCEL',
+        resourceType: 'homeschool_invites',
+        resourceId: normalizedId,
+      );
       _setStatus('초대를 취소했습니다.');
     });
   }
@@ -1314,6 +1840,11 @@ class NestController extends ChangeNotifier {
         currentRole = _resolveViewRole(selectedHomeschoolId);
       }
       await loadHomeschoolMemberships();
+      await _logAudit(
+        actionType: 'MEMBERSHIP_GRANT',
+        resourceType: 'homeschool_memberships',
+        resourceId: '$normalizedUserId:$role',
+      );
       _setStatus('$normalizedUserId 에게 $role 권한을 부여했습니다.');
     });
   }
@@ -1364,6 +1895,11 @@ class NestController extends ChangeNotifier {
         currentRole = _resolveViewRole(selectedHomeschoolId);
       }
       await loadHomeschoolMemberships();
+      await _logAudit(
+        actionType: 'MEMBERSHIP_REVOKE',
+        resourceType: 'homeschool_memberships',
+        resourceId: '$normalizedUserId:$role',
+      );
       _setStatus('$normalizedUserId 의 $role 권한을 회수했습니다.');
     });
   }
@@ -1426,6 +1962,20 @@ class NestController extends ChangeNotifier {
     return pendingInvites.where((invite) => invite.canAccept).length;
   }
 
+  String? get defaultTeacherProfileId {
+    final currentUserId = user?.id;
+    if (currentUserId != null) {
+      final matched = teacherProfiles
+          .where((profile) => profile.userId == currentUserId)
+          .map((profile) => profile.id)
+          .firstOrNull;
+      if (matched != null) {
+        return matched;
+      }
+    }
+    return teacherProfiles.map((profile) => profile.id).firstOrNull;
+  }
+
   List<String> get membershipUserIds {
     return homeschoolMemberships
         .map((row) => row.userId)
@@ -1437,6 +1987,100 @@ class NestController extends ChangeNotifier {
   List<Membership> membershipsByUser(String userId) {
     return homeschoolMemberships
         .where((row) => row.userId == userId)
+        .toList(growable: false);
+  }
+
+  List<ChildProfile> childrenForFamily(String familyId) {
+    return children
+        .where((child) => child.familyId == familyId)
+        .toList(growable: false);
+  }
+
+  List<String> enrolledChildIdsForClassGroup(String classGroupId) {
+    return classEnrollments
+        .where((row) => row.classGroupId == classGroupId)
+        .map((row) => row.childId)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  bool isChildEnrolledInClass({
+    required String classGroupId,
+    required String childId,
+  }) {
+    return classEnrollments.any(
+      (row) => row.classGroupId == classGroupId && row.childId == childId,
+    );
+  }
+
+  String findTeacherName(String teacherProfileId) {
+    return teacherProfiles
+            .where((profile) => profile.id == teacherProfileId)
+            .map((profile) => profile.displayName)
+            .firstOrNull ??
+        teacherProfileId;
+  }
+
+  List<SessionTeacherAssignment> teacherAssignmentsForSession(
+    String sessionId,
+  ) {
+    final rows = sessionTeacherAssignments
+        .where((row) => row.classSessionId == sessionId)
+        .toList(growable: false);
+
+    rows.sort((a, b) {
+      final left = a.assignmentRole == 'MAIN' ? 0 : 1;
+      final right = b.assignmentRole == 'MAIN' ? 0 : 1;
+      if (left != right) {
+        return left.compareTo(right);
+      }
+      return findTeacherName(
+        a.teacherProfileId,
+      ).compareTo(findTeacherName(b.teacherProfileId));
+    });
+
+    return rows;
+  }
+
+  List<String> teacherConflictMessagesForSession(String sessionId) {
+    final targetSession = sessions
+        .where((item) => item.id == sessionId)
+        .firstOrNull;
+    if (targetSession == null) {
+      return const [];
+    }
+
+    final slotId = targetSession.timeSlotId;
+    final messages = <String>{};
+
+    for (final assignment in teacherAssignmentsForSession(sessionId)) {
+      final duplicated = sessionTeacherAssignments.any(
+        (row) =>
+            row.teacherProfileId == assignment.teacherProfileId &&
+            row.classSessionId != sessionId &&
+            sessions.any(
+              (otherSession) =>
+                  otherSession.id == row.classSessionId &&
+                  otherSession.timeSlotId == slotId,
+            ),
+      );
+      if (duplicated) {
+        messages.add('${findTeacherName(assignment.teacherProfileId)} 시간충돌');
+      }
+    }
+
+    return messages.toList(growable: false);
+  }
+
+  List<TeachingPlan> teachingPlansForSession(String sessionId) {
+    return teachingPlans
+        .where((plan) => plan.classSessionId == sessionId)
+        .toList(growable: false);
+  }
+
+  List<StudentActivityLog> activityLogsForChild(String childId) {
+    return studentActivityLogs
+        .where((log) => log.childId == childId)
         .toList(growable: false);
   }
 
@@ -1624,6 +2268,15 @@ class NestController extends ChangeNotifier {
     homeschoolMemberships = const [];
     homeschoolInvites = const [];
     pendingInvites = const [];
+    families = const [];
+    children = const [];
+    classEnrollments = const [];
+    teacherProfiles = const [];
+    sessionTeacherAssignments = const [];
+    teachingPlans = const [];
+    studentActivityLogs = const [];
+    announcements = const [];
+    auditLogs = const [];
     _viewRoleByHomeschool.clear();
     selectedHomeschoolId = null;
     currentRole = null;
@@ -1651,6 +2304,38 @@ class NestController extends ChangeNotifier {
 
   void _setStatus(String text) {
     _statusMessage = text;
+  }
+
+  Future<void> _logAudit({
+    required String actionType,
+    required String resourceType,
+    required String resourceId,
+    Map<String, dynamic>? beforeJson,
+    Map<String, dynamic>? afterJson,
+  }) async {
+    if (!isAdminLike || user == null) {
+      return;
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return;
+    }
+
+    try {
+      await _repository.insertAuditLog(
+        homeschoolId: homeschoolId,
+        actorUserId: user!.id,
+        actionType: actionType,
+        resourceType: resourceType,
+        resourceId: resourceId,
+        beforeJson: beforeJson,
+        afterJson: afterJson,
+      );
+      await loadAuditLogs();
+    } catch (_) {
+      // Ignore audit persistence errors to keep primary action non-blocking.
+    }
   }
 
   @override

@@ -116,6 +116,35 @@ class _DashboardTabState extends State<DashboardTab> {
           ],
         ),
         const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('최근 공지', style: theme.textTheme.titleLarge),
+                const SizedBox(height: 8),
+                if (controller.announcements.isEmpty)
+                  const Text('등록된 공지가 없습니다.')
+                else
+                  ...controller.announcements.take(3).map((notice) {
+                    final scope = notice.classGroupId == null
+                        ? '전체'
+                        : controller.findClassGroupName(notice.classGroupId);
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        '${notice.pinned ? '[PIN] ' : ''}${notice.title}',
+                      ),
+                      subtitle: Text('$scope · ${notice.body}'),
+                    );
+                  }),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         if (controller.isAdminLike)
           Card(
             child: Padding(

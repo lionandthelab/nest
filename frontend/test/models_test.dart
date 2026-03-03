@@ -60,5 +60,39 @@ void main() {
       expect(invite.isExpired, isTrue);
       expect(invite.canAccept, isFalse);
     });
+
+    test('ChildProfile.fromMap reads nested family fields', () {
+      final child = ChildProfile.fromMap({
+        'id': 'child-1',
+        'family_id': 'fam-1',
+        'name': 'Mina',
+        'birth_date': '2019-05-12',
+        'profile_note': 'likes reading',
+        'status': 'ACTIVE',
+        'families': {'family_name': 'Kim Family', 'homeschool_id': 'school-1'},
+      });
+
+      expect(child.id, 'child-1');
+      expect(child.familyId, 'fam-1');
+      expect(child.familyName, 'Kim Family');
+      expect(child.name, 'Mina');
+      expect(child.status, 'ACTIVE');
+    });
+
+    test('TeacherProfile.fromMap supports parent-teacher type', () {
+      final profile = TeacherProfile.fromMap({
+        'id': 'teacher-1',
+        'homeschool_id': 'school-1',
+        'user_id': 'user-1',
+        'display_name': 'Teacher Lee',
+        'teacher_type': 'PARENT_TEACHER',
+        'specialties': ['math', 'science'],
+      });
+
+      expect(profile.id, 'teacher-1');
+      expect(profile.isParentTeacher, isTrue);
+      expect(profile.specialties, hasLength(2));
+      expect(profile.displayName, 'Teacher Lee');
+    });
   });
 }

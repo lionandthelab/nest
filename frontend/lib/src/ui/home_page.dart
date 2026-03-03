@@ -11,6 +11,8 @@ import 'tabs/parent_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'tabs/community_tab.dart';
 import 'tabs/community_feed_tab.dart';
+import 'tabs/family_admin_tab.dart';
+import 'tabs/ops_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 
 class HomePage extends StatefulWidget {
@@ -147,6 +149,21 @@ class _HomePageState extends State<HomePage> {
         _TabSpec(
           label: 'Members',
           page: MembersTab(controller: controller),
+        ),
+      );
+    }
+
+    if (controller.isAdminLike) {
+      tabs.add(
+        _TabSpec(
+          label: 'Families',
+          page: FamilyAdminTab(controller: controller),
+        ),
+      );
+      tabs.add(
+        _TabSpec(
+          label: 'Ops',
+          page: OpsTab(controller: controller),
         ),
       );
     }
@@ -638,9 +655,12 @@ Icon _iconForLabel(String label, {required bool filled}) {
       filled ? Icons.admin_panel_settings : Icons.admin_panel_settings_outlined,
     ),
     'Members' => Icon(filled ? Icons.group : Icons.group_outlined),
+    'Families' => Icon(filled ? Icons.diversity_3 : Icons.diversity_3_outlined),
+    'Ops' => Icon(filled ? Icons.manage_search : Icons.manage_search_outlined),
     'Gallery' => Icon(
       filled ? Icons.photo_library : Icons.photo_library_outlined,
     ),
+    'Drive' => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
     _ => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
   };
 }

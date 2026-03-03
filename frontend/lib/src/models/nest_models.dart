@@ -142,6 +142,298 @@ class HomeschoolInvite {
   }
 }
 
+class Family {
+  const Family({
+    required this.id,
+    required this.homeschoolId,
+    required this.familyName,
+    required this.note,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String familyName;
+  final String note;
+  final DateTime? createdAt;
+
+  factory Family.fromMap(Map<String, dynamic> map) {
+    return Family(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      familyName: (map['family_name'] as String?) ?? 'Unnamed Family',
+      note: (map['note'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
+class ChildProfile {
+  const ChildProfile({
+    required this.id,
+    required this.familyId,
+    required this.familyName,
+    required this.name,
+    required this.birthDate,
+    required this.profileNote,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String familyId;
+  final String familyName;
+  final String name;
+  final DateTime? birthDate;
+  final String profileNote;
+  final String status;
+  final DateTime? createdAt;
+
+  factory ChildProfile.fromMap(Map<String, dynamic> map) {
+    final nested = map['families'];
+    final familyMap = nested is Map<String, dynamic>
+        ? nested
+        : <String, dynamic>{};
+
+    return ChildProfile(
+      id: (map['id'] as String?) ?? '',
+      familyId: (map['family_id'] as String?) ?? '',
+      familyName: (familyMap['family_name'] as String?) ?? 'Unknown Family',
+      name: (map['name'] as String?) ?? 'Unnamed Child',
+      birthDate: parseDateTime(map['birth_date']),
+      profileNote: (map['profile_note'] as String?) ?? '',
+      status: (map['status'] as String?) ?? 'ACTIVE',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
+class ClassEnrollment {
+  const ClassEnrollment({
+    required this.id,
+    required this.classGroupId,
+    required this.childId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String classGroupId;
+  final String childId;
+  final DateTime? createdAt;
+
+  factory ClassEnrollment.fromMap(Map<String, dynamic> map) {
+    return ClassEnrollment(
+      id: (map['id'] as String?) ?? '',
+      classGroupId: (map['class_group_id'] as String?) ?? '',
+      childId: (map['child_id'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
+class TeacherProfile {
+  const TeacherProfile({
+    required this.id,
+    required this.homeschoolId,
+    required this.userId,
+    required this.displayName,
+    required this.teacherType,
+    required this.specialties,
+    required this.bio,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String? userId;
+  final String displayName;
+  final String teacherType;
+  final List<String> specialties;
+  final String bio;
+  final DateTime? createdAt;
+
+  bool get isParentTeacher => teacherType == 'PARENT_TEACHER';
+
+  factory TeacherProfile.fromMap(Map<String, dynamic> map) {
+    return TeacherProfile(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      userId: map['user_id'] as String?,
+      displayName: (map['display_name'] as String?) ?? 'Teacher',
+      teacherType: (map['teacher_type'] as String?) ?? 'GUEST_TEACHER',
+      specialties:
+          (map['specialties'] as List?)?.whereType<String>().toList(
+            growable: false,
+          ) ??
+          const [],
+      bio: (map['bio'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
+class SessionTeacherAssignment {
+  const SessionTeacherAssignment({
+    required this.id,
+    required this.classSessionId,
+    required this.teacherProfileId,
+    required this.assignmentRole,
+  });
+
+  final String id;
+  final String classSessionId;
+  final String teacherProfileId;
+  final String assignmentRole;
+
+  bool get isMain => assignmentRole == 'MAIN';
+
+  factory SessionTeacherAssignment.fromMap(Map<String, dynamic> map) {
+    return SessionTeacherAssignment(
+      id: (map['id'] as String?) ?? '',
+      classSessionId: (map['class_session_id'] as String?) ?? '',
+      teacherProfileId: (map['teacher_profile_id'] as String?) ?? '',
+      assignmentRole: (map['assignment_role'] as String?) ?? 'ASSISTANT',
+    );
+  }
+}
+
+class TeachingPlan {
+  const TeachingPlan({
+    required this.id,
+    required this.classSessionId,
+    required this.teacherProfileId,
+    required this.objectives,
+    required this.materials,
+    required this.activities,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String classSessionId;
+  final String teacherProfileId;
+  final String objectives;
+  final String materials;
+  final String activities;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory TeachingPlan.fromMap(Map<String, dynamic> map) {
+    return TeachingPlan(
+      id: (map['id'] as String?) ?? '',
+      classSessionId: (map['class_session_id'] as String?) ?? '',
+      teacherProfileId: (map['teacher_profile_id'] as String?) ?? '',
+      objectives: (map['objectives'] as String?) ?? '',
+      materials: (map['materials'] as String?) ?? '',
+      activities: (map['activities'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+}
+
+class StudentActivityLog {
+  const StudentActivityLog({
+    required this.id,
+    required this.childId,
+    required this.classSessionId,
+    required this.recordedByTeacherId,
+    required this.activityType,
+    required this.content,
+    required this.recordedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String childId;
+  final String? classSessionId;
+  final String recordedByTeacherId;
+  final String activityType;
+  final String content;
+  final DateTime? recordedAt;
+  final DateTime? createdAt;
+
+  factory StudentActivityLog.fromMap(Map<String, dynamic> map) {
+    return StudentActivityLog(
+      id: (map['id'] as String?) ?? '',
+      childId: (map['child_id'] as String?) ?? '',
+      classSessionId: map['class_session_id'] as String?,
+      recordedByTeacherId: (map['recorded_by_teacher_id'] as String?) ?? '',
+      activityType: (map['activity_type'] as String?) ?? 'OBSERVATION',
+      content: (map['content'] as String?) ?? '',
+      recordedAt: parseDateTime(map['recorded_at']),
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
+class Announcement {
+  const Announcement({
+    required this.id,
+    required this.homeschoolId,
+    required this.classGroupId,
+    required this.authorUserId,
+    required this.title,
+    required this.body,
+    required this.pinned,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String? classGroupId;
+  final String authorUserId;
+  final String title;
+  final String body;
+  final bool pinned;
+  final DateTime? createdAt;
+
+  factory Announcement.fromMap(Map<String, dynamic> map) {
+    return Announcement(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      classGroupId: map['class_group_id'] as String?,
+      authorUserId: (map['author_user_id'] as String?) ?? '',
+      title: (map['title'] as String?) ?? '',
+      body: (map['body'] as String?) ?? '',
+      pinned: parseBool(map['pinned']),
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
+class AuditLog {
+  const AuditLog({
+    required this.id,
+    required this.homeschoolId,
+    required this.actorUserId,
+    required this.actionType,
+    required this.resourceType,
+    required this.resourceId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String? actorUserId;
+  final String actionType;
+  final String resourceType;
+  final String resourceId;
+  final DateTime? createdAt;
+
+  factory AuditLog.fromMap(Map<String, dynamic> map) {
+    return AuditLog(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      actorUserId: map['actor_user_id'] as String?,
+      actionType: (map['action_type'] as String?) ?? '',
+      resourceType: (map['resource_type'] as String?) ?? '',
+      resourceId: (map['resource_id'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
 class Term {
   const Term({
     required this.id,

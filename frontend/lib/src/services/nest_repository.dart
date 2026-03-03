@@ -210,6 +210,346 @@ class NestRepository {
     );
   }
 
+  Future<List<Family>> fetchFamilies({required String homeschoolId}) async {
+    final data = await client
+        .from('families')
+        .select('id, homeschool_id, family_name, note, created_at')
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false)
+        .limit(300);
+
+    return _asRows(data).map(Family.fromMap).toList(growable: false);
+  }
+
+  Future<Family> createFamily({
+    required String homeschoolId,
+    required String familyName,
+    required String note,
+  }) async {
+    final row = await client
+        .from('families')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'family_name': familyName.trim(),
+          'note': note.trim(),
+        })
+        .select('id, homeschool_id, family_name, note, created_at')
+        .single();
+
+    return Family.fromMap(_asMap(row));
+  }
+
+  Future<List<ChildProfile>> fetchChildren({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('children')
+        .select(
+          'id, family_id, name, birth_date, profile_note, status, created_at, '
+          'families!inner(homeschool_id, family_name)',
+        )
+        .eq('families.homeschool_id', homeschoolId)
+        .order('created_at', ascending: false)
+        .limit(600);
+
+    return _asRows(data).map(ChildProfile.fromMap).toList(growable: false);
+  }
+
+  Future<ChildProfile> createChild({
+    required String familyId,
+    required String name,
+    required String birthDate,
+    required String profileNote,
+  }) async {
+    final data = await client.rpc(
+      'create_child_admin',
+      params: {
+        'p_family_id': familyId,
+        'p_name': name.trim(),
+        'p_birth_date': birthDate,
+        'p_profile_note': profileNote.trim(),
+      },
+    );
+
+    return ChildProfile.fromMap(_asMap(data));
+  }
+
+  Future<List<ClassEnrollment>> fetchClassEnrollments({
+    required List<String> classGroupIds,
+  }) async {
+    if (classGroupIds.isEmpty) {
+      return const [];
+    }
+
+    final data = await client
+        .from('class_enrollments')
+        .select('id, class_group_id, child_id, created_at')
+        .inFilter('class_group_id', classGroupIds);
+
+    return _asRows(data).map(ClassEnrollment.fromMap).toList(growable: false);
+  }
+
+  Future<void> upsertClassEnrollment({
+    required String classGroupId,
+    required String childId,
+  }) {
+    return client.from('class_enrollments').upsert({
+      'class_group_id': classGroupId,
+      'child_id': childId,
+    }, onConflict: 'class_group_id,child_id');
+  }
+
+  Future<void> deleteClassEnrollment({
+    required String classGroupId,
+    required String childId,
+  }) {
+    return client
+        .from('class_enrollments')
+        .delete()
+        .eq('class_group_id', classGroupId)
+        .eq('child_id', childId);
+  }
+
+  Future<List<TeacherProfile>> fetchTeacherProfiles({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('teacher_profiles')
+        .select(
+          'id, homeschool_id, user_id, display_name, teacher_type, specialties, bio, created_at',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false)
+        .limit(300);
+
+    return _asRows(data).map(TeacherProfile.fromMap).toList(growable: false);
+  }
+
+  Future<TeacherProfile> createTeacherProfile({
+    required String homeschoolId,
+    required String displayName,
+    required String teacherType,
+    String? userId,
+  }) async {
+    final row = await client
+        .from('teacher_profiles')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'user_id': _normalizeNullable(userId),
+          'display_name': displayName.trim(),
+          'teacher_type': teacherType,
+          'specialties': const <String>[],
+          'bio': '',
+        })
+        .select(
+          'id, homeschool_id, user_id, display_name, teacher_type, specialties, bio, created_at',
+        )
+        .single();
+
+    return TeacherProfile.fromMap(_asMap(row));
+  }
+
+  Future<List<SessionTeacherAssignment>> fetchSessionTeacherAssignments({
+    required List<String> classSessionIds,
+  }) async {
+    if (classSessionIds.isEmpty) {
+      return const [];
+    }
+
+    final data = await client
+        .from('session_teacher_assignments')
+        .select('id, class_session_id, teacher_profile_id, assignment_role')
+        .inFilter('class_session_id', classSessionIds);
+
+    return _asRows(
+      data,
+    ).map(SessionTeacherAssignment.fromMap).toList(growable: false);
+  }
+
+  Future<void> upsertSessionTeacherAssignment({
+    required String classSessionId,
+    required String teacherProfileId,
+    required String assignmentRole,
+  }) {
+    return client.from('session_teacher_assignments').upsert({
+      'class_session_id': classSessionId,
+      'teacher_profile_id': teacherProfileId,
+      'assignment_role': assignmentRole,
+    }, onConflict: 'class_session_id,teacher_profile_id');
+  }
+
+  Future<void> setSessionMainTeacher({
+    required String classSessionId,
+    required String teacherProfileId,
+  }) async {
+    await client
+        .from('session_teacher_assignments')
+        .delete()
+        .eq('class_session_id', classSessionId)
+        .eq('assignment_role', 'MAIN')
+        .neq('teacher_profile_id', teacherProfileId);
+
+    await upsertSessionTeacherAssignment(
+      classSessionId: classSessionId,
+      teacherProfileId: teacherProfileId,
+      assignmentRole: 'MAIN',
+    );
+  }
+
+  Future<void> deleteSessionTeacherAssignment({
+    required String classSessionId,
+    required String teacherProfileId,
+  }) {
+    return client
+        .from('session_teacher_assignments')
+        .delete()
+        .eq('class_session_id', classSessionId)
+        .eq('teacher_profile_id', teacherProfileId);
+  }
+
+  Future<List<TeachingPlan>> fetchTeachingPlans({
+    required List<String> classSessionIds,
+  }) async {
+    if (classSessionIds.isEmpty) {
+      return const [];
+    }
+
+    final data = await client
+        .from('teaching_plans')
+        .select(
+          'id, class_session_id, teacher_profile_id, objectives, materials, activities, created_at, updated_at',
+        )
+        .inFilter('class_session_id', classSessionIds)
+        .order('created_at', ascending: false)
+        .limit(500);
+
+    return _asRows(data).map(TeachingPlan.fromMap).toList(growable: false);
+  }
+
+  Future<void> createTeachingPlan({
+    required String classSessionId,
+    required String teacherProfileId,
+    required String objectives,
+    required String materials,
+    required String activities,
+  }) {
+    return client.from('teaching_plans').insert({
+      'class_session_id': classSessionId,
+      'teacher_profile_id': teacherProfileId,
+      'objectives': objectives.trim(),
+      'materials': materials.trim(),
+      'activities': activities.trim(),
+    });
+  }
+
+  Future<List<StudentActivityLog>> fetchStudentActivityLogs({
+    required List<String> childIds,
+  }) async {
+    if (childIds.isEmpty) {
+      return const [];
+    }
+
+    final data = await client
+        .from('student_activity_logs')
+        .select(
+          'id, child_id, class_session_id, recorded_by_teacher_id, activity_type, content, recorded_at, created_at',
+        )
+        .inFilter('child_id', childIds)
+        .order('recorded_at', ascending: false)
+        .limit(800);
+
+    return _asRows(
+      data,
+    ).map(StudentActivityLog.fromMap).toList(growable: false);
+  }
+
+  Future<void> createStudentActivityLog({
+    required String childId,
+    required String? classSessionId,
+    required String recordedByTeacherId,
+    required String activityType,
+    required String content,
+  }) {
+    return client.from('student_activity_logs').insert({
+      'child_id': childId,
+      'class_session_id': _normalizeNullable(classSessionId),
+      'recorded_by_teacher_id': recordedByTeacherId,
+      'activity_type': activityType,
+      'content': content.trim(),
+    });
+  }
+
+  Future<List<Announcement>> fetchAnnouncements({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('announcements')
+        .select(
+          'id, homeschool_id, class_group_id, author_user_id, title, body, pinned, created_at',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('pinned', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(200);
+
+    return _asRows(data).map(Announcement.fromMap).toList(growable: false);
+  }
+
+  Future<void> createAnnouncement({
+    required String homeschoolId,
+    required String? classGroupId,
+    required String authorUserId,
+    required String title,
+    required String body,
+    required bool pinned,
+  }) {
+    return client.from('announcements').insert({
+      'homeschool_id': homeschoolId,
+      'class_group_id': _normalizeNullable(classGroupId),
+      'author_user_id': authorUserId,
+      'title': title.trim(),
+      'body': body.trim(),
+      'pinned': pinned,
+    });
+  }
+
+  Future<List<AuditLog>> fetchAuditLogs({
+    required String homeschoolId,
+    int limit = 200,
+  }) async {
+    final safeLimit = limit <= 0 ? 200 : limit;
+    final data = await client
+        .from('audit_logs')
+        .select(
+          'id, homeschool_id, actor_user_id, action_type, resource_type, resource_id, created_at',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false)
+        .limit(safeLimit);
+
+    return _asRows(data).map(AuditLog.fromMap).toList(growable: false);
+  }
+
+  Future<void> insertAuditLog({
+    required String homeschoolId,
+    required String actorUserId,
+    required String actionType,
+    required String resourceType,
+    required String resourceId,
+    Map<String, dynamic>? beforeJson,
+    Map<String, dynamic>? afterJson,
+  }) {
+    return client.from('audit_logs').insert({
+      'homeschool_id': homeschoolId,
+      'actor_user_id': actorUserId,
+      'action_type': actionType,
+      'resource_type': resourceType,
+      'resource_id': resourceId,
+      'before_json': beforeJson,
+      'after_json': afterJson,
+    });
+  }
+
   Future<List<Term>> fetchTerms({required String homeschoolId}) async {
     final data = await client
         .from('terms')

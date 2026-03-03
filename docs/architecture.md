@@ -65,6 +65,8 @@ frontend/
           community_feed_tab.dart
           community_tab.dart
           members_tab.dart
+          family_admin_tab.dart
+          ops_tab.dart
           drive_tab.dart
   web/
     index.html
@@ -79,6 +81,9 @@ supabase/
     20260302173000_constraints_and_drive_tokens.sql
     20260303060000_community_sns.sql
     20260303130000_homeschool_invites.sql
+    20260303143000_children_policy_fix.sql
+    20260303145000_child_admin_rpc.sql
+    20260303150000_invite_rpc_fix.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -108,6 +113,8 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 - Non-admin: `Community` (user feed)
 - Admin/Staff: `SNS Admin` (moderation)
 - HOMESCHOOL_ADMIN only: `Drive`, `Members`
+- Admin/Staff: `Families` (family/child/class enrollment)
+- Admin/Staff: `Ops` (announcement + audit log)
 
 ## 5. State and Data Flow
 
@@ -121,6 +128,9 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - timetable data, gallery data, drive integration
   - community feed + moderation state
   - homeschool membership list for role administration
+  - family/child/enrollment/teacher profile domain
+  - teaching plans + student activity logs
+  - announcements + audit logs
 
 ### 5.2 `NestRepository`
 
@@ -134,6 +144,15 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `createHomeschoolInvite(...)`
   - `cancelHomeschoolInvite(inviteId)`
   - `acceptHomeschoolInvite(inviteToken)`
+  - `fetchFamilies`, `createFamily`
+  - `fetchChildren`, `createChild` (`create_child_admin` RPC)
+  - `fetchClassEnrollments`, `upsertClassEnrollment`, `deleteClassEnrollment`
+  - `fetchTeacherProfiles`, `createTeacherProfile`
+  - `fetchSessionTeacherAssignments`, `setSessionMainTeacher`, `upsertSessionTeacherAssignment`
+  - `fetchTeachingPlans`, `createTeachingPlan`
+  - `fetchStudentActivityLogs`, `createStudentActivityLog`
+  - `fetchAnnouncements`, `createAnnouncement`
+  - `fetchAuditLogs`, `insertAuditLog`
 
 ## 6. Feature Architecture
 
@@ -195,6 +214,34 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   3. DB activates `homeschool_memberships` row
   4. controller reloads memberships/context and role tabs
 
+### 6.7 Family and Enrollment Admin
+
+- `family_admin_tab.dart`:
+  - create family
+  - create child
+  - class-level child enrollment toggle
+  - teacher profile creation for timetable assignment
+
+### 6.8 Teacher Plan and Activity Logs
+
+- `teacher_hub_tab.dart`:
+  - create teaching plan by class session
+  - create student activity log by child/session
+  - teacher-side announcement creation
+
+### 6.9 Timetable Teacher Assignment
+
+- `timetable_tab.dart`:
+  - per-session teacher assignment dialog
+  - main/assistant assignment controls
+  - slot conflict warning badges (UI) + DB trigger enforcement
+
+### 6.10 Operations
+
+- `ops_tab.dart` (Admin/Staff):
+  - announcement posting and monitoring
+  - audit log timeline (membership/report/timetable/invite actions)
+
 ## 7. Database and RLS Notes
 
 ### 7.1 Core Membership Security
@@ -230,6 +277,18 @@ Migration `20260303130000_homeschool_invites.sql` includes:
   - membership upsert to `ACTIVE`
   - invite transition to `ACCEPTED`
 
+Migration `20260303143000_children_policy_fix.sql`:
+
+- children insert/update RLS check hardened for admin/staff membership join path
+
+Migration `20260303145000_child_admin_rpc.sql`:
+
+- `create_child_admin` RPC for stable admin/staff child creation flow
+
+Migration `20260303150000_invite_rpc_fix.sql`:
+
+- `accept_homeschool_invite` return signature fix to avoid output-variable collision
+
 ## 8. Environment Variables
 
 Required `dart-define` values:
@@ -257,6 +316,7 @@ flutter build web --release --base-href /nest/
 
 - GitHub Pages workflow: `.github/workflows/flutter_web_pages.yml`
 - Artifact: `frontend/build/web` to `gh-pages`
+- Remote integration workflow: `.github/workflows/remote_e2e.yml`
 
 ## 10. OAuth Redirect URI
 
