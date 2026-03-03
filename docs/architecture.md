@@ -86,6 +86,7 @@ supabase/
     20260303145000_child_admin_rpc.sql
     20260303150000_invite_rpc_fix.sql
     20260303162000_class_groups_delete_and_member_search.sql
+    20260303190000_member_unavailability_blocks.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -148,10 +149,12 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `cancelHomeschoolInvite(inviteId)`
   - `acceptHomeschoolInvite(inviteToken)`
   - `fetchFamilies`, `createFamily`
+  - `fetchFamilyGuardianUserIds`
   - `fetchChildren`, `createChild` (`create_child_admin` RPC)
   - `createClassGroup`, `updateClassGroup`, `deleteClassGroup`
   - `fetchClassEnrollments`, `upsertClassEnrollment`, `deleteClassEnrollment`
   - `fetchTeacherProfiles`, `createTeacherProfile`
+  - `fetchMemberUnavailabilityBlocks`, `createMemberUnavailabilityBlock`, `deleteMemberUnavailabilityBlock`
   - `fetchSessionTeacherAssignments`, `setSessionMainTeacher`, `upsertSessionTeacherAssignment`
   - `fetchTeachingPlans`, `createTeachingPlan`
   - `fetchStudentActivityLogs`, `createStudentActivityLog`
@@ -178,6 +181,8 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - schedule concierge (few-question wizard) -> multi-option drafts
   - course-frequency weighting controls (per course low/medium/high)
   - teacher preference strategy controls (balanced/preferred-first/parent-first)
+  - parent/teacher blocked-time constraints are auto-avoided in draft generation
+  - draft/board conflict checks include parent-blocked and teacher-blocked slot issues
   - draft session editor (course/slot/main teacher) with immediate conflict feedback
   - draft apply flow with slot-collision skip and teacher conflict reporting
   - prompt generation + apply/discard proposals (legacy path)
@@ -236,6 +241,11 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - class CRUD (create/update/delete)
   - class-level child enrollment toggle
   - teacher profile creation with optional existing-account linkage (member search)
+  - parent/teacher unavailability block registration and deletion
+- `parent_hub_tab.dart`:
+  - parent self-service unavailability registration/deletion (own account only)
+- `teacher_hub_tab.dart`:
+  - teacher self-service unavailability registration/deletion (own teacher profile only)
 
 ### 6.8 Teacher Plan and Activity Logs
 
@@ -308,6 +318,18 @@ Migration `20260303162000_class_groups_delete_and_member_search.sql`:
 
 - `class_groups` delete RLS policy for admin/staff
 - `search_homeschool_members` security-definer RPC for account lookup by name/email/UUID
+
+Migration `20260303190000_member_unavailability_blocks.sql`:
+
+- `member_unavailability_blocks` table for teacher/parent unavailable time ranges
+- owner kind split:
+  - `TEACHER_PROFILE` (teacher profile scoped)
+  - `MEMBER_USER` (parent account scoped)
+- RLS:
+  - member read access
+  - admin/staff full management
+  - owner self-management (teacher profile owner or parent user owner)
+- update trigger: `set_updated_at()`
 
 ## 8. Environment Variables
 

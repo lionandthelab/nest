@@ -38,7 +38,9 @@ class NestController extends ChangeNotifier {
   List<Family> families = const [];
   List<ChildProfile> children = const [];
   List<ClassEnrollment> classEnrollments = const [];
+  Map<String, List<String>> familyGuardianUserIdsByFamily = const {};
   List<TeacherProfile> teacherProfiles = const [];
+  List<MemberUnavailabilityBlock> memberUnavailabilityBlocks = const [];
   List<SessionTeacherAssignment> sessionTeacherAssignments = const [];
   List<TeachingPlan> teachingPlans = const [];
   List<StudentActivityLog> studentActivityLogs = const [];
@@ -483,9 +485,15 @@ class NestController extends ChangeNotifier {
         : trimmedPrompt;
 
     await _runBusy('질문 기반 시간표 초안을 생성하는 중...', () async {
+      final classGroupId = selectedClassGroupId!;
+      final blockedSlotIdsByTeacher = blockedSlotIdsByTeacherProfile();
+      final blockedSlotsForParents = blockedSlotIdsForParentsInClass(
+        classGroupId,
+      );
+
       final drafts = buildWizardScheduleOptions(
         prompt: safePrompt,
-        classGroupId: selectedClassGroupId!,
+        classGroupId: classGroupId,
         courses: courses,
         timeSlots: timeSlots,
         existingSessions: sessions,
@@ -496,6 +504,8 @@ class NestController extends ChangeNotifier {
         preferredTeacherIds: preferredTeacherIds,
         teacherStrategy: teacherStrategy,
         preferOnlySelectedTeachers: preferOnlySelectedTeachers,
+        blockedSlotIds: blockedSlotsForParents,
+        teacherBlockedSlotIdsByTeacher: blockedSlotIdsByTeacher,
         optionCount: optionCount,
         keepExistingSessions: keepExistingSessions,
       );
@@ -557,11 +567,7 @@ class NestController extends ChangeNotifier {
     _replaceScheduleOptionDraft(
       draft.copyWith(
         sessions: updatedSessions,
-        issues: evaluateScheduleOptionIssues(
-          sessions: updatedSessions,
-          existingSessions: sessions,
-          requireTeacher: true,
-        ),
+        issues: _evaluateScheduleOptionIssues(updatedSessions),
       ),
     );
   }
@@ -579,11 +585,13 @@ class NestController extends ChangeNotifier {
         .map((session) => session.timeSlotId)
         .toSet();
     final occupiedExisting = sessions.map((row) => row.timeSlotId).toSet();
+    final blockedByParents = blockedSlotIdsForParentsInClass(classGroupId);
     final candidateSlot = timeSlots
         .where(
           (slot) =>
               !occupiedByDraft.contains(slot.id) &&
-              !occupiedExisting.contains(slot.id),
+              !occupiedExisting.contains(slot.id) &&
+              !blockedByParents.contains(slot.id),
         )
         .firstOrNull;
     final fallbackCourse = courses.firstOrNull;
@@ -607,11 +615,7 @@ class NestController extends ChangeNotifier {
     _replaceScheduleOptionDraft(
       draft.copyWith(
         sessions: updatedSessions,
-        issues: evaluateScheduleOptionIssues(
-          sessions: updatedSessions,
-          existingSessions: sessions,
-          requireTeacher: true,
-        ),
+        issues: _evaluateScheduleOptionIssues(updatedSessions),
       ),
     );
   }
@@ -634,12 +638,25 @@ class NestController extends ChangeNotifier {
     _replaceScheduleOptionDraft(
       draft.copyWith(
         sessions: updatedSessions,
-        issues: evaluateScheduleOptionIssues(
-          sessions: updatedSessions,
-          existingSessions: sessions,
-          requireTeacher: true,
-        ),
+        issues: _evaluateScheduleOptionIssues(updatedSessions),
       ),
+    );
+  }
+
+  List<ScheduleDraftIssue> _evaluateScheduleOptionIssues(
+    List<ScheduleOptionSession> sessionsToEvaluate,
+  ) {
+    final classGroupId = selectedClassGroupId;
+    final parentBlockedSlotIds = classGroupId == null
+        ? const <String>{}
+        : blockedSlotIdsForParentsInClass(classGroupId);
+
+    return evaluateScheduleOptionIssues(
+      sessions: sessionsToEvaluate,
+      existingSessions: sessions,
+      requireTeacher: true,
+      blockedSlotIdsForParents: parentBlockedSlotIds,
+      teacherBlockedSlotIdsByTeacher: blockedSlotIdsByTeacherProfile(),
     );
   }
 
@@ -661,11 +678,7 @@ class NestController extends ChangeNotifier {
     }
 
     final refreshedDraft = draft.copyWith(
-      issues: evaluateScheduleOptionIssues(
-        sessions: draft.sessions,
-        existingSessions: sessions,
-        requireTeacher: true,
-      ),
+      issues: _evaluateScheduleOptionIssues(draft.sessions),
     );
     if (refreshedDraft.hasHardConflicts) {
       _replaceScheduleOptionDraft(refreshedDraft);
@@ -1080,7 +1093,9 @@ class NestController extends ChangeNotifier {
       families = const [];
       children = const [];
       classEnrollments = const [];
+      familyGuardianUserIdsByFamily = const {};
       teacherProfiles = const [];
+      memberUnavailabilityBlocks = const [];
       sessionTeacherAssignments = const [];
       teachingPlans = const [];
       studentActivityLogs = const [];
@@ -1244,11 +1259,29 @@ class NestController extends ChangeNotifier {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       families = const [];
+      familyGuardianUserIdsByFamily = const {};
       notifyListeners();
       return;
     }
 
     families = await _repository.fetchFamilies(homeschoolId: homeschoolId);
+    notifyListeners();
+  }
+
+  Future<void> loadFamilyGuardians() async {
+    if (families.isEmpty) {
+      familyGuardianUserIdsByFamily = const {};
+      notifyListeners();
+      return;
+    }
+
+    final familyIds = families
+        .map((family) => family.id)
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    familyGuardianUserIdsByFamily = await _repository
+        .fetchFamilyGuardianUserIds(familyIds: familyIds);
     notifyListeners();
   }
 
@@ -1287,6 +1320,19 @@ class NestController extends ChangeNotifier {
     teacherProfiles = await _repository.fetchTeacherProfiles(
       homeschoolId: homeschoolId,
     );
+    notifyListeners();
+  }
+
+  Future<void> loadMemberUnavailabilityBlocks() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      memberUnavailabilityBlocks = const [];
+      notifyListeners();
+      return;
+    }
+
+    memberUnavailabilityBlocks = await _repository
+        .fetchMemberUnavailabilityBlocks(homeschoolId: homeschoolId);
     notifyListeners();
   }
 
@@ -1372,9 +1418,11 @@ class NestController extends ChangeNotifier {
   Future<void> _loadOperationalData() async {
     await loadHomeschoolMemberDirectory();
     await loadFamilies();
+    await loadFamilyGuardians();
     await loadChildren();
     await loadClassEnrollments();
     await loadTeacherProfiles();
+    await loadMemberUnavailabilityBlocks();
     await loadSessionTeacherAssignments();
     await loadTeachingPlans();
     await loadStudentActivityLogs();
@@ -1889,6 +1937,7 @@ class NestController extends ChangeNotifier {
       );
 
       await loadFamilies();
+      await loadFamilyGuardians();
       await _logAudit(
         actionType: 'FAMILY_CREATE',
         resourceType: 'families',
@@ -2016,6 +2065,99 @@ class NestController extends ChangeNotifier {
         afterJson: {'display_name': created.displayName, 'type': teacherType},
       );
       _setStatus('교사 프로필을 생성했습니다.');
+    });
+  }
+
+  Future<void> createMemberUnavailabilityBlock({
+    required String ownerKind,
+    required String ownerId,
+    required int dayOfWeek,
+    required String startTime,
+    required String endTime,
+    required String note,
+  }) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final normalizedOwnerId = _normalizeNullable(ownerId);
+    if (normalizedOwnerId == null) {
+      throw StateError('대상 사용자를 선택하세요.');
+    }
+    if (dayOfWeek < 0 || dayOfWeek > 6) {
+      throw StateError('요일 값이 유효하지 않습니다.');
+    }
+
+    final normalizedStart = _normalizeClockText(startTime);
+    final normalizedEnd = _normalizeClockText(endTime);
+    if (normalizedStart == null || normalizedEnd == null) {
+      throw StateError('시간은 HH:MM 형식으로 입력하세요.');
+    }
+    if (!_isClockRangeValid(normalizedStart, normalizedEnd)) {
+      throw StateError('종료 시간은 시작 시간보다 늦어야 합니다.');
+    }
+
+    final normalizedKind = ownerKind.trim();
+    if (normalizedKind != 'TEACHER_PROFILE' &&
+        normalizedKind != 'MEMBER_USER') {
+      throw StateError('대상 유형이 유효하지 않습니다.');
+    }
+    if (!_canManageUnavailabilityTarget(
+      ownerKind: normalizedKind,
+      ownerId: normalizedOwnerId,
+    )) {
+      throw StateError('해당 대상의 불가 시간을 수정할 권한이 없습니다.');
+    }
+
+    await _runBusy('불가 시간을 저장하는 중...', () async {
+      await _repository.createMemberUnavailabilityBlock(
+        homeschoolId: homeschoolId,
+        ownerKind: normalizedKind,
+        ownerId: normalizedOwnerId,
+        dayOfWeek: dayOfWeek,
+        startTime: normalizedStart,
+        endTime: normalizedEnd,
+        note: note,
+        createdByUserId: user!.id,
+      );
+      await loadMemberUnavailabilityBlocks();
+      _setStatus('불가 시간을 저장했습니다.');
+    });
+  }
+
+  Future<void> deleteMemberUnavailabilityBlock({
+    required String blockId,
+  }) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(blockId);
+    if (normalizedId == null) {
+      throw StateError('삭제할 항목을 선택하세요.');
+    }
+    final target = memberUnavailabilityBlocks
+        .where((row) => row.id == normalizedId)
+        .firstOrNull;
+    if (target == null) {
+      throw StateError('삭제할 항목을 찾을 수 없습니다.');
+    }
+    if (!_canManageUnavailabilityTarget(
+      ownerKind: target.ownerKind,
+      ownerId: target.ownerId,
+    )) {
+      throw StateError('해당 대상의 불가 시간을 삭제할 권한이 없습니다.');
+    }
+
+    await _runBusy('불가 시간을 삭제하는 중...', () async {
+      await _repository.deleteMemberUnavailabilityBlock(blockId: normalizedId);
+      await loadMemberUnavailabilityBlocks();
+      _setStatus('불가 시간을 삭제했습니다.');
     });
   }
 
@@ -2413,18 +2555,51 @@ class NestController extends ChangeNotifier {
     return pendingInvites.where((invite) => invite.canAccept).length;
   }
 
-  String? get defaultTeacherProfileId {
+  List<TeacherProfile> get currentUserTeacherProfiles {
     final currentUserId = user?.id;
-    if (currentUserId != null) {
-      final matched = teacherProfiles
-          .where((profile) => profile.userId == currentUserId)
-          .map((profile) => profile.id)
-          .firstOrNull;
-      if (matched != null) {
-        return matched;
-      }
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return const [];
+    }
+
+    return teacherProfiles
+        .where((profile) => profile.userId == currentUserId)
+        .toList(growable: false);
+  }
+
+  String? get defaultTeacherProfileId {
+    final myProfiles = currentUserTeacherProfiles;
+    if (myProfiles.isNotEmpty) {
+      return myProfiles.first.id;
     }
     return teacherProfiles.map((profile) => profile.id).firstOrNull;
+  }
+
+  bool _canManageUnavailabilityTarget({
+    required String ownerKind,
+    required String ownerId,
+  }) {
+    if (isAdminLike) {
+      return true;
+    }
+    final currentUserId = user?.id;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return false;
+    }
+
+    if (ownerKind == 'MEMBER_USER') {
+      return isParentView && ownerId == currentUserId;
+    }
+
+    if (ownerKind == 'TEACHER_PROFILE') {
+      if (!isTeacherView) {
+        return false;
+      }
+      return currentUserTeacherProfiles
+          .map((profile) => profile.id)
+          .contains(ownerId);
+    }
+
+    return false;
   }
 
   List<HomeschoolMemberDirectoryEntry> searchHomeschoolMemberDirectory(
@@ -2480,6 +2655,17 @@ class NestController extends ChangeNotifier {
         .toList(growable: false);
   }
 
+  List<String> get parentCandidateUserIds {
+    final fromMemberships = homeschoolMemberships
+        .where((row) => row.role == 'PARENT')
+        .map((row) => row.userId);
+    final fromGuardians = familyGuardianUserIdsByFamily.values
+        .expand((rows) => rows)
+        .where((id) => id.isNotEmpty);
+
+    return {...fromMemberships, ...fromGuardians}.toList(growable: false);
+  }
+
   List<ChildProfile> childrenForFamily(String familyId) {
     return children
         .where((child) => child.familyId == familyId)
@@ -2501,6 +2687,32 @@ class NestController extends ChangeNotifier {
     return classEnrollments.any(
       (row) => row.classGroupId == classGroupId && row.childId == childId,
     );
+  }
+
+  Set<String> parentUserIdsForClassGroup(String classGroupId) {
+    final childIds = enrolledChildIdsForClassGroup(classGroupId).toSet();
+    if (childIds.isEmpty) {
+      return const <String>{};
+    }
+
+    final familyIds = children
+        .where((child) => childIds.contains(child.id))
+        .map((child) => child.familyId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final users = <String>{};
+    for (final familyId in familyIds) {
+      users.addAll(familyGuardianUserIdsByFamily[familyId] ?? const []);
+    }
+    return users;
+  }
+
+  String findAvailabilityOwnerLabel(MemberUnavailabilityBlock block) {
+    if (block.isTeacherOwner) {
+      return '교사 · ${findTeacherName(block.ownerId)}';
+    }
+    return '부모 · ${findMemberDisplayName(block.ownerId)}';
   }
 
   String findTeacherName(String teacherProfileId) {
@@ -2562,8 +2774,63 @@ class NestController extends ChangeNotifier {
     return messages.toList(growable: false);
   }
 
+  Map<String, Set<String>> blockedSlotIdsByTeacherProfile() {
+    final blocks = memberUnavailabilityBlocks
+        .where((row) => row.ownerKind == 'TEACHER_PROFILE')
+        .toList(growable: false);
+    if (blocks.isEmpty || timeSlots.isEmpty) {
+      return const {};
+    }
+
+    final map = <String, Set<String>>{};
+    for (final block in blocks) {
+      final blockedSlots = timeSlots
+          .where((slot) => _doesSlotOverlapBlock(slot: slot, block: block))
+          .map((slot) => slot.id)
+          .toSet();
+      if (blockedSlots.isEmpty) {
+        continue;
+      }
+      map.putIfAbsent(block.ownerId, () => <String>{});
+      map[block.ownerId]!.addAll(blockedSlots);
+    }
+    return map;
+  }
+
+  Set<String> blockedSlotIdsForParentsInClass(String classGroupId) {
+    final parentIds = parentUserIdsForClassGroup(classGroupId);
+    if (parentIds.isEmpty || timeSlots.isEmpty) {
+      return const {};
+    }
+
+    final blocks = memberUnavailabilityBlocks
+        .where(
+          (row) =>
+              row.ownerKind == 'MEMBER_USER' && parentIds.contains(row.ownerId),
+        )
+        .toList(growable: false);
+    if (blocks.isEmpty) {
+      return const {};
+    }
+
+    final blocked = <String>{};
+    for (final block in blocks) {
+      blocked.addAll(
+        timeSlots
+            .where((slot) => _doesSlotOverlapBlock(slot: slot, block: block))
+            .map((slot) => slot.id),
+      );
+    }
+    return blocked;
+  }
+
   List<String> timetableBoardIssueMessages() {
     final issues = <String>{};
+    final classGroupId = selectedClassGroupId;
+    final parentBlockedSlots = classGroupId == null
+        ? const <String>{}
+        : blockedSlotIdsForParentsInClass(classGroupId);
+    final teacherBlockedSlotsByTeacher = blockedSlotIdsByTeacherProfile();
 
     for (final session in sessions) {
       for (final conflict in teacherConflictMessagesForSession(session.id)) {
@@ -2582,9 +2849,59 @@ class NestController extends ChangeNotifier {
           '${findCourseName(session.courseId)} · 주강사 미지정 ($slotLabel)',
         );
       }
+
+      if (parentBlockedSlots.contains(session.timeSlotId)) {
+        final slot = findTimeSlot(session.timeSlotId);
+        final slotLabel = slot == null
+            ? session.timeSlotId
+            : '${slot.dayOfWeek} ${slot.startTime.substring(0, 5)}';
+        issues.add(
+          '${findCourseName(session.courseId)} · 부모 불가 시간대 ($slotLabel)',
+        );
+      }
+
+      final mainRows = teacherAssignmentsForSession(
+        session.id,
+      ).where((row) => row.assignmentRole == 'MAIN');
+      for (final row in mainRows) {
+        final blocked = teacherBlockedSlotsByTeacher[row.teacherProfileId];
+        if (blocked == null || !blocked.contains(session.timeSlotId)) {
+          continue;
+        }
+        final slot = findTimeSlot(session.timeSlotId);
+        final slotLabel = slot == null
+            ? session.timeSlotId
+            : '${slot.dayOfWeek} ${slot.startTime.substring(0, 5)}';
+        issues.add(
+          '${findTeacherName(row.teacherProfileId)} 불가 시간대 배정 ($slotLabel)',
+        );
+      }
     }
 
     return issues.toList(growable: false);
+  }
+
+  bool _doesSlotOverlapBlock({
+    required TimeSlot slot,
+    required MemberUnavailabilityBlock block,
+  }) {
+    if (slot.dayOfWeek != block.dayOfWeek) {
+      return false;
+    }
+
+    final slotStart = _clockToMinutes(slot.startTime);
+    final slotEnd = _clockToMinutes(slot.endTime);
+    final blockStart = _clockToMinutes(block.startTime);
+    final blockEnd = _clockToMinutes(block.endTime);
+
+    if (slotStart == null ||
+        slotEnd == null ||
+        blockStart == null ||
+        blockEnd == null) {
+      return false;
+    }
+
+    return slotStart < blockEnd && blockStart < slotEnd;
   }
 
   List<TeachingPlan> teachingPlansForSession(String sessionId) {
@@ -2797,7 +3114,9 @@ class NestController extends ChangeNotifier {
     families = const [];
     children = const [];
     classEnrollments = const [];
+    familyGuardianUserIdsByFamily = const {};
     teacherProfiles = const [];
+    memberUnavailabilityBlocks = const [];
     sessionTeacherAssignments = const [];
     teachingPlans = const [];
     studentActivityLogs = const [];
@@ -2966,6 +3285,59 @@ bool _looksLikeEmail(String value) {
 
   final domain = value.substring(at + 1);
   return domain.contains('.');
+}
+
+String? _normalizeClockText(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  final parts = trimmed.split(':');
+  if (parts.length < 2 || parts.length > 3) {
+    return null;
+  }
+
+  final hour = int.tryParse(parts[0]);
+  final minute = int.tryParse(parts[1]);
+  final second = parts.length >= 3 ? int.tryParse(parts[2]) : 0;
+  if (hour == null ||
+      minute == null ||
+      second == null ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59 ||
+      second < 0 ||
+      second > 59) {
+    return null;
+  }
+
+  final h = hour.toString().padLeft(2, '0');
+  final m = minute.toString().padLeft(2, '0');
+  final s = second.toString().padLeft(2, '0');
+  return '$h:$m:$s';
+}
+
+bool _isClockRangeValid(String startTime, String endTime) {
+  final start = _clockToMinutes(startTime);
+  final end = _clockToMinutes(endTime);
+  if (start == null || end == null) {
+    return false;
+  }
+  return end > start;
+}
+
+int? _clockToMinutes(String value) {
+  final normalized = _normalizeClockText(value);
+  if (normalized == null) {
+    return null;
+  }
+
+  final parts = normalized.split(':');
+  final hour = int.parse(parts[0]);
+  final minute = int.parse(parts[1]);
+  return hour * 60 + minute;
 }
 
 extension _IterableFirstOrNull<T> on Iterable<T> {

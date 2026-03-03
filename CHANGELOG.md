@@ -59,6 +59,10 @@
   - 생성 전 미리보기 + 일괄 생성(중복 이름 자동 스킵)
 - 수동 시간표 충돌 요약 패널 추가
   - `Manual Board` 상단에서 교사 충돌/주강사 미지정 경고를 즉시 확인
+- 교사/부모 불가 시간 관리 기능 추가
+  - `member_unavailability_blocks` 마이그레이션 추가 (`20260303190000_member_unavailability_blocks.sql`)
+  - `Families` 탭에서 관리자 기준 교사/부모 불가 시간 등록/삭제 UI 추가
+  - `Parent Hub`/`Teacher Hub`에 본인 불가 시간 self-service 등록/삭제 UI 추가
 
 ### Changed
 
@@ -111,13 +115,21 @@
 - 관리자 설정 UX 간소화
   - `Drive` 탭 라벨을 `Media Setup`으로 변경
   - Drive 토큰 수동 입력 필드를 `개발자 고급 설정` 토글 하위로 숨김 처리
+- 스케줄 생성/검증 로직 확장
+  - 부모 불가 시간 충돌 코드 추가: `PARENT_SLOT_UNAVAILABLE`
+  - 교사 불가 시간 충돌 코드 추가: `TEACHER_SLOT_UNAVAILABLE`
+  - 초안 생성 시 부모/교사 불가 슬롯 자동 회피 반영
+- 불가 시간 권한 모델 확장
+  - 관리자/스태프는 전체 대상 관리
+  - 부모는 본인(`MEMBER_USER`) 항목만 직접 관리
+  - 교사는 본인 `teacher_profile` 항목만 직접 관리
 
 ### Verification
 
 - `cd frontend && flutter analyze` 통과
 - `cd frontend && flutter test` 통과
 - `cd frontend && flutter build web --release --base-href /nest/` 통과
-- `supabase db push` 통과 (`20260303130000`, `20260303143000`, `20260303145000`, `20260303150000`)
+- `supabase db push` 통과 (`20260303130000`, `20260303143000`, `20260303145000`, `20260303150000`, `20260303162000`, `20260303190000`)
 - `node scripts/e2e_remote.mjs` 통과 (`summary.success: true`, invite_flow 포함)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22607933835`)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22609099078`)
@@ -125,8 +137,6 @@
 - GitHub Actions `Deploy Flutter Web to GitHub Pages` 통과 (`run: 22609099069`)
 - GitHub Actions `Deploy Flutter Web to GitHub Pages` 통과 (`run: 22610637304`)
 - GitHub Actions `pages-build-deployment` 통과 (`run: 22610687288`)
-- 신규 마이그레이션 `20260303162000_class_groups_delete_and_member_search.sql`는 파일 추가 완료
-  - 현재 환경에서는 `supabase db push` 시 권한/DB 비밀번호 이슈로 직접 적용은 미실행
 
 ## 2026-03-02
 

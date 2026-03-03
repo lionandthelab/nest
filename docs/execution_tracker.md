@@ -30,6 +30,7 @@ Last updated: 2026-03-03
 - [x] 가족/아이/반 배정 관리 UI 고도화
 - [x] 반(Class) CRUD(생성/수정/삭제) + 반별 시간표 연계 운영
 - [x] 수업별 주강사/보조강사 배정 UI + 충돌 시각화 고도화
+- [x] 교사/부모 불가 시간 등록 + 스케줄 자동 회피(관리자/본인 self-service)
 - [x] 교사 계정 검색 자동완성(이름/이메일/UUID) + 계정 없는 초청교사 등록
 - [x] 교사 학기 계획표/아동 활동기록 작성 UI
 - [x] 운영 감사로그/알림(권한 변경, 신고 처리, 시간표 확정 이벤트)
@@ -49,6 +50,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | 어드민 반 CRUD + 교사 계정 검색 연결 UX 개선 | 코드 완료 (DB 마이그레이션 파일 추가, `supabase db push`는 권한/DB 비밀번호 이슈로 미실행) | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `node scripts/e2e_remote.mjs`, GitHub Actions `Remote Supabase E2E` run `22609099078` 성공 |
 | 2026-03-03 | 관리자 스케줄 UX 고도화(질문형 초안/다중 대안/실시간 충돌 검증) + 반/교사 질문형 일괄 생성 + Drive 고급 설정 숨김 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-03 | 스케줄 엔진 고도화(과목 빈도 가중치 + 교사 선호 전략) 및 원격 E2E 재검증 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `SUPABASE_* node scripts/e2e_remote.mjs`, GitHub Actions `Remote Supabase E2E` run `22610640069` 성공, `Deploy Flutter Web to GitHub Pages` run `22610637304` 성공 |
+| 2026-03-03 | 교사/부모 불가 시간 등록(관리자+본인) 및 스케줄 자동 회피/충돌 검증 고도화 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push`, `SUPABASE_* node scripts/e2e_remote.mjs` |
 
 ## Next Batch
 

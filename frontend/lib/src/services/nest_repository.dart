@@ -278,6 +278,32 @@ class NestRepository {
     return _asRows(data).map(ChildProfile.fromMap).toList(growable: false);
   }
 
+  Future<Map<String, List<String>>> fetchFamilyGuardianUserIds({
+    required List<String> familyIds,
+  }) async {
+    if (familyIds.isEmpty) {
+      return const {};
+    }
+
+    final data = await client
+        .from('family_guardians')
+        .select('family_id, user_id')
+        .inFilter('family_id', familyIds);
+
+    final grouped = <String, List<String>>{};
+    for (final row in _asRows(data)) {
+      final familyId = row['family_id'] as String?;
+      final userId = row['user_id'] as String?;
+      if (familyId == null || userId == null) {
+        continue;
+      }
+      grouped.putIfAbsent(familyId, () => <String>[]);
+      grouped[familyId]!.add(userId);
+    }
+
+    return grouped;
+  }
+
   Future<ChildProfile> createChild({
     required String familyId,
     required String name,
@@ -370,6 +396,61 @@ class NestRepository {
         .single();
 
     return TeacherProfile.fromMap(_asMap(row));
+  }
+
+  Future<List<MemberUnavailabilityBlock>> fetchMemberUnavailabilityBlocks({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('member_unavailability_blocks')
+        .select(
+          'id, homeschool_id, owner_kind, owner_id, day_of_week, start_time, end_time, note, created_at',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('day_of_week')
+        .order('start_time')
+        .limit(1200);
+
+    return _asRows(
+      data,
+    ).map(MemberUnavailabilityBlock.fromMap).toList(growable: false);
+  }
+
+  Future<MemberUnavailabilityBlock> createMemberUnavailabilityBlock({
+    required String homeschoolId,
+    required String ownerKind,
+    required String ownerId,
+    required int dayOfWeek,
+    required String startTime,
+    required String endTime,
+    required String note,
+    required String createdByUserId,
+  }) async {
+    final row = await client
+        .from('member_unavailability_blocks')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'owner_kind': ownerKind,
+          'owner_id': ownerId,
+          'day_of_week': dayOfWeek,
+          'start_time': startTime,
+          'end_time': endTime,
+          'note': note.trim(),
+          'created_by_user_id': createdByUserId,
+        })
+        .select(
+          'id, homeschool_id, owner_kind, owner_id, day_of_week, start_time, end_time, note, created_at',
+        )
+        .single();
+
+    return MemberUnavailabilityBlock.fromMap(_asMap(row));
+  }
+
+  Future<void> deleteMemberUnavailabilityBlock({required String blockId}) {
+    return client
+        .from('member_unavailability_blocks')
+        .delete()
+        .eq('id', blockId);
   }
 
   Future<List<SessionTeacherAssignment>> fetchSessionTeacherAssignments({

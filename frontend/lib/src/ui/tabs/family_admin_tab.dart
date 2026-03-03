@@ -29,6 +29,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   );
   final _teacherDisplayNameController = TextEditingController();
   final _teacherAccountSearchController = TextEditingController();
+  final _unavailabilityStartController = TextEditingController(text: '09:00');
+  final _unavailabilityEndController = TextEditingController(text: '10:00');
+  final _unavailabilityNoteController = TextEditingController();
   late final TextEditingController _birthDateController;
 
   String? _selectedFamilyId;
@@ -39,6 +42,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   HomeschoolMemberDirectoryEntry? _selectedTeacherAccount;
   bool _familyInitialized = false;
   bool _classInitialized = false;
+  String _unavailabilityOwnerKind = 'TEACHER_PROFILE';
+  String? _selectedUnavailabilityOwnerId;
+  int _selectedUnavailabilityDay = 1;
   List<String> _quickDraftClassNames = const [];
   List<String> _quickDraftTeacherNames = const [];
 
@@ -65,6 +71,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     _quickTeacherNamesController.dispose();
     _teacherDisplayNameController.dispose();
     _teacherAccountSearchController.dispose();
+    _unavailabilityStartController.dispose();
+    _unavailabilityEndController.dispose();
+    _unavailabilityNoteController.dispose();
     _birthDateController.dispose();
     super.dispose();
   }
@@ -74,6 +83,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     final controller = widget.controller;
     _syncSelections(controller);
     _syncClassForm(controller);
+    _syncUnavailabilitySelection(controller);
 
     if (!controller.canManageFamilies) {
       return Card(
@@ -105,6 +115,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         _buildClassCrudCard(controller),
         const SizedBox(height: 12),
         _buildTeacherProfileCard(controller),
+        const SizedBox(height: 12),
+        _buildMemberUnavailabilityCard(controller),
         const SizedBox(height: 12),
         _buildEnrollmentCard(controller),
         const SizedBox(height: 12),
@@ -161,6 +173,24 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       _classNameController.text = classGroup.name;
       _classCapacityController.text = classGroup.capacity.toString();
       _classFormBoundToId = classGroup.id;
+    }
+  }
+
+  void _syncUnavailabilitySelection(NestController controller) {
+    final ownerIds = _unavailabilityOwnerKind == 'TEACHER_PROFILE'
+        ? controller.teacherProfiles
+              .map((row) => row.id)
+              .toList(growable: false)
+        : controller.parentCandidateUserIds.toList(growable: false);
+
+    if (ownerIds.isEmpty) {
+      _selectedUnavailabilityOwnerId = null;
+      return;
+    }
+
+    if (_selectedUnavailabilityOwnerId == null ||
+        !ownerIds.contains(_selectedUnavailabilityOwnerId)) {
+      _selectedUnavailabilityOwnerId = ownerIds.first;
     }
   }
 
@@ -701,6 +731,203 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     );
   }
 
+  Widget _buildMemberUnavailabilityCard(NestController controller) {
+    final isTeacher = _unavailabilityOwnerKind == 'TEACHER_PROFILE';
+    final ownerItems = isTeacher
+        ? controller.teacherProfiles
+              .map(
+                (row) => DropdownMenuItem<String>(
+                  value: row.id,
+                  child: Text(row.displayName),
+                ),
+              )
+              .toList(growable: false)
+        : controller.parentCandidateUserIds
+              .map(
+                (userId) => DropdownMenuItem<String>(
+                  value: userId,
+                  child: Text(controller.findMemberDisplayName(userId)),
+                ),
+              )
+              .toList(growable: false);
+
+    final blocks = controller.memberUnavailabilityBlocks.toList(growable: false)
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) {
+          return day;
+        }
+        final start = a.startTime.compareTo(b.startTime);
+        if (start != 0) {
+          return start;
+        }
+        return controller
+            .findAvailabilityOwnerLabel(a)
+            .compareTo(controller.findAvailabilityOwnerLabel(b));
+      });
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('교사/부모 불가 시간', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '설정한 불가 시간은 시간표 초안 생성 시 자동 회피됩니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'TEACHER_PROFILE', label: Text('교사')),
+                ButtonSegment(value: 'MEMBER_USER', label: Text('부모')),
+              ],
+              selected: {_unavailabilityOwnerKind},
+              onSelectionChanged: controller.isBusy
+                  ? null
+                  : (values) {
+                      if (values.isEmpty) {
+                        return;
+                      }
+                      setState(() {
+                        _unavailabilityOwnerKind = values.first;
+                        _syncUnavailabilitySelection(controller);
+                      });
+                    },
+            ),
+            const SizedBox(height: 8),
+            if (ownerItems.isEmpty)
+              Text(isTeacher ? '등록된 교사가 없습니다.' : '선택 가능한 부모 계정이 없습니다.')
+            else
+              DropdownButtonFormField<String>(
+                key: ValueKey(
+                  'owner-${_unavailabilityOwnerKind}_${_selectedUnavailabilityOwnerId ?? ''}',
+                ),
+                initialValue: _selectedUnavailabilityOwnerId,
+                decoration: const InputDecoration(labelText: '대상'),
+                items: ownerItems,
+                onChanged: controller.isBusy
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _selectedUnavailabilityOwnerId = value;
+                        });
+                      },
+              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _selectedUnavailabilityDay,
+                    decoration: const InputDecoration(labelText: '요일'),
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text('Sun')),
+                      DropdownMenuItem(value: 1, child: Text('Mon')),
+                      DropdownMenuItem(value: 2, child: Text('Tue')),
+                      DropdownMenuItem(value: 3, child: Text('Wed')),
+                      DropdownMenuItem(value: 4, child: Text('Thu')),
+                      DropdownMenuItem(value: 5, child: Text('Fri')),
+                      DropdownMenuItem(value: 6, child: Text('Sat')),
+                    ],
+                    onChanged: controller.isBusy
+                        ? null
+                        : (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setState(() {
+                              _selectedUnavailabilityDay = value;
+                            });
+                          },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _unavailabilityStartController,
+                    decoration: const InputDecoration(labelText: '시작 (HH:MM)'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _unavailabilityEndController,
+                    decoration: const InputDecoration(labelText: '종료 (HH:MM)'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _unavailabilityNoteController,
+              decoration: const InputDecoration(labelText: '메모 (선택)'),
+              minLines: 1,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 10),
+            ElevatedButton.icon(
+              onPressed: controller.isBusy || ownerItems.isEmpty
+                  ? null
+                  : _createUnavailabilityBlock,
+              icon: const Icon(Icons.block),
+              label: const Text('불가 시간 추가'),
+            ),
+            const SizedBox(height: 10),
+            Text('등록된 불가 시간', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 6),
+            if (blocks.isEmpty)
+              const Text('등록된 불가 시간이 없습니다.')
+            else
+              ...blocks.map((block) {
+                final label = controller.findAvailabilityOwnerLabel(block);
+                final day = _dayLabel(block.dayOfWeek);
+                final start = _shortTime(block.startTime);
+                final end = _shortTime(block.endTime);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(label),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$day $start-$end${block.note.trim().isEmpty ? '' : ' · ${block.note.trim()}'}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () => _deleteUnavailabilityBlock(block.id),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFamilyOverviewCard(NestController controller) {
     return Card(
       child: Padding(
@@ -1010,9 +1237,11 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   Future<void> _refreshFamilyDomain() async {
     try {
       await widget.controller.loadFamilies();
+      await widget.controller.loadFamilyGuardians();
       await widget.controller.loadChildren();
       await widget.controller.loadClassEnrollments();
       await widget.controller.loadTeacherProfiles();
+      await widget.controller.loadMemberUnavailabilityBlocks();
       await widget.controller.loadHomeschoolMemberDirectory();
       _showMessage('가정/아이/배정 목록을 갱신했습니다.');
     } catch (_) {
@@ -1041,6 +1270,60 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }
+  }
+
+  Future<void> _createUnavailabilityBlock() async {
+    final ownerId = _selectedUnavailabilityOwnerId;
+    if (ownerId == null || ownerId.isEmpty) {
+      _showMessage('대상을 선택하세요.');
+      return;
+    }
+
+    try {
+      await widget.controller.createMemberUnavailabilityBlock(
+        ownerKind: _unavailabilityOwnerKind,
+        ownerId: ownerId,
+        dayOfWeek: _selectedUnavailabilityDay,
+        startTime: _unavailabilityStartController.text,
+        endTime: _unavailabilityEndController.text,
+        note: _unavailabilityNoteController.text,
+      );
+      _unavailabilityNoteController.clear();
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _deleteUnavailabilityBlock(String blockId) async {
+    try {
+      await widget.controller.deleteMemberUnavailabilityBlock(blockId: blockId);
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  String _dayLabel(int dayOfWeek) {
+    const labels = <int, String>{
+      0: 'Sun',
+      1: 'Mon',
+      2: 'Tue',
+      3: 'Wed',
+      4: 'Thu',
+      5: 'Fri',
+      6: 'Sat',
+    };
+    return labels[dayOfWeek] ?? '$dayOfWeek';
+  }
+
+  String _shortTime(String value) {
+    final parsed = DateFormat('HH:mm:ss').tryParse(value);
+    if (parsed == null) {
+      final fallback = DateFormat('HH:mm').tryParse(value);
+      return fallback == null ? value : DateFormat('HH:mm').format(fallback);
+    }
+    return DateFormat('HH:mm').format(parsed);
   }
 
   void _showMessage(String text) {

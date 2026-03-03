@@ -299,6 +299,78 @@ void main() {
       );
     });
 
+    test('avoids parent blocked slots when building drafts', () {
+      final slots = [
+        const TimeSlot(
+          id: 's1',
+          termId: 't1',
+          dayOfWeek: 1,
+          startTime: '09:30:00',
+          endTime: '10:20:00',
+        ),
+        const TimeSlot(
+          id: 's2',
+          termId: 't1',
+          dayOfWeek: 1,
+          startTime: '10:30:00',
+          endTime: '11:20:00',
+        ),
+      ];
+
+      final drafts = buildWizardScheduleOptions(
+        prompt: '국어 중심',
+        classGroupId: 'g1',
+        courses: const [
+          Course(
+            id: 'c1',
+            homeschoolId: 'h1',
+            name: '국어',
+            defaultDurationMin: 50,
+          ),
+        ],
+        timeSlots: slots,
+        existingSessions: const [],
+        teacherProfiles: const [],
+        preferredDays: const {1},
+        sessionsPerDay: 2,
+        optionCount: 1,
+        blockedSlotIds: const {'s1'},
+      );
+
+      expect(
+        drafts.single.sessions.any((session) => session.timeSlotId == 's1'),
+        isFalse,
+      );
+      expect(
+        drafts.single.sessions.any((session) => session.timeSlotId == 's2'),
+        isTrue,
+      );
+    });
+
+    test('flags teacher unavailable slot conflicts in issue evaluator', () {
+      final issues = evaluateScheduleOptionIssues(
+        sessions: const [
+          ScheduleOptionSession(
+            localId: 'local-1',
+            classGroupId: 'g1',
+            courseId: 'c1',
+            timeSlotId: 'slot-1',
+            teacherMainId: 'teacher-1',
+          ),
+        ],
+        existingSessions: const [],
+        requireTeacher: true,
+        teacherBlockedSlotIdsByTeacher: const {
+          'teacher-1': {'slot-1'},
+        },
+      );
+
+      expect(
+        issues.any((issue) => issue.code == 'TEACHER_SLOT_UNAVAILABLE'),
+        isTrue,
+      );
+    });
+
     test('detects duplicate slot and teacher conflicts in draft issues', () {
       final sessions = [
         const ScheduleOptionSession(

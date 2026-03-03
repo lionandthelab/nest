@@ -313,6 +313,47 @@ class TeacherProfile {
   }
 }
 
+class MemberUnavailabilityBlock {
+  const MemberUnavailabilityBlock({
+    required this.id,
+    required this.homeschoolId,
+    required this.ownerKind,
+    required this.ownerId,
+    required this.dayOfWeek,
+    required this.startTime,
+    required this.endTime,
+    required this.note,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String ownerKind; // TEACHER_PROFILE | MEMBER_USER
+  final String ownerId;
+  final int dayOfWeek;
+  final String startTime;
+  final String endTime;
+  final String note;
+  final DateTime? createdAt;
+
+  bool get isTeacherOwner => ownerKind == 'TEACHER_PROFILE';
+  bool get isMemberOwner => ownerKind == 'MEMBER_USER';
+
+  factory MemberUnavailabilityBlock.fromMap(Map<String, dynamic> map) {
+    return MemberUnavailabilityBlock(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      ownerKind: (map['owner_kind'] as String?) ?? 'MEMBER_USER',
+      ownerId: (map['owner_id'] as String?) ?? '',
+      dayOfWeek: (map['day_of_week'] as int?) ?? 0,
+      startTime: (map['start_time'] as String?) ?? '00:00:00',
+      endTime: (map['end_time'] as String?) ?? '00:00:00',
+      note: (map['note'] as String?) ?? '',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
 class SessionTeacherAssignment {
   const SessionTeacherAssignment({
     required this.id,

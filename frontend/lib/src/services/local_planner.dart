@@ -116,6 +116,8 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
   required List<TeacherProfile> teacherProfiles,
   required Set<int> preferredDays,
   required int sessionsPerDay,
+  Set<String> blockedSlotIds = const {},
+  Map<String, Set<String>> teacherBlockedSlotIdsByTeacher = const {},
   Map<String, int> courseWeightsById = const {},
   Set<String> preferredTeacherIds = const {},
   String teacherStrategy = 'BALANCED',
@@ -204,9 +206,12 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
               .where((slot) => !occupiedSlotIds.contains(slot.id))
               .toList(growable: false)
         : slotPool;
+    final feasibleSlotPool = filteredSlotPool
+        .where((slot) => !blockedSlotIds.contains(slot.id))
+        .toList(growable: false);
 
     final estimatedSessionCount = _minInt(
-      filteredSlotPool.length,
+      feasibleSlotPool.length,
       fallbackCourses.length * 3,
     );
 
@@ -215,7 +220,7 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
     final teacherBySlot = <String, Set<String>>{};
 
     for (var i = 0; i < estimatedSessionCount; i += 1) {
-      final slot = filteredSlotPool[i];
+      final slot = feasibleSlotPool[i];
       final course =
           weightedCoursePool[(i + optionIndex) % weightedCoursePool.length];
       final teacher = _pickTeacherForSlot(
@@ -227,6 +232,7 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
         preferredTeacherIds: preferredTeacherIds,
         strategy: teacherStrategy,
         preferOnlySelectedTeachers: preferOnlySelectedTeachers,
+        teacherBlockedSlotIdsByTeacher: teacherBlockedSlotIdsByTeacher,
         seed: optionIndex + i,
       );
 
@@ -245,6 +251,8 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
       sessions: sessions,
       existingSessions: keepExistingSessions ? existingSessions : const [],
       requireTeacher: true,
+      blockedSlotIdsForParents: blockedSlotIds,
+      teacherBlockedSlotIdsByTeacher: teacherBlockedSlotIdsByTeacher,
     );
 
     options.add(
@@ -265,6 +273,8 @@ List<ScheduleDraftIssue> evaluateScheduleOptionIssues({
   required List<ScheduleOptionSession> sessions,
   required List<ClassSession> existingSessions,
   bool requireTeacher = false,
+  Set<String> blockedSlotIdsForParents = const {},
+  Map<String, Set<String>> teacherBlockedSlotIdsByTeacher = const {},
 }) {
   final issues = <ScheduleDraftIssue>[];
 
@@ -293,6 +303,17 @@ List<ScheduleDraftIssue> evaluateScheduleOptionIssues({
       );
     }
 
+    if (blockedSlotIdsForParents.contains(session.timeSlotId)) {
+      issues.add(
+        ScheduleDraftIssue(
+          code: 'PARENT_SLOT_UNAVAILABLE',
+          message: '부모 불가 시간대와 충돌합니다.',
+          severity: 'HARD',
+          sessionLocalId: session.localId,
+        ),
+      );
+    }
+
     final teacherId = session.teacherMainId?.trim() ?? '';
     if (requireTeacher && teacherId.isEmpty) {
       issues.add(
@@ -306,6 +327,17 @@ List<ScheduleDraftIssue> evaluateScheduleOptionIssues({
     }
 
     if (teacherId.isNotEmpty) {
+      final blockedSlots = teacherBlockedSlotIdsByTeacher[teacherId];
+      if (blockedSlots != null && blockedSlots.contains(session.timeSlotId)) {
+        issues.add(
+          ScheduleDraftIssue(
+            code: 'TEACHER_SLOT_UNAVAILABLE',
+            message: '교사 불가 시간대와 충돌합니다.',
+            severity: 'HARD',
+            sessionLocalId: session.localId,
+          ),
+        );
+      }
       final key = '$teacherId::${session.timeSlotId}';
       sessionsByTeacherSlot.putIfAbsent(key, () => <ScheduleOptionSession>[]);
       sessionsByTeacherSlot[key]!.add(session);
@@ -356,6 +388,7 @@ TeacherProfile? _pickTeacherForSlot({
   required Set<String> preferredTeacherIds,
   required String strategy,
   required bool preferOnlySelectedTeachers,
+  required Map<String, Set<String>> teacherBlockedSlotIdsByTeacher,
   required int seed,
 }) {
   if (teachers.isEmpty) {
@@ -403,6 +436,10 @@ TeacherProfile? _pickTeacherForSlot({
 
   for (final teacher in rotated) {
     if (occupied.contains(teacher.id)) {
+      continue;
+    }
+    final blocked = teacherBlockedSlotIdsByTeacher[teacher.id];
+    if (blocked != null && blocked.contains(slotId)) {
       continue;
     }
     teacherLoad[teacher.id] = (teacherLoad[teacher.id] ?? 0) + 1;
