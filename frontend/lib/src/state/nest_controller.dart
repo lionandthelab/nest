@@ -31,8 +31,10 @@ class NestController extends ChangeNotifier {
   Session? session;
 
   List<Membership> memberships = const [];
+  List<Membership> homeschoolMemberships = const [];
   String? selectedHomeschoolId;
   String? currentRole;
+  final Map<String, String> _viewRoleByHomeschool = <String, String>{};
 
   List<Term> terms = const [];
   String? selectedTermId;
@@ -58,6 +60,7 @@ class NestController extends ChangeNotifier {
   Map<String, List<CommunityComment>> communityCommentsByPost = const {};
   Map<String, int> communityLikeCountsByPost = const {};
   Set<String> likedCommunityPostIds = const <String>{};
+  List<CommunityReport> communityReports = const [];
   PendingMediaFile? pendingCommunityMediaFile;
 
   bool get isBusy => _isBusy;
@@ -65,10 +68,41 @@ class NestController extends ChangeNotifier {
   bool get isBootstrapped => _isBootstrapped;
   String get statusMessage => _statusMessage;
 
+  List<String> get availableViewRoles {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return const [];
+    }
+
+    final roles = memberships
+        .where((membership) => membership.homeschoolId == homeschoolId)
+        .map((membership) => membership.role)
+        .toSet();
+
+    const rolePriority = <String>[
+      'HOMESCHOOL_ADMIN',
+      'STAFF',
+      'TEACHER',
+      'GUEST_TEACHER',
+      'PARENT',
+    ];
+
+    final ordered = rolePriority.where(roles.contains).toList(growable: false);
+    if (ordered.isNotEmpty) {
+      return ordered;
+    }
+
+    return roles.toList(growable: false);
+  }
+
   bool get isAdminLike =>
       currentRole == 'HOMESCHOOL_ADMIN' || currentRole == 'STAFF';
 
   bool get isDriveAdmin => currentRole == 'HOMESCHOOL_ADMIN';
+  bool get canManageMemberships => currentRole == 'HOMESCHOOL_ADMIN';
+  bool get isParentView => currentRole == 'PARENT';
+  bool get isTeacherView =>
+      currentRole == 'TEACHER' || currentRole == 'GUEST_TEACHER';
 
   bool get canUploadMedia => const {
     'HOMESCHOOL_ADMIN',
@@ -85,6 +119,8 @@ class NestController extends ChangeNotifier {
     'GUEST_TEACHER',
     'PARENT',
   }.contains(currentRole);
+
+  bool get canModerateCommunity => isAdminLike;
 
   Future<void> initialize() async {
     if (_isBootstrapped) {
@@ -154,14 +190,37 @@ class NestController extends ChangeNotifier {
 
   Future<void> changeHomeschool(String? homeschoolId) async {
     selectedHomeschoolId = _normalizeNullable(homeschoolId);
-    currentRole = _resolveCurrentRole(selectedHomeschoolId);
+    currentRole = _resolveViewRole(selectedHomeschoolId);
     notifyListeners();
 
     await _runBusy('학기/반 정보를 불러오는 중...', () async {
       await _loadTermAndBelow();
+      await loadHomeschoolMemberships();
       await loadDriveIntegration();
       await loadGalleryItems();
       await loadCommunityFeed();
+    });
+  }
+
+  Future<void> changeViewRole(String? role) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final nextRole = _normalizeNullable(role);
+    if (nextRole == null || !availableViewRoles.contains(nextRole)) {
+      throw StateError('선택할 수 없는 뷰 역할입니다.');
+    }
+
+    currentRole = nextRole;
+    _viewRoleByHomeschool[homeschoolId] = nextRole;
+    notifyListeners();
+
+    await _runBusy('뷰 전환 중...', () async {
+      await loadHomeschoolMemberships();
+      await loadCommunityFeed();
+      _setStatus('현재 뷰: $nextRole');
     });
   }
 
@@ -650,6 +709,7 @@ class NestController extends ChangeNotifier {
     if (memberships.isEmpty) {
       selectedHomeschoolId = null;
       currentRole = null;
+      _viewRoleByHomeschool.clear();
       terms = const [];
       classGroups = const [];
       courses = const [];
@@ -664,6 +724,8 @@ class NestController extends ChangeNotifier {
       communityCommentsByPost = const {};
       communityLikeCountsByPost = const {};
       likedCommunityPostIds = const <String>{};
+      communityReports = const [];
+      homeschoolMemberships = const [];
       pendingCommunityMediaFile = null;
       driveIntegration = null;
 
@@ -680,9 +742,10 @@ class NestController extends ChangeNotifier {
       selectedHomeschoolId = memberships.first.homeschoolId;
     }
 
-    currentRole = _resolveCurrentRole(selectedHomeschoolId);
+    currentRole = _resolveViewRole(selectedHomeschoolId);
 
     await _loadTermAndBelow();
+    await loadHomeschoolMemberships();
     await loadDriveIntegration();
     await syncOauthResult();
     await loadGalleryItems();
@@ -729,6 +792,20 @@ class NestController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadHomeschoolMemberships() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      homeschoolMemberships = const [];
+      notifyListeners();
+      return;
+    }
+
+    homeschoolMemberships = await _repository.fetchHomeschoolMemberships(
+      homeschoolId: homeschoolId,
+    );
+    notifyListeners();
+  }
+
   Future<void> loadCommunityFeed() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
@@ -737,6 +814,7 @@ class NestController extends ChangeNotifier {
       communityCommentsByPost = const {};
       communityLikeCountsByPost = const {};
       likedCommunityPostIds = const <String>{};
+      communityReports = const [];
       pendingCommunityMediaFile = null;
       notifyListeners();
       return;
@@ -779,6 +857,14 @@ class NestController extends ChangeNotifier {
     } else {
       communityLikeCountsByPost = const {};
       likedCommunityPostIds = const <String>{};
+    }
+
+    if (canModerateCommunity) {
+      communityReports = await _repository.fetchCommunityReports(
+        homeschoolId: homeschoolId,
+      );
+    } else {
+      communityReports = const [];
     }
 
     notifyListeners();
@@ -974,6 +1060,190 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> reportCommunityPost({
+    required String postId,
+    required String reasonCategory,
+    required String reasonDetail,
+  }) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    await _runBusy('신고를 등록하는 중...', () async {
+      await _repository.createCommunityReport(
+        postId: postId,
+        homeschoolId: homeschoolId,
+        reporterUserId: user!.id,
+        reporterDisplayName: _authorDisplayName(user!),
+        reasonCategory: reasonCategory,
+        reasonDetail: reasonDetail,
+      );
+
+      await loadCommunityFeed();
+      _setStatus('신고를 접수했습니다.');
+    });
+  }
+
+  Future<void> setCommunityReportStatus({
+    required String reportId,
+    required String status,
+  }) async {
+    if (!canModerateCommunity || user == null) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('신고 상태를 반영하는 중...', () async {
+      await _repository.setCommunityReportStatus(
+        reportId: reportId,
+        status: status,
+        handledByUserId: user!.id,
+      );
+      await loadCommunityFeed();
+      _setStatus('신고 상태를 업데이트했습니다.');
+    });
+  }
+
+  Future<void> setCommunityPostHidden({
+    required String postId,
+    required bool hidden,
+  }) async {
+    if (!canModerateCommunity || user == null) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy(hidden ? '게시글을 숨기는 중...' : '게시글 숨김을 해제하는 중...', () async {
+      await _repository.setCommunityPostHidden(
+        postId: postId,
+        hidden: hidden,
+        handledByUserId: user!.id,
+      );
+      await loadCommunityFeed();
+      _setStatus(hidden ? '게시글을 숨김 처리했습니다.' : '게시글 숨김을 해제했습니다.');
+    });
+  }
+
+  Future<void> setCommunityPostPinned({
+    required String postId,
+    required bool pinned,
+  }) async {
+    if (!canModerateCommunity) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy(
+      pinned ? '게시글을 상단 고정하는 중...' : '게시글 고정을 해제하는 중...',
+      () async {
+        await _repository.setCommunityPostPinned(
+          postId: postId,
+          pinned: pinned,
+        );
+        await loadCommunityFeed();
+        _setStatus(pinned ? '게시글을 고정했습니다.' : '게시글 고정을 해제했습니다.');
+      },
+    );
+  }
+
+  Future<void> deleteCommunityPost(String postId) async {
+    if (!canModerateCommunity) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('게시글을 삭제하는 중...', () async {
+      await _repository.deleteCommunityPost(postId: postId);
+      await loadCommunityFeed();
+      _setStatus('게시글을 삭제했습니다.');
+    });
+  }
+
+  Future<void> grantMembershipRole({
+    required String targetUserId,
+    required String role,
+  }) async {
+    if (!canManageMemberships) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final normalizedUserId = _normalizeNullable(targetUserId);
+    if (normalizedUserId == null) {
+      throw StateError('사용자 ID를 입력하세요.');
+    }
+
+    await _runBusy('권한을 부여하는 중...', () async {
+      await _repository.grantMembershipRole(
+        homeschoolId: homeschoolId,
+        userId: normalizedUserId,
+        role: role,
+      );
+
+      if (user != null) {
+        memberships = await _repository.fetchMemberships(userId: user!.id);
+        currentRole = _resolveViewRole(selectedHomeschoolId);
+      }
+      await loadHomeschoolMemberships();
+      _setStatus('$normalizedUserId 에게 $role 권한을 부여했습니다.');
+    });
+  }
+
+  Future<void> revokeMembershipRole({
+    required String targetUserId,
+    required String role,
+  }) async {
+    if (!canManageMemberships) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final normalizedUserId = _normalizeNullable(targetUserId);
+    if (normalizedUserId == null) {
+      throw StateError('사용자 ID를 입력하세요.');
+    }
+
+    final isAdminRole = role == 'HOMESCHOOL_ADMIN';
+    if (isAdminRole) {
+      final adminCount = homeschoolMemberships
+          .where(
+            (row) =>
+                row.role == 'HOMESCHOOL_ADMIN' &&
+                row.status == 'ACTIVE' &&
+                row.homeschoolId == homeschoolId,
+          )
+          .length;
+
+      if (adminCount <= 1) {
+        throw StateError('최소 1명의 홈스쿨 관리자는 유지되어야 합니다.');
+      }
+    }
+
+    await _runBusy('권한을 회수하는 중...', () async {
+      await _repository.revokeMembershipRole(
+        homeschoolId: homeschoolId,
+        userId: normalizedUserId,
+        role: role,
+      );
+
+      if (user != null) {
+        memberships = await _repository.fetchMemberships(userId: user!.id);
+        currentRole = _resolveViewRole(selectedHomeschoolId);
+      }
+      await loadHomeschoolMemberships();
+      _setStatus('$normalizedUserId 의 $role 권한을 회수했습니다.');
+    });
+  }
+
   String findCourseName(String courseId) {
     return courses
             .where((course) => course.id == courseId)
@@ -1010,6 +1280,36 @@ class NestController extends ChangeNotifier {
 
   bool isCommunityPostLiked(String postId) {
     return likedCommunityPostIds.contains(postId);
+  }
+
+  List<CommunityReport> reportsForCommunityPost(String postId) {
+    return communityReports
+        .where((report) => report.postId == postId)
+        .toList(growable: false);
+  }
+
+  int openReportsForCommunityPost(String postId) {
+    return communityReports
+        .where((report) => report.postId == postId && report.isOpen)
+        .length;
+  }
+
+  int get openCommunityReportCount {
+    return communityReports.where((report) => report.isOpen).length;
+  }
+
+  List<String> get membershipUserIds {
+    return homeschoolMemberships
+        .map((row) => row.userId)
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  List<Membership> membershipsByUser(String userId) {
+    return homeschoolMemberships
+        .where((row) => row.userId == userId)
+        .toList(growable: false);
   }
 
   String findClassGroupName(String? classGroupId) {
@@ -1154,7 +1454,7 @@ class NestController extends ChangeNotifier {
     }
   }
 
-  String? _resolveCurrentRole(String? homeschoolId) {
+  String? _resolveViewRole(String? homeschoolId) {
     if (homeschoolId == null) {
       return null;
     }
@@ -1163,6 +1463,11 @@ class NestController extends ChangeNotifier {
         .where((membership) => membership.homeschoolId == homeschoolId)
         .map((membership) => membership.role)
         .toSet();
+
+    final preferred = _viewRoleByHomeschool[homeschoolId];
+    if (preferred != null && roles.contains(preferred)) {
+      return preferred;
+    }
 
     const rolePriority = <String>[
       'HOMESCHOOL_ADMIN',
@@ -1174,15 +1479,22 @@ class NestController extends ChangeNotifier {
 
     for (final role in rolePriority) {
       if (roles.contains(role)) {
+        _viewRoleByHomeschool[homeschoolId] = role;
         return role;
       }
     }
 
-    return roles.firstOrNull;
+    final fallback = roles.firstOrNull;
+    if (fallback != null) {
+      _viewRoleByHomeschool[homeschoolId] = fallback;
+    }
+    return fallback;
   }
 
   void _clearDomainState() {
     memberships = const [];
+    homeschoolMemberships = const [];
+    _viewRoleByHomeschool.clear();
     selectedHomeschoolId = null;
     currentRole = null;
     terms = const [];
@@ -1203,6 +1515,7 @@ class NestController extends ChangeNotifier {
     communityCommentsByPost = const {};
     communityLikeCountsByPost = const {};
     likedCommunityPostIds = const <String>{};
+    communityReports = const [];
     pendingCommunityMediaFile = null;
   }
 

@@ -7,6 +7,25 @@ DateTime? parseDateTime(dynamic value) {
   return null;
 }
 
+bool parseBool(dynamic value, {bool fallback = false}) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is num) {
+    return value != 0;
+  }
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'true' || normalized == 't' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == 'f' || normalized == '0') {
+      return false;
+    }
+  }
+  return fallback;
+}
+
 class Homeschool {
   const Homeschool({
     required this.id,
@@ -29,12 +48,14 @@ class Homeschool {
 
 class Membership {
   const Membership({
+    required this.userId,
     required this.homeschoolId,
     required this.role,
     required this.status,
     required this.homeschool,
   });
 
+  final String userId;
   final String homeschoolId;
   final String role;
   final String status;
@@ -52,6 +73,7 @@ class Membership {
         '';
 
     return Membership(
+      userId: (map['user_id'] as String?) ?? '',
       homeschoolId: fallbackId,
       role: (map['role'] as String?) ?? 'PARENT',
       status: (map['status'] as String?) ?? 'ACTIVE',
@@ -329,6 +351,8 @@ class CommunityPost {
     required this.authorUserId,
     required this.authorDisplayName,
     required this.content,
+    required this.isHidden,
+    required this.isPinned,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -339,6 +363,8 @@ class CommunityPost {
   final String authorUserId;
   final String authorDisplayName;
   final String content;
+  final bool isHidden;
+  final bool isPinned;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -350,8 +376,60 @@ class CommunityPost {
       authorUserId: (map['author_user_id'] as String?) ?? '',
       authorDisplayName: (map['author_display_name'] as String?) ?? 'Unknown',
       content: (map['content'] as String?) ?? '',
+      isHidden: parseBool(map['is_hidden']),
+      isPinned: parseBool(map['is_pinned']),
       createdAt: parseDateTime(map['created_at']),
       updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+}
+
+class CommunityReport {
+  const CommunityReport({
+    required this.id,
+    required this.postId,
+    required this.homeschoolId,
+    required this.reporterUserId,
+    required this.reporterDisplayName,
+    required this.reasonCategory,
+    required this.reasonDetail,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.handledByUserId,
+    required this.handledAt,
+  });
+
+  final String id;
+  final String postId;
+  final String homeschoolId;
+  final String reporterUserId;
+  final String reporterDisplayName;
+  final String reasonCategory;
+  final String reasonDetail;
+  final String status;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final String? handledByUserId;
+  final DateTime? handledAt;
+
+  bool get isOpen => status == 'OPEN';
+
+  factory CommunityReport.fromMap(Map<String, dynamic> map) {
+    return CommunityReport(
+      id: map['id'] as String,
+      postId: (map['post_id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      reporterUserId: (map['reporter_user_id'] as String?) ?? '',
+      reporterDisplayName:
+          (map['reporter_display_name'] as String?) ?? 'Unknown',
+      reasonCategory: (map['reason_category'] as String?) ?? 'OTHER',
+      reasonDetail: (map['reason_detail'] as String?) ?? '',
+      status: (map['status'] as String?) ?? 'OPEN',
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+      handledByUserId: map['handled_by_user_id'] as String?,
+      handledAt: parseDateTime(map['handled_at']),
     );
   }
 }

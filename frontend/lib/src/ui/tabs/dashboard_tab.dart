@@ -54,6 +54,36 @@ class _DashboardTabState extends State<DashboardTab> {
 
     return ListView(
       children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('현재 뷰', style: theme.textTheme.titleLarge),
+                const SizedBox(height: 6),
+                Text(
+                  '활성 역할: ${controller.currentRole ?? 'NONE'}',
+                  style: theme.textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  controller.isParentView
+                      ? '부모 뷰에서는 내 아이의 시간표/갤러리를 중심으로 확인합니다.'
+                      : controller.isTeacherView
+                      ? '교사 뷰에서는 수업 운영과 활동 기록 중심으로 확인합니다.'
+                      : controller.isAdminLike
+                      ? '관리자 뷰에서는 운영/권한/신고 등 전체 관리 기능을 사용합니다.'
+                      : '역할을 선택하면 해당 뷰에 맞는 기능이 활성화됩니다.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.72),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -81,91 +111,102 @@ class _DashboardTabState extends State<DashboardTab> {
           ],
         ),
         const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('빠른 초기 세팅', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 6),
-                  Text(
-                    '관리 운영의 기본 틀(홈스쿨, 학기, 반, 과목, 시간 슬롯)을 자동으로 만듭니다.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: NestColors.deepWood.withValues(alpha: 0.72),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _homeschoolController,
-                    decoration: const InputDecoration(labelText: '홈스쿨 이름'),
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                        ? '필수값입니다.'
-                        : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _termController,
-                    decoration: const InputDecoration(labelText: '학기 이름'),
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                        ? '필수값입니다.'
-                        : null,
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _startDateController,
-                          decoration: const InputDecoration(
-                            labelText: '시작일 (YYYY-MM-DD)',
-                          ),
-                          validator: _validateDate,
-                        ),
+        if (controller.isAdminLike)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('빠른 초기 세팅', style: theme.textTheme.titleLarge),
+                    const SizedBox(height: 6),
+                    Text(
+                      '관리 운영의 기본 틀(홈스쿨, 학기, 반, 과목, 시간 슬롯)을 자동으로 만듭니다.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.72),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _endDateController,
-                          decoration: const InputDecoration(
-                            labelText: '종료일 (YYYY-MM-DD)',
-                          ),
-                          validator: _validateDate,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _classController,
-                    decoration: const InputDecoration(labelText: '반 이름'),
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                        ? '필수값입니다.'
-                        : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _courseController,
-                    decoration: const InputDecoration(
-                      labelText: '기본 과목 (콤마 구분)',
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton.icon(
-                    onPressed: controller.isBusy ? null : _submitBootstrap,
-                    icon: const Icon(Icons.auto_awesome),
-                    label: const Text('운영 틀 생성'),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _homeschoolController,
+                      decoration: const InputDecoration(labelText: '홈스쿨 이름'),
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? '필수값입니다.'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _termController,
+                      decoration: const InputDecoration(labelText: '학기 이름'),
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? '필수값입니다.'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _startDateController,
+                            decoration: const InputDecoration(
+                              labelText: '시작일 (YYYY-MM-DD)',
+                            ),
+                            validator: _validateDate,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _endDateController,
+                            decoration: const InputDecoration(
+                              labelText: '종료일 (YYYY-MM-DD)',
+                            ),
+                            validator: _validateDate,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _classController,
+                      decoration: const InputDecoration(labelText: '반 이름'),
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? '필수값입니다.'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _courseController,
+                      decoration: const InputDecoration(
+                        labelText: '기본 과목 (콤마 구분)',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      onPressed: controller.isBusy ? null : _submitBootstrap,
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('운영 틀 생성'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                '관리 기능(초기 세팅, 권한 관리, Drive 설정)은 관리자 뷰에서 사용할 수 있습니다.',
+                style: theme.textTheme.bodyMedium,
               ),
             ),
           ),
-        ),
       ],
     );
   }

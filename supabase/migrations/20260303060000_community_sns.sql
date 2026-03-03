@@ -11,10 +11,23 @@ create table if not exists public.community_posts (
   author_user_id uuid not null references auth.users(id) on delete restrict,
   author_display_name text not null,
   content text not null,
+  is_hidden boolean not null default false,
+  is_pinned boolean not null default false,
+  hidden_by_user_id uuid references auth.users(id) on delete set null,
+  hidden_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (char_length(trim(content)) > 0)
 );
+
+alter table public.community_posts
+  add column if not exists is_hidden boolean not null default false;
+alter table public.community_posts
+  add column if not exists is_pinned boolean not null default false;
+alter table public.community_posts
+  add column if not exists hidden_by_user_id uuid references auth.users(id) on delete set null;
+alter table public.community_posts
+  add column if not exists hidden_at timestamptz;
 
 create table if not exists public.community_post_media (
   id uuid primary key default gen_random_uuid(),
@@ -44,6 +57,23 @@ create table if not exists public.community_post_reactions (
   unique (post_id, user_id)
 );
 
+create table if not exists public.community_reports (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.community_posts(id) on delete cascade,
+  homeschool_id uuid not null references public.homeschools(id) on delete cascade,
+  reporter_user_id uuid not null references auth.users(id) on delete cascade,
+  reporter_display_name text not null,
+  reason_category text not null default 'OTHER'
+    check (reason_category in ('SPAM', 'ABUSE', 'SAFETY', 'INAPPROPRIATE', 'OTHER')),
+  reason_detail text not null default '',
+  status text not null default 'OPEN'
+    check (status in ('OPEN', 'RESOLVED', 'DISMISSED')),
+  handled_by_user_id uuid references auth.users(id) on delete set null,
+  handled_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- =====================================================
 -- Indexes
 -- =====================================================
@@ -54,6 +84,9 @@ create index if not exists idx_community_posts_school_created
 create index if not exists idx_community_posts_class_created
   on public.community_posts(class_group_id, created_at desc);
 
+create index if not exists idx_community_posts_school_pinned_created
+  on public.community_posts(homeschool_id, is_pinned desc, created_at desc);
+
 create index if not exists idx_community_post_media_post
   on public.community_post_media(post_id);
 
@@ -62,6 +95,12 @@ create index if not exists idx_community_post_comments_post_created
 
 create index if not exists idx_community_post_reactions_post
   on public.community_post_reactions(post_id);
+
+create index if not exists idx_community_reports_school_status_created
+  on public.community_reports(homeschool_id, status, created_at desc);
+
+create index if not exists idx_community_reports_post_created
+  on public.community_reports(post_id, created_at desc);
 
 -- =====================================================
 -- Triggers
@@ -77,6 +116,11 @@ create trigger trg_community_post_comments_updated_at
 before update on public.community_post_comments
 for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_community_reports_updated_at on public.community_reports;
+create trigger trg_community_reports_updated_at
+before update on public.community_reports
+for each row execute function public.set_updated_at();
+
 -- =====================================================
 -- RLS
 -- =====================================================
@@ -85,6 +129,7 @@ alter table public.community_posts enable row level security;
 alter table public.community_post_media enable row level security;
 alter table public.community_post_comments enable row level security;
 alter table public.community_post_reactions enable row level security;
+alter table public.community_reports enable row level security;
 
 -- community_posts
 
@@ -250,6 +295,55 @@ for delete using (
     from public.community_posts cp
     where cp.id = post_id
       and public.has_homeschool_role(cp.homeschool_id, array['HOMESCHOOL_ADMIN', 'STAFF']::public.membership_role[])
+  )
+);
+
+-- community_reports
+
+drop policy if exists community_reports_select_reporter_or_admin on public.community_reports;
+create policy community_reports_select_reporter_or_admin on public.community_reports
+for select using (
+  reporter_user_id = auth.uid()
+  or public.has_homeschool_role(
+    homeschool_id,
+    array['HOMESCHOOL_ADMIN', 'STAFF']::public.membership_role[]
+  )
+);
+
+drop policy if exists community_reports_insert_member on public.community_reports;
+create policy community_reports_insert_member on public.community_reports
+for insert with check (
+  reporter_user_id = auth.uid()
+  and exists (
+    select 1
+    from public.community_posts cp
+    where cp.id = post_id
+      and cp.homeschool_id = homeschool_id
+      and public.is_homeschool_member(cp.homeschool_id)
+  )
+);
+
+drop policy if exists community_reports_update_admin on public.community_reports;
+create policy community_reports_update_admin on public.community_reports
+for update using (
+  public.has_homeschool_role(
+    homeschool_id,
+    array['HOMESCHOOL_ADMIN', 'STAFF']::public.membership_role[]
+  )
+)
+with check (
+  public.has_homeschool_role(
+    homeschool_id,
+    array['HOMESCHOOL_ADMIN', 'STAFF']::public.membership_role[]
+  )
+);
+
+drop policy if exists community_reports_delete_admin on public.community_reports;
+create policy community_reports_delete_admin on public.community_reports
+for delete using (
+  public.has_homeschool_role(
+    homeschool_id,
+    array['HOMESCHOOL_ADMIN', 'STAFF']::public.membership_role[]
   )
 );
 

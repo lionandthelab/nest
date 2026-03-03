@@ -79,11 +79,53 @@ class NestRepository {
   Future<List<Membership>> fetchMemberships({required String userId}) async {
     final data = await client
         .from('homeschool_memberships')
-        .select('homeschool_id, role, status, homeschools(id, name, timezone)')
+        .select(
+          'user_id, homeschool_id, role, status, homeschools(id, name, timezone)',
+        )
         .eq('user_id', userId)
         .eq('status', 'ACTIVE');
 
     return _asRows(data).map(Membership.fromMap).toList(growable: false);
+  }
+
+  Future<List<Membership>> fetchHomeschoolMemberships({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('homeschool_memberships')
+        .select(
+          'user_id, homeschool_id, role, status, homeschools(id, name, timezone)',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: true);
+
+    return _asRows(data).map(Membership.fromMap).toList(growable: false);
+  }
+
+  Future<void> grantMembershipRole({
+    required String homeschoolId,
+    required String userId,
+    required String role,
+  }) {
+    return client.from('homeschool_memberships').upsert({
+      'homeschool_id': homeschoolId,
+      'user_id': userId,
+      'role': role,
+      'status': 'ACTIVE',
+    }, onConflict: 'homeschool_id,user_id,role');
+  }
+
+  Future<void> revokeMembershipRole({
+    required String homeschoolId,
+    required String userId,
+    required String role,
+  }) {
+    return client
+        .from('homeschool_memberships')
+        .delete()
+        .eq('homeschool_id', homeschoolId)
+        .eq('user_id', userId)
+        .eq('role', role);
   }
 
   Future<List<Term>> fetchTerms({required String homeschoolId}) async {
@@ -568,13 +610,31 @@ class NestRepository {
     final data = await client
         .from('community_posts')
         .select(
-          'id, homeschool_id, class_group_id, author_user_id, author_display_name, content, created_at, updated_at',
+          'id, homeschool_id, class_group_id, author_user_id, author_display_name, '
+          'content, is_hidden, is_pinned, created_at, updated_at',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('is_pinned', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(120);
+
+    return _asRows(data).map(CommunityPost.fromMap).toList(growable: false);
+  }
+
+  Future<List<CommunityReport>> fetchCommunityReports({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('community_reports')
+        .select(
+          'id, post_id, homeschool_id, reporter_user_id, reporter_display_name, '
+          'reason_category, reason_detail, status, created_at, updated_at, handled_by_user_id, handled_at',
         )
         .eq('homeschool_id', homeschoolId)
         .order('created_at', ascending: false)
-        .limit(80);
+        .limit(200);
 
-    return _asRows(data).map(CommunityPost.fromMap).toList(growable: false);
+    return _asRows(data).map(CommunityReport.fromMap).toList(growable: false);
   }
 
   Future<Map<String, List<CommunityPostMedia>>> fetchCommunityMediaByPost({
@@ -732,10 +792,11 @@ class NestRepository {
     required String postId,
     required String userId,
   }) {
-    return client.from('community_post_reactions').upsert(
-      {'post_id': postId, 'user_id': userId, 'reaction_type': 'LIKE'},
-      onConflict: 'post_id,user_id',
-    );
+    return client.from('community_post_reactions').upsert({
+      'post_id': postId,
+      'user_id': userId,
+      'reaction_type': 'LIKE',
+    }, onConflict: 'post_id,user_id');
   }
 
   Future<void> removeCommunityLike({
@@ -747,6 +808,69 @@ class NestRepository {
         .delete()
         .eq('post_id', postId)
         .eq('user_id', userId);
+  }
+
+  Future<void> createCommunityReport({
+    required String postId,
+    required String homeschoolId,
+    required String reporterUserId,
+    required String reporterDisplayName,
+    required String reasonCategory,
+    required String reasonDetail,
+  }) {
+    return client.from('community_reports').insert({
+      'post_id': postId,
+      'homeschool_id': homeschoolId,
+      'reporter_user_id': reporterUserId,
+      'reporter_display_name': reporterDisplayName,
+      'reason_category': reasonCategory,
+      'reason_detail': reasonDetail,
+      'status': 'OPEN',
+    });
+  }
+
+  Future<void> setCommunityReportStatus({
+    required String reportId,
+    required String status,
+    required String handledByUserId,
+  }) {
+    return client
+        .from('community_reports')
+        .update({
+          'status': status,
+          'handled_by_user_id': handledByUserId,
+          'handled_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', reportId);
+  }
+
+  Future<void> setCommunityPostHidden({
+    required String postId,
+    required bool hidden,
+    required String handledByUserId,
+  }) {
+    return client
+        .from('community_posts')
+        .update({
+          'is_hidden': hidden,
+          'hidden_by_user_id': hidden ? handledByUserId : null,
+          'hidden_at': hidden ? DateTime.now().toUtc().toIso8601String() : null,
+        })
+        .eq('id', postId);
+  }
+
+  Future<void> setCommunityPostPinned({
+    required String postId,
+    required bool pinned,
+  }) {
+    return client
+        .from('community_posts')
+        .update({'is_pinned': pinned})
+        .eq('id', postId);
+  }
+
+  Future<void> deleteCommunityPost({required String postId}) {
+    return client.from('community_posts').delete().eq('id', postId);
   }
 
   Future<DriveIntegration?> fetchDriveIntegration({

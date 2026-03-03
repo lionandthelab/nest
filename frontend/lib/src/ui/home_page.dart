@@ -6,8 +6,12 @@ import 'nest_theme.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/drive_tab.dart';
 import 'tabs/gallery_tab.dart';
+import 'tabs/members_tab.dart';
+import 'tabs/parent_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'tabs/community_tab.dart';
+import 'tabs/community_feed_tab.dart';
+import 'tabs/teacher_hub_tab.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -21,26 +25,25 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
 
-  static const _labels = <String>[
-    'Dashboard',
-    'Timetable',
-    'Community',
-    'Gallery',
-    'Drive',
-  ];
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
-        final pages = [
-          DashboardTab(controller: widget.controller),
-          TimetableTab(controller: widget.controller),
-          CommunityTab(controller: widget.controller),
-          GalleryTab(controller: widget.controller),
-          DriveTab(controller: widget.controller),
-        ];
+        final tabs = _buildTabs(widget.controller);
+        final labels = tabs.map((tab) => tab.label).toList(growable: false);
+
+        final safeIndex = _currentIndex >= tabs.length ? 0 : _currentIndex;
+        if (safeIndex != _currentIndex) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _currentIndex = safeIndex;
+            });
+          });
+        }
 
         final width = MediaQuery.sizeOf(context).width;
         final desktopLike = width >= 1080;
@@ -53,30 +56,32 @@ class _HomePageState extends State<HomePage> {
               SafeArea(
                 child: desktopLike
                     ? _DesktopScaffold(
-                        currentIndex: _currentIndex,
+                        currentIndex: safeIndex,
                         onSelectIndex: (value) =>
                             setState(() => _currentIndex = value),
-                        labels: _labels,
+                        labels: labels,
                         controller: widget.controller,
-                        tab: pages[_currentIndex],
+                        tab: tabs[safeIndex].page,
                         onLogout: _handleLogout,
                         onRefresh: _handleRefresh,
                         onSelectHomeschool: _handleHomeschoolChange,
                         onSelectTerm: _handleTermChange,
                         onSelectClassGroup: _handleClassGroupChange,
+                        onSelectViewRole: _handleViewRoleChange,
                       )
                     : _MobileScaffold(
-                        currentIndex: _currentIndex,
+                        currentIndex: safeIndex,
                         onSelectIndex: (value) =>
                             setState(() => _currentIndex = value),
-                        labels: _labels,
+                        labels: labels,
                         controller: widget.controller,
-                        tab: pages[_currentIndex],
+                        tab: tabs[safeIndex].page,
                         onLogout: _handleLogout,
                         onRefresh: _handleRefresh,
                         onSelectHomeschool: _handleHomeschoolChange,
                         onSelectTerm: _handleTermChange,
                         onSelectClassGroup: _handleClassGroupChange,
+                        onSelectViewRole: _handleViewRoleChange,
                       ),
               ),
             ],
@@ -84,6 +89,69 @@ class _HomePageState extends State<HomePage> {
         );
       },
     );
+  }
+
+  List<_TabSpec> _buildTabs(NestController controller) {
+    final tabs = <_TabSpec>[
+      _TabSpec(
+        label: 'Dashboard',
+        page: DashboardTab(controller: controller),
+      ),
+      if (controller.isParentView)
+        _TabSpec(
+          label: 'Parent Hub',
+          page: ParentHubTab(controller: controller),
+        ),
+      if (controller.isTeacherView)
+        _TabSpec(
+          label: 'Teacher Hub',
+          page: TeacherHubTab(controller: controller),
+        ),
+      _TabSpec(
+        label: 'Timetable',
+        page: TimetableTab(controller: controller),
+      ),
+      _TabSpec(
+        label: 'Gallery',
+        page: GalleryTab(controller: controller),
+      ),
+    ];
+
+    if (controller.canModerateCommunity) {
+      tabs.add(
+        _TabSpec(
+          label: 'SNS Admin',
+          page: CommunityTab(controller: controller),
+        ),
+      );
+    } else {
+      tabs.add(
+        _TabSpec(
+          label: 'Community',
+          page: CommunityFeedTab(controller: controller),
+        ),
+      );
+    }
+
+    if (controller.isDriveAdmin) {
+      tabs.add(
+        _TabSpec(
+          label: 'Drive',
+          page: DriveTab(controller: controller),
+        ),
+      );
+    }
+
+    if (controller.canManageMemberships) {
+      tabs.add(
+        _TabSpec(
+          label: 'Members',
+          page: MembersTab(controller: controller),
+        ),
+      );
+    }
+
+    return tabs;
   }
 
   Future<void> _handleLogout() async {
@@ -126,6 +194,20 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _handleViewRoleChange(String? value) async {
+    try {
+      await widget.controller.changeViewRole(value);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _currentIndex = 0;
+      });
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
   void _showMessage(String message) {
     if (!mounted || message.isEmpty) {
       return;
@@ -135,6 +217,13 @@ class _HomePageState extends State<HomePage> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+class _TabSpec {
+  const _TabSpec({required this.label, required this.page});
+
+  final String label;
+  final Widget page;
 }
 
 class _DesktopScaffold extends StatelessWidget {
@@ -149,6 +238,7 @@ class _DesktopScaffold extends StatelessWidget {
     required this.onSelectHomeschool,
     required this.onSelectTerm,
     required this.onSelectClassGroup,
+    required this.onSelectViewRole,
   });
 
   final int currentIndex;
@@ -161,6 +251,7 @@ class _DesktopScaffold extends StatelessWidget {
   final Future<void> Function(String? value) onSelectHomeschool;
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
+  final Future<void> Function(String? value) onSelectViewRole;
 
   @override
   Widget build(BuildContext context) {
@@ -199,6 +290,7 @@ class _DesktopScaffold extends StatelessWidget {
               onSelectHomeschool: onSelectHomeschool,
               onSelectTerm: onSelectTerm,
               onSelectClassGroup: onSelectClassGroup,
+              onSelectViewRole: onSelectViewRole,
             ),
           ),
         ),
@@ -219,6 +311,7 @@ class _MobileScaffold extends StatelessWidget {
     required this.onSelectHomeschool,
     required this.onSelectTerm,
     required this.onSelectClassGroup,
+    required this.onSelectViewRole,
   });
 
   final int currentIndex;
@@ -231,6 +324,7 @@ class _MobileScaffold extends StatelessWidget {
   final Future<void> Function(String? value) onSelectHomeschool;
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
+  final Future<void> Function(String? value) onSelectViewRole;
 
   @override
   Widget build(BuildContext context) {
@@ -247,6 +341,7 @@ class _MobileScaffold extends StatelessWidget {
               onSelectHomeschool: onSelectHomeschool,
               onSelectTerm: onSelectTerm,
               onSelectClassGroup: onSelectClassGroup,
+              onSelectViewRole: onSelectViewRole,
             ),
           ),
         ),
@@ -283,6 +378,7 @@ class _MainPanel extends StatelessWidget {
     required this.onSelectHomeschool,
     required this.onSelectTerm,
     required this.onSelectClassGroup,
+    required this.onSelectViewRole,
   });
 
   final NestController controller;
@@ -292,6 +388,7 @@ class _MainPanel extends StatelessWidget {
   final Future<void> Function(String? value) onSelectHomeschool;
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
+  final Future<void> Function(String? value) onSelectViewRole;
 
   @override
   Widget build(BuildContext context) {
@@ -345,6 +442,7 @@ class _MainPanel extends StatelessWidget {
                   onSelectHomeschool: onSelectHomeschool,
                   onSelectTerm: onSelectTerm,
                   onSelectClassGroup: onSelectClassGroup,
+                  onSelectViewRole: onSelectViewRole,
                 ),
                 const SizedBox(height: 10),
                 Align(
@@ -397,12 +495,14 @@ class _ContextSelector extends StatelessWidget {
     required this.onSelectHomeschool,
     required this.onSelectTerm,
     required this.onSelectClassGroup,
+    required this.onSelectViewRole,
   });
 
   final NestController controller;
   final Future<void> Function(String? value) onSelectHomeschool;
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
+  final Future<void> Function(String? value) onSelectViewRole;
 
   @override
   Widget build(BuildContext context) {
@@ -436,6 +536,15 @@ class _ContextSelector extends StatelessWidget {
         )
         .toList(growable: false);
 
+    final roleItems = controller.availableViewRoles
+        .map(
+          (role) => DropdownMenuItem<String>(
+            value: role,
+            child: Text(_labelForRole(role)),
+          ),
+        )
+        .toList(growable: false);
+
     final fields = [
       _SelectorField(
         label: '홈스쿨',
@@ -454,6 +563,12 @@ class _ContextSelector extends StatelessWidget {
         value: controller.selectedClassGroupId,
         items: classItems,
         onChanged: controller.isBusy ? null : onSelectClassGroup,
+      ),
+      _SelectorField(
+        label: '뷰 역할',
+        value: controller.currentRole,
+        items: roleItems,
+        onChanged: controller.isBusy ? null : onSelectViewRole,
       ),
     ];
 
@@ -513,12 +628,31 @@ class _SelectorField extends StatelessWidget {
 Icon _iconForLabel(String label, {required bool filled}) {
   return switch (label) {
     'Dashboard' => Icon(filled ? Icons.dashboard : Icons.dashboard_outlined),
+    'Parent Hub' => Icon(
+      filled ? Icons.family_restroom : Icons.family_restroom_outlined,
+    ),
+    'Teacher Hub' => Icon(filled ? Icons.school : Icons.school_outlined),
     'Timetable' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
     'Community' => Icon(filled ? Icons.forum : Icons.forum_outlined),
+    'SNS Admin' => Icon(
+      filled ? Icons.admin_panel_settings : Icons.admin_panel_settings_outlined,
+    ),
+    'Members' => Icon(filled ? Icons.group : Icons.group_outlined),
     'Gallery' => Icon(
       filled ? Icons.photo_library : Icons.photo_library_outlined,
     ),
     _ => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
+  };
+}
+
+String _labelForRole(String role) {
+  return switch (role) {
+    'HOMESCHOOL_ADMIN' => '관리자',
+    'STAFF' => '스태프',
+    'TEACHER' => '교사',
+    'GUEST_TEACHER' => '외부교사',
+    'PARENT' => '부모',
+    _ => role,
   };
 }
 

@@ -1,26 +1,35 @@
 # Nest Flutter Architecture
 
-## 1. 목표
+Last updated: 2026-03-03
 
-- 웹/모바일 단일 코드베이스로 운영/학부모/교사 UX 일관성 유지
-- Supabase(Postgres + Auth + Edge Functions) 중심의 단순한 BaaS 아키텍처
-- 시간표 생성(프롬프트) + 수동 편집(드래그앤드롭) 동시 제공
-- Google Drive 기반 미디어 업로드/갤러리 연동
+## 1. Goals
 
-## 2. 시스템 구성
+- Single Flutter codebase for web/mobile with consistent UX.
+- Supabase-centered backend with strict RLS-based access control.
+- Role-switching product model:
+  - Parent view
+  - Teacher view
+  - Admin view
+- Community dual mode:
+  - User feed (post/comment/like/report)
+  - Admin moderation (report queue/hide/pin/delete)
+- Prompt timetable generation plus manual drag-and-drop editing.
+- Google Drive based media upload and gallery sharing.
+
+## 2. System Overview
 
 - Frontend: Flutter (`frontend/`)
 - Backend: Supabase
-  - Auth: 이메일 로그인
+  - Auth: email/password
   - DB: Postgres + RLS
   - Edge Functions:
     - `timetable-assistant-generate`
     - `google-drive-connect-start`
     - `google-drive-connect-complete`
     - `google-drive-upload`
-- Deployment (Web): GitHub Pages (`gh-pages` branch)
+- Web deployment: GitHub Pages (`gh-pages`)
 
-## 3. 프론트엔드 프로젝트 구조
+## 3. Project Structure
 
 ```text
 frontend/
@@ -46,68 +55,157 @@ frontend/
         home_page.dart
         tabs/
           dashboard_tab.dart
+          parent_hub_tab.dart
+          teacher_hub_tab.dart
           timetable_tab.dart
           gallery_tab.dart
+          community_feed_tab.dart
+          community_tab.dart
+          members_tab.dart
           drive_tab.dart
   web/
     index.html
     oauth/google/callback.html
   test/
     widget_test.dart
+
+supabase/
+  migrations/
+    20260302160000_init_nest.sql
+    20260302173000_constraints_and_drive_tokens.sql
+    20260303060000_community_sns.sql
 ```
 
-## 4. 상태관리/데이터 흐름
+## 4. Role Model and View Switching
 
-- `NestController`
-  - 화면 상태 단일 소스
-  - 인증 상태, 운영 컨텍스트, 시간표/갤러리/Drive 상태 관리
-  - UI 이벤트를 비즈니스 액션으로 변환
-- `NestRepository`
-  - Supabase 테이블 CRUD와 Edge Function 호출 캡슐화
-  - 컨트롤러는 SQL/HTTP 세부 구현을 몰라도 되도록 분리
+### 4.1 Membership Roles
 
-## 5. 핵심 기능별 설계
+- `HOMESCHOOL_ADMIN`
+- `STAFF`
+- `TEACHER`
+- `GUEST_TEACHER`
+- `PARENT`
 
-### 5.1 인증/컨텍스트
+### 4.2 View Role Resolution
 
-1. `Supabase.auth` 회원가입/로그인
-2. `homeschool_memberships` 로 사용자 소속 조회
-3. 선택된 홈스쿨 기준으로 학기/반/권한 로딩
+- A user can hold multiple roles in one homeschool.
+- `NestController.availableViewRoles` computes switchable roles from active memberships.
+- `NestController.changeViewRole()` sets the current active view role and persists preference in-memory by homeschool.
+- Current role is shown and switched in the top context selector (`뷰 역할`).
 
-### 5.2 시간표 스튜디오
+### 4.3 Dynamic Tab Composition
 
-- Prompt 생성
-  1. `timetable-assistant-generate` 호출
-  2. 실패 시 `local_planner.dart` fallback 생성
-  3. `timetable_proposals`, `timetable_proposal_sessions` 저장
-  4. 적용 시 `class_sessions` 삽입
-- Manual 편집
-  - 과목 칩/수업 카드 Drag & Drop
-  - `class_sessions.time_slot_id` 업데이트로 이동
-  - 세션 취소는 `status = CANCELED`
+Tabs are built dynamically in `HomePage._buildTabs`:
 
-### 5.3 Google Drive OAuth
+- Always: `Dashboard`, `Timetable`, `Gallery`
+- Parent role: `Parent Hub`
+- Teacher/GUEST_TEACHER role: `Teacher Hub`
+- Non-admin: `Community` (user feed)
+- Admin/Staff: `SNS Admin` (moderation)
+- HOMESCHOOL_ADMIN only: `Drive`, `Members`
 
-- 시작: `google-drive-connect-start` → OAuth URL 반환
-- 웹: 팝업으로 Google 인증 후 `web/oauth/google/callback.html` 진입
-- 콜백 페이지가 `google-drive-connect-complete` 직접 호출
-- 완료 결과는 `localStorage(nest.oauth.result)` 저장 후 앱 동기화
+## 5. State and Data Flow
 
-### 5.4 미디어 업로드/갤러리
+### 5.1 `NestController`
 
-1. `media_upload_sessions` 생성
-2. `google-drive-upload` 호출 (base64 payload)
-3. `media_assets` + `media_asset_children` 저장
-4. 갤러리 조회 (`media_assets`, `media_asset_children`)
+- Single source of UI/application state.
+- Manages:
+  - auth session and user
+  - homeschool/term/class context
+  - current view role and role capabilities
+  - timetable data, gallery data, drive integration
+  - community feed + moderation state
+  - homeschool membership list for role administration
 
-## 6. 환경 변수
+### 5.2 `NestRepository`
 
-Flutter `dart-define` 지원:
+- Encapsulates Supabase table access and function invocation.
+- Key role APIs:
+  - `fetchMemberships(userId)`
+  - `fetchHomeschoolMemberships(homeschoolId)`
+  - `grantMembershipRole(homeschoolId, userId, role)`
+  - `revokeMembershipRole(homeschoolId, userId, role)`
+
+## 6. Feature Architecture
+
+### 6.1 Auth and Context Bootstrapping
+
+1. Sign in/up via `Supabase.auth`.
+2. Load active memberships (`homeschool_memberships`) for current user.
+3. Resolve current homeschool and view role.
+4. Load dependent context:
+  - terms, class groups
+  - timetable assets and sessions
+  - drive integration
+  - gallery items
+  - community feed (+ reports for admin/staff)
+
+### 6.2 Timetable
+
+- Admin view:
+  - prompt generation + apply/discard proposals
+  - drag-and-drop manual board edits
+- Parent/Teacher view:
+  - read-only schedule visibility (editing hidden/disabled)
+
+### 6.3 Community
+
+- User Feed (`community_feed_tab.dart`)
+  - create post (text + optional media)
+  - like, comment
+  - report post (category + detail)
+- Admin Moderation (`community_tab.dart`)
+  - moderation metrics
+  - open report queue and status resolution
+  - post hide/unhide, pin/unpin, delete
+
+### 6.4 Membership and Permission Admin
+
+- `members_tab.dart` (HOMESCHOOL_ADMIN only):
+  - grant role to target `auth.users.id`
+  - revoke specific role
+  - guardrail: cannot remove last remaining `HOMESCHOOL_ADMIN`
+
+### 6.5 Drive and Gallery
+
+- OAuth start/complete through edge functions and web bridge.
+- Upload flow:
+  1. create `media_upload_sessions`
+  2. upload to Drive via edge function
+  3. insert `media_assets` and optional child tagging
+  4. show in gallery and community attachments
+
+## 7. Database and RLS Notes
+
+### 7.1 Core Membership Security
+
+- `homeschool_memberships` insert/update/delete is admin-gated by RLS (`HOMESCHOOL_ADMIN`).
+- App-level enforcement adds additional UX/guardrails (e.g., last admin protection), but DB RLS remains the source of truth.
+
+### 7.2 Community Moderation Tables
+
+Migration `20260303060000_community_sns.sql` includes:
+
+- `community_posts` (with `is_hidden`, `is_pinned`, hidden metadata)
+- `community_post_media`
+- `community_post_comments`
+- `community_post_reactions`
+- `community_reports`
+
+RLS summary:
+
+- Members can read community content for their homeschool.
+- Members can create posts/comments/reactions/report.
+- Admin/Staff can moderate reports and post visibility/pinning/deletion.
+
+## 8. Environment Variables
+
+Required `dart-define` values:
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 
-예시:
+Example:
 
 ```bash
 flutter run \
@@ -115,7 +213,7 @@ flutter run \
   --dart-define=SUPABASE_ANON_KEY=<anon-key>
 ```
 
-## 7. 개발/검증 명령어
+## 9. Build, Test, and Deploy
 
 ```bash
 cd frontend
@@ -123,25 +221,21 @@ flutter pub get
 flutter analyze
 flutter test
 flutter build web --release --base-href /nest/
-flutter build apk --debug
-flutter build ios --simulator --no-codesign
 ```
 
-## 8. GitHub Pages 배포
+- GitHub Pages workflow: `.github/workflows/flutter_web_pages.yml`
+- Artifact: `frontend/build/web` to `gh-pages`
 
-- Workflow: `.github/workflows/flutter_web_pages.yml`
-- 트리거: `main` 브랜치 푸시 (frontend 변경)
-- 배포 대상: `frontend/build/web` → `gh-pages`
+## 10. OAuth Redirect URI
 
-## 9. OAuth Redirect URI 기준
+Keep Google Console redirect URI and Supabase `GOOGLE_REDIRECT_URI` aligned:
 
-Google Console과 Supabase `GOOGLE_REDIRECT_URI`를 동일하게 맞춰야 함.
-
-- 로컬 개발: `http://localhost:8080/oauth/google/callback.html`
+- Local: `http://localhost:8080/oauth/google/callback.html`
 - GitHub Pages: `https://lionandthelab.github.io/nest/oauth/google/callback.html`
 
-## 10. 운영 시 주의사항
+## 11. Operational Rules
 
-- `service_role` 키는 프론트에 절대 노출 금지
-- OAuth 토큰 컬럼 접근은 관리자 권한과 RLS 정책 범위에서만 허용
-- Edge Function JWT 검증 전략(`verify_jwt`) 변경 시 함수 내부 `requireUser` 체크를 유지
+- Never expose `service_role` in frontend.
+- Keep token access restricted to admin RLS scopes.
+- Keep edge function JWT/user checks enabled.
+- Update this file whenever architecture-affecting code changes are introduced.

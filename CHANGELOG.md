@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-03-03
+
+### Added
+
+- 역할 기반 사용자 뷰 전환
+  - 상단 컨텍스트에 `뷰 역할` 선택 추가 (부모/교사/관리자)
+  - 계정이 다중 역할을 가진 경우 즉시 전환 가능
+- 역할별 허브 탭 추가
+  - `Parent Hub` (`parent_hub_tab.dart`)
+  - `Teacher Hub` (`teacher_hub_tab.dart`)
+- 권한 관리 탭 추가
+  - `Members` (`members_tab.dart`)
+  - 홈스쿨 관리자가 사용자별 역할 부여/회수 가능
+  - 마지막 `HOMESCHOOL_ADMIN` 보호 로직 추가
+- 일반 사용자용 커뮤니티 피드 탭 추가
+  - `Community` (`community_feed_tab.dart`)
+  - 글/첨부/좋아요/댓글/신고 기능 제공
+
+### Changed
+
+- 탭 라우팅을 역할 기반 동적 구성으로 전환 (`home_page.dart`)
+  - 공통: Dashboard, Timetable, Gallery
+  - 부모: Parent Hub
+  - 교사: Teacher Hub
+  - 사용자: Community
+  - 관리자/스태프: SNS Admin
+  - 관리자 전용: Drive, Members
+- 시간표 탭을 권한 기반 UX로 개선
+  - 관리자: Prompt + Manual 편집
+  - 부모/교사: 읽기 전용 시간표
+- 멤버십/권한 API 확장 (`nest_repository.dart`)
+  - 홈스쿨 전체 멤버십 조회
+  - 역할 부여/회수 API
+- 멤버십 모델에 `userId` 추가 (`nest_models.dart`)
+- 아키텍처 문서 최신화 (`docs/architecture.md`)
+  - 역할 전환 구조, 동적 탭, 권한관리, 커뮤니티 이중 모드 반영
+
+### Verification
+
+- `cd frontend && flutter analyze` 통과
+- `cd frontend && flutter test` 통과
+- `cd frontend && flutter build web --release` 통과
+- `supabase db push` 확인: 원격 DB 최신 상태
+
 ## 2026-03-02
 
 ### Added

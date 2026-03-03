@@ -28,71 +28,101 @@ class _TimetableTabState extends State<TimetableTab> {
     final controller = widget.controller;
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 1180;
+    final adminEditable = controller.isAdminLike;
 
     return ListView(
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Prompt Studio',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '프롬프트로 생성안을 만든 뒤 적용하거나, 드래그 앤 드롭으로 바로 수동 편집할 수 있습니다.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.72),
+        if (adminEditable) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Prompt Studio',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _promptController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    hintText: '예: 화/목 오전은 국어/수학 중심으로 편성해줘.',
-                    labelText: '시간표 생성 프롬프트',
+                  const SizedBox(height: 6),
+                  Text(
+                    '프롬프트로 생성안을 만든 뒤 적용하거나, 드래그 앤 드롭으로 바로 수동 편집할 수 있습니다.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.72),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: controller.isBusy ? null : _generateProposal,
-                      icon: const Icon(Icons.auto_fix_high),
-                      label: const Text('생성안 만들기'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _promptController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: '예: 화/목 오전은 국어/수학 중심으로 편성해줘.',
+                      labelText: '시간표 생성 프롬프트',
                     ),
-                    FilledButton.tonalIcon(
-                      onPressed: controller.isBusy ? null : _reloadProposals,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('생성안 갱신'),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: controller.isBusy ? null : _generateProposal,
+                        icon: const Icon(Icons.auto_fix_high),
+                        label: const Text('생성안 만들기'),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: controller.isBusy ? null : _reloadProposals,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('생성안 갱신'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ] else ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Read-only Timetable',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '현재 뷰에서는 시간표 열람만 가능합니다. 수정은 관리자 뷰에서 진행하세요.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         compact
             ? Column(
                 children: [
-                  _buildProposalPanel(controller),
-                  const SizedBox(height: 12),
+                  if (adminEditable) ...[
+                    _buildProposalPanel(controller),
+                    const SizedBox(height: 12),
+                  ],
                   _buildBoardPanel(controller),
                 ],
               )
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(flex: 2, child: _buildProposalPanel(controller)),
-                  const SizedBox(width: 12),
+                  if (adminEditable) ...[
+                    Expanded(flex: 2, child: _buildProposalPanel(controller)),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(flex: 3, child: _buildBoardPanel(controller)),
                 ],
               ),
@@ -186,7 +216,7 @@ class _TimetableTabState extends State<TimetableTab> {
             const SizedBox(height: 8),
             if (controller.courses.isEmpty)
               const Text('과목이 없습니다. Dashboard에서 과목을 추가하세요.')
-            else
+            else if (controller.isAdminLike)
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -212,6 +242,11 @@ class _TimetableTabState extends State<TimetableTab> {
                       ),
                     )
                     .toList(growable: false),
+              ),
+            if (!controller.isAdminLike)
+              Text(
+                '읽기 전용 모드에서는 과목 드래그/세션 이동이 비활성화됩니다.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             const SizedBox(height: 12),
             if (sortedSlots.isEmpty)
