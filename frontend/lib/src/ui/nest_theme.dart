@@ -126,6 +126,21 @@ class NestTheme {
         side: BorderSide.none,
         selectedColor: NestColors.mutedSage.withValues(alpha: 0.18),
       ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: NestColors.dustyRose,
+        linearTrackColor: NestColors.roseMist,
+        circularTrackColor: Color(0x33DCAE96),
+      ),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
+        },
+      ),
     );
   }
 }

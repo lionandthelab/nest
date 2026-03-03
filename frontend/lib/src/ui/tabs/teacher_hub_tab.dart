@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/hub_scaffold.dart';
 
 class TeacherHubTab extends StatefulWidget {
   const TeacherHubTab({super.key, required this.controller});
@@ -33,6 +34,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   String _logActivityType = 'OBSERVATION';
   bool _announcePinned = false;
   int _selectedUnavailabilityDay = 1;
+  String _sectionId = 'operations';
 
   @override
   void dispose() {
@@ -53,52 +55,60 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     final controller = widget.controller;
     _syncDefaults(controller);
 
-    final sessions = controller.sessions.length;
-    final plans = controller.teachingPlans.length;
-    final logs = controller.studentActivityLogs.length;
-
-    return ListView(
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Teacher Hub',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '수업 계획, 아동 활동 기록, 공지 작성을 교사 뷰에서 바로 처리합니다.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.72),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _MetricCard(label: '배정 수업 수', value: '$sessions'),
-                    _MetricCard(label: '등록 계획 수', value: '$plans'),
-                    _MetricCard(label: '활동 기록 수', value: '$logs'),
-                  ],
-                ),
-              ],
-            ),
+    return HubScaffold(
+      title: 'Teacher Hub',
+      subtitle: '수업 운영, 계획 작성, 활동 기록까지 한 화면 흐름으로 처리합니다.',
+      icon: Icons.school,
+      isBusy: controller.isBusy,
+      metrics: [
+        HubMetric(
+          label: '배정 수업',
+          value: '${controller.sessions.length}',
+          icon: Icons.view_week,
+        ),
+        HubMetric(
+          label: '수업 계획',
+          value: '${controller.teachingPlans.length}',
+          icon: Icons.menu_book,
+        ),
+        HubMetric(
+          label: '활동 기록',
+          value: '${controller.studentActivityLogs.length}',
+          icon: Icons.fact_check,
+        ),
+      ],
+      sections: [
+        HubSection(
+          id: 'operations',
+          label: '수업 운영',
+          icon: Icons.tune,
+          content: Column(
+            children: [
+              _buildTeacherUnavailabilityCard(controller),
+              const SizedBox(height: 12),
+              _buildTeacherAnnouncementCard(controller),
+            ],
           ),
         ),
-        const SizedBox(height: 12),
-        _buildTeacherUnavailabilityCard(controller),
-        const SizedBox(height: 12),
-        _buildTeachingPlanCard(controller),
-        const SizedBox(height: 12),
-        _buildActivityLogCard(controller),
-        const SizedBox(height: 12),
-        _buildTeacherAnnouncementCard(controller),
+        HubSection(
+          id: 'plans',
+          label: '계획 작성',
+          icon: Icons.edit_note,
+          content: _buildTeachingPlanCard(controller),
+        ),
+        HubSection(
+          id: 'logs',
+          label: '활동 기록',
+          icon: Icons.history_edu,
+          content: _buildActivityLogCard(controller),
+        ),
       ],
+      selectedSectionId: _sectionId,
+      onSelectSection: (value) {
+        setState(() {
+          _sectionId = value;
+        });
+      },
     );
   }
 
@@ -172,19 +182,22 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             Text('내 불가 시간', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
-              '등록한 불가 시간은 관리자 시간표 생성 시 자동 회피됩니다.',
+              '등록한 시간은 관리자 시간표 생성 시 자동으로 회피됩니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 10),
             if (myProfiles.isEmpty)
-              const Text('연결된 교사 프로필이 없습니다.')
+              _buildEmptyHint('연결된 교사 프로필이 없습니다.')
             else ...[
               DropdownButtonFormField<String>(
                 key: ValueKey('teacher-unavailable-${selectedProfileId ?? ''}'),
                 initialValue: selectedProfileId,
-                decoration: const InputDecoration(labelText: '교사 프로필'),
+                decoration: const InputDecoration(
+                  labelText: '교사 프로필',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
                 items: myProfiles
                     .map(
                       (profile) => DropdownMenuItem<String>(
@@ -202,57 +215,57 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                       },
               ),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: _selectedUnavailabilityDay,
-                      decoration: const InputDecoration(labelText: '요일'),
-                      items: const [
-                        DropdownMenuItem(value: 0, child: Text('Sun')),
-                        DropdownMenuItem(value: 1, child: Text('Mon')),
-                        DropdownMenuItem(value: 2, child: Text('Tue')),
-                        DropdownMenuItem(value: 3, child: Text('Wed')),
-                        DropdownMenuItem(value: 4, child: Text('Thu')),
-                        DropdownMenuItem(value: 5, child: Text('Fri')),
-                        DropdownMenuItem(value: 6, child: Text('Sat')),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 760;
+                  if (compact) {
+                    return Column(
+                      children: [
+                        _buildDayField(controller),
+                        const SizedBox(height: 8),
+                        _buildTimeField(
+                          controller: _unavailabilityStartController,
+                          label: '시작 (HH:MM)',
+                        ),
+                        const SizedBox(height: 8),
+                        _buildTimeField(
+                          controller: _unavailabilityEndController,
+                          label: '종료 (HH:MM)',
+                        ),
                       ],
-                      onChanged: controller.isBusy
-                          ? null
-                          : (value) {
-                              if (value == null) {
-                                return;
-                              }
-                              setState(() {
-                                _selectedUnavailabilityDay = value;
-                              });
-                            },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _unavailabilityStartController,
-                      decoration: const InputDecoration(
-                        labelText: '시작 (HH:MM)',
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(flex: 3, child: _buildDayField(controller)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: _buildTimeField(
+                          controller: _unavailabilityStartController,
+                          label: '시작 (HH:MM)',
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _unavailabilityEndController,
-                      decoration: const InputDecoration(
-                        labelText: '종료 (HH:MM)',
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: _buildTimeField(
+                          controller: _unavailabilityEndController,
+                          label: '종료 (HH:MM)',
+                        ),
                       ),
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _unavailabilityNoteController,
-                decoration: const InputDecoration(labelText: '메모 (선택)'),
+                decoration: const InputDecoration(
+                  labelText: '메모 (선택)',
+                  prefixIcon: Icon(Icons.edit_note),
+                ),
                 minLines: 1,
                 maxLines: 2,
               ),
@@ -264,46 +277,43 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                         !myProfileIds.contains(selectedProfileId)
                     ? null
                     : _createTeacherUnavailabilityBlock,
-                icon: const Icon(Icons.block),
+                icon: const Icon(Icons.add),
                 label: const Text('불가 시간 추가'),
               ),
-              const SizedBox(height: 10),
-              Text('등록된 항목', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 6),
-              if (blocks.isEmpty)
-                const Text('등록된 불가 시간이 없습니다.')
-              else
-                ...blocks.map((block) {
-                  final day = _dayLabel(block.dayOfWeek);
-                  final start = _shortTime(block.startTime);
-                  final end = _shortTime(block.endTime);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: NestColors.roseMist),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '$day $start-$end${block.note.trim().isEmpty ? '' : ' · ${block.note.trim()}'}',
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: controller.isBusy
-                                ? null
-                                : () => _deleteUnavailabilityBlock(block.id),
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                        ],
+            ],
+            const SizedBox(height: 14),
+            Text('등록 항목', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (blocks.isEmpty)
+              _buildEmptyHint('등록된 불가 시간이 없습니다.')
+            else
+              ...blocks.map((block) {
+                final day = _dayLabel(block.dayOfWeek);
+                final start = _shortTime(block.startTime);
+                final end = _shortTime(block.endTime);
+                final note = block.note.trim();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.schedule),
+                      title: Text('$day · $start - $end'),
+                      subtitle: note.isEmpty ? null : Text(note),
+                      trailing: IconButton(
+                        onPressed: controller.isBusy
+                            ? null
+                            : () => _deleteUnavailabilityBlock(block.id),
+                        icon: const Icon(Icons.delete_outline),
                       ),
                     ),
-                  );
-                }),
-            ],
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -342,11 +352,14 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             Text('수업 계획 등록', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
             if (sessionItems.isEmpty || teacherItems.isEmpty)
-              const Text('수업 세션/교사 프로필 데이터가 필요합니다.')
+              _buildEmptyHint('수업 세션/교사 프로필 데이터가 필요합니다.')
             else ...[
               DropdownButtonFormField<String>(
                 initialValue: _planSessionId,
-                decoration: const InputDecoration(labelText: '수업 세션'),
+                decoration: const InputDecoration(
+                  labelText: '수업 세션',
+                  prefixIcon: Icon(Icons.class_outlined),
+                ),
                 items: sessionItems,
                 onChanged: controller.isBusy
                     ? null
@@ -355,7 +368,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _planTeacherProfileId,
-                decoration: const InputDecoration(labelText: '작성 교사'),
+                decoration: const InputDecoration(
+                  labelText: '작성 교사',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
                 items: teacherItems,
                 onChanged: controller.isBusy
                     ? null
@@ -364,21 +380,30 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               const SizedBox(height: 8),
               TextField(
                 controller: _planObjectivesController,
-                decoration: const InputDecoration(labelText: '수업 목표'),
+                decoration: const InputDecoration(
+                  labelText: '수업 목표',
+                  prefixIcon: Icon(Icons.flag_outlined),
+                ),
                 minLines: 2,
                 maxLines: 4,
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _planMaterialsController,
-                decoration: const InputDecoration(labelText: '준비물'),
+                decoration: const InputDecoration(
+                  labelText: '준비물',
+                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                ),
                 minLines: 1,
                 maxLines: 3,
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _planActivitiesController,
-                decoration: const InputDecoration(labelText: '활동 계획'),
+                decoration: const InputDecoration(
+                  labelText: '활동 계획',
+                  prefixIcon: Icon(Icons.format_list_bulleted),
+                ),
                 minLines: 2,
                 maxLines: 4,
               ),
@@ -389,11 +414,11 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 label: const Text('계획 등록'),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text('최근 수업 계획', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             if (controller.teachingPlans.isEmpty)
-              const Text('등록된 계획이 없습니다.')
+              _buildEmptyHint('등록된 계획이 없습니다.')
             else
               ...controller.teachingPlans.take(20).map((plan) {
                 final sessionName =
@@ -412,6 +437,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 return ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.menu_book_outlined, size: 18),
                   title: Text('$sessionName · $teacherName'),
                   subtitle: Text(plan.objectives),
                 );
@@ -464,11 +490,14 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             Text('아동 활동 기록', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
             if (childItems.isEmpty || teacherItems.isEmpty)
-              const Text('아이/교사 데이터가 필요합니다.')
+              _buildEmptyHint('아이/교사 데이터가 필요합니다.')
             else ...[
               DropdownButtonFormField<String>(
                 initialValue: _logChildId,
-                decoration: const InputDecoration(labelText: '아이'),
+                decoration: const InputDecoration(
+                  labelText: '아이',
+                  prefixIcon: Icon(Icons.child_care_outlined),
+                ),
                 items: childItems,
                 onChanged: controller.isBusy
                     ? null
@@ -478,7 +507,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               DropdownButtonFormField<String>(
                 key: ValueKey(sessionValue),
                 initialValue: sessionValue,
-                decoration: const InputDecoration(labelText: '연결 수업'),
+                decoration: const InputDecoration(
+                  labelText: '연결 수업',
+                  prefixIcon: Icon(Icons.class_outlined),
+                ),
                 items: sessionItems,
                 onChanged: controller.isBusy
                     ? null
@@ -491,7 +523,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _logTeacherProfileId,
-                decoration: const InputDecoration(labelText: '기록 교사'),
+                decoration: const InputDecoration(
+                  labelText: '기록 교사',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
                 items: teacherItems,
                 onChanged: controller.isBusy
                     ? null
@@ -500,7 +535,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _logActivityType,
-                decoration: const InputDecoration(labelText: '활동 유형'),
+                decoration: const InputDecoration(
+                  labelText: '활동 유형',
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
                 items: const [
                   DropdownMenuItem(value: 'ATTENDANCE', child: Text('출결')),
                   DropdownMenuItem(value: 'OBSERVATION', child: Text('관찰')),
@@ -520,7 +558,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               const SizedBox(height: 8),
               TextField(
                 controller: _logContentController,
-                decoration: const InputDecoration(labelText: '활동 내용'),
+                decoration: const InputDecoration(
+                  labelText: '활동 내용',
+                  prefixIcon: Icon(Icons.edit_note),
+                ),
                 minLines: 2,
                 maxLines: 4,
               ),
@@ -531,11 +572,11 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 label: const Text('활동 기록 등록'),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text('최근 활동 기록', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             if (controller.studentActivityLogs.isEmpty)
-              const Text('등록된 활동 기록이 없습니다.')
+              _buildEmptyHint('등록된 활동 기록이 없습니다.')
             else
               ...controller.studentActivityLogs.take(24).map((log) {
                 final childName =
@@ -553,6 +594,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 return ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.history, size: 18),
                   title: Text(
                     '$childName · ${log.activityType} · $teacherName',
                   ),
@@ -580,14 +622,20 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             const SizedBox(height: 8),
             TextField(
               controller: _announceTitleController,
-              decoration: const InputDecoration(labelText: '제목'),
+              decoration: const InputDecoration(
+                labelText: '제목',
+                prefixIcon: Icon(Icons.title),
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _announceBodyController,
               minLines: 2,
               maxLines: 5,
-              decoration: const InputDecoration(labelText: '본문'),
+              decoration: const InputDecoration(
+                labelText: '본문',
+                prefixIcon: Icon(Icons.notes),
+              ),
             ),
             const SizedBox(height: 8),
             SwitchListTile(
@@ -612,6 +660,60 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDayField(NestController controller) {
+    return DropdownButtonFormField<int>(
+      initialValue: _selectedUnavailabilityDay,
+      decoration: const InputDecoration(
+        labelText: '요일',
+        prefixIcon: Icon(Icons.calendar_today_outlined),
+      ),
+      items: const [
+        DropdownMenuItem(value: 0, child: Text('Sun')),
+        DropdownMenuItem(value: 1, child: Text('Mon')),
+        DropdownMenuItem(value: 2, child: Text('Tue')),
+        DropdownMenuItem(value: 3, child: Text('Wed')),
+        DropdownMenuItem(value: 4, child: Text('Thu')),
+        DropdownMenuItem(value: 5, child: Text('Fri')),
+        DropdownMenuItem(value: 6, child: Text('Sat')),
+      ],
+      onChanged: controller.isBusy
+          ? null
+          : (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() {
+                _selectedUnavailabilityDay = value;
+              });
+            },
+    );
+  }
+
+  Widget _buildTimeField({
+    required TextEditingController controller,
+    required String label,
+  }) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.access_time),
+      ),
+    );
+  }
+
+  Widget _buildEmptyHint(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: NestColors.roseMist.withValues(alpha: 0.36),
+      ),
+      child: Text(message),
     );
   }
 
@@ -741,33 +843,6 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.titleLarge),
-        ],
-      ),
-    );
   }
 }
 

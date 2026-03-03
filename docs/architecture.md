@@ -57,6 +57,9 @@ frontend/
         nest_theme.dart
         login_page.dart
         home_page.dart
+        widgets/
+          hub_scaffold.dart
+          nest_motion.dart
         tabs/
           dashboard_tab.dart
           parent_hub_tab.dart
@@ -121,6 +124,10 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `Timetable`
   - `Gallery`
   - `Community`
+- Parent/Teacher hubs share one visual frame (`HubScaffold`):
+  - same header + KPI metric tiles
+  - same section-chip navigation
+  - same card density and spacing rhythm for predictable interaction
 
 ## 5. State and Data Flow
 
@@ -219,7 +226,33 @@ Admin dashboard onboarding:
   - open report queue and status resolution
   - post hide/unhide, pin/unpin, delete
 
-### 6.4 Membership and Permission Admin
+### 6.4 Parent/Teacher Hub UX
+
+- Parent Hub (`parent_hub_tab.dart`)
+  - sections: `개요` / `내 불가 시간` / `활동 타임라인`
+  - compact announcement digest + recent activity summary
+  - self-service blocked-time management with responsive input layout
+- Teacher Hub (`teacher_hub_tab.dart`)
+  - sections: `수업 운영` / `계획 작성` / `활동 기록`
+  - teacher blocked-time, announcement authoring, teaching plan and activity logging in one flow
+- Both hubs use:
+  - card-first layout with low cognitive load
+  - section switching through `ChoiceChip` controls
+  - animated section swap for continuity
+
+### 6.5 Motion and Loading System
+
+- Global state transition animation
+  - `NestAppRoot`: animated switch between bootstrap/login/home
+- Main workspace transition animation
+  - `HomePage._MainPanel`: animated tab content replacement (`fade + slide`)
+- Busy/Loading feedback
+  - `NestLoadingScreen`: branded warm loading scene
+  - `NestBusyOverlay`: modal-style smooth busy overlay during mutations
+- Login interaction animation
+  - sign-in/sign-up mode change animates confirm-password field expansion/collapse
+
+### 6.6 Membership and Permission Admin
 
 - `members_tab.dart` (HOMESCHOOL_ADMIN only):
   - grant role to target `auth.users.id`
@@ -228,7 +261,7 @@ Admin dashboard onboarding:
   - invite by email with role pre-assignment
   - pending invite cancellation
 
-### 6.5 Drive and Gallery
+### 6.7 Drive and Gallery
 
 - OAuth start/complete through edge functions and web bridge.
 - Drive tab is simplified for operators:
@@ -240,7 +273,7 @@ Admin dashboard onboarding:
   3. insert `media_assets` and optional child tagging
   4. show in gallery and community attachments
 
-### 6.6 Invite Acceptance (Dashboard)
+### 6.8 Invite Acceptance (Dashboard)
 
 - `Dashboard` renders pending invites matched to logged-in email.
 - Accept flow:
@@ -249,7 +282,7 @@ Admin dashboard onboarding:
   3. DB activates `homeschool_memberships` row
   4. controller reloads memberships/context and role tabs
 
-### 6.7 Family and Enrollment Admin
+### 6.9 Family and Enrollment Admin
 
 - `family_admin_tab.dart`:
   - term setup workspace with unit-level sections:
@@ -263,27 +296,27 @@ Admin dashboard onboarding:
 - `teacher_hub_tab.dart`:
   - teacher self-service unavailability registration/deletion (own teacher profile only)
 
-### 6.8 Teacher Plan and Activity Logs
+### 6.10 Teacher Plan and Activity Logs
 
 - `teacher_hub_tab.dart`:
   - create teaching plan by class session
   - create student activity log by child/session
   - teacher-side announcement creation
 
-### 6.9 Timetable Teacher Assignment
+### 6.11 Timetable Teacher Assignment
 
 - `timetable_tab.dart`:
   - per-session teacher assignment dialog
   - main/assistant assignment controls
   - slot conflict warning badges (UI) + DB trigger enforcement
 
-### 6.10 Operations
+### 6.12 Operations
 
 - `ops_tab.dart` (Admin/Staff):
   - announcement posting and monitoring
   - audit log timeline (membership/report/timetable/invite actions)
 
-### 6.11 System Admin Hub
+### 6.13 System Admin Hub
 
 - `system_admin_tab.dart`:
   - single admin tab that consolidates:

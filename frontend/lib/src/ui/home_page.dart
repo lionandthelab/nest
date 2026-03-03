@@ -11,6 +11,7 @@ import 'tabs/community_feed_tab.dart';
 import 'tabs/family_admin_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
+import 'widgets/nest_motion.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -60,6 +61,7 @@ class _HomePageState extends State<HomePage> {
                             setState(() => _currentIndex = value),
                         labels: labels,
                         controller: widget.controller,
+                        tabLabel: tabs[safeIndex].label,
                         tab: tabs[safeIndex].page,
                         onLogout: _handleLogout,
                         onRefresh: _handleRefresh,
@@ -74,6 +76,7 @@ class _HomePageState extends State<HomePage> {
                             setState(() => _currentIndex = value),
                         labels: labels,
                         controller: widget.controller,
+                        tabLabel: tabs[safeIndex].label,
                         tab: tabs[safeIndex].page,
                         onLogout: _handleLogout,
                         onRefresh: _handleRefresh,
@@ -242,6 +245,7 @@ class _DesktopScaffold extends StatelessWidget {
     required this.onSelectIndex,
     required this.labels,
     required this.controller,
+    required this.tabLabel,
     required this.tab,
     required this.onLogout,
     required this.onRefresh,
@@ -255,6 +259,7 @@ class _DesktopScaffold extends StatelessWidget {
   final ValueChanged<int> onSelectIndex;
   final List<String> labels;
   final NestController controller;
+  final String tabLabel;
   final Widget tab;
   final Future<void> Function() onLogout;
   final Future<void> Function() onRefresh;
@@ -294,6 +299,7 @@ class _DesktopScaffold extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
             child: _MainPanel(
               controller: controller,
+              tabLabel: tabLabel,
               tab: tab,
               onLogout: onLogout,
               onRefresh: onRefresh,
@@ -315,6 +321,7 @@ class _MobileScaffold extends StatelessWidget {
     required this.onSelectIndex,
     required this.labels,
     required this.controller,
+    required this.tabLabel,
     required this.tab,
     required this.onLogout,
     required this.onRefresh,
@@ -328,6 +335,7 @@ class _MobileScaffold extends StatelessWidget {
   final ValueChanged<int> onSelectIndex;
   final List<String> labels;
   final NestController controller;
+  final String tabLabel;
   final Widget tab;
   final Future<void> Function() onLogout;
   final Future<void> Function() onRefresh;
@@ -345,6 +353,7 @@ class _MobileScaffold extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: _MainPanel(
               controller: controller,
+              tabLabel: tabLabel,
               tab: tab,
               onLogout: onLogout,
               onRefresh: onRefresh,
@@ -382,6 +391,7 @@ class _MobileScaffold extends StatelessWidget {
 class _MainPanel extends StatelessWidget {
   const _MainPanel({
     required this.controller,
+    required this.tabLabel,
     required this.tab,
     required this.onLogout,
     required this.onRefresh,
@@ -392,6 +402,7 @@ class _MainPanel extends StatelessWidget {
   });
 
   final NestController controller;
+  final String tabLabel;
   final Widget tab;
   final Future<void> Function() onLogout;
   final Future<void> Function() onRefresh;
@@ -491,7 +502,33 @@ class _MainPanel extends StatelessWidget {
           ),
           const Divider(height: 1),
           Expanded(
-            child: Padding(padding: const EdgeInsets.all(16), child: tab),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) =>
+                        nestFadeSlideTransition(
+                          child,
+                          animation,
+                          beginOffset: const Offset(0.015, 0),
+                        ),
+                    child: KeyedSubtree(
+                      key: ValueKey<String>(tabLabel),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: tab,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: NestBusyOverlay(visible: controller.isBusy),
+                ),
+              ],
+            ),
           ),
         ],
       ),

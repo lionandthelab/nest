@@ -8,6 +8,7 @@ import '../state/nest_controller.dart';
 import 'home_page.dart';
 import 'login_page.dart';
 import 'nest_theme.dart';
+import 'widgets/nest_motion.dart';
 
 class NestAppRoot extends StatefulWidget {
   const NestAppRoot({super.key});
@@ -46,17 +47,32 @@ class _NestAppRootState extends State<NestAppRoot> {
       home: AnimatedBuilder(
         animation: controller,
         builder: (context, _) {
-          if (!controller.isBootstrapped) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+          final page = switch ((
+            controller.isBootstrapped,
+            controller.isLoggedIn,
+          )) {
+            (false, _) => const NestLoadingScreen(),
+            (true, false) => LoginPage(controller: controller),
+            (true, true) => HomePage(controller: controller),
+          };
 
-          if (!controller.isLoggedIn) {
-            return LoginPage(controller: controller);
-          }
+          final key = switch ((
+            controller.isBootstrapped,
+            controller.isLoggedIn,
+          )) {
+            (false, _) => const ValueKey<String>('boot'),
+            (true, false) => const ValueKey<String>('login'),
+            (true, true) => const ValueKey<String>('home'),
+          };
 
-          return HomePage(controller: controller);
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 340),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) =>
+                nestFadeSlideTransition(child, animation),
+            child: KeyedSubtree(key: key, child: page),
+          );
         },
       ),
     );

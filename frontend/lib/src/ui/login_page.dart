@@ -139,30 +139,55 @@ class _LoginPageState extends State<LoginPage> {
                                   },
                                   onFieldSubmitted: (_) => _onSubmit(),
                                 ),
-                                if (_isSignUpMode) ...[
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _confirmPasswordController,
-                                    obscureText: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Password 확인',
-                                    ),
-                                    validator: (value) {
-                                      if (!_isSignUpMode) {
-                                        return null;
-                                      }
-                                      if (value == null ||
-                                          value.trim().isEmpty) {
-                                        return '비밀번호 확인을 입력하세요.';
-                                      }
-                                      if (value != _passwordController.text) {
-                                        return '비밀번호가 일치하지 않습니다.';
-                                      }
-                                      return null;
-                                    },
-                                    onFieldSubmitted: (_) => _onSubmit(),
-                                  ),
-                                ],
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: SizeTransition(
+                                        sizeFactor: animation,
+                                        axisAlignment: -1,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: _isSignUpMode
+                                      ? Column(
+                                          key: const ValueKey('signup-confirm'),
+                                          children: [
+                                            const SizedBox(height: 14),
+                                            TextFormField(
+                                              controller:
+                                                  _confirmPasswordController,
+                                              obscureText: true,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Password 확인',
+                                              ),
+                                              validator: (value) {
+                                                if (!_isSignUpMode) {
+                                                  return null;
+                                                }
+                                                if (value == null ||
+                                                    value.trim().isEmpty) {
+                                                  return '비밀번호 확인을 입력하세요.';
+                                                }
+                                                if (value !=
+                                                    _passwordController.text) {
+                                                  return '비밀번호가 일치하지 않습니다.';
+                                                }
+                                                return null;
+                                              },
+                                              onFieldSubmitted: (_) =>
+                                                  _onSubmit(),
+                                            ),
+                                          ],
+                                        )
+                                      : const SizedBox(
+                                          key: ValueKey('signin-confirm-empty'),
+                                        ),
+                                ),
                                 const SizedBox(height: 20),
                                 ElevatedButton.icon(
                                   onPressed: widget.controller.isBusy

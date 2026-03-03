@@ -54,6 +54,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | `class_sessions_source_type_check` 오류 수정(`ASSISTED` -> `AI_PROMPT`) + 관리자 대시보드 단계형 학기 설정 가이드(순번/완료표시/탭 이동) 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-03 | 관리자 UI/UX 재구성: 상위 탭 축소(`Term Setup`/`Schedule`/`System`), 학기 설정 단위 분리(가정/선생님/반/과목), 시스템 설정 통합(Drive+SNS+권한+운영) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `SUPABASE_* node scripts/e2e_remote.mjs` |
 | 2026-03-03 | 시간표 편집 UX 재설계: 과목 팔레트 + 그리드 시간표(day x period) 기반 드래그앤드롭 스튜디오 및 시각적 세션 카드 개선 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-03 | 부모/교사 허브 UX 통일(공통 섹션형 레이아웃) + 전역 로딩/전환 모션 시스템 적용 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 
