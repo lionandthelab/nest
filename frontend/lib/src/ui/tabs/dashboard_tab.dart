@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 
@@ -83,6 +84,10 @@ class _DashboardTabState extends State<DashboardTab> {
             ),
           ),
         ),
+        if (controller.pendingInvites.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _PendingInvitesCard(controller: controller),
+        ],
         const SizedBox(height: 16),
         Wrap(
           spacing: 12,
@@ -256,6 +261,126 @@ class _DashboardTabState extends State<DashboardTab> {
         context,
       ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
     }
+  }
+}
+
+class _PendingInvitesCard extends StatelessWidget {
+  const _PendingInvitesCard({required this.controller});
+
+  final NestController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending =
+        controller.pendingInvites
+            .where((invite) => invite.canAccept)
+            .toList(growable: false)
+          ..sort((a, b) {
+            final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
+            final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
+            return right.compareTo(left);
+          });
+
+    if (pending.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('대기 중 초대', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '홈스쿨 관리자에게 받은 초대를 수락하면 바로 멤버십이 활성화됩니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...pending.map(
+              (invite) => _InviteItem(controller: controller, invite: invite),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InviteItem extends StatelessWidget {
+  const _InviteItem({required this.controller, required this.invite});
+
+  final NestController controller;
+  final HomeschoolInvite invite;
+
+  @override
+  Widget build(BuildContext context) {
+    final created = invite.createdAt == null
+        ? '-'
+        : DateFormat('yyyy-MM-dd HH:mm').format(invite.createdAt!);
+    final expires = invite.expiresAt == null
+        ? '-'
+        : DateFormat('yyyy-MM-dd').format(invite.expiresAt!);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: NestColors.roseMist),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Chip(label: Text(invite.homeschoolName)),
+                Chip(label: Text(invite.role)),
+                Chip(label: Text('만료: $expires')),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '초대 생성: $created',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: controller.isBusy
+                  ? null
+                  : () async {
+                      try {
+                        await controller.acceptPendingInvite(
+                          invite.inviteToken,
+                        );
+                        if (!context.mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(controller.statusMessage)),
+                        );
+                      } catch (_) {
+                        if (!context.mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(controller.statusMessage)),
+                        );
+                      }
+                    },
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('초대 수락'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

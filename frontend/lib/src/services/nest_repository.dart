@@ -128,6 +128,88 @@ class NestRepository {
         .eq('role', role);
   }
 
+  Future<List<HomeschoolInvite>> fetchHomeschoolInvites({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('homeschool_invites')
+        .select(
+          'id, homeschool_id, invite_email, role, status, invite_token, '
+          'expires_at, created_at, homeschools(id, name)',
+        )
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false)
+        .limit(200);
+
+    return _asRows(data).map(HomeschoolInvite.fromMap).toList(growable: false);
+  }
+
+  Future<List<HomeschoolInvite>> fetchPendingInvitesForEmail({
+    required String email,
+  }) async {
+    final normalized = email.trim();
+    if (normalized.isEmpty) {
+      return const [];
+    }
+
+    final data = await client
+        .from('homeschool_invites')
+        .select(
+          'id, homeschool_id, invite_email, role, status, invite_token, '
+          'expires_at, created_at, homeschools(id, name)',
+        )
+        .ilike('invite_email', normalized)
+        .eq('status', 'PENDING')
+        .order('created_at', ascending: false)
+        .limit(100);
+
+    return _asRows(data).map(HomeschoolInvite.fromMap).toList(growable: false);
+  }
+
+  Future<HomeschoolInvite> createHomeschoolInvite({
+    required String homeschoolId,
+    required String inviteEmail,
+    required String role,
+    required String invitedByUserId,
+    required DateTime expiresAt,
+  }) async {
+    final row = await client
+        .from('homeschool_invites')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'invite_email': inviteEmail.trim().toLowerCase(),
+          'role': role,
+          'status': 'PENDING',
+          'invited_by_user_id': invitedByUserId,
+          'expires_at': expiresAt.toUtc().toIso8601String(),
+        })
+        .select(
+          'id, homeschool_id, invite_email, role, status, invite_token, '
+          'expires_at, created_at, homeschools(id, name)',
+        )
+        .single();
+
+    return HomeschoolInvite.fromMap(_asMap(row));
+  }
+
+  Future<void> cancelHomeschoolInvite({required String inviteId}) {
+    return client
+        .from('homeschool_invites')
+        .update({
+          'status': 'CANCELED',
+          'canceled_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', inviteId)
+        .eq('status', 'PENDING');
+  }
+
+  Future<void> acceptHomeschoolInvite({required String inviteToken}) {
+    return client.rpc(
+      'accept_homeschool_invite',
+      params: {'p_invite_token': inviteToken.trim()},
+    );
+  }
+
   Future<List<Term>> fetchTerms({required String homeschoolId}) async {
     final data = await client
         .from('terms')

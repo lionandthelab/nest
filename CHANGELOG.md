@@ -4,6 +4,11 @@
 
 ### Added
 
+- 이메일 초대 기반 멤버 온보딩
+  - Supabase `homeschool_invites` 마이그레이션 추가
+  - 초대 수락 RPC `accept_homeschool_invite` 추가
+  - 관리자 `Members` 탭에서 이메일 초대 생성/취소/목록 관리
+  - 사용자 `Dashboard`에서 대기 초대 수락 UI 추가
 - 역할 기반 사용자 뷰 전환
   - 상단 컨텍스트에 `뷰 역할` 선택 추가 (부모/교사/관리자)
   - 계정이 다중 역할을 가진 경우 즉시 전환 가능
@@ -20,6 +25,9 @@
 
 ### Changed
 
+- `NestRepository`/`NestController`에 초대 도메인 API/상태 추가
+  - `fetchHomeschoolInvites`, `createHomeschoolInvite`, `cancelHomeschoolInvite`, `acceptHomeschoolInvite`
+  - `pendingInvites`, `homeschoolInvites` 상태 및 로드 흐름 추가
 - 탭 라우팅을 역할 기반 동적 구성으로 전환 (`home_page.dart`)
   - 공통: Dashboard, Timetable, Gallery
   - 부모: Parent Hub
@@ -36,13 +44,15 @@
 - 멤버십 모델에 `userId` 추가 (`nest_models.dart`)
 - 아키텍처 문서 최신화 (`docs/architecture.md`)
   - 역할 전환 구조, 동적 탭, 권한관리, 커뮤니티 이중 모드 반영
+- 실행 추적 문서 추가 (`docs/execution_tracker.md`)
+  - 다국어/결제 제외 기준 체크리스트와 반복 검증 로그 누적
 
 ### Verification
 
 - `cd frontend && flutter analyze` 통과
 - `cd frontend && flutter test` 통과
-- `cd frontend && flutter build web --release` 통과
-- `supabase db push` 확인: 원격 DB 최신 상태
+- `cd frontend && flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과 (`20260303130000_homeschool_invites.sql` 반영)
 
 ## 2026-03-02
 

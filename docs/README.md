@@ -42,6 +42,9 @@
 12. `architecture.md`
 - Flutter 프론트엔드 구조, 상태관리, OAuth/Drive 흐름, 배포/검증 가이드
 
+13. `execution_tracker.md`
+- 다국어/결제 제외 기준의 실행 체크리스트, 반복 개발 로그, 검증 이력
+
 ## 권장 읽기 순서
 
 1. 비전/브랜드

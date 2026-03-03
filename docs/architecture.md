@@ -13,6 +13,9 @@ Last updated: 2026-03-03
 - Community dual mode:
   - User feed (post/comment/like/report)
   - Admin moderation (report queue/hide/pin/delete)
+- Membership onboarding via email invite:
+  - admin invite create/cancel
+  - invited user self-accept from dashboard
 - Prompt timetable generation plus manual drag-and-drop editing.
 - Google Drive based media upload and gallery sharing.
 
@@ -68,12 +71,14 @@ frontend/
     oauth/google/callback.html
   test/
     widget_test.dart
+    models_test.dart
 
 supabase/
   migrations/
     20260302160000_init_nest.sql
     20260302173000_constraints_and_drive_tokens.sql
     20260303060000_community_sns.sql
+    20260303130000_homeschool_invites.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -125,6 +130,10 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `fetchHomeschoolMemberships(homeschoolId)`
   - `grantMembershipRole(homeschoolId, userId, role)`
   - `revokeMembershipRole(homeschoolId, userId, role)`
+  - `fetchHomeschoolInvites(homeschoolId)`
+  - `createHomeschoolInvite(...)`
+  - `cancelHomeschoolInvite(inviteId)`
+  - `acceptHomeschoolInvite(inviteToken)`
 
 ## 6. Feature Architecture
 
@@ -165,6 +174,8 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - grant role to target `auth.users.id`
   - revoke specific role
   - guardrail: cannot remove last remaining `HOMESCHOOL_ADMIN`
+  - invite by email with role pre-assignment
+  - pending invite cancellation
 
 ### 6.5 Drive and Gallery
 
@@ -174,6 +185,15 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   2. upload to Drive via edge function
   3. insert `media_assets` and optional child tagging
   4. show in gallery and community attachments
+
+### 6.6 Invite Acceptance (Dashboard)
+
+- `Dashboard` renders pending invites matched to logged-in email.
+- Accept flow:
+  1. user clicks `초대 수락`
+  2. app calls `accept_homeschool_invite` RPC
+  3. DB activates `homeschool_memberships` row
+  4. controller reloads memberships/context and role tabs
 
 ## 7. Database and RLS Notes
 
@@ -197,6 +217,18 @@ RLS summary:
 - Members can read community content for their homeschool.
 - Members can create posts/comments/reactions/report.
 - Admin/Staff can moderate reports and post visibility/pinning/deletion.
+
+### 7.3 Invite Table and RPC
+
+Migration `20260303130000_homeschool_invites.sql` includes:
+
+- `homeschool_invites` table (`PENDING`, `ACCEPTED`, `CANCELED`, `EXPIRED`)
+- partial unique index preventing duplicate pending invites per homeschool/email/role
+- `accept_homeschool_invite(token)` security-definer RPC:
+  - auth/email verification
+  - expiry check
+  - membership upsert to `ACTIVE`
+  - invite transition to `ACCEPTED`
 
 ## 8. Environment Variables
 

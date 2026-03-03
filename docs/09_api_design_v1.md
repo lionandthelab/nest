@@ -40,6 +40,10 @@
 - `GET /homeschools`
 - `POST /homeschools`
 - `POST /homeschools/{homeschoolId}/invite-links`
+- `GET /homeschools/{homeschoolId}/member-invites`
+- `POST /homeschools/{homeschoolId}/member-invites`
+- `PATCH /homeschools/{homeschoolId}/member-invites/{inviteId}/cancel`
+- `POST /member-invites/accept`
 - `GET /families`
 - `POST /families`
 - `GET /children`
@@ -140,4 +144,5 @@
 
 - Parent
 - 내 아이 시간표/활동/갤러리 조회
-- 업로드/API 수정 권한 없음(MVP)
+- 커뮤니티 글/댓글/좋아요/신고 작성
+- 초대 수락 API 접근 가능

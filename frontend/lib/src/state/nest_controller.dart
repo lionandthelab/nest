@@ -32,6 +32,8 @@ class NestController extends ChangeNotifier {
 
   List<Membership> memberships = const [];
   List<Membership> homeschoolMemberships = const [];
+  List<HomeschoolInvite> homeschoolInvites = const [];
+  List<HomeschoolInvite> pendingInvites = const [];
   String? selectedHomeschoolId;
   String? currentRole;
   final Map<String, String> _viewRoleByHomeschool = <String, String>{};
@@ -196,6 +198,7 @@ class NestController extends ChangeNotifier {
     await _runBusy('학기/반 정보를 불러오는 중...', () async {
       await _loadTermAndBelow();
       await loadHomeschoolMemberships();
+      await loadHomeschoolInvites();
       await loadDriveIntegration();
       await loadGalleryItems();
       await loadCommunityFeed();
@@ -219,6 +222,7 @@ class NestController extends ChangeNotifier {
 
     await _runBusy('뷰 전환 중...', () async {
       await loadHomeschoolMemberships();
+      await loadHomeschoolInvites();
       await loadCommunityFeed();
       _setStatus('현재 뷰: $nextRole');
     });
@@ -704,6 +708,7 @@ class NestController extends ChangeNotifier {
       return;
     }
 
+    await loadPendingInvites();
     memberships = await _repository.fetchMemberships(userId: user!.id);
 
     if (memberships.isEmpty) {
@@ -726,10 +731,17 @@ class NestController extends ChangeNotifier {
       likedCommunityPostIds = const <String>{};
       communityReports = const [];
       homeschoolMemberships = const [];
+      homeschoolInvites = const [];
       pendingCommunityMediaFile = null;
       driveIntegration = null;
 
-      _setStatus('소속 홈스쿨이 없습니다. 대시보드에서 초기 세팅을 진행하세요.');
+      if (pendingInvites.isNotEmpty) {
+        _setStatus(
+          '소속 홈스쿨이 없습니다. 대시보드에서 대기 초대 ${pendingInvites.length}건을 확인하세요.',
+        );
+      } else {
+        _setStatus('소속 홈스쿨이 없습니다. 대시보드에서 초기 세팅을 진행하세요.');
+      }
       notifyListeners();
       return;
     }
@@ -746,6 +758,7 @@ class NestController extends ChangeNotifier {
 
     await _loadTermAndBelow();
     await loadHomeschoolMemberships();
+    await loadHomeschoolInvites();
     await loadDriveIntegration();
     await syncOauthResult();
     await loadGalleryItems();
@@ -802,6 +815,47 @@ class NestController extends ChangeNotifier {
 
     homeschoolMemberships = await _repository.fetchHomeschoolMemberships(
       homeschoolId: homeschoolId,
+    );
+    notifyListeners();
+  }
+
+  Future<void> loadHomeschoolInvites() async {
+    if (!canManageMemberships) {
+      homeschoolInvites = const [];
+      notifyListeners();
+      return;
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      homeschoolInvites = const [];
+      notifyListeners();
+      return;
+    }
+
+    homeschoolInvites = await _repository.fetchHomeschoolInvites(
+      homeschoolId: homeschoolId,
+    );
+    notifyListeners();
+  }
+
+  Future<void> loadPendingInvites() async {
+    final currentUser = user;
+    if (currentUser == null) {
+      pendingInvites = const [];
+      notifyListeners();
+      return;
+    }
+
+    final email = _normalizeNullable(currentUser.email);
+    if (email == null) {
+      pendingInvites = const [];
+      notifyListeners();
+      return;
+    }
+
+    pendingInvites = await _repository.fetchPendingInvitesForEmail(
+      email: email,
     );
     notifyListeners();
   }
@@ -1160,6 +1214,76 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> createHomeschoolInvite({
+    required String inviteEmail,
+    required String role,
+    int expirationDays = 14,
+  }) async {
+    if (!canManageMemberships || user == null) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final normalizedEmail = _normalizeNullable(inviteEmail)?.toLowerCase();
+    if (normalizedEmail == null || !_looksLikeEmail(normalizedEmail)) {
+      throw StateError('유효한 이메일 주소를 입력하세요.');
+    }
+
+    final safeDays = expirationDays <= 0 ? 14 : expirationDays;
+
+    await _runBusy('이메일 초대를 생성하는 중...', () async {
+      await _repository.createHomeschoolInvite(
+        homeschoolId: homeschoolId,
+        inviteEmail: normalizedEmail,
+        role: role,
+        invitedByUserId: user!.id,
+        expiresAt: DateTime.now().toUtc().add(Duration(days: safeDays)),
+      );
+
+      await loadHomeschoolInvites();
+      await loadPendingInvites();
+      _setStatus('$normalizedEmail 에게 $role 초대를 보냈습니다.');
+    });
+  }
+
+  Future<void> cancelHomeschoolInvite(String inviteId) async {
+    if (!canManageMemberships) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(inviteId);
+    if (normalizedId == null) {
+      throw StateError('초대 ID가 필요합니다.');
+    }
+
+    await _runBusy('초대를 취소하는 중...', () async {
+      await _repository.cancelHomeschoolInvite(inviteId: normalizedId);
+      await loadHomeschoolInvites();
+      _setStatus('초대를 취소했습니다.');
+    });
+  }
+
+  Future<void> acceptPendingInvite(String inviteToken) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final normalizedToken = _normalizeNullable(inviteToken);
+    if (normalizedToken == null) {
+      throw StateError('초대 토큰이 없습니다.');
+    }
+
+    await _runBusy('홈스쿨 초대를 수락하는 중...', () async {
+      await _repository.acceptHomeschoolInvite(inviteToken: normalizedToken);
+      await loadHomeschoolContext();
+      _setStatus('초대를 수락하고 홈스쿨에 참여했습니다.');
+    });
+  }
+
   Future<void> grantMembershipRole({
     required String targetUserId,
     required String role,
@@ -1296,6 +1420,10 @@ class NestController extends ChangeNotifier {
 
   int get openCommunityReportCount {
     return communityReports.where((report) => report.isOpen).length;
+  }
+
+  int get pendingInviteCount {
+    return pendingInvites.where((invite) => invite.canAccept).length;
   }
 
   List<String> get membershipUserIds {
@@ -1494,6 +1622,8 @@ class NestController extends ChangeNotifier {
   void _clearDomainState() {
     memberships = const [];
     homeschoolMemberships = const [];
+    homeschoolInvites = const [];
+    pendingInvites = const [];
     _viewRoleByHomeschool.clear();
     selectedHomeschoolId = null;
     currentRole = null;
@@ -1613,6 +1743,16 @@ String _guessMimeType(String fileName) {
   }
 
   return 'application/octet-stream';
+}
+
+bool _looksLikeEmail(String value) {
+  final at = value.indexOf('@');
+  if (at <= 0 || at >= value.length - 1) {
+    return false;
+  }
+
+  final domain = value.substring(at + 1);
+  return domain.contains('.');
 }
 
 extension _IterableFirstOrNull<T> on Iterable<T> {

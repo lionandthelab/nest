@@ -86,6 +86,62 @@ class Membership {
   }
 }
 
+class HomeschoolInvite {
+  const HomeschoolInvite({
+    required this.id,
+    required this.homeschoolId,
+    required this.homeschoolName,
+    required this.inviteEmail,
+    required this.role,
+    required this.status,
+    required this.inviteToken,
+    required this.expiresAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String homeschoolName;
+  final String inviteEmail;
+  final String role;
+  final String status;
+  final String inviteToken;
+  final DateTime? expiresAt;
+  final DateTime? createdAt;
+
+  bool get isPending => status == 'PENDING';
+  bool get isExpired =>
+      expiresAt != null && expiresAt!.isBefore(DateTime.now());
+  bool get canAccept => isPending && !isExpired && inviteToken.isNotEmpty;
+
+  factory HomeschoolInvite.fromMap(Map<String, dynamic> map) {
+    final nested = map['homeschools'];
+    final homeschoolMap = nested is Map<String, dynamic>
+        ? nested
+        : <String, dynamic>{};
+
+    final fallbackId =
+        (map['homeschool_id'] as String?) ??
+        (homeschoolMap['id'] as String?) ??
+        '';
+
+    return HomeschoolInvite(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: fallbackId,
+      homeschoolName:
+          (homeschoolMap['name'] as String?) ??
+          (map['homeschool_name'] as String?) ??
+          'Unknown Homeschool',
+      inviteEmail: (map['invite_email'] as String?) ?? '',
+      role: (map['role'] as String?) ?? 'PARENT',
+      status: (map['status'] as String?) ?? 'PENDING',
+      inviteToken: (map['invite_token'] as String?) ?? '',
+      expiresAt: parseDateTime(map['expires_at']),
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
 class Term {
   const Term({
     required this.id,
