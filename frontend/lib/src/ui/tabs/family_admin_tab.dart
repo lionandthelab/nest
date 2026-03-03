@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 
@@ -18,13 +19,18 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   final _familyNoteController = TextEditingController();
   final _childNameController = TextEditingController();
   final _childNoteController = TextEditingController();
+  final _classNameController = TextEditingController();
+  final _classCapacityController = TextEditingController(text: '12');
   final _teacherDisplayNameController = TextEditingController();
-  final _teacherUserIdController = TextEditingController();
+  final _teacherAccountSearchController = TextEditingController();
   late final TextEditingController _birthDateController;
 
   String? _selectedFamilyId;
   String? _selectedClassGroupId;
+  String? _classFormBoundToId;
   String _teacherType = 'GUEST_TEACHER';
+  bool _linkTeacherAccount = false;
+  HomeschoolMemberDirectoryEntry? _selectedTeacherAccount;
   bool _familyInitialized = false;
   bool _classInitialized = false;
 
@@ -43,8 +49,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     _familyNoteController.dispose();
     _childNameController.dispose();
     _childNoteController.dispose();
+    _classNameController.dispose();
+    _classCapacityController.dispose();
     _teacherDisplayNameController.dispose();
-    _teacherUserIdController.dispose();
+    _teacherAccountSearchController.dispose();
     _birthDateController.dispose();
     super.dispose();
   }
@@ -53,6 +61,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     _syncSelections(controller);
+    _syncClassForm(controller);
 
     if (!controller.canManageFamilies) {
       return Card(
@@ -78,6 +87,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         _buildFamilyCreateCard(controller),
         const SizedBox(height: 12),
         _buildChildCreateCard(controller),
+        const SizedBox(height: 12),
+        _buildClassCrudCard(controller),
         const SizedBox(height: 12),
         _buildTeacherProfileCard(controller),
         const SizedBox(height: 12),
@@ -111,6 +122,31 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       _selectedClassGroupId =
           controller.selectedClassGroupId ??
           controller.classGroups.firstOrNull?.id;
+    }
+  }
+
+  void _syncClassForm(NestController controller, {bool force = false}) {
+    final classGroupId = _selectedClassGroupId;
+    if (classGroupId == null || classGroupId.isEmpty) {
+      if (force || _classFormBoundToId != null) {
+        _classNameController.clear();
+        _classCapacityController.text = '12';
+        _classFormBoundToId = null;
+      }
+      return;
+    }
+
+    final classGroup = controller.classGroups
+        .where((row) => row.id == classGroupId)
+        .firstOrNull;
+    if (classGroup == null) {
+      return;
+    }
+
+    if (force || _classFormBoundToId != classGroup.id) {
+      _classNameController.text = classGroup.name;
+      _classCapacityController.text = classGroup.capacity.toString();
+      _classFormBoundToId = classGroup.id;
     }
   }
 
@@ -229,6 +265,90 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     );
   }
 
+  Widget _buildClassCrudCard(NestController controller) {
+    final classItems = controller.classGroups
+        .map(
+          (group) => DropdownMenuItem(value: group.id, child: Text(group.name)),
+        )
+        .toList(growable: false);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('반 관리 (CRUD)', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '반을 생성/수정/삭제하면 반별 시간표 편성 대상이 즉시 반영됩니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (classItems.isEmpty)
+              const Text('현재 학기에 등록된 반이 없습니다. 아래 정보로 새 반을 생성하세요.')
+            else
+              DropdownButtonFormField<String>(
+                initialValue: _selectedClassGroupId,
+                decoration: const InputDecoration(labelText: '편집 대상 반'),
+                items: classItems,
+                onChanged: controller.isBusy
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _selectedClassGroupId = value;
+                          _syncClassForm(controller, force: true);
+                        });
+                      },
+              ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _classNameController,
+              decoration: const InputDecoration(labelText: '반 이름'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _classCapacityController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: '정원'),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy ? null : _createClassGroup,
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('반 생성'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy || _selectedClassGroupId == null
+                      ? null
+                      : _updateClassGroup,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('반 수정'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy || _selectedClassGroupId == null
+                      ? null
+                      : _deleteClassGroup,
+                  style: FilledButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                  ),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('반 삭제'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEnrollmentCard(NestController controller) {
     final classItems = controller.classGroups
         .map(
@@ -268,6 +388,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     : (value) {
                         setState(() {
                           _selectedClassGroupId = value;
+                          _syncClassForm(controller, force: true);
                         });
                       },
               ),
@@ -299,6 +420,11 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildTeacherProfileCard(NestController controller) {
+    final memberMatches = controller.searchHomeschoolMemberDirectory(
+      _teacherAccountSearchController.text,
+      maxResults: 8,
+    );
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -314,17 +440,109 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ),
             ),
             const SizedBox(height: 10),
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('기존 계정 연결'),
+              subtitle: const Text('이름/이메일/ID 검색으로 기존 계정을 연결합니다.'),
+              value: _linkTeacherAccount,
+              onChanged: controller.isBusy
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _linkTeacherAccount = value;
+                        _selectedTeacherAccount = null;
+                        _teacherAccountSearchController.clear();
+                      });
+                    },
+            ),
+            if (_linkTeacherAccount) ...[
+              TextField(
+                controller: _teacherAccountSearchController,
+                decoration: const InputDecoration(
+                  labelText: '계정 검색',
+                  hintText: '이름, 이메일, UUID로 검색',
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              if (memberMatches.isEmpty)
+                const Text('검색 결과가 없습니다.')
+              else
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: NestColors.roseMist),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: memberMatches.length,
+                    itemBuilder: (context, index) {
+                      final member = memberMatches[index];
+                      final selected =
+                          _selectedTeacherAccount?.userId == member.userId;
+                      return ListTile(
+                        dense: true,
+                        selected: selected,
+                        leading: Icon(
+                          selected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_off,
+                          size: 18,
+                        ),
+                        title: Text(
+                          member.fullName.trim().isEmpty
+                              ? member.email
+                              : member.fullName,
+                        ),
+                        subtitle: Text(
+                          '${member.email.isEmpty ? member.userId : member.email} · ${member.roles.join(', ')}',
+                        ),
+                        onTap: controller.isBusy
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedTeacherAccount = member;
+                                  if (_teacherDisplayNameController.text
+                                      .trim()
+                                      .isEmpty) {
+                                    _teacherDisplayNameController.text =
+                                        member.fullName.trim().isNotEmpty
+                                        ? member.fullName
+                                        : member.email;
+                                  }
+                                });
+                              },
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 8),
+              if (_selectedTeacherAccount != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    avatar: const Icon(Icons.link, size: 16),
+                    label: Text(_selectedTeacherAccount!.displayLabel),
+                    onDeleted: controller.isBusy
+                        ? null
+                        : () {
+                            setState(() {
+                              _selectedTeacherAccount = null;
+                            });
+                          },
+                  ),
+                ),
+            ] else
+              Text(
+                '계정이 아직 없는 선생님은 초청교사로 등록할 수 있습니다.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            const SizedBox(height: 8),
             TextField(
               controller: _teacherDisplayNameController,
               decoration: const InputDecoration(labelText: '표시 이름'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _teacherUserIdController,
-              decoration: const InputDecoration(
-                labelText: '연결 사용자 ID (선택)',
-                hintText: 'auth.users.id',
-              ),
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
@@ -461,6 +679,100 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     }
   }
 
+  Future<void> _createClassGroup() async {
+    final capacity = int.tryParse(_classCapacityController.text.trim());
+    if (capacity == null) {
+      _showMessage('정원은 숫자로 입력하세요.');
+      return;
+    }
+
+    try {
+      await widget.controller.createClassGroup(
+        name: _classNameController.text,
+        capacity: capacity,
+      );
+      setState(() {
+        _selectedClassGroupId = widget.controller.selectedClassGroupId;
+        _syncClassForm(widget.controller, force: true);
+      });
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _updateClassGroup() async {
+    final classGroupId = _selectedClassGroupId;
+    if (classGroupId == null || classGroupId.isEmpty) {
+      _showMessage('수정할 반을 선택하세요.');
+      return;
+    }
+
+    final capacity = int.tryParse(_classCapacityController.text.trim());
+    if (capacity == null) {
+      _showMessage('정원은 숫자로 입력하세요.');
+      return;
+    }
+
+    try {
+      await widget.controller.updateClassGroup(
+        classGroupId: classGroupId,
+        name: _classNameController.text,
+        capacity: capacity,
+      );
+      setState(() {
+        _syncClassForm(widget.controller, force: true);
+      });
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _deleteClassGroup() async {
+    final classGroupId = _selectedClassGroupId;
+    if (classGroupId == null || classGroupId.isEmpty) {
+      _showMessage('삭제할 반을 선택하세요.');
+      return;
+    }
+
+    final className = widget.controller.findClassGroupName(classGroupId);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('반 삭제'),
+        content: Text(
+          '반 "$className" 을(를) 삭제할까요?\n연결된 시간표/배정 데이터도 함께 삭제될 수 있습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await widget.controller.deleteClassGroup(classGroupId: classGroupId);
+      setState(() {
+        _selectedClassGroupId = widget.controller.selectedClassGroupId;
+        _syncClassForm(widget.controller, force: true);
+      });
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
   Future<void> _toggleEnrollment({
     required String classGroupId,
     required String childId,
@@ -490,6 +802,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       await widget.controller.loadChildren();
       await widget.controller.loadClassEnrollments();
       await widget.controller.loadTeacherProfiles();
+      await widget.controller.loadHomeschoolMemberDirectory();
       _showMessage('가정/아이/배정 목록을 갱신했습니다.');
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
@@ -497,14 +810,22 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Future<void> _createTeacherProfile() async {
+    if (_linkTeacherAccount && _selectedTeacherAccount == null) {
+      _showMessage('연결할 계정을 먼저 검색해 선택하세요.');
+      return;
+    }
+
     try {
       await widget.controller.createTeacherProfile(
         displayName: _teacherDisplayNameController.text,
         teacherType: _teacherType,
-        userId: _teacherUserIdController.text,
+        userId: _linkTeacherAccount ? _selectedTeacherAccount?.userId : null,
       );
       _teacherDisplayNameController.clear();
-      _teacherUserIdController.clear();
+      _teacherAccountSearchController.clear();
+      setState(() {
+        _selectedTeacherAccount = null;
+      });
       _showMessage(widget.controller.statusMessage);
     } catch (_) {
       _showMessage(widget.controller.statusMessage);

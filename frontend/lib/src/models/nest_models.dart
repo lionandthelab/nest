@@ -86,6 +86,47 @@ class Membership {
   }
 }
 
+class HomeschoolMemberDirectoryEntry {
+  const HomeschoolMemberDirectoryEntry({
+    required this.userId,
+    required this.email,
+    required this.fullName,
+    required this.roles,
+  });
+
+  final String userId;
+  final String email;
+  final String fullName;
+  final List<String> roles;
+
+  String get displayLabel {
+    final trimmedName = fullName.trim();
+    if (trimmedName.isNotEmpty && email.trim().isNotEmpty) {
+      return '$trimmedName <$email>';
+    }
+    if (trimmedName.isNotEmpty) {
+      return trimmedName;
+    }
+    if (email.trim().isNotEmpty) {
+      return email;
+    }
+    return userId;
+  }
+
+  factory HomeschoolMemberDirectoryEntry.fromMap(Map<String, dynamic> map) {
+    return HomeschoolMemberDirectoryEntry(
+      userId: (map['user_id'] as String?) ?? '',
+      email: (map['email'] as String?) ?? '',
+      fullName: (map['full_name'] as String?) ?? '',
+      roles:
+          (map['roles'] as List?)?.whereType<String>().toList(
+            growable: false,
+          ) ??
+          const [],
+    );
+  }
+}
+
 class HomeschoolInvite {
   const HomeschoolInvite({
     required this.id,

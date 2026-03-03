@@ -94,5 +94,20 @@ void main() {
       expect(profile.specialties, hasLength(2));
       expect(profile.displayName, 'Teacher Lee');
     });
+
+    test('HomeschoolMemberDirectoryEntry.fromMap parses label and roles', () {
+      final entry = HomeschoolMemberDirectoryEntry.fromMap({
+        'user_id': 'user-2',
+        'email': 'teacher@example.com',
+        'full_name': 'Teacher Kim',
+        'roles': ['TEACHER', 'PARENT'],
+      });
+
+      expect(entry.userId, 'user-2');
+      expect(entry.email, 'teacher@example.com');
+      expect(entry.fullName, 'Teacher Kim');
+      expect(entry.roles, containsAll(['TEACHER', 'PARENT']));
+      expect(entry.displayLabel, 'Teacher Kim <teacher@example.com>');
+    });
   });
 }

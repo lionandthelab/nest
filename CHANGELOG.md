@@ -36,9 +36,17 @@
   - `20260303143000_children_policy_fix.sql`
   - `20260303145000_child_admin_rpc.sql`
   - `20260303150000_invite_rpc_fix.sql`
+  - `20260303162000_class_groups_delete_and_member_search.sql`
 - 원격 E2E 자동화 워크플로 추가
   - `.github/workflows/remote_e2e.yml`
   - `scripts/e2e_remote.mjs`에 가족/아이/배정/계획/활동/공지/초대수락 검증 시나리오 확장
+- 홈스쿨 어드민 반 운영 기능 강화
+  - `Families` 탭에 반(Class) CRUD UI 추가 (생성/수정/삭제)
+  - 반 삭제 시 경고 확인 다이얼로그 추가
+  - 반 편집 선택 시 이름/정원 폼 자동 동기화
+- 교사 등록 UX 개선
+  - 기존 계정 연결 토글 + 이름/이메일/UUID 검색 기반 선택
+  - 계정 미보유 교사는 연결 없이 초청교사 프로필 생성 가능
 
 ### Changed
 
@@ -74,6 +82,13 @@
   - job `env` 주입 후 `env.*` 기반으로 실행/스킵 분기하도록 변경
 - 원격 E2E 스크립트 경로 이식성 수정 (`scripts/e2e_remote.mjs`)
   - OAuth 콜백 페이지 존재 검증 경로를 로컬 절대경로에서 `process.cwd()` 기반 상대 해석으로 변경
+- `NestController`/`NestRepository` 반 도메인 확장
+  - `createClassGroup`, `updateClassGroup`, `deleteClassGroup`
+  - 반 CRUD 후 시간표/공지/커뮤니티/갤러리 연동 데이터 동기화
+- 멤버 디렉토리 검색 도메인 추가
+  - `search_homeschool_members` RPC 연동
+  - `HomeschoolMemberDirectoryEntry` 모델 추가
+  - `NestController.searchHomeschoolMemberDirectory(...)`로 로컬 검색 제공
 
 ### Verification
 
@@ -83,6 +98,8 @@
 - `supabase db push` 통과 (`20260303130000`, `20260303143000`, `20260303145000`, `20260303150000`)
 - `node scripts/e2e_remote.mjs` 통과 (`summary.success: true`, invite_flow 포함)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22607933835`)
+- 신규 마이그레이션 `20260303162000_class_groups_delete_and_member_search.sql`는 파일 추가 완료
+  - 현재 환경에서는 `supabase db push` 시 권한/DB 비밀번호 이슈로 직접 적용은 미실행
 
 ## 2026-03-02
 

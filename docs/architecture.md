@@ -84,6 +84,7 @@ supabase/
     20260303143000_children_policy_fix.sql
     20260303145000_child_admin_rpc.sql
     20260303150000_invite_rpc_fix.sql
+    20260303162000_class_groups_delete_and_member_search.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -141,11 +142,13 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `grantMembershipRole(homeschoolId, userId, role)`
   - `revokeMembershipRole(homeschoolId, userId, role)`
   - `fetchHomeschoolInvites(homeschoolId)`
+  - `searchHomeschoolMembers(homeschoolId, query, limit)` (`search_homeschool_members` RPC)
   - `createHomeschoolInvite(...)`
   - `cancelHomeschoolInvite(inviteId)`
   - `acceptHomeschoolInvite(inviteToken)`
   - `fetchFamilies`, `createFamily`
   - `fetchChildren`, `createChild` (`create_child_admin` RPC)
+  - `createClassGroup`, `updateClassGroup`, `deleteClassGroup`
   - `fetchClassEnrollments`, `upsertClassEnrollment`, `deleteClassEnrollment`
   - `fetchTeacherProfiles`, `createTeacherProfile`
   - `fetchSessionTeacherAssignments`, `setSessionMainTeacher`, `upsertSessionTeacherAssignment`
@@ -219,8 +222,9 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 - `family_admin_tab.dart`:
   - create family
   - create child
+  - class CRUD (create/update/delete)
   - class-level child enrollment toggle
-  - teacher profile creation for timetable assignment
+  - teacher profile creation with optional existing-account linkage (member search)
 
 ### 6.8 Teacher Plan and Activity Logs
 
@@ -288,6 +292,11 @@ Migration `20260303145000_child_admin_rpc.sql`:
 Migration `20260303150000_invite_rpc_fix.sql`:
 
 - `accept_homeschool_invite` return signature fix to avoid output-variable collision
+
+Migration `20260303162000_class_groups_delete_and_member_search.sql`:
+
+- `class_groups` delete RLS policy for admin/staff
+- `search_homeschool_members` security-definer RPC for account lookup by name/email/UUID
 
 ## 8. Environment Variables
 

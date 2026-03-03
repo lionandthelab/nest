@@ -26,7 +26,9 @@ Last updated: 2026-03-03
 - [x] 관리자 멤버 권한 관리(UUID 기준 부여/회수)
 - [x] 이메일 초대 기반 멤버 온보딩(생성/취소/수락)
 - [x] 가족/아이/반 배정 관리 UI 고도화
+- [x] 반(Class) CRUD(생성/수정/삭제) + 반별 시간표 연계 운영
 - [x] 수업별 주강사/보조강사 배정 UI + 충돌 시각화 고도화
+- [x] 교사 계정 검색 자동완성(이름/이메일/UUID) + 계정 없는 초청교사 등록
 - [x] 교사 학기 계획표/아동 활동기록 작성 UI
 - [x] 운영 감사로그/알림(권한 변경, 신고 처리, 시간표 확정 이벤트)
 - [x] 원격 E2E 자동화(핵심 시나리오 CI 내 상시 검증)
@@ -41,6 +43,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | 가족/아이/반 배정, 교사배정 UI, 계획/활동기록, 공지/감사로그, 원격E2E 자동화 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push`, `node scripts/e2e_remote.mjs` |
 | 2026-03-03 | 원격E2E GitHub Actions 워크플로 파싱 오류 수정(`secrets` 직접 조건식 제거) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-03 | 원격E2E 스크립트 CI 경로 하드코딩 제거(콜백 파일 검증 경로 이식성 수정) | 완료 | `node scripts/e2e_remote.mjs`, GitHub Actions `Remote Supabase E2E` run `22607933835` 성공 |
+| 2026-03-03 | 어드민 반 CRUD + 교사 계정 검색 연결 UX 개선 | 코드 완료 (DB 마이그레이션 파일 추가, `supabase db push`는 권한/DB 비밀번호 이슈로 미실행) | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `node scripts/e2e_remote.mjs` |
 
 ## Next Batch
 

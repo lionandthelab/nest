@@ -17,6 +17,7 @@ supabase db push
 5. `supabase/migrations/20260303143000_children_policy_fix.sql`
 6. `supabase/migrations/20260303145000_child_admin_rpc.sql`
 7. `supabase/migrations/20260303150000_invite_rpc_fix.sql`
+8. `supabase/migrations/20260303162000_class_groups_delete_and_member_search.sql`
 
 ## 2) Edge Functions 배포
 

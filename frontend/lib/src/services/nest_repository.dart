@@ -102,6 +102,29 @@ class NestRepository {
     return _asRows(data).map(Membership.fromMap).toList(growable: false);
   }
 
+  Future<List<HomeschoolMemberDirectoryEntry>> searchHomeschoolMembers({
+    required String homeschoolId,
+    String query = '',
+    int limit = 30,
+  }) async {
+    try {
+      final data = await client.rpc(
+        'search_homeschool_members',
+        params: {
+          'p_homeschool_id': homeschoolId,
+          'p_query': query.trim(),
+          'p_limit': limit,
+        },
+      );
+
+      return _asRows(
+        data,
+      ).map(HomeschoolMemberDirectoryEntry.fromMap).toList(growable: false);
+    } on PostgrestException {
+      return const [];
+    }
+  }
+
   Future<void> grantMembershipRole({
     required String homeschoolId,
     required String userId,
@@ -568,6 +591,39 @@ class NestRepository {
         .order('name');
 
     return _asRows(data).map(ClassGroup.fromMap).toList(growable: false);
+  }
+
+  Future<ClassGroup> createClassGroup({
+    required String termId,
+    required String name,
+    required int capacity,
+  }) async {
+    final row = await client
+        .from('class_groups')
+        .insert({'term_id': termId, 'name': name.trim(), 'capacity': capacity})
+        .select('id, term_id, name, capacity')
+        .single();
+
+    return ClassGroup.fromMap(_asMap(row));
+  }
+
+  Future<ClassGroup> updateClassGroup({
+    required String classGroupId,
+    required String name,
+    required int capacity,
+  }) async {
+    final row = await client
+        .from('class_groups')
+        .update({'name': name.trim(), 'capacity': capacity})
+        .eq('id', classGroupId)
+        .select('id, term_id, name, capacity')
+        .single();
+
+    return ClassGroup.fromMap(_asMap(row));
+  }
+
+  Future<void> deleteClassGroup({required String classGroupId}) {
+    return client.from('class_groups').delete().eq('id', classGroupId);
   }
 
   Future<List<Course>> fetchCourses({required String homeschoolId}) async {
