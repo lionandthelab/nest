@@ -82,6 +82,7 @@
 - `cd frontend && flutter build web --release --base-href /nest/` 통과
 - `supabase db push` 통과 (`20260303130000`, `20260303143000`, `20260303145000`, `20260303150000`)
 - `node scripts/e2e_remote.mjs` 통과 (`summary.success: true`, invite_flow 포함)
+- GitHub Actions `Remote Supabase E2E` 통과 (`run: 22607933835`)
 
 ## 2026-03-02
 
