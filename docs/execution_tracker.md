@@ -48,7 +48,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | 원격E2E 스크립트 CI 경로 하드코딩 제거(콜백 파일 검증 경로 이식성 수정) | 완료 | `node scripts/e2e_remote.mjs`, GitHub Actions `Remote Supabase E2E` run `22607933835` 성공 |
 | 2026-03-03 | 어드민 반 CRUD + 교사 계정 검색 연결 UX 개선 | 코드 완료 (DB 마이그레이션 파일 추가, `supabase db push`는 권한/DB 비밀번호 이슈로 미실행) | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `node scripts/e2e_remote.mjs`, GitHub Actions `Remote Supabase E2E` run `22609099078` 성공 |
 | 2026-03-03 | 관리자 스케줄 UX 고도화(질문형 초안/다중 대안/실시간 충돌 검증) + 반/교사 질문형 일괄 생성 + Drive 고급 설정 숨김 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
-| 2026-03-03 | 스케줄 엔진 고도화(과목 빈도 가중치 + 교사 선호 전략) 및 원격 E2E 재검증 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `SUPABASE_* node scripts/e2e_remote.mjs` |
+| 2026-03-03 | 스케줄 엔진 고도화(과목 빈도 가중치 + 교사 선호 전략) 및 원격 E2E 재검증 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `SUPABASE_* node scripts/e2e_remote.mjs`, GitHub Actions `Remote Supabase E2E` run `22610640069` 성공, `Deploy Flutter Web to GitHub Pages` run `22610637304` 성공 |
 
 ## Next Batch
 

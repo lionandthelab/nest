@@ -121,7 +121,10 @@
 - `node scripts/e2e_remote.mjs` 통과 (`summary.success: true`, invite_flow 포함)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22607933835`)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22609099078`)
+- GitHub Actions `Remote Supabase E2E` 통과 (`run: 22610640069`)
 - GitHub Actions `Deploy Flutter Web to GitHub Pages` 통과 (`run: 22609099069`)
+- GitHub Actions `Deploy Flutter Web to GitHub Pages` 통과 (`run: 22610637304`)
+- GitHub Actions `pages-build-deployment` 통과 (`run: 22610687288`)
 - 신규 마이그레이션 `20260303162000_class_groups_delete_and_member_search.sql`는 파일 추가 완료
   - 현재 환경에서는 `supabase db push` 시 권한/DB 비밀번호 이슈로 직접 적용은 미실행
 
