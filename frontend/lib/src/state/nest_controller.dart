@@ -60,6 +60,8 @@ class NestController extends ChangeNotifier {
 
   List<Proposal> proposals = const [];
   Map<String, List<ProposalSession>> proposalSessionsById = const {};
+  List<ScheduleOptionDraft> scheduleOptionDrafts = const [];
+  String? selectedScheduleOptionId;
 
   DriveIntegration? driveIntegration;
 
@@ -79,6 +81,15 @@ class NestController extends ChangeNotifier {
   bool get isLoggedIn => user != null;
   bool get isBootstrapped => _isBootstrapped;
   String get statusMessage => _statusMessage;
+  ScheduleOptionDraft? get selectedScheduleOption {
+    final targetId = selectedScheduleOptionId;
+    if (targetId == null) {
+      return scheduleOptionDrafts.firstOrNull;
+    }
+    return scheduleOptionDrafts
+        .where((draft) => draft.id == targetId)
+        .firstOrNull;
+  }
 
   List<String> get availableViewRoles {
     final homeschoolId = selectedHomeschoolId;
@@ -247,6 +258,8 @@ class NestController extends ChangeNotifier {
 
   Future<void> changeTerm(String? termId) async {
     selectedTermId = _normalizeNullable(termId);
+    scheduleOptionDrafts = const [];
+    selectedScheduleOptionId = null;
     notifyListeners();
 
     await _runBusy('반/시간표 데이터를 불러오는 중...', () async {
@@ -265,6 +278,8 @@ class NestController extends ChangeNotifier {
 
   Future<void> changeClassGroup(String? classGroupId) async {
     selectedClassGroupId = _normalizeNullable(classGroupId);
+    scheduleOptionDrafts = const [];
+    selectedScheduleOptionId = null;
     notifyListeners();
 
     await _runBusy('수업 및 갤러리를 갱신하는 중...', () async {
@@ -441,6 +456,283 @@ class NestController extends ChangeNotifier {
       );
       await _loadProposals();
       _setStatus('생성안을 폐기했습니다.');
+    });
+  }
+
+  Future<void> generateScheduleOptions({
+    required String prompt,
+    required Set<int> preferredDays,
+    required int sessionsPerDay,
+    int optionCount = 3,
+    bool keepExistingSessions = true,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    if (selectedClassGroupId == null) {
+      throw StateError('반을 먼저 선택하세요.');
+    }
+
+    final trimmedPrompt = prompt.trim();
+    final safePrompt = trimmedPrompt.isEmpty
+        ? '현재 운영 조건을 반영해 안정적인 시간표를 생성해줘.'
+        : trimmedPrompt;
+
+    await _runBusy('질문 기반 시간표 초안을 생성하는 중...', () async {
+      final drafts = buildWizardScheduleOptions(
+        prompt: safePrompt,
+        classGroupId: selectedClassGroupId!,
+        courses: courses,
+        timeSlots: timeSlots,
+        existingSessions: sessions,
+        teacherProfiles: teacherProfiles,
+        preferredDays: preferredDays,
+        sessionsPerDay: sessionsPerDay,
+        optionCount: optionCount,
+        keepExistingSessions: keepExistingSessions,
+      );
+
+      scheduleOptionDrafts = drafts;
+      selectedScheduleOptionId = drafts.firstOrNull?.id;
+      _setStatus('질문 기반 초안 ${drafts.length}개를 생성했습니다.');
+    });
+  }
+
+  void selectScheduleOptionDraft(String? optionId) {
+    if (scheduleOptionDrafts.isEmpty) {
+      selectedScheduleOptionId = null;
+      notifyListeners();
+      return;
+    }
+
+    final normalized = _normalizeNullable(optionId);
+    if (normalized == null ||
+        !scheduleOptionDrafts.any((draft) => draft.id == normalized)) {
+      selectedScheduleOptionId = scheduleOptionDrafts.first.id;
+      notifyListeners();
+      return;
+    }
+
+    selectedScheduleOptionId = normalized;
+    notifyListeners();
+  }
+
+  void updateScheduleOptionSession({
+    required String optionId,
+    required String sessionLocalId,
+    String? courseId,
+    String? timeSlotId,
+    String? teacherMainId,
+    bool clearTeacherMainId = false,
+  }) {
+    final draft = scheduleOptionDrafts
+        .where((item) => item.id == optionId)
+        .firstOrNull;
+    if (draft == null) {
+      return;
+    }
+
+    final updatedSessions = draft.sessions
+        .map((session) {
+          if (session.localId != sessionLocalId) {
+            return session;
+          }
+          return session.copyWith(
+            courseId: courseId,
+            timeSlotId: timeSlotId,
+            teacherMainId: teacherMainId,
+            clearTeacherMainId: clearTeacherMainId,
+          );
+        })
+        .toList(growable: false);
+
+    _replaceScheduleOptionDraft(
+      draft.copyWith(
+        sessions: updatedSessions,
+        issues: evaluateScheduleOptionIssues(
+          sessions: updatedSessions,
+          existingSessions: sessions,
+          requireTeacher: true,
+        ),
+      ),
+    );
+  }
+
+  void addScheduleOptionSession(String optionId) {
+    final draft = scheduleOptionDrafts
+        .where((item) => item.id == optionId)
+        .firstOrNull;
+    final classGroupId = selectedClassGroupId;
+    if (draft == null || classGroupId == null) {
+      return;
+    }
+
+    final occupiedByDraft = draft.sessions
+        .map((session) => session.timeSlotId)
+        .toSet();
+    final occupiedExisting = sessions.map((row) => row.timeSlotId).toSet();
+    final candidateSlot = timeSlots
+        .where(
+          (slot) =>
+              !occupiedByDraft.contains(slot.id) &&
+              !occupiedExisting.contains(slot.id),
+        )
+        .firstOrNull;
+    final fallbackCourse = courses.firstOrNull;
+
+    if (candidateSlot == null || fallbackCourse == null) {
+      _setStatus('추가할 수 있는 슬롯/과목이 없습니다.');
+      notifyListeners();
+      return;
+    }
+
+    final nextIndex = draft.sessions.length + 1;
+    final nextSession = ScheduleOptionSession(
+      localId: '${draft.id}-add-$nextIndex',
+      classGroupId: classGroupId,
+      courseId: fallbackCourse.id,
+      timeSlotId: candidateSlot.id,
+      teacherMainId: teacherProfiles.firstOrNull?.id,
+    );
+
+    final updatedSessions = [...draft.sessions, nextSession];
+    _replaceScheduleOptionDraft(
+      draft.copyWith(
+        sessions: updatedSessions,
+        issues: evaluateScheduleOptionIssues(
+          sessions: updatedSessions,
+          existingSessions: sessions,
+          requireTeacher: true,
+        ),
+      ),
+    );
+  }
+
+  void removeScheduleOptionSession({
+    required String optionId,
+    required String sessionLocalId,
+  }) {
+    final draft = scheduleOptionDrafts
+        .where((item) => item.id == optionId)
+        .firstOrNull;
+    if (draft == null) {
+      return;
+    }
+
+    final updatedSessions = draft.sessions
+        .where((session) => session.localId != sessionLocalId)
+        .toList(growable: false);
+
+    _replaceScheduleOptionDraft(
+      draft.copyWith(
+        sessions: updatedSessions,
+        issues: evaluateScheduleOptionIssues(
+          sessions: updatedSessions,
+          existingSessions: sessions,
+          requireTeacher: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> applyScheduleOptionDraft(String optionId) async {
+    if (!isAdminLike || user == null) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final classGroupId = selectedClassGroupId;
+    if (classGroupId == null) {
+      throw StateError('반을 먼저 선택하세요.');
+    }
+
+    final draft = scheduleOptionDrafts
+        .where((item) => item.id == optionId)
+        .firstOrNull;
+    if (draft == null) {
+      throw StateError('적용할 초안을 찾을 수 없습니다.');
+    }
+
+    final refreshedDraft = draft.copyWith(
+      issues: evaluateScheduleOptionIssues(
+        sessions: draft.sessions,
+        existingSessions: sessions,
+        requireTeacher: true,
+      ),
+    );
+    if (refreshedDraft.hasHardConflicts) {
+      _replaceScheduleOptionDraft(refreshedDraft);
+      throw StateError('하드 충돌을 먼저 해결하세요.');
+    }
+
+    await _runBusy('초안을 시간표에 반영하는 중...', () async {
+      var created = 0;
+      var skippedBySlot = 0;
+      var teacherConflicts = 0;
+
+      final occupiedSlotIds = sessions.map((row) => row.timeSlotId).toSet();
+
+      final sortedSessions = refreshedDraft.sessions.toList(growable: false)
+        ..sort((a, b) {
+          final left = findTimeSlot(a.timeSlotId);
+          final right = findTimeSlot(b.timeSlotId);
+          if (left == null || right == null) {
+            return a.timeSlotId.compareTo(b.timeSlotId);
+          }
+          final day = left.dayOfWeek.compareTo(right.dayOfWeek);
+          if (day != 0) {
+            return day;
+          }
+          return left.startTime.compareTo(right.startTime);
+        });
+
+      for (final row in sortedSessions) {
+        if (row.classGroupId != classGroupId) {
+          continue;
+        }
+        if (occupiedSlotIds.contains(row.timeSlotId)) {
+          skippedBySlot += 1;
+          continue;
+        }
+
+        final createdSession = await _repository.createSessionAndReturn(
+          classGroupId: classGroupId,
+          courseId: row.courseId,
+          timeSlotId: row.timeSlotId,
+          title: '${findCourseName(row.courseId)} 수업',
+          createdByUserId: user!.id,
+          sourceType: 'ASSISTED',
+        );
+
+        occupiedSlotIds.add(row.timeSlotId);
+        created += 1;
+
+        final teacherId = _normalizeNullable(row.teacherMainId);
+        if (teacherId == null) {
+          continue;
+        }
+
+        try {
+          await _repository.setSessionMainTeacher(
+            classSessionId: createdSession.id,
+            teacherProfileId: teacherId,
+          );
+        } on PostgrestException catch (error) {
+          if (error.message.contains('TEACHER_SLOT_CONFLICT')) {
+            teacherConflicts += 1;
+            continue;
+          }
+          rethrow;
+        }
+      }
+
+      await _loadSessions();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
+      await _loadProposals();
+
+      _setStatus(
+        '초안 반영 완료: 생성 $created, 슬롯중복 건너뜀 $skippedBySlot, 교사충돌 $teacherConflicts',
+      );
     });
   }
 
@@ -764,6 +1056,8 @@ class NestController extends ChangeNotifier {
       sessions = const [];
       proposals = const [];
       proposalSessionsById = const {};
+      scheduleOptionDrafts = const [];
+      selectedScheduleOptionId = null;
       galleryItems = const [];
       mediaChildrenByAsset = const {};
       communityPosts = const [];
@@ -2260,6 +2554,31 @@ class NestController extends ChangeNotifier {
     return messages.toList(growable: false);
   }
 
+  List<String> timetableBoardIssueMessages() {
+    final issues = <String>{};
+
+    for (final session in sessions) {
+      for (final conflict in teacherConflictMessagesForSession(session.id)) {
+        issues.add(conflict);
+      }
+
+      final hasMainTeacher = teacherAssignmentsForSession(
+        session.id,
+      ).any((assignment) => assignment.assignmentRole == 'MAIN');
+      if (!hasMainTeacher) {
+        final slot = findTimeSlot(session.timeSlotId);
+        final slotLabel = slot == null
+            ? session.timeSlotId
+            : '${slot.dayOfWeek} ${slot.startTime.substring(0, 5)}';
+        issues.add(
+          '${findCourseName(session.courseId)} · 주강사 미지정 ($slotLabel)',
+        );
+      }
+    }
+
+    return issues.toList(growable: false);
+  }
+
   List<TeachingPlan> teachingPlansForSession(String sessionId) {
     return teachingPlans
         .where((plan) => plan.classSessionId == sessionId)
@@ -2356,6 +2675,8 @@ class NestController extends ChangeNotifier {
     if (termId == null || termId.isEmpty) {
       proposals = const [];
       proposalSessionsById = const {};
+      scheduleOptionDrafts = const [];
+      selectedScheduleOptionId = null;
       return;
     }
 
@@ -2367,6 +2688,14 @@ class NestController extends ChangeNotifier {
     proposalSessionsById = await _repository.fetchProposalSessionsByProposal(
       proposalIds: proposalIds,
     );
+  }
+
+  void _replaceScheduleOptionDraft(ScheduleOptionDraft updated) {
+    scheduleOptionDrafts = scheduleOptionDrafts
+        .map((draft) => draft.id == updated.id ? updated : draft)
+        .toList(growable: false);
+    selectedScheduleOptionId = updated.id;
+    notifyListeners();
   }
 
   Future<void> _onAuthStateChanged(Session? nextSession) async {
@@ -2478,6 +2807,8 @@ class NestController extends ChangeNotifier {
     sessions = const [];
     proposals = const [];
     proposalSessionsById = const {};
+    scheduleOptionDrafts = const [];
+    selectedScheduleOptionId = null;
     driveIntegration = null;
     galleryItems = const [];
     mediaChildrenByAsset = const {};

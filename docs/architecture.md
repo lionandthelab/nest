@@ -17,6 +17,7 @@ Last updated: 2026-03-03
   - admin invite create/cancel
   - invited user self-accept from dashboard
 - Prompt timetable generation plus manual drag-and-drop editing.
+- Questionnaire-based schedule concierge with multiple draft options and live conflict checks.
 - Google Drive based media upload and gallery sharing.
 
 ## 2. System Overview
@@ -113,7 +114,7 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 - Teacher/GUEST_TEACHER role: `Teacher Hub`
 - Non-admin: `Community` (user feed)
 - Admin/Staff: `SNS Admin` (moderation)
-- HOMESCHOOL_ADMIN only: `Drive`, `Members`
+- HOMESCHOOL_ADMIN only: `Media Setup`, `Members`
 - Admin/Staff: `Families` (family/child/class enrollment)
 - Admin/Staff: `Ops` (announcement + audit log)
 
@@ -174,8 +175,12 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 ### 6.2 Timetable
 
 - Admin view:
-  - prompt generation + apply/discard proposals
+  - schedule concierge (few-question wizard) -> multi-option drafts
+  - draft session editor (course/slot/main teacher) with immediate conflict feedback
+  - draft apply flow with slot-collision skip and teacher conflict reporting
+  - prompt generation + apply/discard proposals (legacy path)
   - drag-and-drop manual board edits
+  - board-level health summary (teacher conflict + missing main teacher)
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
 
@@ -202,6 +207,9 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 ### 6.5 Drive and Gallery
 
 - OAuth start/complete through edge functions and web bridge.
+- Drive tab is simplified for operators:
+  - root folder + folder policy + OAuth actions
+  - developer token fields hidden behind explicit advanced toggle
 - Upload flow:
   1. create `media_upload_sessions`
   2. upload to Drive via edge function
@@ -220,6 +228,7 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 ### 6.7 Family and Enrollment Admin
 
 - `family_admin_tab.dart`:
+  - onboarding draft generator for bulk class/teacher creation
   - create family
   - create child
   - class CRUD (create/update/delete)

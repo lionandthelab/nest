@@ -21,6 +21,7 @@ class _DriveTabState extends State<DriveTab> {
 
   String _folderPolicy = 'TERM_CLASS_DATE';
   String? _lastSyncIntegrationId;
+  bool _showDeveloperFields = false;
 
   @override
   void dispose() {
@@ -46,12 +47,12 @@ class _DriveTabState extends State<DriveTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Google Drive Integration',
+                  'Google Drive 연동',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'OAuth 팝업과 수동 설정을 모두 지원합니다. 웹에서는 팝업 인증 후 동기화 버튼을 눌러 결과를 반영하세요.',
+                  '관리자는 OAuth 연결과 폴더 정책만 설정하면 됩니다. 토큰 수동 입력은 개발자 고급 메뉴에서만 노출됩니다.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: NestColors.deepWood.withValues(alpha: 0.72),
                   ),
@@ -111,28 +112,50 @@ class _DriveTabState extends State<DriveTab> {
                         },
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: _accessTokenController,
-                  decoration: const InputDecoration(
-                    labelText: 'Access Token (선택)',
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () {
+                            setState(() {
+                              _showDeveloperFields = !_showDeveloperFields;
+                            });
+                          },
+                    icon: Icon(
+                      _showDeveloperFields
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                    ),
+                    label: Text(
+                      _showDeveloperFields ? '개발자 고급 설정 숨기기' : '개발자 고급 설정 보기',
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _refreshTokenController,
-                  decoration: const InputDecoration(
-                    labelText: 'Refresh Token (선택)',
+                if (_showDeveloperFields) ...[
+                  TextField(
+                    controller: _accessTokenController,
+                    decoration: const InputDecoration(
+                      labelText: 'Access Token (선택)',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _tokenExpiresAtController,
-                  decoration: const InputDecoration(
-                    labelText: 'Token Expires At ISO (선택)',
-                    hintText: '2026-03-02T19:00:00Z',
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _refreshTokenController,
+                    decoration: const InputDecoration(
+                      labelText: 'Refresh Token (선택)',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _tokenExpiresAtController,
+                    decoration: const InputDecoration(
+                      labelText: 'Token Expires At ISO (선택)',
+                      hintText: '2026-03-02T19:00:00Z',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,

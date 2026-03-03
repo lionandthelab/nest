@@ -21,6 +21,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   final _childNoteController = TextEditingController();
   final _classNameController = TextEditingController();
   final _classCapacityController = TextEditingController(text: '12');
+  final _quickClassPrefixController = TextEditingController(text: 'Robin');
+  final _quickClassCountController = TextEditingController(text: '2');
+  final _quickCapacityController = TextEditingController(text: '12');
+  final _quickTeacherNamesController = TextEditingController(
+    text: '초청교사A, 초청교사B',
+  );
   final _teacherDisplayNameController = TextEditingController();
   final _teacherAccountSearchController = TextEditingController();
   late final TextEditingController _birthDateController;
@@ -33,6 +39,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   HomeschoolMemberDirectoryEntry? _selectedTeacherAccount;
   bool _familyInitialized = false;
   bool _classInitialized = false;
+  List<String> _quickDraftClassNames = const [];
+  List<String> _quickDraftTeacherNames = const [];
 
   @override
   void initState() {
@@ -51,6 +59,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     _childNoteController.dispose();
     _classNameController.dispose();
     _classCapacityController.dispose();
+    _quickClassPrefixController.dispose();
+    _quickClassCountController.dispose();
+    _quickCapacityController.dispose();
+    _quickTeacherNamesController.dispose();
     _teacherDisplayNameController.dispose();
     _teacherAccountSearchController.dispose();
     _birthDateController.dispose();
@@ -87,6 +99,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         _buildFamilyCreateCard(controller),
         const SizedBox(height: 12),
         _buildChildCreateCard(controller),
+        const SizedBox(height: 12),
+        _buildQuickOnboardingCard(controller),
         const SizedBox(height: 12),
         _buildClassCrudCard(controller),
         const SizedBox(height: 12),
@@ -343,6 +357,112 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickOnboardingCard(NestController controller) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('운영 초안 생성기', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '몇 가지 질문으로 반/교사 초안을 먼저 만든 뒤, 목록을 보정하고 일괄 생성할 수 있습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _quickClassPrefixController,
+              decoration: const InputDecoration(labelText: '질문 1) 반 이름 접두어'),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _quickClassCountController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '질문 2) 만들 반 개수',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _quickCapacityController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '질문 3) 반 기본 정원',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _quickTeacherNamesController,
+              decoration: const InputDecoration(
+                labelText: '질문 4) 교사 이름(콤마 구분)',
+                hintText: '예: 김민지, 이도윤, Park Teacher',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy ? null : _buildQuickDraft,
+                  icon: const Icon(Icons.auto_fix_high),
+                  label: const Text('초안 만들기'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy || _quickDraftClassNames.isEmpty
+                      ? null
+                      : _applyQuickDraft,
+                  icon: const Icon(Icons.done_all),
+                  label: const Text('초안 일괄 생성'),
+                ),
+              ],
+            ),
+            if (_quickDraftClassNames.isNotEmpty ||
+                _quickDraftTeacherNames.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text('생성 예정 반', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              if (_quickDraftClassNames.isEmpty)
+                const Text('없음')
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _quickDraftClassNames
+                      .map((name) => Chip(label: Text(name)))
+                      .toList(growable: false),
+                ),
+              const SizedBox(height: 8),
+              Text('생성 예정 교사', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              if (_quickDraftTeacherNames.isEmpty)
+                const Text('없음')
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _quickDraftTeacherNames
+                      .map((name) => Chip(label: Text(name)))
+                      .toList(growable: false),
+                ),
+            ],
           ],
         ),
       ),
@@ -696,6 +816,97 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         _syncClassForm(widget.controller, force: true);
       });
       _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  void _buildQuickDraft() {
+    final prefix = _quickClassPrefixController.text.trim();
+    final classCount =
+        int.tryParse(_quickClassCountController.text.trim()) ?? 0;
+
+    if (prefix.isEmpty || classCount <= 0) {
+      _showMessage('반 접두어와 개수를 올바르게 입력하세요.');
+      return;
+    }
+
+    final classNames = List.generate(
+      classCount,
+      (index) => '$prefix ${index + 1}',
+    );
+
+    final teacherNames = _quickTeacherNamesController.text
+        .split(',')
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+
+    setState(() {
+      _quickDraftClassNames = classNames;
+      _quickDraftTeacherNames = teacherNames;
+    });
+    _showMessage('초안을 생성했습니다. 목록을 확인하고 일괄 생성하세요.');
+  }
+
+  Future<void> _applyQuickDraft() async {
+    if (_quickDraftClassNames.isEmpty && _quickDraftTeacherNames.isEmpty) {
+      _showMessage('먼저 초안을 만드세요.');
+      return;
+    }
+
+    final capacity = int.tryParse(_quickCapacityController.text.trim());
+    if (capacity == null || capacity < 1 || capacity > 200) {
+      _showMessage('기본 정원은 1~200 사이 숫자로 입력하세요.');
+      return;
+    }
+
+    var createdClasses = 0;
+    var skippedClasses = 0;
+    var createdTeachers = 0;
+    var skippedTeachers = 0;
+
+    try {
+      for (final className in _quickDraftClassNames) {
+        final exists = widget.controller.classGroups.any(
+          (group) => group.name.trim() == className,
+        );
+        if (exists) {
+          skippedClasses += 1;
+          continue;
+        }
+        await widget.controller.createClassGroup(
+          name: className,
+          capacity: capacity,
+        );
+        createdClasses += 1;
+      }
+
+      for (final teacherName in _quickDraftTeacherNames) {
+        final exists = widget.controller.teacherProfiles.any(
+          (profile) => profile.displayName.trim() == teacherName,
+        );
+        if (exists) {
+          skippedTeachers += 1;
+          continue;
+        }
+        await widget.controller.createTeacherProfile(
+          displayName: teacherName,
+          teacherType: 'GUEST_TEACHER',
+        );
+        createdTeachers += 1;
+      }
+
+      await widget.controller.loadClassEnrollments();
+      await widget.controller.loadTeacherProfiles();
+      setState(() {
+        _quickDraftClassNames = const [];
+        _quickDraftTeacherNames = const [];
+      });
+      _showMessage(
+        '일괄 생성 완료: 반 $createdClasses개(중복 $skippedClasses개), 교사 $createdTeachers명(중복 $skippedTeachers명)',
+      );
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }

@@ -897,16 +897,42 @@ class NestRepository {
     required String timeSlotId,
     required String title,
     required String createdByUserId,
-  }) {
-    return client.from('class_sessions').insert({
-      'class_group_id': classGroupId,
-      'course_id': courseId,
-      'time_slot_id': timeSlotId,
-      'title': title,
-      'source_type': 'MANUAL',
-      'status': 'PLANNED',
-      'created_by_user_id': createdByUserId,
-    });
+  }) async {
+    await createSessionAndReturn(
+      classGroupId: classGroupId,
+      courseId: courseId,
+      timeSlotId: timeSlotId,
+      title: title,
+      createdByUserId: createdByUserId,
+      sourceType: 'MANUAL',
+    );
+  }
+
+  Future<ClassSession> createSessionAndReturn({
+    required String classGroupId,
+    required String courseId,
+    required String timeSlotId,
+    required String title,
+    required String createdByUserId,
+    String sourceType = 'MANUAL',
+  }) async {
+    final row = await client
+        .from('class_sessions')
+        .insert({
+          'class_group_id': classGroupId,
+          'course_id': courseId,
+          'time_slot_id': timeSlotId,
+          'title': title,
+          'source_type': sourceType,
+          'status': 'PLANNED',
+          'created_by_user_id': createdByUserId,
+        })
+        .select(
+          'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+        )
+        .single();
+
+    return ClassSession.fromMap(_asMap(row));
   }
 
   Future<void> moveSession({

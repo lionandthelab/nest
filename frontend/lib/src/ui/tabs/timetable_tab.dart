@@ -16,6 +16,10 @@ class TimetableTab extends StatefulWidget {
 
 class _TimetableTabState extends State<TimetableTab> {
   final _promptController = TextEditingController();
+  final Set<int> _selectedDays = <int>{1, 2, 3, 4, 5};
+  int _sessionsPerDay = 2;
+  int _optionCount = 3;
+  bool _keepExistingSessions = true;
 
   @override
   void dispose() {
@@ -33,54 +37,9 @@ class _TimetableTabState extends State<TimetableTab> {
     return ListView(
       children: [
         if (adminEditable) ...[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Prompt Studio',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '프롬프트로 생성안을 만든 뒤 적용하거나, 드래그 앤 드롭으로 바로 수동 편집할 수 있습니다.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: NestColors.deepWood.withValues(alpha: 0.72),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _promptController,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: '예: 화/목 오전은 국어/수학 중심으로 편성해줘.',
-                      labelText: '시간표 생성 프롬프트',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: controller.isBusy ? null : _generateProposal,
-                        icon: const Icon(Icons.auto_fix_high),
-                        label: const Text('생성안 만들기'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: controller.isBusy ? null : _reloadProposals,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('생성안 갱신'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _buildConciergeCard(controller),
+          const SizedBox(height: 12),
+          _buildScheduleDraftPanel(controller),
           const SizedBox(height: 12),
         ] else ...[
           Card(
@@ -127,6 +86,475 @@ class _TimetableTabState extends State<TimetableTab> {
                 ],
               ),
       ],
+    );
+  }
+
+  Widget _buildConciergeCard(NestController controller) {
+    final selectedDays = _selectedDays.toList(growable: false)..sort();
+    final daysLabel = selectedDays.map(_dayLabel).join(', ');
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Schedule Concierge',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '몇 가지 질문에 답하면 반/교사 배정을 고려한 시간표 초안을 여러 개 제안합니다. 제안안을 보정하면 충돌 여부를 즉시 확인할 수 있습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _promptController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                hintText: '예: 월수금 오전은 수학/국어, 화목 오후는 탐구/미술 중심',
+                labelText: '운영 방향 프롬프트',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '질문 1. 수업 요일 선택 ($daysLabel)',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildDayChip(1, 'Mon'),
+                _buildDayChip(2, 'Tue'),
+                _buildDayChip(3, 'Wed'),
+                _buildDayChip(4, 'Thu'),
+                _buildDayChip(5, 'Fri'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '질문 2. 하루 수업 수',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 1, label: Text('1교시')),
+                ButtonSegment(value: 2, label: Text('2교시')),
+                ButtonSegment(value: 3, label: Text('3교시')),
+                ButtonSegment(value: 4, label: Text('4교시')),
+              ],
+              selected: {_sessionsPerDay},
+              onSelectionChanged: controller.isBusy
+                  ? null
+                  : (values) {
+                      if (values.isEmpty) {
+                        return;
+                      }
+                      setState(() {
+                        _sessionsPerDay = values.first;
+                      });
+                    },
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '질문 3. 생성할 대안 개수',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 2, label: Text('2개')),
+                ButtonSegment(value: 3, label: Text('3개')),
+                ButtonSegment(value: 4, label: Text('4개')),
+              ],
+              selected: {_optionCount},
+              onSelectionChanged: controller.isBusy
+                  ? null
+                  : (values) {
+                      if (values.isEmpty) {
+                        return;
+                      }
+                      setState(() {
+                        _optionCount = values.first;
+                      });
+                    },
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('기존 시간표는 유지하고 빈 슬롯만 사용'),
+              value: _keepExistingSessions,
+              onChanged: controller.isBusy
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _keepExistingSessions = value;
+                      });
+                    },
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : _generateScheduleOptions,
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text('질문 기반 초안 생성'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy ? null : _generateProposal,
+                  icon: const Icon(Icons.psychology),
+                  label: const Text('기존 프롬프트 생성안 저장'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy ? null : _reloadProposals,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('전체 새로고침'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayChip(int day, String label) {
+    return FilterChip(
+      label: Text(label),
+      selected: _selectedDays.contains(day),
+      onSelected: (selected) {
+        setState(() {
+          if (selected) {
+            _selectedDays.add(day);
+            return;
+          }
+          if (_selectedDays.length == 1) {
+            return;
+          }
+          _selectedDays.remove(day);
+        });
+      },
+    );
+  }
+
+  Widget _buildScheduleDraftPanel(NestController controller) {
+    final drafts = controller.scheduleOptionDrafts;
+    final selectedDraft = controller.selectedScheduleOption;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('초안 대안 비교', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (drafts.isEmpty)
+              const Text('질문 기반 생성 버튼을 눌러 초안을 만드세요.')
+            else ...[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: drafts
+                    .map(
+                      (draft) => Container(
+                        width: 240,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: selectedDraft?.id == draft.id
+                              ? NestColors.roseMist.withValues(alpha: 0.45)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: selectedDraft?.id == draft.id
+                                ? NestColors.clay
+                                : NestColors.roseMist,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              draft.label,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${draft.sessions.length}세션 · 하드충돌 ${draft.hardConflictCount} · 경고 ${draft.warningCount}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.tonal(
+                                  onPressed: controller.isBusy
+                                      ? null
+                                      : () => controller
+                                            .selectScheduleOptionDraft(
+                                              draft.id,
+                                            ),
+                                  child: const Text('선택'),
+                                ),
+                                ElevatedButton(
+                                  onPressed: controller.isBusy
+                                      ? null
+                                      : () => _applyScheduleOption(draft.id),
+                                  child: const Text('적용'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              if (selectedDraft != null) ...[
+                const SizedBox(height: 12),
+                _buildDraftEditor(controller, selectedDraft),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDraftEditor(
+    NestController controller,
+    ScheduleOptionDraft draft,
+  ) {
+    final slotItems = controller.timeSlots.toList(growable: false)
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) {
+          return day;
+        }
+        return a.startTime.compareTo(b.startTime);
+      });
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('선택 초안 보정', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (draft.sessions.isEmpty)
+            const Text('세션이 없습니다.')
+          else
+            ...draft.sessions.map((session) {
+              final sessionIssues = draft.issues
+                  .where((issue) => issue.sessionLocalId == session.localId)
+                  .toList(growable: false);
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: sessionIssues.any((issue) => issue.isHard)
+                          ? Colors.red.shade300
+                          : NestColors.roseMist,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              session.localId,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            onPressed: controller.isBusy
+                                ? null
+                                : () => controller.removeScheduleOptionSession(
+                                    optionId: draft.id,
+                                    sessionLocalId: session.localId,
+                                  ),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            controller.courses.any(
+                              (course) => course.id == session.courseId,
+                            )
+                            ? session.courseId
+                            : null,
+                        decoration: const InputDecoration(labelText: '과목'),
+                        items: controller.courses
+                            .map(
+                              (course) => DropdownMenuItem(
+                                value: course.id,
+                                child: Text(course.name),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: controller.isBusy
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                controller.updateScheduleOptionSession(
+                                  optionId: draft.id,
+                                  sessionLocalId: session.localId,
+                                  courseId: value,
+                                );
+                              },
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            slotItems.any(
+                              (slot) => slot.id == session.timeSlotId,
+                            )
+                            ? session.timeSlotId
+                            : null,
+                        decoration: const InputDecoration(labelText: '시간 슬롯'),
+                        items: slotItems
+                            .map(
+                              (slot) => DropdownMenuItem(
+                                value: slot.id,
+                                child: Text(
+                                  '${_dayLabel(slot.dayOfWeek)} ${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}',
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: controller.isBusy
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                controller.updateScheduleOptionSession(
+                                  optionId: draft.id,
+                                  sessionLocalId: session.localId,
+                                  timeSlotId: value,
+                                );
+                              },
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            session.teacherMainId != null &&
+                                controller.teacherProfiles.any(
+                                  (teacher) =>
+                                      teacher.id == session.teacherMainId,
+                                )
+                            ? session.teacherMainId
+                            : '__NONE__',
+                        decoration: const InputDecoration(labelText: '주강사'),
+                        items: [
+                          const DropdownMenuItem(
+                            value: '__NONE__',
+                            child: Text('미지정'),
+                          ),
+                          ...controller.teacherProfiles.map(
+                            (teacher) => DropdownMenuItem(
+                              value: teacher.id,
+                              child: Text(teacher.displayName),
+                            ),
+                          ),
+                        ],
+                        onChanged: controller.isBusy
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                controller.updateScheduleOptionSession(
+                                  optionId: draft.id,
+                                  sessionLocalId: session.localId,
+                                  teacherMainId: value == '__NONE__'
+                                      ? null
+                                      : value,
+                                  clearTeacherMainId: value == '__NONE__',
+                                );
+                              },
+                      ),
+                      if (sessionIssues.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: sessionIssues
+                              .map(
+                                (issue) => Chip(
+                                  backgroundColor: issue.isHard
+                                      ? Colors.red.shade50
+                                      : Colors.amber.shade100,
+                                  label: Text(issue.message),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => controller.addScheduleOptionSession(draft.id),
+                icon: const Icon(Icons.add),
+                label: const Text('세션 추가'),
+              ),
+              ElevatedButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _applyScheduleOption(draft.id),
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('이 초안 적용'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (draft.issues.isEmpty)
+            const Text('충돌 없음. 적용 가능한 초안입니다.')
+          else
+            Text(
+              '충돌 점검: 하드 ${draft.hardConflictCount}건, 경고 ${draft.warningCount}건',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+      ),
     );
   }
 
@@ -214,6 +642,49 @@ class _TimetableTabState extends State<TimetableTab> {
           children: [
             Text('Manual Board', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
+            Builder(
+              builder: (context) {
+                final issues = controller.timetableBoardIssueMessages();
+                if (issues.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.green.shade50,
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: const Text('현재 시간표 충돌 없음'),
+                  );
+                }
+                return Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.amber.shade50,
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('충돌/경고 ${issues.length}건'),
+                      const SizedBox(height: 6),
+                      ...issues
+                          .take(5)
+                          .map(
+                            (text) => Text(
+                              '• $text',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
             if (controller.courses.isEmpty)
               const Text('과목이 없습니다. Dashboard에서 과목을 추가하세요.')
             else if (controller.isAdminLike)
@@ -408,6 +879,18 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
+  Future<void> _generateScheduleOptions() async {
+    await _safeCall(() {
+      return widget.controller.generateScheduleOptions(
+        prompt: _promptController.text,
+        preferredDays: _selectedDays,
+        sessionsPerDay: _sessionsPerDay,
+        optionCount: _optionCount,
+        keepExistingSessions: _keepExistingSessions,
+      );
+    });
+  }
+
   Future<void> _reloadProposals() async {
     await _safeCall(widget.controller.refreshAll);
   }
@@ -418,6 +901,10 @@ class _TimetableTabState extends State<TimetableTab> {
 
   Future<void> _discardProposal(String proposalId) async {
     await _safeCall(() => widget.controller.discardProposal(proposalId));
+  }
+
+  Future<void> _applyScheduleOption(String optionId) async {
+    await _safeCall(() => widget.controller.applyScheduleOptionDraft(optionId));
   }
 
   Future<void> _openTeacherAssignDialog({required String sessionId}) async {

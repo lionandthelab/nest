@@ -47,6 +47,16 @@
 - 교사 등록 UX 개선
   - 기존 계정 연결 토글 + 이름/이메일/UUID 검색 기반 선택
   - 계정 미보유 교사는 연결 없이 초청교사 프로필 생성 가능
+- 관리자 시간표 UX 고도화
+  - `Schedule Concierge` 질문형 생성기(요일/일일 수업 수/대안 개수/기존 시간표 유지 옵션)
+  - 다중 초안(안 1~N) 비교 카드 + 선택/적용 플로우
+  - 초안 보정 에디터(과목/슬롯/주강사 변경, 세션 추가/삭제)
+  - 초안 보정 시 하드충돌/경고 실시간 계산 및 표시
+- Family Admin 질문형 일괄 생성
+  - 반 접두어/개수/정원/교사 목록 질문 기반 초안 생성
+  - 생성 전 미리보기 + 일괄 생성(중복 이름 자동 스킵)
+- 수동 시간표 충돌 요약 패널 추가
+  - `Manual Board` 상단에서 교사 충돌/주강사 미지정 경고를 즉시 확인
 
 ### Changed
 
@@ -85,10 +95,18 @@
 - `NestController`/`NestRepository` 반 도메인 확장
   - `createClassGroup`, `updateClassGroup`, `deleteClassGroup`
   - 반 CRUD 후 시간표/공지/커뮤니티/갤러리 연동 데이터 동기화
+- 스케줄 도메인 모델/로컬 플래너 확장
+  - `ScheduleOptionDraft`, `ScheduleOptionSession`, `ScheduleDraftIssue`
+  - `buildWizardScheduleOptions`, `evaluateScheduleOptionIssues`
+  - `applyScheduleOptionDraft` 반영 시 생성/건너뜀/교사충돌 결과 요약
+  - `createSessionAndReturn` 저장소 API 추가 (`source_type` 지원)
 - 멤버 디렉토리 검색 도메인 추가
   - `search_homeschool_members` RPC 연동
   - `HomeschoolMemberDirectoryEntry` 모델 추가
   - `NestController.searchHomeschoolMemberDirectory(...)`로 로컬 검색 제공
+- 관리자 설정 UX 간소화
+  - `Drive` 탭 라벨을 `Media Setup`으로 변경
+  - Drive 토큰 수동 입력 필드를 `개발자 고급 설정` 토글 하위로 숨김 처리
 
 ### Verification
 

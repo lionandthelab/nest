@@ -79,5 +79,115 @@ void main() {
       expect(draft.hardConflicts, isNotEmpty);
       expect((draft.hardConflicts.first as Map)['code'], 'NO_FREE_SLOT');
     });
+
+    test('builds multiple wizard schedule options', () {
+      final slots = [
+        const TimeSlot(
+          id: 's1',
+          termId: 't1',
+          dayOfWeek: 1,
+          startTime: '09:30:00',
+          endTime: '10:20:00',
+        ),
+        const TimeSlot(
+          id: 's2',
+          termId: 't1',
+          dayOfWeek: 1,
+          startTime: '10:30:00',
+          endTime: '11:20:00',
+        ),
+        const TimeSlot(
+          id: 's3',
+          termId: 't1',
+          dayOfWeek: 2,
+          startTime: '09:30:00',
+          endTime: '10:20:00',
+        ),
+      ];
+
+      final courses = [
+        const Course(
+          id: 'c1',
+          homeschoolId: 'h1',
+          name: '국어',
+          defaultDurationMin: 50,
+        ),
+        const Course(
+          id: 'c2',
+          homeschoolId: 'h1',
+          name: '수학',
+          defaultDurationMin: 50,
+        ),
+      ];
+
+      final teachers = [
+        const TeacherProfile(
+          id: 't1',
+          homeschoolId: 'h1',
+          userId: 'u1',
+          displayName: 'Teacher A',
+          teacherType: 'TEACHER',
+          specialties: [],
+          bio: '',
+          createdAt: null,
+        ),
+        const TeacherProfile(
+          id: 't2',
+          homeschoolId: 'h1',
+          userId: 'u2',
+          displayName: 'Teacher B',
+          teacherType: 'TEACHER',
+          specialties: [],
+          bio: '',
+          createdAt: null,
+        ),
+      ];
+
+      final drafts = buildWizardScheduleOptions(
+        prompt: '국어 수학 중심',
+        classGroupId: 'g1',
+        courses: courses,
+        timeSlots: slots,
+        existingSessions: const [],
+        teacherProfiles: teachers,
+        preferredDays: const {1, 2},
+        sessionsPerDay: 2,
+        optionCount: 3,
+        keepExistingSessions: true,
+      );
+
+      expect(drafts.length, 3);
+      expect(drafts.every((draft) => draft.sessions.isNotEmpty), isTrue);
+      expect(drafts.any((draft) => draft.hasHardConflicts), isFalse);
+    });
+
+    test('detects duplicate slot and teacher conflicts in draft issues', () {
+      final sessions = [
+        const ScheduleOptionSession(
+          localId: 's1',
+          classGroupId: 'g1',
+          courseId: 'c1',
+          timeSlotId: 'slot-a',
+          teacherMainId: 'teacher-1',
+        ),
+        const ScheduleOptionSession(
+          localId: 's2',
+          classGroupId: 'g1',
+          courseId: 'c2',
+          timeSlotId: 'slot-a',
+          teacherMainId: 'teacher-1',
+        ),
+      ];
+
+      final issues = evaluateScheduleOptionIssues(
+        sessions: sessions,
+        existingSessions: const [],
+        requireTeacher: true,
+      );
+
+      final codes = issues.map((issue) => issue.code).toSet();
+      expect(codes, contains('SLOT_DUPLICATED'));
+      expect(codes, contains('TEACHER_SLOT_CONFLICT'));
+    });
   });
 }

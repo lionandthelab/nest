@@ -138,7 +138,7 @@ class _HomePageState extends State<HomePage> {
     if (controller.isDriveAdmin) {
       tabs.add(
         _TabSpec(
-          label: 'Drive',
+          label: 'Media Setup',
           page: DriveTab(controller: controller),
         ),
       );
@@ -660,7 +660,7 @@ Icon _iconForLabel(String label, {required bool filled}) {
     'Gallery' => Icon(
       filled ? Icons.photo_library : Icons.photo_library_outlined,
     ),
-    'Drive' => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
+    'Media Setup' => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
     _ => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
   };
 }

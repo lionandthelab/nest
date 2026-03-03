@@ -945,6 +945,93 @@ class GeneratedProposalDraft {
   final List<dynamic> softWarnings;
 }
 
+class ScheduleDraftIssue {
+  const ScheduleDraftIssue({
+    required this.code,
+    required this.message,
+    required this.severity,
+    required this.sessionLocalId,
+  });
+
+  final String code;
+  final String message;
+  final String severity; // HARD | WARN
+  final String? sessionLocalId;
+
+  bool get isHard => severity == 'HARD';
+}
+
+class ScheduleOptionSession {
+  const ScheduleOptionSession({
+    required this.localId,
+    required this.classGroupId,
+    required this.courseId,
+    required this.timeSlotId,
+    required this.teacherMainId,
+  });
+
+  final String localId;
+  final String classGroupId;
+  final String courseId;
+  final String timeSlotId;
+  final String? teacherMainId;
+
+  ScheduleOptionSession copyWith({
+    String? localId,
+    String? classGroupId,
+    String? courseId,
+    String? timeSlotId,
+    String? teacherMainId,
+    bool clearTeacherMainId = false,
+  }) {
+    return ScheduleOptionSession(
+      localId: localId ?? this.localId,
+      classGroupId: classGroupId ?? this.classGroupId,
+      courseId: courseId ?? this.courseId,
+      timeSlotId: timeSlotId ?? this.timeSlotId,
+      teacherMainId: clearTeacherMainId
+          ? null
+          : (teacherMainId ?? this.teacherMainId),
+    );
+  }
+}
+
+class ScheduleOptionDraft {
+  const ScheduleOptionDraft({
+    required this.id,
+    required this.label,
+    required this.prompt,
+    required this.sessions,
+    required this.issues,
+  });
+
+  final String id;
+  final String label;
+  final String prompt;
+  final List<ScheduleOptionSession> sessions;
+  final List<ScheduleDraftIssue> issues;
+
+  int get hardConflictCount => issues.where((issue) => issue.isHard).length;
+  int get warningCount => issues.where((issue) => !issue.isHard).length;
+  bool get hasHardConflicts => hardConflictCount > 0;
+
+  ScheduleOptionDraft copyWith({
+    String? id,
+    String? label,
+    String? prompt,
+    List<ScheduleOptionSession>? sessions,
+    List<ScheduleDraftIssue>? issues,
+  }) {
+    return ScheduleOptionDraft(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      prompt: prompt ?? this.prompt,
+      sessions: sessions ?? this.sessions,
+      issues: issues ?? this.issues,
+    );
+  }
+}
+
 enum DragPayloadType { course, session }
 
 class DragPayload {
