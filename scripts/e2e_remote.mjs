@@ -591,9 +591,17 @@ async function main() {
 
   await step("verify_callback_page_exists", async () => {
     const fs = await import("node:fs/promises");
-    const path = "/Users/euiseokkim/Workspace/lionandthelab/beloved/frontend/web/oauth/google/callback.html";
-    await fs.access(path);
-    return { path };
+    const nodePath = await import("node:path");
+    const callbackPath = nodePath.resolve(
+      process.cwd(),
+      "frontend",
+      "web",
+      "oauth",
+      "google",
+      "callback.html"
+    );
+    await fs.access(callbackPath);
+    return { path: callbackPath };
   });
 
   report.summary = {

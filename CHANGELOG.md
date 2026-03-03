@@ -72,6 +72,8 @@
 - 원격 E2E 워크플로 조건식 수정 (`.github/workflows/remote_e2e.yml`)
   - `if`에서 `secrets.*` 직접 참조 제거
   - job `env` 주입 후 `env.*` 기반으로 실행/스킵 분기하도록 변경
+- 원격 E2E 스크립트 경로 이식성 수정 (`scripts/e2e_remote.mjs`)
+  - OAuth 콜백 페이지 존재 검증 경로를 로컬 절대경로에서 `process.cwd()` 기반 상대 해석으로 변경
 
 ### Verification
 

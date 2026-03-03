@@ -318,6 +318,7 @@ flutter build web --release --base-href /nest/
 - Artifact: `frontend/build/web` to `gh-pages`
 - Remote integration workflow: `.github/workflows/remote_e2e.yml`
   - workflow condition guards use `env.*` (not direct `secrets.*` in `if`) to avoid GitHub Actions workflow validation failures.
+  - `scripts/e2e_remote.mjs` callback file validation is repo-root relative to run on both local and CI environments.
 
 ## 10. OAuth Redirect URI
 

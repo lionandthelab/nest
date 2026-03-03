@@ -40,6 +40,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | 이메일 초대 플로우(관리자 생성·취소, 사용자 수락) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-03 | 가족/아이/반 배정, 교사배정 UI, 계획/활동기록, 공지/감사로그, 원격E2E 자동화 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push`, `node scripts/e2e_remote.mjs` |
 | 2026-03-03 | 원격E2E GitHub Actions 워크플로 파싱 오류 수정(`secrets` 직접 조건식 제거) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-03 | 원격E2E 스크립트 CI 경로 하드코딩 제거(콜백 파일 검증 경로 이식성 수정) | 완료 | `node scripts/e2e_remote.mjs` |
 
 ## Next Batch
 
