@@ -717,6 +717,28 @@ class NestRepository {
     return _asRows(data).map(Course.fromMap).toList(growable: false);
   }
 
+  Future<Course> createCourse({
+    required String homeschoolId,
+    required String name,
+    required int defaultDurationMin,
+  }) async {
+    final row = await client
+        .from('courses')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'name': name.trim(),
+          'default_duration_min': defaultDurationMin,
+        })
+        .select('id, homeschool_id, name, default_duration_min')
+        .single();
+
+    return Course.fromMap(_asMap(row));
+  }
+
+  Future<void> deleteCourse({required String courseId}) {
+    return client.from('courses').delete().eq('id', courseId);
+  }
+
   Future<List<TimeSlot>> fetchTimeSlots({required String termId}) async {
     final data = await client
         .from('time_slots')

@@ -1911,6 +1911,72 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> createCourse({
+    required String name,
+    required int defaultDurationMin,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('과목 이름을 입력하세요.');
+    }
+    if (defaultDurationMin < 20 || defaultDurationMin > 300) {
+      throw StateError('기본 수업 시간은 20~300분 사이여야 합니다.');
+    }
+
+    await _runBusy('과목을 생성하는 중...', () async {
+      final created = await _repository.createCourse(
+        homeschoolId: homeschoolId,
+        name: trimmedName,
+        defaultDurationMin: defaultDurationMin,
+      );
+      await _loadTimetableAssets();
+      await _logAudit(
+        actionType: 'COURSE_CREATE',
+        resourceType: 'courses',
+        resourceId: created.id,
+        afterJson: {
+          'name': created.name,
+          'default_duration_min': created.defaultDurationMin,
+        },
+      );
+      _setStatus('과목을 생성했습니다.');
+    });
+  }
+
+  Future<void> deleteCourse({required String courseId}) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(courseId);
+    if (normalizedId == null) {
+      throw StateError('삭제할 과목을 선택하세요.');
+    }
+    if (sessions.any((session) => session.courseId == normalizedId)) {
+      throw StateError('현재 반 시간표에서 사용 중인 과목은 삭제할 수 없습니다.');
+    }
+
+    await _runBusy('과목을 삭제하는 중...', () async {
+      await _repository.deleteCourse(courseId: normalizedId);
+      await _loadTimetableAssets();
+      await _logAudit(
+        actionType: 'COURSE_DELETE',
+        resourceType: 'courses',
+        resourceId: normalizedId,
+      );
+      _setStatus('과목을 삭제했습니다.');
+    });
+  }
+
   Future<void> createFamily({
     required String familyName,
     required String note,

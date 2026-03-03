@@ -65,7 +65,13 @@
   - `Parent Hub`/`Teacher Hub`에 본인 불가 시간 self-service 등록/삭제 UI 추가
 - 관리자 대시보드 단계형 온보딩 UI 추가
   - 큰 카드 기반 `학기 설정 가이드`(1~4 순번 + 완료 체크 + 다음 단계 이동)
-  - 단계별 빠른 이동: `Families`, `Timetable` 탭 점프
+  - 단계별 빠른 이동: `Term Setup`, `Schedule` 탭 점프
+- 관리자 시스템 통합 탭 추가
+  - `System` 탭에서 `SNS 관리`, `Google Drive`, `권한`, `운영` 섹션을 한 화면에서 전환
+- 학기 설정 단위형 UI 추가
+  - `Term Setup` 탭에서 `가정`, `선생님`, `반`, `과목` 단위를 분리해 설정
+  - 단위별 완료 상태/진행도를 직관적으로 표시
+  - 과목 CRUD(추가/삭제) UI 및 API 추가
 
 ### Changed
 
@@ -129,6 +135,11 @@
 - 시간표 초안 적용 시 세션 source_type 정합성 수정
   - `ASSISTED` 값을 `AI_PROMPT`로 교체하여
   - DB 체크 제약(`class_sessions_source_type_check`) 위반 문제 해결
+- 관리자 상위 탭 구조 간소화
+  - 기존 다중 운영 탭(`SNS Admin`, `Media Setup`, `Members`, `Families`, `Ops`)을
+  - `Dashboard` / `Term Setup` / `Schedule` / `System` 중심으로 재구성
+- 대시보드 온보딩 가이드 이동 대상 갱신
+  - `Families`/`Timetable` 기준에서 `Term Setup`/`Schedule` 기준으로 변경
 
 ### Verification
 
@@ -137,6 +148,7 @@
 - `cd frontend && flutter build web --release --base-href /nest/` 통과
 - `supabase db push` 통과 (`20260303130000`, `20260303143000`, `20260303145000`, `20260303150000`, `20260303162000`, `20260303190000`)
 - `node scripts/e2e_remote.mjs` 통과 (`summary.success: true`, invite_flow 포함)
+- `SUPABASE_* node scripts/e2e_remote.mjs` 재통과 (UI 재구성 이후 회귀 없음, `source_type=AI_PROMPT` 확인)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22607933835`)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22609099078`)
 - GitHub Actions `Remote Supabase E2E` 통과 (`run: 22610640069`)

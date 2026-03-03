@@ -359,7 +359,7 @@ class _DashboardTabState extends State<DashboardTab> {
         order: 1,
         title: '가정 관리',
         description: '가정을 만들고 아이를 등록합니다.',
-        targetTab: 'Families',
+        targetTab: 'Term Setup',
         actionLabel: '가정/아이 설정 열기',
         completed:
             controller.families.isNotEmpty && controller.children.isNotEmpty,
@@ -369,7 +369,7 @@ class _DashboardTabState extends State<DashboardTab> {
         order: 2,
         title: '반 관리',
         description: '반을 만들고 아이를 반에 배정합니다.',
-        targetTab: 'Families',
+        targetTab: 'Term Setup',
         actionLabel: '반/배정 설정 열기',
         completed:
             controller.classGroups.isNotEmpty &&
@@ -380,7 +380,7 @@ class _DashboardTabState extends State<DashboardTab> {
         order: 3,
         title: '과목 관리',
         description: '과목을 준비하고 시간표에서 반에 배정합니다.',
-        targetTab: 'Timetable',
+        targetTab: 'Term Setup',
         actionLabel: '과목/수업 편성 열기',
         completed: hasCourses && hasClass,
         enabled: hasHomeschool,
@@ -389,7 +389,7 @@ class _DashboardTabState extends State<DashboardTab> {
         order: 4,
         title: '시간표 관리',
         description: '이번 학기의 시간표를 생성/보정하고 확정합니다.',
-        targetTab: 'Timetable',
+        targetTab: 'Schedule',
         actionLabel: '시간표 관리 열기',
         completed: controller.sessions.isNotEmpty,
         enabled: hasTerm && hasClass && hasCourses && hasSlots,

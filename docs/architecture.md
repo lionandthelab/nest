@@ -110,14 +110,17 @@ supabase/
 
 Tabs are built dynamically in `HomePage._buildTabs`:
 
-- Always: `Dashboard`, `Timetable`, `Gallery`
-- Parent role: `Parent Hub`
-- Teacher/GUEST_TEACHER role: `Teacher Hub`
-- Non-admin: `Community` (user feed)
-- Admin/Staff: `SNS Admin` (moderation)
-- HOMESCHOOL_ADMIN only: `Media Setup`, `Members`
-- Admin/Staff: `Families` (family/child/class enrollment)
-- Admin/Staff: `Ops` (announcement + audit log)
+- Admin/Staff streamlined layout:
+  - `Dashboard`
+  - `Term Setup` (family/teacher/class/course setup)
+  - `Schedule` (timetable authoring)
+  - `System` (SNS moderation + Drive + membership + ops)
+- Parent/Teacher user layout:
+  - `Dashboard`
+  - role hub (`Parent Hub` or `Teacher Hub`)
+  - `Timetable`
+  - `Gallery`
+  - `Community`
 
 ## 5. State and Data Flow
 
@@ -149,6 +152,7 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `cancelHomeschoolInvite(inviteId)`
   - `acceptHomeschoolInvite(inviteToken)`
   - `fetchFamilies`, `createFamily`
+  - `createCourse`, `deleteCourse`
   - `fetchFamilyGuardianUserIds`
   - `fetchChildren`, `createChild` (`create_child_admin` RPC)
   - `createClassGroup`, `updateClassGroup`, `deleteClassGroup`
@@ -182,7 +186,7 @@ Admin dashboard onboarding:
   - 2) class + child enrollment
   - 3) course preparation and class assignment path
   - 4) timetable generation/adjustment
-- direct tab jump actions from roadmap (`Families`, `Timetable`)
+- direct tab jump actions from roadmap (`Term Setup`, `Schedule`)
 
 ### 6.2 Timetable
 
@@ -244,13 +248,12 @@ Admin dashboard onboarding:
 ### 6.7 Family and Enrollment Admin
 
 - `family_admin_tab.dart`:
-  - onboarding draft generator for bulk class/teacher creation
-  - create family
-  - create child
-  - class CRUD (create/update/delete)
-  - class-level child enrollment toggle
-  - teacher profile creation with optional existing-account linkage (member search)
-  - parent/teacher unavailability block registration and deletion
+  - term setup workspace with unit-level sections:
+    - family (family/child creation + overview)
+    - teacher (teacher profile + unavailability)
+    - class (bulk draft, class CRUD, enrollments)
+    - course (course create/delete and duration)
+  - setup progress bar + unit chips for direct switching
 - `parent_hub_tab.dart`:
   - parent self-service unavailability registration/deletion (own account only)
 - `teacher_hub_tab.dart`:
@@ -275,6 +278,15 @@ Admin dashboard onboarding:
 - `ops_tab.dart` (Admin/Staff):
   - announcement posting and monitoring
   - audit log timeline (membership/report/timetable/invite actions)
+
+### 6.11 System Admin Hub
+
+- `system_admin_tab.dart`:
+  - single admin tab that consolidates:
+    - `SNS` moderation (`community_tab.dart`)
+    - `Google Drive` integration (`drive_tab.dart`)
+    - `Members` role/invite management (`members_tab.dart`)
+    - `Ops` announcements + audit logs (`ops_tab.dart`)
 
 ## 7. Database and RLS Notes
 

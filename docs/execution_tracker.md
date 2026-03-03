@@ -52,6 +52,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | 스케줄 엔진 고도화(과목 빈도 가중치 + 교사 선호 전략) 및 원격 E2E 재검증 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `SUPABASE_* node scripts/e2e_remote.mjs`, GitHub Actions `Remote Supabase E2E` run `22610640069` 성공, `Deploy Flutter Web to GitHub Pages` run `22610637304` 성공 |
 | 2026-03-03 | 교사/부모 불가 시간 등록(관리자+본인) 및 스케줄 자동 회피/충돌 검증 고도화 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push`, `SUPABASE_* node scripts/e2e_remote.mjs` |
 | 2026-03-03 | `class_sessions_source_type_check` 오류 수정(`ASSISTED` -> `AI_PROMPT`) + 관리자 대시보드 단계형 학기 설정 가이드(순번/완료표시/탭 이동) 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-03 | 관리자 UI/UX 재구성: 상위 탭 축소(`Term Setup`/`Schedule`/`System`), 학기 설정 단위 분리(가정/선생님/반/과목), 시스템 설정 통합(Drive+SNS+권한+운영) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `SUPABASE_* node scripts/e2e_remote.mjs` |
 
 ## Next Batch
 

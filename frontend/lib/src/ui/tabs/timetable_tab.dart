@@ -818,7 +818,7 @@ class _TimetableTabState extends State<TimetableTab> {
             ),
             const SizedBox(height: 10),
             if (controller.courses.isEmpty)
-              const Text('과목이 없습니다. Dashboard에서 과목을 추가하세요.')
+              const Text('과목이 없습니다. Term Setup에서 과목을 추가하세요.')
             else if (controller.isAdminLike)
               Wrap(
                 spacing: 8,
@@ -853,7 +853,7 @@ class _TimetableTabState extends State<TimetableTab> {
               ),
             const SizedBox(height: 12),
             if (sortedSlots.isEmpty)
-              const Text('시간 슬롯이 없습니다. Dashboard에서 초기 세팅을 진행하세요.')
+              const Text('시간 슬롯이 없습니다. Dashboard 빠른 초기 세팅을 먼저 진행하세요.')
             else
               ...sortedSlots.map((slot) => _buildSlot(controller, slot)),
           ],

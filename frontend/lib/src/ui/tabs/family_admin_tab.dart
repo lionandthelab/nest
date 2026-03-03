@@ -29,6 +29,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   );
   final _teacherDisplayNameController = TextEditingController();
   final _teacherAccountSearchController = TextEditingController();
+  final _courseNameController = TextEditingController();
+  final _courseDurationController = TextEditingController(text: '50');
   final _unavailabilityStartController = TextEditingController(text: '09:00');
   final _unavailabilityEndController = TextEditingController(text: '10:00');
   final _unavailabilityNoteController = TextEditingController();
@@ -45,6 +47,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   String _unavailabilityOwnerKind = 'TEACHER_PROFILE';
   String? _selectedUnavailabilityOwnerId;
   int _selectedUnavailabilityDay = 1;
+  String _setupUnit = 'FAMILY';
   List<String> _quickDraftClassNames = const [];
   List<String> _quickDraftTeacherNames = const [];
 
@@ -71,6 +74,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     _quickTeacherNamesController.dispose();
     _teacherDisplayNameController.dispose();
     _teacherAccountSearchController.dispose();
+    _courseNameController.dispose();
+    _courseDurationController.dispose();
     _unavailabilityStartController.dispose();
     _unavailabilityEndController.dispose();
     _unavailabilityNoteController.dispose();
@@ -92,10 +97,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Family Admin',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              Text('Term Setup', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
               const Text('가정/아이 배정 관리는 관리자/스태프만 사용할 수 있습니다.'),
             ],
@@ -104,24 +106,138 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       );
     }
 
-    return ListView(
-      children: [
+    final unitCards = switch (_setupUnit) {
+      'FAMILY' => [
         _buildFamilyCreateCard(controller),
         const SizedBox(height: 12),
         _buildChildCreateCard(controller),
         const SizedBox(height: 12),
+        _buildFamilyOverviewCard(controller),
+      ],
+      'TEACHER' => [
+        _buildTeacherProfileCard(controller),
+        const SizedBox(height: 12),
+        _buildMemberUnavailabilityCard(controller),
+      ],
+      'CLASS' => [
         _buildQuickOnboardingCard(controller),
         const SizedBox(height: 12),
         _buildClassCrudCard(controller),
         const SizedBox(height: 12),
-        _buildTeacherProfileCard(controller),
-        const SizedBox(height: 12),
-        _buildMemberUnavailabilityCard(controller),
-        const SizedBox(height: 12),
         _buildEnrollmentCard(controller),
-        const SizedBox(height: 12),
-        _buildFamilyOverviewCard(controller),
       ],
+      'COURSE' => [_buildCourseManageCard(controller)],
+      _ => [_buildFamilyCreateCard(controller)],
+    };
+
+    return ListView(
+      children: [
+        _buildTermSetupHeaderCard(controller),
+        const SizedBox(height: 12),
+        ...unitCards,
+      ],
+    );
+  }
+
+  Widget _buildTermSetupHeaderCard(NestController controller) {
+    final familyDone =
+        controller.families.isNotEmpty && controller.children.isNotEmpty;
+    final teacherDone = controller.teacherProfiles.isNotEmpty;
+    final classDone =
+        controller.classGroups.isNotEmpty &&
+        controller.classEnrollments.isNotEmpty;
+    final courseDone = controller.courses.isNotEmpty;
+    final completed = [
+      familyDone,
+      teacherDone,
+      classDone,
+      courseDone,
+    ].where((done) => done).length;
+
+    Widget stepChip({
+      required int order,
+      required String title,
+      required bool done,
+      required String key,
+    }) {
+      final selected = _setupUnit == key;
+      return ChoiceChip(
+        label: Text('$order. $title'),
+        selected: selected,
+        onSelected: controller.isBusy
+            ? null
+            : (_) {
+                setState(() {
+                  _setupUnit = key;
+                });
+              },
+        avatar: done
+            ? const Icon(Icons.check_circle, size: 16)
+            : Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                size: 16,
+              ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('학기 설정', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '가정, 선생님, 반, 과목을 단위별로 설정한 뒤 시간표 탭에서 배치하세요.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                value: completed / 4,
+                color: NestColors.dustyRose,
+                backgroundColor: NestColors.roseMist,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '완료 $completed / 4',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                stepChip(
+                  order: 1,
+                  title: '가정',
+                  done: familyDone,
+                  key: 'FAMILY',
+                ),
+                stepChip(
+                  order: 2,
+                  title: '선생님',
+                  done: teacherDone,
+                  key: 'TEACHER',
+                ),
+                stepChip(order: 3, title: '반', done: classDone, key: 'CLASS'),
+                stepChip(
+                  order: 4,
+                  title: '과목',
+                  done: courseDone,
+                  key: 'COURSE',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -928,6 +1044,103 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     );
   }
 
+  Widget _buildCourseManageCard(NestController controller) {
+    final courses = controller.courses.toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('과목 관리', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '시간표 배치에 사용할 과목을 관리합니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _courseNameController,
+                    decoration: const InputDecoration(labelText: '과목 이름'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 140,
+                  child: TextField(
+                    controller: _courseDurationController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '기본 분(min)'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ElevatedButton.icon(
+              onPressed: controller.isBusy ? null : _createCourse,
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('과목 추가'),
+            ),
+            const SizedBox(height: 12),
+            if (courses.isEmpty)
+              const Text('등록된 과목이 없습니다.')
+            else
+              ...courses.map((course) {
+                final usedInCurrentClass = controller.sessions.any(
+                  (session) => session.courseId == course.id,
+                );
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                course.name,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              Text(
+                                '기본 ${course.defaultDurationMin}분${usedInCurrentClass ? ' · 현재 반 시간표 사용중' : ''}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: controller.isBusy || usedInCurrentClass
+                              ? null
+                              : () => _deleteCourse(course.id),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFamilyOverviewCard(NestController controller) {
     return Card(
       child: Padding(
@@ -1244,6 +1457,35 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       await widget.controller.loadMemberUnavailabilityBlocks();
       await widget.controller.loadHomeschoolMemberDirectory();
       _showMessage('가정/아이/배정 목록을 갱신했습니다.');
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _createCourse() async {
+    final duration = int.tryParse(_courseDurationController.text.trim());
+    if (duration == null) {
+      _showMessage('기본 시간은 숫자로 입력하세요.');
+      return;
+    }
+
+    try {
+      await widget.controller.createCourse(
+        name: _courseNameController.text,
+        defaultDurationMin: duration,
+      );
+      _courseNameController.clear();
+      _courseDurationController.text = '50';
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _deleteCourse(String courseId) async {
+    try {
+      await widget.controller.deleteCourse(courseId: courseId);
+      _showMessage(widget.controller.statusMessage);
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }

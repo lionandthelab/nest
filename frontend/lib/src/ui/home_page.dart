@@ -4,15 +4,12 @@ import '../config/app_config.dart';
 import '../state/nest_controller.dart';
 import 'nest_theme.dart';
 import 'tabs/dashboard_tab.dart';
-import 'tabs/drive_tab.dart';
 import 'tabs/gallery_tab.dart';
-import 'tabs/members_tab.dart';
 import 'tabs/parent_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
-import 'tabs/community_tab.dart';
 import 'tabs/community_feed_tab.dart';
 import 'tabs/family_admin_tab.dart';
-import 'tabs/ops_tab.dart';
+import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 
 class HomePage extends StatefulWidget {
@@ -94,6 +91,30 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<_TabSpec> _buildTabs(NestController controller) {
+    if (controller.isAdminLike) {
+      return [
+        _TabSpec(
+          label: 'Dashboard',
+          page: DashboardTab(
+            controller: controller,
+            onRequestTabChange: _navigateToTabLabel,
+          ),
+        ),
+        _TabSpec(
+          label: 'Term Setup',
+          page: FamilyAdminTab(controller: controller),
+        ),
+        _TabSpec(
+          label: 'Schedule',
+          page: TimetableTab(controller: controller),
+        ),
+        _TabSpec(
+          label: 'System',
+          page: SystemAdminTab(controller: controller),
+        ),
+      ];
+    }
+
     final tabs = <_TabSpec>[
       _TabSpec(
         label: 'Dashboard',
@@ -121,55 +142,12 @@ class _HomePageState extends State<HomePage> {
         page: GalleryTab(controller: controller),
       ),
     ];
-
-    if (controller.canModerateCommunity) {
-      tabs.add(
-        _TabSpec(
-          label: 'SNS Admin',
-          page: CommunityTab(controller: controller),
-        ),
-      );
-    } else {
-      tabs.add(
-        _TabSpec(
-          label: 'Community',
-          page: CommunityFeedTab(controller: controller),
-        ),
-      );
-    }
-
-    if (controller.isDriveAdmin) {
-      tabs.add(
-        _TabSpec(
-          label: 'Media Setup',
-          page: DriveTab(controller: controller),
-        ),
-      );
-    }
-
-    if (controller.canManageMemberships) {
-      tabs.add(
-        _TabSpec(
-          label: 'Members',
-          page: MembersTab(controller: controller),
-        ),
-      );
-    }
-
-    if (controller.isAdminLike) {
-      tabs.add(
-        _TabSpec(
-          label: 'Families',
-          page: FamilyAdminTab(controller: controller),
-        ),
-      );
-      tabs.add(
-        _TabSpec(
-          label: 'Ops',
-          page: OpsTab(controller: controller),
-        ),
-      );
-    }
+    tabs.add(
+      _TabSpec(
+        label: 'Community',
+        page: CommunityFeedTab(controller: controller),
+      ),
+    );
 
     return tabs;
   }
@@ -665,6 +643,11 @@ Icon _iconForLabel(String label, {required bool filled}) {
     ),
     'Teacher Hub' => Icon(filled ? Icons.school : Icons.school_outlined),
     'Timetable' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
+    'Schedule' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
+    'Term Setup' => Icon(
+      filled ? Icons.account_tree : Icons.account_tree_outlined,
+    ),
+    'System' => Icon(filled ? Icons.tune : Icons.tune_outlined),
     'Community' => Icon(filled ? Icons.forum : Icons.forum_outlined),
     'SNS Admin' => Icon(
       filled ? Icons.admin_panel_settings : Icons.admin_panel_settings_outlined,
