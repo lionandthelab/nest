@@ -176,6 +176,8 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 
 - Admin view:
   - schedule concierge (few-question wizard) -> multi-option drafts
+  - course-frequency weighting controls (per course low/medium/high)
+  - teacher preference strategy controls (balanced/preferred-first/parent-first)
   - draft session editor (course/slot/main teacher) with immediate conflict feedback
   - draft apply flow with slot-collision skip and teacher conflict reporting
   - prompt generation + apply/discard proposals (legacy path)

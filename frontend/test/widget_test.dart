@@ -161,6 +161,144 @@ void main() {
       expect(drafts.any((draft) => draft.hasHardConflicts), isFalse);
     });
 
+    test('applies course frequency weights to draft distribution', () {
+      final slots = [
+        const TimeSlot(
+          id: 's1',
+          termId: 't1',
+          dayOfWeek: 1,
+          startTime: '09:30:00',
+          endTime: '10:20:00',
+        ),
+        const TimeSlot(
+          id: 's2',
+          termId: 't1',
+          dayOfWeek: 1,
+          startTime: '10:30:00',
+          endTime: '11:20:00',
+        ),
+        const TimeSlot(
+          id: 's3',
+          termId: 't1',
+          dayOfWeek: 2,
+          startTime: '09:30:00',
+          endTime: '10:20:00',
+        ),
+        const TimeSlot(
+          id: 's4',
+          termId: 't1',
+          dayOfWeek: 2,
+          startTime: '10:30:00',
+          endTime: '11:20:00',
+        ),
+      ];
+
+      final courses = [
+        const Course(
+          id: 'c1',
+          homeschoolId: 'h1',
+          name: '국어',
+          defaultDurationMin: 50,
+        ),
+        const Course(
+          id: 'c2',
+          homeschoolId: 'h1',
+          name: '수학',
+          defaultDurationMin: 50,
+        ),
+      ];
+
+      final drafts = buildWizardScheduleOptions(
+        prompt: '균형 편성',
+        classGroupId: 'g1',
+        courses: courses,
+        timeSlots: slots,
+        existingSessions: const [],
+        teacherProfiles: const [],
+        preferredDays: const {1, 2},
+        sessionsPerDay: 2,
+        optionCount: 1,
+        courseWeightsById: const {'c1': 3, 'c2': 1},
+      );
+
+      final sessions = drafts.single.sessions;
+      final koreanCount = sessions.where((row) => row.courseId == 'c1').length;
+      final mathCount = sessions.where((row) => row.courseId == 'c2').length;
+
+      expect(koreanCount, greaterThan(mathCount));
+    });
+
+    test('respects preferred teachers when strict mode is enabled', () {
+      final slots = [
+        const TimeSlot(
+          id: 's1',
+          termId: 't1',
+          dayOfWeek: 1,
+          startTime: '09:30:00',
+          endTime: '10:20:00',
+        ),
+        const TimeSlot(
+          id: 's2',
+          termId: 't1',
+          dayOfWeek: 2,
+          startTime: '09:30:00',
+          endTime: '10:20:00',
+        ),
+      ];
+
+      final teachers = [
+        const TeacherProfile(
+          id: 't1',
+          homeschoolId: 'h1',
+          userId: 'u1',
+          displayName: 'Teacher Preferred',
+          teacherType: 'TEACHER',
+          specialties: [],
+          bio: '',
+          createdAt: null,
+        ),
+        const TeacherProfile(
+          id: 't2',
+          homeschoolId: 'h1',
+          userId: 'u2',
+          displayName: 'Teacher Other',
+          teacherType: 'TEACHER',
+          specialties: [],
+          bio: '',
+          createdAt: null,
+        ),
+      ];
+
+      final drafts = buildWizardScheduleOptions(
+        prompt: '국어 중심',
+        classGroupId: 'g1',
+        courses: const [
+          Course(
+            id: 'c1',
+            homeschoolId: 'h1',
+            name: '국어',
+            defaultDurationMin: 50,
+          ),
+        ],
+        timeSlots: slots,
+        existingSessions: const [],
+        teacherProfiles: teachers,
+        preferredDays: const {1, 2},
+        sessionsPerDay: 1,
+        optionCount: 1,
+        preferredTeacherIds: const {'t1'},
+        teacherStrategy: 'PREFERRED_FIRST',
+        preferOnlySelectedTeachers: true,
+      );
+
+      expect(
+        drafts.single.sessions.every(
+          (session) => session.teacherMainId == 't1',
+        ),
+        isTrue,
+      );
+    });
+
     test('detects duplicate slot and teacher conflicts in draft issues', () {
       final sessions = [
         const ScheduleOptionSession(

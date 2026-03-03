@@ -49,6 +49,8 @@
   - 계정 미보유 교사는 연결 없이 초청교사 프로필 생성 가능
 - 관리자 시간표 UX 고도화
   - `Schedule Concierge` 질문형 생성기(요일/일일 수업 수/대안 개수/기존 시간표 유지 옵션)
+  - 과목 빈도 가중치(낮음/보통/높음) 입력 UI 추가
+  - 교사 배정 전략(균형/선호교사 우선/부모교사 우선) 및 선호교사 선택 UI 추가
   - 다중 초안(안 1~N) 비교 카드 + 선택/적용 플로우
   - 초안 보정 에디터(과목/슬롯/주강사 변경, 세션 추가/삭제)
   - 초안 보정 시 하드충돌/경고 실시간 계산 및 표시
@@ -98,6 +100,8 @@
 - 스케줄 도메인 모델/로컬 플래너 확장
   - `ScheduleOptionDraft`, `ScheduleOptionSession`, `ScheduleDraftIssue`
   - `buildWizardScheduleOptions`, `evaluateScheduleOptionIssues`
+  - 과목 가중치 기반 편성 풀 생성 로직 추가
+  - 선호교사/부모교사 우선 배정 전략 및 선택교사 전용 모드 추가
   - `applyScheduleOptionDraft` 반영 시 생성/건너뜀/교사충돌 결과 요약
   - `createSessionAndReturn` 저장소 API 추가 (`source_type` 지원)
 - 멤버 디렉토리 검색 도메인 추가

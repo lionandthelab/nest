@@ -116,6 +116,10 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
   required List<TeacherProfile> teacherProfiles,
   required Set<int> preferredDays,
   required int sessionsPerDay,
+  Map<String, int> courseWeightsById = const {},
+  Set<String> preferredTeacherIds = const {},
+  String teacherStrategy = 'BALANCED',
+  bool preferOnlySelectedTeachers = false,
   int optionCount = 3,
   bool keepExistingSessions = true,
 }) {
@@ -130,6 +134,15 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
     courses: courses,
   );
   final fallbackCourses = availableCourses.isEmpty ? courses : availableCourses;
+  final normalizedCourseWeights = _normalizeCourseWeights(
+    courses: fallbackCourses,
+    courseWeightsById: courseWeightsById,
+    prompt: prompt,
+  );
+  final weightedCoursePool = _buildWeightedCoursePool(
+    courses: fallbackCourses,
+    normalizedWeights: normalizedCourseWeights,
+  );
 
   final grouped = <int, List<TimeSlot>>{};
   for (final slot in timeSlots) {
@@ -204,12 +217,16 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
     for (var i = 0; i < estimatedSessionCount; i += 1) {
       final slot = filteredSlotPool[i];
       final course =
-          fallbackCourses[(i + optionIndex) % fallbackCourses.length];
+          weightedCoursePool[(i + optionIndex) % weightedCoursePool.length];
       final teacher = _pickTeacherForSlot(
         teachers: teacherProfiles,
         teacherLoad: teacherLoad,
         teacherBySlot: teacherBySlot,
         slotId: slot.id,
+        course: course,
+        preferredTeacherIds: preferredTeacherIds,
+        strategy: teacherStrategy,
+        preferOnlySelectedTeachers: preferOnlySelectedTeachers,
         seed: optionIndex + i,
       );
 
@@ -335,18 +352,48 @@ TeacherProfile? _pickTeacherForSlot({
   required Map<String, int> teacherLoad,
   required Map<String, Set<String>> teacherBySlot,
   required String slotId,
+  required Course course,
+  required Set<String> preferredTeacherIds,
+  required String strategy,
+  required bool preferOnlySelectedTeachers,
   required int seed,
 }) {
   if (teachers.isEmpty) {
     return null;
   }
 
-  final sorted = teachers.toList(growable: false)
+  final selectedTeachers = preferOnlySelectedTeachers
+      ? teachers
+            .where((teacher) => preferredTeacherIds.contains(teacher.id))
+            .toList(growable: false)
+      : teachers.toList(growable: false);
+
+  if (selectedTeachers.isEmpty) {
+    return null;
+  }
+
+  final sorted = selectedTeachers.toList(growable: false)
     ..sort((a, b) {
-      final left = teacherLoad[a.id] ?? 0;
-      final right = teacherLoad[b.id] ?? 0;
-      if (left != right) {
-        return left.compareTo(right);
+      final leftScore = _teacherPriorityScore(
+        teacher: a,
+        course: course,
+        preferredTeacherIds: preferredTeacherIds,
+        strategy: strategy,
+      );
+      final rightScore = _teacherPriorityScore(
+        teacher: b,
+        course: course,
+        preferredTeacherIds: preferredTeacherIds,
+        strategy: strategy,
+      );
+      if (leftScore != rightScore) {
+        return rightScore.compareTo(leftScore);
+      }
+
+      final leftLoad = teacherLoad[a.id] ?? 0;
+      final rightLoad = teacherLoad[b.id] ?? 0;
+      if (leftLoad != rightLoad) {
+        return leftLoad.compareTo(rightLoad);
       }
       return a.displayName.compareTo(b.displayName);
     });
@@ -365,6 +412,104 @@ TeacherProfile? _pickTeacherForSlot({
   }
 
   return null;
+}
+
+Map<String, int> _normalizeCourseWeights({
+  required List<Course> courses,
+  required Map<String, int> courseWeightsById,
+  required String prompt,
+}) {
+  final normalized = <String, int>{};
+  for (final course in courses) {
+    final fromUi = courseWeightsById[course.id] ?? 0;
+    final fromPrompt = _inferPromptBoost(
+      prompt: prompt,
+      courseName: course.name,
+    );
+    final weight = fromUi > 0 ? fromUi : (1 + fromPrompt);
+    normalized[course.id] = weight.clamp(1, 5);
+  }
+  return normalized;
+}
+
+List<Course> _buildWeightedCoursePool({
+  required List<Course> courses,
+  required Map<String, int> normalizedWeights,
+}) {
+  final pool = <Course>[];
+  for (final course in courses) {
+    final weight = (normalizedWeights[course.id] ?? 1).clamp(1, 5);
+    for (var i = 0; i < weight; i += 1) {
+      pool.add(course);
+    }
+  }
+  return pool.isEmpty ? courses : pool;
+}
+
+int _inferPromptBoost({required String prompt, required String courseName}) {
+  final normalizedPrompt = prompt.trim().toLowerCase();
+  if (normalizedPrompt.isEmpty) {
+    return 0;
+  }
+
+  final loweredCourse = courseName.toLowerCase();
+  if (normalizedPrompt.contains(loweredCourse)) {
+    return 2;
+  }
+
+  final keywordsByCourse = <String, List<String>>{
+    '국어': ['국어', '문해', '읽기', '독서', 'language'],
+    '수학': ['수학', 'math', '계산'],
+    '자연': ['자연', '과학', 'science', '탐구'],
+    '미술': ['미술', 'art', '그림'],
+  };
+
+  for (final entry in keywordsByCourse.entries) {
+    final key = entry.key.toLowerCase();
+    if (!loweredCourse.contains(key)) {
+      continue;
+    }
+    final matched = entry.value.any(
+      (keyword) => normalizedPrompt.contains(keyword.toLowerCase()),
+    );
+    if (matched) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+int _teacherPriorityScore({
+  required TeacherProfile teacher,
+  required Course course,
+  required Set<String> preferredTeacherIds,
+  required String strategy,
+}) {
+  var score = 0;
+
+  if (preferredTeacherIds.contains(teacher.id)) {
+    score += 5;
+  }
+
+  if (strategy == 'PREFERRED_FIRST' &&
+      preferredTeacherIds.contains(teacher.id)) {
+    score += 7;
+  }
+
+  if (strategy == 'PARENT_FIRST' && teacher.teacherType == 'PARENT_TEACHER') {
+    score += 7;
+  }
+
+  final lowerName = course.name.toLowerCase();
+  final specialtyMatched = teacher.specialties.any(
+    (specialty) => specialty.toLowerCase().contains(lowerName),
+  );
+  if (specialtyMatched) {
+    score += 3;
+  }
+
+  return score;
 }
 
 List<T> _rotateList<T>(List<T> rows, int offset) {

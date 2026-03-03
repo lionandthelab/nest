@@ -17,9 +17,13 @@ class TimetableTab extends StatefulWidget {
 class _TimetableTabState extends State<TimetableTab> {
   final _promptController = TextEditingController();
   final Set<int> _selectedDays = <int>{1, 2, 3, 4, 5};
+  final Set<String> _preferredTeacherIds = <String>{};
+  final Map<String, int> _courseWeightsById = <String, int>{};
   int _sessionsPerDay = 2;
   int _optionCount = 3;
   bool _keepExistingSessions = true;
+  String _teacherStrategy = 'BALANCED';
+  bool _preferOnlySelectedTeachers = false;
 
   @override
   void dispose() {
@@ -30,6 +34,7 @@ class _TimetableTabState extends State<TimetableTab> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
+    _syncConciergeState(controller);
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 1180;
     final adminEditable = controller.isAdminLike;
@@ -86,6 +91,23 @@ class _TimetableTabState extends State<TimetableTab> {
                 ],
               ),
       ],
+    );
+  }
+
+  void _syncConciergeState(NestController controller) {
+    final courseIds = controller.courses.map((course) => course.id).toSet();
+    _courseWeightsById.removeWhere(
+      (courseId, _) => !courseIds.contains(courseId),
+    );
+    for (final course in controller.courses) {
+      _courseWeightsById.putIfAbsent(course.id, () => 1);
+    }
+
+    final teacherIds = controller.teacherProfiles
+        .map((teacher) => teacher.id)
+        .toSet();
+    _preferredTeacherIds.removeWhere(
+      (teacherId) => !teacherIds.contains(teacherId),
     );
   }
 
@@ -183,6 +205,116 @@ class _TimetableTabState extends State<TimetableTab> {
                       }
                       setState(() {
                         _optionCount = values.first;
+                      });
+                    },
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '질문 4. 과목 빈도 가중치',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            if (controller.courses.isEmpty)
+              const Text('가중치를 조정할 과목이 없습니다.')
+            else
+              ...controller.courses.map((course) {
+                final currentWeight = _courseWeightsById[course.id] ?? 1;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(course.name)),
+                      SegmentedButton<int>(
+                        segments: const [
+                          ButtonSegment(value: 1, label: Text('낮음')),
+                          ButtonSegment(value: 2, label: Text('보통')),
+                          ButtonSegment(value: 3, label: Text('높음')),
+                        ],
+                        selected: {
+                          currentWeight < 1
+                              ? 1
+                              : (currentWeight > 3 ? 3 : currentWeight),
+                        },
+                        onSelectionChanged: controller.isBusy
+                            ? null
+                            : (values) {
+                                if (values.isEmpty) {
+                                  return;
+                                }
+                                setState(() {
+                                  _courseWeightsById[course.id] = values.first;
+                                });
+                              },
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            const SizedBox(height: 10),
+            Text(
+              '질문 5. 교사 배정 선호',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'BALANCED', label: Text('균형')),
+                ButtonSegment(value: 'PREFERRED_FIRST', label: Text('선호교사 우선')),
+                ButtonSegment(value: 'PARENT_FIRST', label: Text('부모교사 우선')),
+              ],
+              selected: {_teacherStrategy},
+              onSelectionChanged: controller.isBusy
+                  ? null
+                  : (values) {
+                      if (values.isEmpty) {
+                        return;
+                      }
+                      setState(() {
+                        _teacherStrategy = values.first;
+                      });
+                    },
+            ),
+            const SizedBox(height: 6),
+            if (controller.teacherProfiles.isEmpty)
+              const Text('선택 가능한 교사가 없습니다.')
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: controller.teacherProfiles
+                    .map((teacher) {
+                      final selected = _preferredTeacherIds.contains(
+                        teacher.id,
+                      );
+                      return FilterChip(
+                        selected: selected,
+                        label: Text(teacher.displayName),
+                        onSelected: controller.isBusy
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  if (value) {
+                                    _preferredTeacherIds.add(teacher.id);
+                                  } else {
+                                    _preferredTeacherIds.remove(teacher.id);
+                                  }
+                                });
+                              },
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('선택한 교사만 사용'),
+              subtitle: const Text('선택 교사 수가 부족하면 미배정 경고가 발생할 수 있습니다.'),
+              value: _preferOnlySelectedTeachers,
+              onChanged: controller.isBusy
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _preferOnlySelectedTeachers = value;
                       });
                     },
             ),
@@ -885,6 +1017,10 @@ class _TimetableTabState extends State<TimetableTab> {
         prompt: _promptController.text,
         preferredDays: _selectedDays,
         sessionsPerDay: _sessionsPerDay,
+        courseWeightsById: _courseWeightsById,
+        preferredTeacherIds: _preferredTeacherIds,
+        teacherStrategy: _teacherStrategy,
+        preferOnlySelectedTeachers: _preferOnlySelectedTeachers,
         optionCount: _optionCount,
         keepExistingSessions: _keepExistingSessions,
       );

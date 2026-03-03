@@ -463,6 +463,10 @@ class NestController extends ChangeNotifier {
     required String prompt,
     required Set<int> preferredDays,
     required int sessionsPerDay,
+    Map<String, int> courseWeightsById = const {},
+    Set<String> preferredTeacherIds = const {},
+    String teacherStrategy = 'BALANCED',
+    bool preferOnlySelectedTeachers = false,
     int optionCount = 3,
     bool keepExistingSessions = true,
   }) async {
@@ -488,6 +492,10 @@ class NestController extends ChangeNotifier {
         teacherProfiles: teacherProfiles,
         preferredDays: preferredDays,
         sessionsPerDay: sessionsPerDay,
+        courseWeightsById: courseWeightsById,
+        preferredTeacherIds: preferredTeacherIds,
+        teacherStrategy: teacherStrategy,
+        preferOnlySelectedTeachers: preferOnlySelectedTeachers,
         optionCount: optionCount,
         keepExistingSessions: keepExistingSessions,
       );
