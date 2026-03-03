@@ -175,6 +175,15 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - gallery items
   - community feed (+ reports for admin/staff)
 
+Admin dashboard onboarding:
+
+- step-by-step setup roadmap cards with completion checks
+  - 1) family/child setup
+  - 2) class + child enrollment
+  - 3) course preparation and class assignment path
+  - 4) timetable generation/adjustment
+- direct tab jump actions from roadmap (`Families`, `Timetable`)
+
 ### 6.2 Timetable
 
 - Admin view:

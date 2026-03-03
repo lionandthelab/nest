@@ -6,9 +6,14 @@ import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 
 class DashboardTab extends StatefulWidget {
-  const DashboardTab({super.key, required this.controller});
+  const DashboardTab({
+    super.key,
+    required this.controller,
+    this.onRequestTabChange,
+  });
 
   final NestController controller;
+  final ValueChanged<String>? onRequestTabChange;
 
   @override
   State<DashboardTab> createState() => _DashboardTabState();
@@ -87,6 +92,10 @@ class _DashboardTabState extends State<DashboardTab> {
         if (controller.pendingInvites.isNotEmpty) ...[
           const SizedBox(height: 16),
           _PendingInvitesCard(controller: controller),
+        ],
+        if (controller.isAdminLike) ...[
+          const SizedBox(height: 16),
+          _buildAdminSetupFlowCard(theme, controller),
         ],
         const SizedBox(height: 16),
         Wrap(
@@ -256,6 +265,136 @@ class _DashboardTabState extends State<DashboardTab> {
     }
 
     return null;
+  }
+
+  Widget _buildAdminSetupFlowCard(ThemeData theme, NestController controller) {
+    final steps = _setupSteps(controller);
+    final completedCount = steps.where((step) => step.completed).length;
+    _SetupStep? nextStep;
+    for (final step in steps) {
+      if (!step.completed && step.enabled) {
+        nextStep = step;
+        break;
+      }
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('학기 설정 가이드', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '관리자는 순서대로 진행하면 홈스쿨 운영 틀을 빠르게 완성할 수 있습니다.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                value: steps.isEmpty ? 0 : completedCount / steps.length,
+                color: NestColors.dustyRose,
+                backgroundColor: NestColors.roseMist,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '완료 $completedCount / ${steps.length}',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            ...steps.map(
+              (step) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _SetupStepTile(
+                  step: step,
+                  onOpen: widget.onRequestTabChange == null || !step.enabled
+                      ? null
+                      : () => widget.onRequestTabChange!.call(step.targetTab),
+                ),
+              ),
+            ),
+            if (nextStep != null) ...[
+              const SizedBox(height: 4),
+              Builder(
+                builder: (context) {
+                  final actionableStep = nextStep!;
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: widget.onRequestTabChange == null
+                          ? null
+                          : () => widget.onRequestTabChange!.call(
+                              actionableStep.targetTab,
+                            ),
+                      icon: const Icon(Icons.arrow_forward),
+                      label: Text(
+                        '다음 단계: ${actionableStep.order}. ${actionableStep.title}',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_SetupStep> _setupSteps(NestController controller) {
+    final hasHomeschool = controller.selectedHomeschoolId != null;
+    final hasTerm = controller.selectedTermId != null;
+    final hasClass = controller.classGroups.isNotEmpty;
+    final hasCourses = controller.courses.isNotEmpty;
+    final hasSlots = controller.timeSlots.isNotEmpty;
+
+    return [
+      _SetupStep(
+        order: 1,
+        title: '가정 관리',
+        description: '가정을 만들고 아이를 등록합니다.',
+        targetTab: 'Families',
+        actionLabel: '가정/아이 설정 열기',
+        completed:
+            controller.families.isNotEmpty && controller.children.isNotEmpty,
+        enabled: hasHomeschool,
+      ),
+      _SetupStep(
+        order: 2,
+        title: '반 관리',
+        description: '반을 만들고 아이를 반에 배정합니다.',
+        targetTab: 'Families',
+        actionLabel: '반/배정 설정 열기',
+        completed:
+            controller.classGroups.isNotEmpty &&
+            controller.classEnrollments.isNotEmpty,
+        enabled: hasTerm,
+      ),
+      _SetupStep(
+        order: 3,
+        title: '과목 관리',
+        description: '과목을 준비하고 시간표에서 반에 배정합니다.',
+        targetTab: 'Timetable',
+        actionLabel: '과목/수업 편성 열기',
+        completed: hasCourses && hasClass,
+        enabled: hasHomeschool,
+      ),
+      _SetupStep(
+        order: 4,
+        title: '시간표 관리',
+        description: '이번 학기의 시간표를 생성/보정하고 확정합니다.',
+        targetTab: 'Timetable',
+        actionLabel: '시간표 관리 열기',
+        completed: controller.sessions.isNotEmpty,
+        enabled: hasTerm && hasClass && hasCourses && hasSlots,
+      ),
+    ];
   }
 
   Future<void> _submitBootstrap() async {
@@ -455,6 +594,116 @@ class _SummaryCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SetupStep {
+  const _SetupStep({
+    required this.order,
+    required this.title,
+    required this.description,
+    required this.targetTab,
+    required this.actionLabel,
+    required this.completed,
+    required this.enabled,
+  });
+
+  final int order;
+  final String title;
+  final String description;
+  final String targetTab;
+  final String actionLabel;
+  final bool completed;
+  final bool enabled;
+}
+
+class _SetupStepTile extends StatelessWidget {
+  const _SetupStepTile({required this.step, this.onOpen});
+
+  final _SetupStep step;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDone = step.completed;
+    final active = step.enabled;
+    final borderColor = isDone ? Colors.green.shade400 : NestColors.roseMist;
+    final badgeBg = isDone ? Colors.green.shade50 : NestColors.creamyWhite;
+    final badgeFg = isDone ? Colors.green.shade800 : NestColors.deepWood;
+    final titleStyle = Theme.of(context).textTheme.titleMedium;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+        color: active ? Colors.white : Colors.grey.shade100,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: isDone
+                    ? Colors.green.shade600
+                    : NestColors.dustyRose,
+                foregroundColor: Colors.white,
+                child: isDone
+                    ? const Icon(Icons.check, size: 14)
+                    : Text(
+                        '${step.order}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('${step.order}. ${step.title}', style: titleStyle),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: isDone ? Colors.green.shade200 : NestColors.roseMist,
+                  ),
+                ),
+                child: Text(
+                  isDone ? '완료' : (active ? '진행 필요' : '선행 단계 필요'),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: badgeFg),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            step.description,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: NestColors.deepWood.withValues(
+                alpha: active ? 0.78 : 0.52,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: active ? onOpen : null,
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: Text(step.actionLabel),
+          ),
+        ],
       ),
     );
   }

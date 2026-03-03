@@ -63,6 +63,9 @@
   - `member_unavailability_blocks` 마이그레이션 추가 (`20260303190000_member_unavailability_blocks.sql`)
   - `Families` 탭에서 관리자 기준 교사/부모 불가 시간 등록/삭제 UI 추가
   - `Parent Hub`/`Teacher Hub`에 본인 불가 시간 self-service 등록/삭제 UI 추가
+- 관리자 대시보드 단계형 온보딩 UI 추가
+  - 큰 카드 기반 `학기 설정 가이드`(1~4 순번 + 완료 체크 + 다음 단계 이동)
+  - 단계별 빠른 이동: `Families`, `Timetable` 탭 점프
 
 ### Changed
 
@@ -123,6 +126,9 @@
   - 관리자/스태프는 전체 대상 관리
   - 부모는 본인(`MEMBER_USER`) 항목만 직접 관리
   - 교사는 본인 `teacher_profile` 항목만 직접 관리
+- 시간표 초안 적용 시 세션 source_type 정합성 수정
+  - `ASSISTED` 값을 `AI_PROMPT`로 교체하여
+  - DB 체크 제약(`class_sessions_source_type_check`) 위반 문제 해결
 
 ### Verification
 

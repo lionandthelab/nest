@@ -721,7 +721,7 @@ class NestController extends ChangeNotifier {
           timeSlotId: row.timeSlotId,
           title: '${findCourseName(row.courseId)} 수업',
           createdByUserId: user!.id,
-          sourceType: 'ASSISTED',
+          sourceType: 'AI_PROMPT',
         );
 
         occupiedSlotIds.add(row.timeSlotId);

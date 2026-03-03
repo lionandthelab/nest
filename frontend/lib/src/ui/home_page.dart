@@ -97,7 +97,10 @@ class _HomePageState extends State<HomePage> {
     final tabs = <_TabSpec>[
       _TabSpec(
         label: 'Dashboard',
-        page: DashboardTab(controller: controller),
+        page: DashboardTab(
+          controller: controller,
+          onRequestTabChange: _navigateToTabLabel,
+        ),
       ),
       if (controller.isParentView)
         _TabSpec(
@@ -223,6 +226,18 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }
+  }
+
+  void _navigateToTabLabel(String label) {
+    final tabs = _buildTabs(widget.controller);
+    final targetIndex = tabs.indexWhere((tab) => tab.label == label);
+    if (targetIndex < 0 || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentIndex = targetIndex;
+    });
   }
 
   void _showMessage(String message) {
