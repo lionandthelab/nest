@@ -199,7 +199,11 @@ Admin dashboard onboarding:
   - draft session editor (course/slot/main teacher) with immediate conflict feedback
   - draft apply flow with slot-collision skip and teacher conflict reporting
   - prompt generation + apply/discard proposals (legacy path)
-  - drag-and-drop manual board edits
+  - drag-and-drop visual schedule studio:
+    - course palette
+    - timetable grid (day columns x period rows)
+    - slot-level drop targets and session card drag-move
+    - compact session cards with teacher badges/conflict indicators
   - board-level health summary (teacher conflict + missing main teacher)
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)

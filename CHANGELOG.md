@@ -72,6 +72,11 @@
   - `Term Setup` 탭에서 `가정`, `선생님`, `반`, `과목` 단위를 분리해 설정
   - 단위별 완료 상태/진행도를 직관적으로 표시
   - 과목 CRUD(추가/삭제) UI 및 API 추가
+- 시간표 작성 UI 재설계
+  - `Schedule Studio` 그리드형 시간표(day x period) 도입
+  - 과목 팔레트에서 셀로 드래그해 수업 생성
+  - 세션 카드 드래그로 셀 간 이동
+  - 교사 배정/충돌 상태를 카드 내부에서 바로 확인 가능
 
 ### Changed
 
@@ -140,6 +145,9 @@
   - `Dashboard` / `Term Setup` / `Schedule` / `System` 중심으로 재구성
 - 대시보드 온보딩 가이드 이동 대상 갱신
   - `Families`/`Timetable` 기준에서 `Term Setup`/`Schedule` 기준으로 변경
+- 수동 보드 UX를 시각화 중심으로 전환
+  - 슬롯 나열 방식에서 그리드 편집 방식으로 변경
+  - 충돌 배너 가시성 강화 및 읽기/수정 모드 구분 강화
 
 ### Verification
 
