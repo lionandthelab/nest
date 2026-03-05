@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.0.1+2 (2026-03-05)
+
+### Added
+
+- 로컬 캐시 & Stale-While-Revalidate 패턴 도입
+  - `NestCache` 서비스 (`SharedPreferences` 기반, 스키마 버전 관리)
+  - 앱 시작 시 캐시 데이터 즉시 표시 → 백그라운드 최신 데이터 동기화
+  - 18개 모델에 `toMap()` 직렬화 메서드 추가
+  - 네트워크 실패 시 캐시 데이터 유지 (graceful degradation)
+- PWA 지원
+  - `manifest.json` 업데이트 (name, scope, start_url, orientation, categories)
+  - `index.html`에 `theme-color`, `apple-mobile-web-app-capable` 메타 태그 추가
+  - 데스크톱에서 앱 설치 가능
+- 시간표 이미지 내보내기
+  - `RepaintBoundary` + `toImage()` 기반 PNG 캡처
+  - 웹 전용 다운로드 헬퍼 (조건부 import 패턴: `download_helper.dart` / `_web` / `_stub`)
+- 부모/교사 허브 공통 스캐폴드
+  - `HubScaffold` 위젯으로 Parent Hub / Teacher Hub 레이아웃 일관화
+  - 상단 KPI 카드 + 섹션 칩 전환 + 카드형 본문 구성
+- 전역 모션/로딩 컴포넌트
+  - `NestLoadingScreen`, `NestBusyOverlay`, 공통 fade+slide 전환
+
+### Changed
+
+- 시간표 탭 레이아웃 재구성
+  - 시간표 그리드를 최상단 메인으로 배치
+  - 초안 위자드 + 비교 패널을 `showModalBottomSheet` 모달로 이동
+  - 보드 패널 헤더에 "위자드 열기" / "내보내기" 버튼 추가
+- 헤더 영역 접기/펼치기
+  - `_MainPanel`을 `StatefulWidget`으로 변환
+  - 접힌 상태: 앱 이름 + 역할 칩 한 줄 표시
+  - `AnimatedSize`로 부드러운 전환
+- Parent Hub 아이 중심 뷰 강화
+  - 아이 selector 기반 child-specific 화면
+  - 반별 시간표/교사배정/공지 데이터 on-demand 로드
+- Teacher Hub 담당 반 중심 뷰 강화
+  - 교사 프로필 배정 기준 담당 반 자동 식별
+  - 반 컨텍스트에서 공지/수업계획/활동 기록 일관 흐름
+- 시간표 위자드 단계형 재구성 (기본 설정 / 리소스 조건 / 생성·검토)
+- 시간표 보드에 반/교사 상태 사이드바 상시 표시 (모바일: 모달 시트)
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 2026-03-03
 
 ### Added
