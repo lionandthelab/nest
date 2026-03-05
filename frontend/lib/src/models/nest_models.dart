@@ -44,6 +44,12 @@ class Homeschool {
       timezone: (map['timezone'] as String?) ?? 'Asia/Seoul',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'name': name,
+    'timezone': timezone,
+  };
 }
 
 class Membership {
@@ -84,6 +90,14 @@ class Membership {
       }),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'user_id': userId,
+    'homeschool_id': homeschoolId,
+    'role': role,
+    'status': status,
+    'homeschools': homeschool.toMap(),
+  };
 }
 
 class HomeschoolMemberDirectoryEntry {
@@ -125,6 +139,13 @@ class HomeschoolMemberDirectoryEntry {
           const [],
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'user_id': userId,
+    'email': email,
+    'full_name': fullName,
+    'roles': roles,
+  };
 }
 
 class HomeschoolInvite {
@@ -207,6 +228,14 @@ class Family {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'family_name': familyName,
+    'note': note,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class ChildProfile {
@@ -247,6 +276,17 @@ class ChildProfile {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'family_id': familyId,
+    'families': {'family_name': familyName},
+    'name': name,
+    'birth_date': birthDate?.toUtc().toIso8601String(),
+    'profile_note': profileNote,
+    'status': status,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class ClassEnrollment {
@@ -270,6 +310,13 @@ class ClassEnrollment {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'class_group_id': classGroupId,
+    'child_id': childId,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class TeacherProfile {
@@ -311,6 +358,17 @@ class TeacherProfile {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'user_id': userId,
+    'display_name': displayName,
+    'teacher_type': teacherType,
+    'specialties': specialties,
+    'bio': bio,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class MemberUnavailabilityBlock {
@@ -352,6 +410,18 @@ class MemberUnavailabilityBlock {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'owner_kind': ownerKind,
+    'owner_id': ownerId,
+    'day_of_week': dayOfWeek,
+    'start_time': startTime,
+    'end_time': endTime,
+    'note': note,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class SessionTeacherAssignment {
@@ -377,6 +447,13 @@ class SessionTeacherAssignment {
       assignmentRole: (map['assignment_role'] as String?) ?? 'ASSISTANT',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'class_session_id': classSessionId,
+    'teacher_profile_id': teacherProfileId,
+    'assignment_role': assignmentRole,
+  };
 }
 
 class TeachingPlan {
@@ -412,6 +489,17 @@ class TeachingPlan {
       updatedAt: parseDateTime(map['updated_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'class_session_id': classSessionId,
+    'teacher_profile_id': teacherProfileId,
+    'objectives': objectives,
+    'materials': materials,
+    'activities': activities,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+    'updated_at': updatedAt?.toUtc().toIso8601String(),
+  };
 }
 
 class StudentActivityLog {
@@ -447,6 +535,17 @@ class StudentActivityLog {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'child_id': childId,
+    'class_session_id': classSessionId,
+    'recorded_by_teacher_id': recordedByTeacherId,
+    'activity_type': activityType,
+    'content': content,
+    'recorded_at': recordedAt?.toUtc().toIso8601String(),
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class Announcement {
@@ -543,6 +642,15 @@ class Term {
       endDate: parseDateTime(map['end_date']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'name': name,
+    'status': status,
+    'start_date': startDate?.toUtc().toIso8601String(),
+    'end_date': endDate?.toUtc().toIso8601String(),
+  };
 }
 
 class ClassGroup {
@@ -566,6 +674,13 @@ class ClassGroup {
       capacity: (map['capacity'] as int?) ?? 12,
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'term_id': termId,
+    'name': name,
+    'capacity': capacity,
+  };
 }
 
 class Course {
@@ -589,6 +704,13 @@ class Course {
       defaultDurationMin: (map['default_duration_min'] as int?) ?? 50,
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'name': name,
+    'default_duration_min': defaultDurationMin,
+  };
 }
 
 class TimeSlot {
@@ -615,6 +737,14 @@ class TimeSlot {
       endTime: (map['end_time'] as String?) ?? '00:00:00',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'term_id': termId,
+    'day_of_week': dayOfWeek,
+    'start_time': startTime,
+    'end_time': endTime,
+  };
 }
 
 class ClassSession {
@@ -647,6 +777,16 @@ class ClassSession {
       status: (map['status'] as String?) ?? 'PLANNED',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'class_group_id': classGroupId,
+    'course_id': courseId,
+    'time_slot_id': timeSlotId,
+    'title': title,
+    'source_type': sourceType,
+    'status': status,
+  };
 }
 
 class Proposal {
@@ -673,6 +813,14 @@ class Proposal {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'term_id': termId,
+    'prompt': prompt,
+    'status': status,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class ProposalSession {
@@ -699,6 +847,14 @@ class ProposalSession {
       timeSlotId: (map['time_slot_id'] as String?) ?? '',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'proposal_id': proposalId,
+    'class_group_id': classGroupId,
+    'course_id': courseId,
+    'time_slot_id': timeSlotId,
+  };
 }
 
 class DriveIntegration {

@@ -388,7 +388,7 @@ class _MobileScaffold extends StatelessWidget {
   }
 }
 
-class _MainPanel extends StatelessWidget {
+class _MainPanel extends StatefulWidget {
   const _MainPanel({
     required this.controller,
     required this.tabLabel,
@@ -412,89 +412,111 @@ class _MainPanel extends StatelessWidget {
   final Future<void> Function(String? value) onSelectViewRole;
 
   @override
+  State<_MainPanel> createState() => _MainPanelState();
+}
+
+class _MainPanelState extends State<_MainPanel> {
+  bool _headerExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final controller = widget.controller;
 
     return Card(
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
             child: Column(
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${AppConfig.appName} Administration',
-                            style: theme.textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            controller.user?.email ?? '-',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: NestColors.deepWood.withValues(
-                                alpha: 0.72,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    Text(
+                      '${AppConfig.appName} Administration',
+                      style: theme.textTheme.titleLarge,
                     ),
+                    const SizedBox(width: 8),
+                    Chip(
+                      label: Text(controller.currentRole ?? '-'),
+                      avatar: const Icon(Icons.verified_user, size: 14),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: AnimatedRotation(
+                        turns: _headerExpanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: const Icon(Icons.expand_more),
+                      ),
+                      onPressed: () =>
+                          setState(() => _headerExpanded = !_headerExpanded),
+                      tooltip: _headerExpanded ? '접기' : '펼치기',
+                    ),
+                    const SizedBox(width: 4),
                     FilledButton.tonalIcon(
-                      onPressed: controller.isBusy ? null : onRefresh,
+                      onPressed: controller.isBusy ? null : widget.onRefresh,
                       icon: const Icon(Icons.refresh),
                       label: const Text('새로고침'),
                     ),
                     const SizedBox(width: 8),
                     FilledButton.tonalIcon(
-                      onPressed: controller.isBusy ? null : onLogout,
+                      onPressed: controller.isBusy ? null : widget.onLogout,
                       icon: const Icon(Icons.logout),
                       label: const Text('로그아웃'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                _ContextSelector(
-                  controller: controller,
-                  onSelectHomeschool: onSelectHomeschool,
-                  onSelectTerm: onSelectTerm,
-                  onSelectClassGroup: onSelectClassGroup,
-                  onSelectViewRole: onSelectViewRole,
-                ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Chip(
-                        label: Text('역할: ${controller.currentRole ?? 'None'}'),
-                        avatar: const Icon(Icons.verified_user, size: 16),
-                      ),
-                      Chip(
-                        label: Text(controller.statusMessage),
-                        avatar: controller.isBusy
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: _headerExpanded
+                      ? Column(
+                          children: [
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                controller.user?.email ?? '-',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: NestColors.deepWood.withValues(
+                                    alpha: 0.72,
+                                  ),
                                 ),
-                              )
-                            : const Icon(Icons.info_outline, size: 16),
-                      ),
-                    ],
-                  ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _ContextSelector(
+                              controller: controller,
+                              onSelectHomeschool: widget.onSelectHomeschool,
+                              onSelectTerm: widget.onSelectTerm,
+                              onSelectClassGroup: widget.onSelectClassGroup,
+                              onSelectViewRole: widget.onSelectViewRole,
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Chip(
+                                label: Text(controller.statusMessage),
+                                avatar: controller.isBusy
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.info_outline, size: 16),
+                              ),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
                 ),
                 if (controller.isBusy)
                   const Padding(
-                    padding: EdgeInsets.only(top: 10),
+                    padding: EdgeInsets.only(top: 6),
                     child: LinearProgressIndicator(minHeight: 3),
                   ),
               ],
@@ -516,10 +538,10 @@ class _MainPanel extends StatelessWidget {
                           beginOffset: const Offset(0.015, 0),
                         ),
                     child: KeyedSubtree(
-                      key: ValueKey<String>(tabLabel),
+                      key: ValueKey<String>(widget.tabLabel),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: tab,
+                        child: widget.tab,
                       ),
                     ),
                   ),

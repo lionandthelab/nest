@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../models/nest_models.dart';
 import '../services/local_planner.dart';
+import '../services/nest_cache.dart';
 import '../services/nest_repository.dart';
 import '../services/web_oauth_bridge.dart';
 
@@ -160,11 +161,23 @@ class NestController extends ChangeNotifier {
     session = _repository.currentSession;
     user = _repository.currentUser;
 
+    // Restore cached state instantly before any network calls.
+    if (isLoggedIn) {
+      _restoreFromCache();
+    }
+
     _authSubscription = _repository.authChanges.listen((authState) {
       unawaited(_onAuthStateChanged(authState.session));
     });
 
     if (isLoggedIn) {
+      // If cache was restored, show UI immediately, then refresh in background.
+      if (memberships.isNotEmpty) {
+        _isBootstrapped = true;
+        notifyListeners();
+        await _fetchFreshAndCache();
+        return;
+      }
       await loadHomeschoolContext();
     }
 
@@ -205,6 +218,7 @@ class NestController extends ChangeNotifier {
 
   Future<void> signOut() async {
     await _runBusy('로그아웃 중...', () async {
+      await NestCache.clearAll();
       await _repository.signOut();
       await _onAuthStateChanged(null);
       _setStatus('로그아웃 완료');
@@ -1063,8 +1077,25 @@ class NestController extends ChangeNotifier {
       return;
     }
 
-    await loadPendingInvites();
-    memberships = await _repository.fetchMemberships(userId: user!.id);
+    await _fetchFreshAndCache();
+  }
+
+  /// Fetches all data from API and persists to cache afterwards.
+  Future<void> _fetchFreshAndCache() async {
+    if (user == null) return;
+
+    try {
+      await loadPendingInvites();
+      memberships = await _repository.fetchMemberships(userId: user!.id);
+    } catch (_) {
+      // Network failure — if cached data exists, keep it and bail out.
+      if (memberships.isNotEmpty) {
+        _setStatus('네트워크에 연결할 수 없습니다. 캐시된 데이터를 사용합니다.');
+        notifyListeners();
+        return;
+      }
+      rethrow;
+    }
 
     if (memberships.isEmpty) {
       selectedHomeschoolId = null;
@@ -1125,17 +1156,23 @@ class NestController extends ChangeNotifier {
 
     currentRole = _resolveViewRole(selectedHomeschoolId);
 
-    await _loadTermAndBelow();
-    await loadHomeschoolMemberships();
-    await loadHomeschoolInvites();
-    await _loadOperationalData();
-    await loadDriveIntegration();
-    await syncOauthResult();
-    await loadGalleryItems();
-    await loadCommunityFeed();
+    try {
+      await _loadTermAndBelow();
+      await loadHomeschoolMemberships();
+      await loadHomeschoolInvites();
+      await _loadOperationalData();
+      await loadDriveIntegration();
+      await syncOauthResult();
+      await loadGalleryItems();
+      await loadCommunityFeed();
 
-    _setStatus('운영 컨텍스트 로드 완료');
+      _setStatus('운영 컨텍스트 로드 완료');
+    } catch (_) {
+      _setStatus('일부 데이터를 불러오지 못했습니다. 캐시된 데이터를 사용합니다.');
+    }
+
     notifyListeners();
+    unawaited(_persistToCache());
   }
 
   Future<void> loadDriveIntegration() async {
@@ -3249,6 +3286,225 @@ class NestController extends ChangeNotifier {
       _viewRoleByHomeschool[homeschoolId] = fallback;
     }
     return fallback;
+  }
+
+  /// Restore cached data into controller fields for instant UI rendering.
+  void _restoreFromCache() {
+    final userId = user?.id;
+    if (userId == null) return;
+
+    // Restore last selected homeschool.
+    final lastHomeschoolId = NestCache.loadLastHomeschoolId(userId: userId);
+    if (lastHomeschoolId == null) return;
+
+    final cachedMeta = NestCache.loadMeta(
+      userId: userId,
+      homeschoolId: lastHomeschoolId,
+    );
+    if (cachedMeta == null) return;
+
+    selectedHomeschoolId = lastHomeschoolId;
+    selectedTermId = cachedMeta['selectedTermId'] as String?;
+    selectedClassGroupId = cachedMeta['selectedClassGroupId'] as String?;
+    currentRole = cachedMeta['currentRole'] as String?;
+
+    memberships = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'memberships', fromMap: Membership.fromMap,
+    ) ?? const [];
+    terms = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'terms', fromMap: Term.fromMap,
+    ) ?? const [];
+    classGroups = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'classGroups', fromMap: ClassGroup.fromMap,
+    ) ?? const [];
+    courses = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'courses', fromMap: Course.fromMap,
+    ) ?? const [];
+    timeSlots = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'timeSlots', fromMap: TimeSlot.fromMap,
+    ) ?? const [];
+    sessions = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'sessions', fromMap: ClassSession.fromMap,
+    ) ?? const [];
+    proposals = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'proposals', fromMap: Proposal.fromMap,
+    ) ?? const [];
+    proposalSessionsById = _restoreProposalSessionsMap(userId, lastHomeschoolId);
+    families = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'families', fromMap: Family.fromMap,
+    ) ?? const [];
+    children = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'children', fromMap: ChildProfile.fromMap,
+    ) ?? const [];
+    classEnrollments = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'classEnrollments', fromMap: ClassEnrollment.fromMap,
+    ) ?? const [];
+    familyGuardianUserIdsByFamily = NestCache.loadStringListMap(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'familyGuardians',
+    ) ?? const {};
+    teacherProfiles = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'teacherProfiles', fromMap: TeacherProfile.fromMap,
+    ) ?? const [];
+    memberUnavailabilityBlocks = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'unavailabilityBlocks', fromMap: MemberUnavailabilityBlock.fromMap,
+    ) ?? const [];
+    sessionTeacherAssignments = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'teacherAssignments', fromMap: SessionTeacherAssignment.fromMap,
+    ) ?? const [];
+    teachingPlans = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'teachingPlans', fromMap: TeachingPlan.fromMap,
+    ) ?? const [];
+    studentActivityLogs = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'activityLogs', fromMap: StudentActivityLog.fromMap,
+    ) ?? const [];
+    homeschoolMemberships = NestCache.loadCollection(
+      userId: userId, homeschoolId: lastHomeschoolId,
+      collection: 'homeschoolMemberships', fromMap: Membership.fromMap,
+    ) ?? const [];
+  }
+
+  Map<String, List<ProposalSession>> _restoreProposalSessionsMap(
+    String userId,
+    String homeschoolId,
+  ) {
+    final flat = NestCache.loadCollection(
+      userId: userId, homeschoolId: homeschoolId,
+      collection: 'proposalSessions', fromMap: ProposalSession.fromMap,
+    );
+    if (flat == null) return const {};
+    final result = <String, List<ProposalSession>>{};
+    for (final ps in flat) {
+      (result[ps.proposalId] ??= []).add(ps);
+    }
+    return result;
+  }
+
+  /// Persist current controller state to local cache (fire-and-forget).
+  Future<void> _persistToCache() async {
+    final userId = user?.id;
+    final homeschoolId = selectedHomeschoolId;
+    if (userId == null || homeschoolId == null) return;
+
+    await NestCache.saveLastHomeschoolId(
+      userId: userId,
+      homeschoolId: homeschoolId,
+    );
+    await NestCache.saveMeta(
+      userId: userId,
+      homeschoolId: homeschoolId,
+      selectedTermId: selectedTermId,
+      selectedClassGroupId: selectedClassGroupId,
+      currentRole: currentRole,
+    );
+
+    await Future.wait([
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'memberships', items: memberships,
+        toMap: (m) => m.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'terms', items: terms,
+        toMap: (t) => t.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'classGroups', items: classGroups,
+        toMap: (c) => c.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'courses', items: courses,
+        toMap: (c) => c.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'timeSlots', items: timeSlots,
+        toMap: (t) => t.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'sessions', items: sessions,
+        toMap: (s) => s.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'proposals', items: proposals,
+        toMap: (p) => p.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'proposalSessions',
+        items: proposalSessionsById.values.expand((v) => v).toList(),
+        toMap: (ps) => ps.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'families', items: families,
+        toMap: (f) => f.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'children', items: children,
+        toMap: (c) => c.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'classEnrollments', items: classEnrollments,
+        toMap: (e) => e.toMap(),
+      ),
+      NestCache.saveStringListMap(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'familyGuardians', data: familyGuardianUserIdsByFamily,
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'teacherProfiles', items: teacherProfiles,
+        toMap: (t) => t.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'unavailabilityBlocks', items: memberUnavailabilityBlocks,
+        toMap: (b) => b.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'teacherAssignments', items: sessionTeacherAssignments,
+        toMap: (a) => a.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'teachingPlans', items: teachingPlans,
+        toMap: (p) => p.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'activityLogs', items: studentActivityLogs,
+        toMap: (l) => l.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId, homeschoolId: homeschoolId,
+        collection: 'homeschoolMemberships', items: homeschoolMemberships,
+        toMap: (m) => m.toMap(),
+      ),
+    ]);
   }
 
   void _clearDomainState() {

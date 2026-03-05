@@ -1,7 +1,11 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/download_helper.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 
@@ -16,6 +20,7 @@ class TimetableTab extends StatefulWidget {
 
 class _TimetableTabState extends State<TimetableTab> {
   final _promptController = TextEditingController();
+  final _timetableRepaintKey = GlobalKey();
   final Set<int> _selectedDays = <int>{1, 2, 3, 4, 5};
   final Set<String> _preferredTeacherIds = <String>{};
   final Map<String, int> _courseWeightsById = <String, int>{};
@@ -43,12 +48,7 @@ class _TimetableTabState extends State<TimetableTab> {
 
     return ListView(
       children: [
-        if (adminEditable) ...[
-          _buildConciergeCard(controller),
-          const SizedBox(height: 12),
-          _buildScheduleDraftPanel(controller),
-          const SizedBox(height: 12),
-        ] else ...[
+        if (!adminEditable) ...[
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -72,6 +72,7 @@ class _TimetableTabState extends State<TimetableTab> {
           ),
           const SizedBox(height: 12),
         ],
+        // Timetable grid is always first (main focus).
         if (adminEditable && !compact)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,6 +110,75 @@ class _TimetableTabState extends State<TimetableTab> {
             ],
           ),
       ],
+    );
+  }
+
+  void _openWizardModal(NestController controller) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: NestColors.creamyWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.4,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return AnimatedBuilder(
+                  animation: controller,
+                  builder: (context, _) {
+                    return ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: NestColors.deepWood.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        _buildConciergeCard(controller),
+                        const SizedBox(height: 12),
+                        _buildScheduleDraftPanel(controller),
+                      ],
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _exportTimetableImage() async {
+    final boundary = _timetableRepaintKey.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
+    if (boundary == null) return;
+
+    final image = await boundary.toImage(pixelRatio: 2.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) return;
+
+    final bytes = byteData.buffer.asUint8List();
+    final helper = createDownloadHelper();
+    helper.downloadBytes(
+      bytes: bytes,
+      filename: 'timetable_${DateTime.now().millisecondsSinceEpoch}.png',
+      mimeType: 'image/png',
     );
   }
 
@@ -903,13 +973,9 @@ class _TimetableTabState extends State<TimetableTab> {
               FilledButton.tonalIcon(
                 onPressed: controller.isBusy
                     ? null
-                    : () {
-                        setState(() {
-                          _wizardStep = 0;
-                        });
-                      },
+                    : () => _openWizardModal(controller),
                 icon: const Icon(Icons.assistant_navigation),
-                label: const Text('위자드로 이동'),
+                label: const Text('위자드 열기'),
               ),
             ],
           );
@@ -1308,12 +1374,29 @@ class _TimetableTabState extends State<TimetableTab> {
                   ),
                 ),
                 const Spacer(),
-                if (onOpenStatusPanel != null)
+                if (controller.isAdminLike) ...[
+                  FilledButton.tonalIcon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => _openWizardModal(controller),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('초안 위자드'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                FilledButton.tonalIcon(
+                  onPressed: _exportTimetableImage,
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text('내보내기'),
+                ),
+                if (onOpenStatusPanel != null) ...[
+                  const SizedBox(width: 8),
                   FilledButton.tonalIcon(
                     onPressed: onOpenStatusPanel,
                     icon: const Icon(Icons.tune),
                     label: const Text('반/교사 현황'),
                   ),
+                ],
               ],
             ),
             const SizedBox(height: 6),
@@ -1492,7 +1575,9 @@ class _TimetableTabState extends State<TimetableTab> {
       minWidth = 940;
     }
 
-    return Container(
+    return RepaintBoundary(
+      key: _timetableRepaintKey,
+      child: Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -1636,7 +1721,7 @@ class _TimetableTabState extends State<TimetableTab> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _generateProposal() async {
