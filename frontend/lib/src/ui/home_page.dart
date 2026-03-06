@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../config/app_config.dart';
 import '../state/nest_controller.dart';
+import 'models/child_class_bundle.dart';
 import 'nest_theme.dart';
-import 'tabs/dashboard_tab.dart';
-import 'tabs/gallery_tab.dart';
-import 'tabs/parent_hub_tab.dart';
-import 'tabs/timetable_tab.dart';
 import 'tabs/community_feed_tab.dart';
+import 'tabs/dashboard_tab.dart';
 import 'tabs/family_admin_tab.dart';
+import 'tabs/gallery_tab.dart';
+import 'tabs/parent_news_tab.dart';
+import 'tabs/parent_progress_tab.dart';
+import 'tabs/parent_timetable_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
+import 'tabs/timetable_tab.dart';
 import 'widgets/nest_motion.dart';
 
 class HomePage extends StatefulWidget {
@@ -25,11 +28,22 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
 
+  // ── Parent child selector state (shared across parent tabs) ──
+  String? _selectedChildId;
+  String? _lastScheduledChildLoadId;
+  Map<String, ChildClassBundle> _childClassBundles = const {};
+  bool _isLoadingChildClasses = false;
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
+        // Keep child selector in sync when controller data changes.
+        if (widget.controller.isParentView) {
+          _syncSelectedChild(widget.controller);
+        }
+
         final tabs = _buildTabs(widget.controller);
         final labels = tabs.map((tab) => tab.label).toList(growable: false);
 
@@ -118,6 +132,37 @@ class _HomePageState extends State<HomePage> {
       ];
     }
 
+    // ── Parent view: 3 focused tabs ──
+    if (controller.isParentView) {
+      return [
+        _TabSpec(
+          label: '시간표',
+          page: ParentTimetableTab(
+            controller: controller,
+            selectedChildId: _selectedChildId,
+            childClassBundles: _childClassBundles,
+            onSelectChild: _handleChildChange,
+            isLoadingChildClasses: _isLoadingChildClasses,
+          ),
+        ),
+        _TabSpec(
+          label: '학습 현황',
+          page: ParentProgressTab(
+            controller: controller,
+            selectedChildId: _selectedChildId,
+            childClassBundles: _childClassBundles,
+            onSelectChild: _handleChildChange,
+            isLoadingChildClasses: _isLoadingChildClasses,
+          ),
+        ),
+        _TabSpec(
+          label: '소식',
+          page: ParentNewsTab(controller: controller),
+        ),
+      ];
+    }
+
+    // ── Teacher / other non-admin view ──
     final tabs = <_TabSpec>[
       _TabSpec(
         label: 'Dashboard',
@@ -126,11 +171,6 @@ class _HomePageState extends State<HomePage> {
           onRequestTabChange: _navigateToTabLabel,
         ),
       ),
-      if (controller.isParentView)
-        _TabSpec(
-          label: 'Parent Hub',
-          page: ParentHubTab(controller: controller),
-        ),
       if (controller.isTeacherView)
         _TabSpec(
           label: 'Teacher Hub',
@@ -153,6 +193,92 @@ class _HomePageState extends State<HomePage> {
     );
 
     return tabs;
+  }
+
+  // ── Parent child selector helpers ──
+
+  void _syncSelectedChild(NestController controller) {
+    final children = controller.myChildren.toList(growable: false);
+    final previous = _selectedChildId;
+    final firstId = children.firstOrNull?.id;
+    final stillValid =
+        previous != null && children.any((child) => child.id == previous);
+
+    if (!stillValid) {
+      _selectedChildId = firstId;
+      _childClassBundles = const {};
+      _lastScheduledChildLoadId = null;
+    }
+
+    final selectedId = _selectedChildId;
+    if (selectedId == null || selectedId.isEmpty) return;
+    if (_lastScheduledChildLoadId == selectedId) return;
+
+    _lastScheduledChildLoadId = selectedId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadChildClassBundles(selectedId);
+    });
+  }
+
+  void _handleChildChange(String? childId) {
+    setState(() {
+      _selectedChildId = childId;
+      _childClassBundles = const {};
+      _lastScheduledChildLoadId = null;
+    });
+  }
+
+  Future<void> _loadChildClassBundles(String childId) async {
+    if (_isLoadingChildClasses) return;
+
+    final controller = widget.controller;
+    setState(() => _isLoadingChildClasses = true);
+
+    try {
+      final classGroups =
+          controller.classGroupsForChild(childId).toList(growable: false)
+            ..sort((a, b) => a.name.compareTo(b.name));
+
+      final allAnnouncements =
+          await controller.fetchAnnouncementsForHomeschool();
+      final bundleMap = <String, ChildClassBundle>{};
+
+      for (final classGroup in classGroups) {
+        final sessions = await controller.fetchSessionsForClassGroup(
+          classGroupId: classGroup.id,
+        );
+        final sessionIds = sessions
+            .map((s) => s.id)
+            .where((id) => id.isNotEmpty)
+            .toList(growable: false);
+        final assignments =
+            await controller.fetchSessionTeacherAssignmentsForSessions(
+          classSessionIds: sessionIds,
+        );
+        final classAnnouncements = allAnnouncements
+            .where(
+              (row) =>
+                  row.classGroupId == null ||
+                  row.classGroupId == classGroup.id,
+            )
+            .toList(growable: false);
+
+        bundleMap[classGroup.id] = ChildClassBundle(
+          classGroup: classGroup,
+          sessions: sessions,
+          assignments: assignments,
+          announcements: classAnnouncements,
+        );
+      }
+
+      if (!mounted) return;
+      setState(() => _childClassBundles = bundleMap);
+    } catch (_) {
+      // Keep existing data on failure.
+    } finally {
+      if (mounted) setState(() => _isLoadingChildClasses = false);
+    }
   }
 
   Future<void> _handleLogout() async {
@@ -697,9 +823,11 @@ class _SelectorField extends StatelessWidget {
 Icon _iconForLabel(String label, {required bool filled}) {
   return switch (label) {
     'Dashboard' => Icon(filled ? Icons.dashboard : Icons.dashboard_outlined),
-    'Parent Hub' => Icon(
-      filled ? Icons.family_restroom : Icons.family_restroom_outlined,
+    '시간표' => Icon(
+      filled ? Icons.calendar_view_week : Icons.calendar_view_week_outlined,
     ),
+    '학습 현황' => Icon(filled ? Icons.insights : Icons.insights_outlined),
+    '소식' => Icon(filled ? Icons.newspaper : Icons.newspaper_outlined),
     'Teacher Hub' => Icon(filled ? Icons.school : Icons.school_outlined),
     'Timetable' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
     'Schedule' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
