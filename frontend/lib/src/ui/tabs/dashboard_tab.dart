@@ -58,6 +58,24 @@ class _DashboardTabState extends State<DashboardTab> {
     final theme = Theme.of(context);
     final controller = widget.controller;
 
+    final noMembership = controller.memberships.isEmpty;
+
+    // ── No membership: onboarding experience ──
+    if (noMembership) {
+      return ListView(
+        children: [
+          _buildOnboardingWelcome(theme, controller),
+          if (controller.pendingInvites.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _PendingInvitesCard(controller: controller),
+          ],
+          const SizedBox(height: 16),
+          _buildOnboardingCreateCard(theme, controller),
+        ],
+      );
+    }
+
+    // ── Normal dashboard ──
     return ListView(
       children: [
         Card(
@@ -251,6 +269,170 @@ class _DashboardTabState extends State<DashboardTab> {
             ),
           ),
       ],
+    );
+  }
+
+  // ── Onboarding for users with no membership ──
+
+  Widget _buildOnboardingWelcome(ThemeData theme, NestController controller) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: NestColors.roseMist,
+                  foregroundColor: NestColors.deepWood,
+                  child: const Icon(Icons.waving_hand, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nest에 오신 것을 환영합니다!',
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        controller.user?.email ?? '',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '아직 소속된 홈스쿨이 없습니다. 아래 두 가지 방법으로 시작할 수 있습니다.',
+              style: theme.textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 16),
+            _OnboardingOption(
+              icon: Icons.mail_outline,
+              title: '초대를 받았나요?',
+              description:
+                  '홈스쿨 관리자가 이메일로 초대하면 아래 "대기 중 초대" 카드가 나타납니다.\n'
+                  '관리자에게 가입한 이메일 주소를 알려주세요.',
+              highlight: controller.pendingInvites.isNotEmpty,
+            ),
+            const SizedBox(height: 10),
+            _OnboardingOption(
+              icon: Icons.add_home,
+              title: '새 홈스쿨을 직접 개설',
+              description:
+                  '관리자로서 새 홈스쿨을 개설하고 학기, 반, 과목을 한번에 설정합니다.\n'
+                  '아래 "홈스쿨 개설" 폼을 작성하세요.',
+              highlight: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOnboardingCreateCard(
+    ThemeData theme,
+    NestController controller,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.add_home, color: NestColors.dustyRose),
+                  const SizedBox(width: 8),
+                  Text('홈스쿨 개설', style: theme.textTheme.titleLarge),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '홈스쿨, 학기, 반, 과목, 시간 슬롯을 한번에 만들고 관리자로 시작합니다.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.72),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _homeschoolController,
+                decoration: const InputDecoration(labelText: '홈스쿨 이름'),
+                validator: (value) =>
+                    (value == null || value.trim().isEmpty)
+                    ? '필수값입니다.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _termController,
+                decoration: const InputDecoration(labelText: '학기 이름'),
+                validator: (value) =>
+                    (value == null || value.trim().isEmpty)
+                    ? '필수값입니다.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _startDateController,
+                      decoration: const InputDecoration(
+                        labelText: '시작일 (YYYY-MM-DD)',
+                      ),
+                      validator: _validateDate,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _endDateController,
+                      decoration: const InputDecoration(
+                        labelText: '종료일 (YYYY-MM-DD)',
+                      ),
+                      validator: _validateDate,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _classController,
+                decoration: const InputDecoration(labelText: '반 이름'),
+                validator: (value) =>
+                    (value == null || value.trim().isEmpty)
+                    ? '필수값입니다.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _courseController,
+                decoration: const InputDecoration(
+                  labelText: '기본 과목 (콤마 구분)',
+                ),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: controller.isBusy ? null : _submitBootstrap,
+                icon: const Icon(Icons.auto_awesome),
+                label: const Text('홈스쿨 개설하기'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -702,6 +884,70 @@ class _SetupStepTile extends StatelessWidget {
             onPressed: active ? onOpen : null,
             icon: const Icon(Icons.open_in_new, size: 16),
             label: Text(step.actionLabel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OnboardingOption extends StatelessWidget {
+  const _OnboardingOption({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.highlight,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: highlight ? NestColors.dustyRose : NestColors.roseMist,
+          width: highlight ? 2 : 1,
+        ),
+        color: highlight
+            ? NestColors.roseMist.withValues(alpha: 0.3)
+            : Colors.white,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: NestColors.roseMist,
+            foregroundColor: NestColors.deepWood,
+            child: Icon(icon, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.72),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

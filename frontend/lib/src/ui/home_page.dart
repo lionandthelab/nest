@@ -108,6 +108,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<_TabSpec> _buildTabs(NestController controller) {
+    // ── No membership: onboarding-only dashboard ──
+    if (controller.memberships.isEmpty) {
+      return [
+        _TabSpec(
+          label: 'Dashboard',
+          page: DashboardTab(
+            controller: controller,
+            onRequestTabChange: _navigateToTabLabel,
+          ),
+        ),
+      ];
+    }
+
     if (controller.isAdminLike) {
       return [
         _TabSpec(
