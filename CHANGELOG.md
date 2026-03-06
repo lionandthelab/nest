@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.2+3 (2026-03-06)
+
+### Changed
+
+- 학부모 뷰 UX 재설계: 모놀리식 Parent Hub을 3개 전용 탭으로 분리
+  - **시간표** 탭: 아이 선택 → 반별 시간표 즉시 확인 + 불가시간 설정
+  - **학습 현황** 탭: 활동 기록/유형별 메트릭 대시보드
+  - **소식** 탭: 공지사항 + 커뮤니티 + 갤러리를 서브섹션 칩으로 통합
+  - 아이 선택 상태를 탭 간 공유 (`ChildSelectorHeader` 위젯 추출)
+  - `ChildClassBundle` 공유 모델 추출
+- 신규 사용자 온보딩 UI 추가
+  - 홈스쿨 미소속 사용자에게 초대 수락 또는 홈스쿨 개설 안내 제공
+  - 미소속 시 Dashboard만 표시하여 UX 혼란 방지
+- 로그인 화면 테스트 계정 자동 채움 (`lionandthelab@gmail.com`)
+
+### Removed
+
+- `parent_hub_tab.dart` 삭제 (로직 전량 신규 탭으로 이전)
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter build web --release` 통과
+
 ## 1.0.1+2 (2026-03-05)
 
 ### Added
