@@ -60,6 +60,7 @@ class NestController extends ChangeNotifier {
   List<Course> courses = const [];
   List<TimeSlot> timeSlots = const [];
   List<ClassSession> sessions = const [];
+  List<ClassSession> allTermSessions = const [];
 
   List<Proposal> proposals = const [];
   Map<String, List<ProposalSession>> proposalSessionsById = const {};
@@ -844,6 +845,24 @@ class NestController extends ChangeNotifier {
       await loadSessionTeacherAssignments();
       await loadTeachingPlans();
       _setStatus('수업 취소 완료');
+    });
+  }
+
+  Future<void> updateSessionLocation({
+    required String sessionId,
+    required String? location,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('장소를 변경하는 중...', () async {
+      await _repository.updateSessionLocation(
+        sessionId: sessionId,
+        location: location?.trim().isEmpty == true ? null : location?.trim(),
+      );
+      await _loadSessions();
+      _setStatus('장소 변경 완료');
     });
   }
 
@@ -3032,6 +3051,28 @@ class NestController extends ChangeNotifier {
       }
     }
 
+    // Location conflicts: same time slot + same location across all class groups
+    final locationBySlot = <String, List<ClassSession>>{};
+    for (final session in allTermSessions) {
+      final loc = session.location;
+      if (loc == null || loc.trim().isEmpty) continue;
+      final key = '${session.timeSlotId}|${loc.trim()}';
+      locationBySlot.putIfAbsent(key, () => <ClassSession>[]);
+      locationBySlot[key]!.add(session);
+    }
+    for (final entry in locationBySlot.entries) {
+      if (entry.value.length < 2) continue;
+      final slot = findTimeSlot(entry.value.first.timeSlotId);
+      final slotLabel = slot == null
+          ? ''
+          : '${slot.dayOfWeek} ${slot.startTime.substring(0, 5)}';
+      final loc = entry.value.first.location!;
+      final names = entry.value
+          .map((s) => findCourseName(s.courseId))
+          .join(', ');
+      issues.add('장소 충돌: $loc ($slotLabel) - $names');
+    }
+
     return issues.toList(growable: false);
   }
 
@@ -3172,10 +3213,21 @@ class NestController extends ChangeNotifier {
     final classGroupId = selectedClassGroupId;
     if (classGroupId == null || classGroupId.isEmpty) {
       sessions = const [];
+      allTermSessions = const [];
       return;
     }
 
     sessions = await _repository.fetchSessions(classGroupId: classGroupId);
+
+    // Load all sessions across all class groups for location conflict detection
+    final allGroupIds = classGroups.map((cg) => cg.id).toList(growable: false);
+    if (allGroupIds.isNotEmpty) {
+      allTermSessions = await _repository.fetchSessionsForClassGroups(
+        classGroupIds: allGroupIds,
+      );
+    } else {
+      allTermSessions = sessions;
+    }
   }
 
   Future<void> _loadProposals() async {

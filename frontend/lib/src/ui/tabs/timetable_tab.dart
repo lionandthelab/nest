@@ -31,6 +31,10 @@ class _TimetableTabState extends State<TimetableTab> {
   String _teacherStrategy = 'BALANCED';
   bool _preferOnlySelectedTeachers = false;
   String _statusPanelMode = 'CLASS';
+  double _gridScale = 1.0;
+  bool _paletteOpen = true;
+  bool _statusPanelOpen = true;
+  String _boardView = 'CLASS'; // CLASS or ROOM
 
   @override
   void dispose() {
@@ -78,20 +82,33 @@ class _TimetableTabState extends State<TimetableTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                flex: 7,
                 child: _buildBoardPanel(controller, onOpenStatusPanel: null),
               ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 360,
-                child: Column(
+              if (_statusPanelOpen) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 360,
+                  child: Column(
+                    children: [
+                      _buildStatusInsightPanel(controller),
+                      const SizedBox(height: 12),
+                      _buildProposalPanel(controller),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(width: 4),
+                Column(
                   children: [
-                    _buildStatusInsightPanel(controller),
-                    const SizedBox(height: 12),
-                    _buildProposalPanel(controller),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      tooltip: '상황 패널 열기',
+                      onPressed: () =>
+                          setState(() => _statusPanelOpen = true),
+                    ),
                   ],
                 ),
-              ),
+              ],
             ],
           )
         else
@@ -877,10 +894,10 @@ class _TimetableTabState extends State<TimetableTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('생성안 목록', style: Theme.of(context).textTheme.titleLarge),
+            Text('저장된 시간표 초안', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
             if (controller.proposals.isEmpty)
-              const Text('생성안이 없습니다.')
+              const Text('저장된 초안이 없습니다. 위자드 또는 프롬프트로 초안을 생성하세요.')
             else
               ...controller.proposals.map((proposal) {
                 final rows =
@@ -1033,7 +1050,18 @@ class _TimetableTabState extends State<TimetableTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('상황 패널', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Text('상황 패널', style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '패널 접기',
+                  onPressed: () => setState(() => _statusPanelOpen = false),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(
               '반/교사 상태를 즉시 확인하면서 시간표를 보정하세요.',
@@ -1373,6 +1401,28 @@ class _TimetableTabState extends State<TimetableTab> {
                     controller.isAdminLike ? 'EDIT MODE' : 'READ ONLY',
                   ),
                 ),
+                const SizedBox(width: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'CLASS',
+                      icon: Icon(Icons.grid_view, size: 16),
+                      label: Text('반별'),
+                    ),
+                    ButtonSegment(
+                      value: 'ROOM',
+                      icon: Icon(Icons.room_outlined, size: 16),
+                      label: Text('공간별'),
+                    ),
+                  ],
+                  selected: {_boardView},
+                  onSelectionChanged: (v) =>
+                      setState(() => _boardView = v.first),
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
                 const Spacer(),
                 if (controller.isAdminLike) ...[
                   FilledButton.tonalIcon(
@@ -1413,18 +1463,7 @@ class _TimetableTabState extends State<TimetableTab> {
               builder: (context) {
                 final issues = controller.timetableBoardIssueMessages();
                 if (issues.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: Colors.green.shade50,
-                      border: Border.all(color: Colors.green.shade200),
-                    ),
-                    child: const Text('현재 시간표 충돌 없음'),
-                  );
+                  return const SizedBox.shrink();
                 }
                 return Container(
                   padding: const EdgeInsets.all(10),
@@ -1452,14 +1491,76 @@ class _TimetableTabState extends State<TimetableTab> {
               },
             ),
             const SizedBox(height: 10),
+            // Zoom controls
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.zoom_out, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '축소',
+                  onPressed: _gridScale <= 0.5
+                      ? null
+                      : () => setState(
+                            () => _gridScale =
+                                (_gridScale - 0.1).clamp(0.5, 1.5),
+                          ),
+                ),
+                Text(
+                  '${(_gridScale * 100).round()}%',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.zoom_in, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '확대',
+                  onPressed: _gridScale >= 1.5
+                      ? null
+                      : () => setState(
+                            () => _gridScale =
+                                (_gridScale + 0.1).clamp(0.5, 1.5),
+                          ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.fit_screen, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '원래 크기',
+                  onPressed: _gridScale == 1.0
+                      ? null
+                      : () => setState(() => _gridScale = 1.0),
+                ),
+                const Spacer(),
+                if (controller.isAdminLike) ...[
+                  IconButton(
+                    icon: Icon(
+                      _paletteOpen
+                          ? Icons.view_sidebar_outlined
+                          : Icons.view_sidebar,
+                      size: 20,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: _paletteOpen ? '과목 팔레트 접기' : '과목 팔레트 열기',
+                    onPressed: () =>
+                        setState(() => _paletteOpen = !_paletteOpen),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
             if (sortedSlots.isEmpty)
               const Text('시간 슬롯이 없습니다. Dashboard 빠른 초기 세팅을 먼저 진행하세요.')
             else if (dayOrder.isEmpty || maxPeriods == 0)
               const Text('시간표를 표시할 수 있는 슬롯 구성이 없습니다.')
+            else if (_boardView == 'ROOM')
+              _buildRoomTimetableView(
+                controller: controller,
+                dayOrder: dayOrder,
+                slotsByDay: slotsByDay,
+                maxPeriods: maxPeriods,
+              )
             else if (narrow)
               Column(
                 children: [
-                  if (controller.isAdminLike) ...[
+                  if (controller.isAdminLike && _paletteOpen) ...[
                     _buildCoursePalette(controller),
                     const SizedBox(height: 12),
                   ],
@@ -1475,7 +1576,7 @@ class _TimetableTabState extends State<TimetableTab> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (controller.isAdminLike) ...[
+                  if (controller.isAdminLike && _paletteOpen) ...[
                     SizedBox(
                       width: 260,
                       child: _buildCoursePalette(controller),
@@ -1493,6 +1594,253 @@ class _TimetableTabState extends State<TimetableTab> {
                 ],
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoomTimetableView({
+    required NestController controller,
+    required List<int> dayOrder,
+    required Map<int, List<TimeSlot>> slotsByDay,
+    required int maxPeriods,
+  }) {
+    // Collect all unique locations from all term sessions
+    final allSessions = controller.allTermSessions;
+    final locations = <String>{};
+    for (final s in allSessions) {
+      if (s.location != null && s.location!.trim().isNotEmpty) {
+        locations.add(s.location!.trim());
+      }
+    }
+    final sortedLocations = locations.toList(growable: false)..sort();
+
+    if (sortedLocations.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: NestColors.roseMist.withValues(alpha: 0.36),
+        ),
+        child: const Text(
+          '장소가 설정된 수업이 없습니다. 수업 카드의 교사 배정 다이얼로그에서 장소를 설정하세요.',
+        ),
+      );
+    }
+
+    // Build lookup: slotId -> location -> list of sessions
+    final grid = <String, Map<String, List<ClassSession>>>{};
+    for (final s in allSessions) {
+      final loc = s.location?.trim();
+      if (loc == null || loc.isEmpty) continue;
+      grid.putIfAbsent(s.timeSlotId, () => <String, List<ClassSession>>{});
+      grid[s.timeSlotId]!.putIfAbsent(loc, () => <ClassSession>[]);
+      grid[s.timeSlotId]![loc]!.add(s);
+    }
+
+    const periodWidth = 100.0;
+    final roomColumnWidth = 180.0;
+    final minWidth = periodWidth + (sortedLocations.length * roomColumnWidth);
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white,
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: minWidth < 700 ? 700 : minWidth,
+          child: Column(
+            children: [
+              // Header row: period label + room names
+              Row(
+                children: [
+                  _GridHeaderCell(
+                    width: periodWidth,
+                    title: '교시',
+                    subtitle: '시간',
+                  ),
+                  ...sortedLocations.map(
+                    (loc) => _GridHeaderCell(
+                      width: roomColumnWidth,
+                      title: loc,
+                      subtitle: '공간',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Period rows
+              ...List.generate(maxPeriods, (periodIndex) {
+                TimeSlot? fallbackSlot;
+                for (final day in dayOrder) {
+                  final rows = slotsByDay[day] ?? const <TimeSlot>[];
+                  if (periodIndex < rows.length) {
+                    fallbackSlot = rows[periodIndex];
+                    break;
+                  }
+                }
+
+                // Gather all slot IDs for this period across all days
+                final periodSlotIds = <String>[];
+                for (final day in dayOrder) {
+                  final rows = slotsByDay[day] ?? const <TimeSlot>[];
+                  if (periodIndex < rows.length) {
+                    periodSlotIds.add(rows[periodIndex].id);
+                  }
+                }
+
+                final timeLabel = fallbackSlot == null
+                    ? '-'
+                    : '${_shortTime(fallbackSlot.startTime)}-${_shortTime(fallbackSlot.endTime)}';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: periodWidth,
+                        constraints: const BoxConstraints(minHeight: 80),
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: NestColors.creamyWhite,
+                          border: Border.all(color: NestColors.roseMist),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${periodIndex + 1}교시',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              timeLabel,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      ...sortedLocations.map((loc) {
+                        // Find sessions at this location for any slot in this period
+                        final sessionsHere = <ClassSession>[];
+                        for (final slotId in periodSlotIds) {
+                          final locSessions = grid[slotId]?[loc];
+                          if (locSessions != null) {
+                            sessionsHere.addAll(locSessions);
+                          }
+                        }
+
+                        final isConflict = sessionsHere.length > 1;
+
+                        return Container(
+                          width: roomColumnWidth,
+                          constraints: const BoxConstraints(minHeight: 80),
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: isConflict
+                                ? Colors.red.shade50
+                                : Colors.white,
+                            border: Border.all(
+                              color: isConflict
+                                  ? Colors.red.shade300
+                                  : NestColors.roseMist,
+                            ),
+                          ),
+                          child: sessionsHere.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    '-',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: NestColors.deepWood
+                                              .withValues(alpha: 0.3),
+                                        ),
+                                  ),
+                                )
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: sessionsHere.map((s) {
+                                    final courseName =
+                                        controller.findCourseName(s.courseId);
+                                    final className =
+                                        controller.findClassGroupName(
+                                          s.classGroupId,
+                                        );
+                                    final slot =
+                                        controller.findTimeSlot(s.timeSlotId);
+                                    final dayLabel = slot == null
+                                        ? ''
+                                        : _dayLabel(slot.dayOfWeek);
+                                    return Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 4),
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          color: NestColors.creamyWhite,
+                                          border: Border.all(
+                                            color: NestColors.roseMist,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              courseName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                            Text(
+                                              '$className · $dayLabel',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    fontSize: 11,
+                                                    color: NestColors.deepWood
+                                                        .withValues(
+                                                          alpha: 0.6,
+                                                        ),
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(growable: false),
+                                ),
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
         ),
       ),
     );
@@ -1575,6 +1923,8 @@ class _TimetableTabState extends State<TimetableTab> {
       minWidth = 940;
     }
 
+    final scaledWidth = minWidth * _gridScale;
+
     return RepaintBoundary(
       key: _timetableRepaintKey,
       child: Container(
@@ -1587,8 +1937,13 @@ class _TimetableTabState extends State<TimetableTab> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SizedBox(
-          width: minWidth,
-          child: Column(
+          width: scaledWidth,
+          child: Transform.scale(
+            scale: _gridScale,
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: minWidth,
+              child: Column(
             children: [
               Row(
                 children: [
@@ -1719,6 +2074,8 @@ class _TimetableTabState extends State<TimetableTab> {
               }),
             ],
           ),
+            ),
+          ),
         ),
       ),
     ));
@@ -1765,6 +2122,12 @@ class _TimetableTabState extends State<TimetableTab> {
   Future<void> _openTeacherAssignDialog({required String sessionId}) async {
     final controller = widget.controller;
     String? selectedTeacherId = controller.teacherProfiles.firstOrNull?.id;
+    final currentSession = controller.sessions
+        .where((s) => s.id == sessionId)
+        .firstOrNull;
+    final locationCtrl = TextEditingController(
+      text: currentSession?.location ?? '',
+    );
 
     await showDialog<void>(
       context: context,
@@ -1891,6 +2254,41 @@ class _TimetableTabState extends State<TimetableTab> {
                           ),
                         );
                       }),
+                    const SizedBox(height: 12),
+                    Text(
+                      '장소 설정',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: locationCtrl,
+                            decoration: const InputDecoration(
+                              labelText: '장소 (교실/공간)',
+                              hintText: '예: 교실A, 음악실',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.tonal(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () async {
+                                  await _safeCall(
+                                    () => controller.updateSessionLocation(
+                                      sessionId: sessionId,
+                                      location: locationCtrl.text,
+                                    ),
+                                  );
+                                  if (!context.mounted) return;
+                                  setLocalState(() {});
+                                },
+                          child: const Text('저장'),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     if (controller
                         .teacherConflictMessagesForSession(sessionId)
@@ -1908,7 +2306,10 @@ class _TimetableTabState extends State<TimetableTab> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    locationCtrl.dispose();
+                    Navigator.of(context).pop();
+                  },
                   child: const Text('닫기'),
                 ),
               ],
@@ -2114,6 +2515,7 @@ class _TimetableGridSlotCell extends StatelessWidget {
                         child: _GridSessionTile(
                           title: title,
                           subtitle: subtitle,
+                          location: session.location,
                           teacherBadges: teacherBadges,
                           conflictMessages: conflicts,
                           canManageTeachers: false,
@@ -2125,6 +2527,7 @@ class _TimetableGridSlotCell extends StatelessWidget {
                       child: _GridSessionTile(
                         title: title,
                         subtitle: subtitle,
+                        location: session.location,
                         teacherBadges: teacherBadges,
                         conflictMessages: conflicts,
                         canManageTeachers:
@@ -2156,10 +2559,12 @@ class _GridSessionTile extends StatelessWidget {
     required this.onManageTeachers,
     required this.canDelete,
     required this.onDelete,
+    this.location,
   });
 
   final String title;
   final String subtitle;
+  final String? location;
   final List<String> teacherBadges;
   final List<String> conflictMessages;
   final bool canManageTeachers;
@@ -2219,6 +2624,25 @@ class _GridSessionTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (location != null && location!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                const Icon(Icons.room_outlined, size: 12),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    location!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (teacherBadges.isNotEmpty) ...[
             const SizedBox(height: 6),
             Wrap(

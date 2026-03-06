@@ -756,6 +756,7 @@ class ClassSession {
     required this.title,
     required this.sourceType,
     required this.status,
+    this.location,
   });
 
   final String id;
@@ -765,6 +766,7 @@ class ClassSession {
   final String title;
   final String sourceType;
   final String status;
+  final String? location;
 
   factory ClassSession.fromMap(Map<String, dynamic> map) {
     return ClassSession(
@@ -775,6 +777,7 @@ class ClassSession {
       title: (map['title'] as String?) ?? '',
       sourceType: (map['source_type'] as String?) ?? 'MANUAL',
       status: (map['status'] as String?) ?? 'PLANNED',
+      location: map['location'] as String?,
     );
   }
 
@@ -786,6 +789,7 @@ class ClassSession {
     'title': title,
     'source_type': sourceType,
     'status': status,
+    'location': location,
   };
 }
 

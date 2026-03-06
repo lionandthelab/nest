@@ -756,7 +756,7 @@ class NestRepository {
     final data = await client
         .from('class_sessions')
         .select(
-          'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+          'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
         )
         .eq('class_group_id', classGroupId)
         .neq('status', 'CANCELED');
@@ -1018,6 +1018,7 @@ class NestRepository {
     required String title,
     required String createdByUserId,
     String sourceType = 'MANUAL',
+    String? location,
   }) async {
     final row = await client
         .from('class_sessions')
@@ -1029,13 +1030,40 @@ class NestRepository {
           'source_type': sourceType,
           'status': 'PLANNED',
           'created_by_user_id': createdByUserId,
+          'location': location,
         })
         .select(
-          'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+          'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
         )
         .single();
 
     return ClassSession.fromMap(_asMap(row));
+  }
+
+  Future<void> updateSessionLocation({
+    required String sessionId,
+    required String? location,
+  }) {
+    return client
+        .from('class_sessions')
+        .update({'location': location})
+        .eq('id', sessionId);
+  }
+
+  /// Fetch all non-canceled sessions for all class groups in a list of IDs.
+  Future<List<ClassSession>> fetchSessionsForClassGroups({
+    required List<String> classGroupIds,
+  }) async {
+    if (classGroupIds.isEmpty) return const [];
+    final data = await client
+        .from('class_sessions')
+        .select(
+          'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
+        )
+        .inFilter('class_group_id', classGroupIds)
+        .neq('status', 'CANCELED');
+
+    return _asRows(data).map(ClassSession.fromMap).toList(growable: false);
   }
 
   Future<void> moveSession({
