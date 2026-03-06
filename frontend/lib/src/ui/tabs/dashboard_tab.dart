@@ -21,6 +21,7 @@ class DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<DashboardTab> {
   final _formKey = GlobalKey<FormState>();
+  bool _bootstrapExpanded = false;
   final _homeschoolController = TextEditingController(text: 'Nest Warm Home');
   final _termController = TextEditingController(text: '2026 Spring');
   final _classController = TextEditingController(text: 'Robin Class');
@@ -76,46 +77,25 @@ class _DashboardTabState extends State<DashboardTab> {
     }
 
     // ── Normal dashboard ──
+    // Determine if setup guide should show (admin + not all steps done)
+    final showSetupGuide = controller.isAdminLike &&
+        !_setupSteps(controller).every((s) => s.completed);
+
+    // Bootstrap already done when homeschool + term + class all exist
+    final bootstrapDone = controller.selectedHomeschoolId != null &&
+        controller.terms.isNotEmpty &&
+        controller.classGroups.isNotEmpty;
+
     return ListView(
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('현재 뷰', style: theme.textTheme.titleLarge),
-                const SizedBox(height: 6),
-                Text(
-                  '활성 역할: ${controller.currentRole ?? 'NONE'}',
-                  style: theme.textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  controller.isParentView
-                      ? '부모 뷰에서는 내 아이의 시간표/갤러리를 중심으로 확인합니다.'
-                      : controller.isTeacherView
-                      ? '교사 뷰에서는 수업 운영과 활동 기록 중심으로 확인합니다.'
-                      : controller.isAdminLike
-                      ? '관리자 뷰에서는 운영/권한/신고 등 전체 관리 기능을 사용합니다.'
-                      : '역할을 선택하면 해당 뷰에 맞는 기능이 활성화됩니다.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.72),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
         if (controller.pendingInvites.isNotEmpty) ...[
-          const SizedBox(height: 16),
           _PendingInvitesCard(controller: controller),
-        ],
-        if (controller.isAdminLike) ...[
           const SizedBox(height: 16),
-          _buildAdminSetupFlowCard(theme, controller),
         ],
-        const SizedBox(height: 16),
+        if (showSetupGuide) ...[
+          _buildAdminSetupFlowCard(theme, controller),
+          const SizedBox(height: 16),
+        ],
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -149,7 +129,20 @@ class _DashboardTabState extends State<DashboardTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('최근 공지', style: theme.textTheme.titleLarge),
+                Row(
+                  children: [
+                    Text('최근 공지', style: theme.textTheme.titleLarge),
+                    const Spacer(),
+                    if (controller.canWriteAnnouncement)
+                      FilledButton.tonalIcon(
+                        onPressed: controller.isBusy
+                            ? null
+                            : () => _showCreateAnnouncementModal(context),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('공지 작성'),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 if (controller.announcements.isEmpty)
                   const Text('등록된 공지가 없습니다.')
@@ -173,91 +166,7 @@ class _DashboardTabState extends State<DashboardTab> {
         ),
         const SizedBox(height: 16),
         if (controller.isAdminLike)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('빠른 초기 세팅', style: theme.textTheme.titleLarge),
-                    const SizedBox(height: 6),
-                    Text(
-                      '관리 운영의 기본 틀(홈스쿨, 학기, 반, 과목, 시간 슬롯)을 자동으로 만듭니다.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.72),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _homeschoolController,
-                      decoration: const InputDecoration(labelText: '홈스쿨 이름'),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                          ? '필수값입니다.'
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _termController,
-                      decoration: const InputDecoration(labelText: '학기 이름'),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                          ? '필수값입니다.'
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _startDateController,
-                            decoration: const InputDecoration(
-                              labelText: '시작일 (YYYY-MM-DD)',
-                            ),
-                            validator: _validateDate,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _endDateController,
-                            decoration: const InputDecoration(
-                              labelText: '종료일 (YYYY-MM-DD)',
-                            ),
-                            validator: _validateDate,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _classController,
-                      decoration: const InputDecoration(labelText: '반 이름'),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                          ? '필수값입니다.'
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _courseController,
-                      decoration: const InputDecoration(
-                        labelText: '기본 과목 (콤마 구분)',
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    ElevatedButton.icon(
-                      onPressed: controller.isBusy ? null : _submitBootstrap,
-                      icon: const Icon(Icons.auto_awesome),
-                      label: const Text('운영 틀 생성'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
+          _buildBootstrapCard(theme, controller, bootstrapDone)
         else
           Card(
             child: Padding(
@@ -269,6 +178,258 @@ class _DashboardTabState extends State<DashboardTab> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildBootstrapCard(
+    ThemeData theme,
+    NestController controller,
+    bool bootstrapDone,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () =>
+                  setState(() => _bootstrapExpanded = !_bootstrapExpanded),
+              child: Row(
+                children: [
+                  Text('빠른 초기 세팅', style: theme.textTheme.titleLarge),
+                  const SizedBox(width: 4),
+                  AnimatedRotation(
+                    turns: _bootstrapExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.expand_more),
+                  ),
+                  const Spacer(),
+                  if (bootstrapDone)
+                    Chip(
+                      label: const Text('세팅 완료'),
+                      avatar: Icon(
+                        Icons.check_circle,
+                        size: 16,
+                        color: Colors.green.shade600,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: _bootstrapExpanded
+                  ? Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 6),
+                          Text(
+                            '관리 운영의 기본 틀(홈스쿨, 학기, 반, 과목, 시간 슬롯)을 자동으로 만듭니다.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color:
+                                  NestColors.deepWood.withValues(alpha: 0.72),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _homeschoolController,
+                            decoration:
+                                const InputDecoration(labelText: '홈스쿨 이름'),
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? '필수값입니다.'
+                                    : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _termController,
+                            decoration:
+                                const InputDecoration(labelText: '학기 이름'),
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? '필수값입니다.'
+                                    : null,
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _startDateController,
+                                  decoration: const InputDecoration(
+                                    labelText: '시작일 (YYYY-MM-DD)',
+                                  ),
+                                  validator: _validateDate,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _endDateController,
+                                  decoration: const InputDecoration(
+                                    labelText: '종료일 (YYYY-MM-DD)',
+                                  ),
+                                  validator: _validateDate,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _classController,
+                            decoration:
+                                const InputDecoration(labelText: '반 이름'),
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? '필수값입니다.'
+                                    : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _courseController,
+                            decoration: const InputDecoration(
+                              labelText: '기본 과목 (콤마 구분)',
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          ElevatedButton.icon(
+                            onPressed:
+                                controller.isBusy ? null : _submitBootstrap,
+                            icon: const Icon(Icons.auto_awesome),
+                            label: const Text('운영 틀 생성'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCreateAnnouncementModal(BuildContext context) {
+    final controller = widget.controller;
+    final titleCtrl = TextEditingController();
+    final bodyCtrl = TextEditingController();
+    String? selectedClassGroupId;
+    bool pinned = false;
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            20 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '공지사항 작성',
+                  style: Theme.of(ctx).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(labelText: '제목'),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? '제목을 입력하세요.' : null,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: bodyCtrl,
+                  decoration: const InputDecoration(labelText: '본문'),
+                  maxLines: 4,
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? '본문을 입력하세요.' : null,
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedClassGroupId,
+                  decoration: const InputDecoration(labelText: '대상'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('전체')),
+                    ...controller.classGroups.map(
+                      (cg) => DropdownMenuItem(
+                        value: cg.id,
+                        child: Text(cg.name),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) =>
+                      setModalState(() => selectedClassGroupId = v),
+                ),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  title: const Text('상단 고정'),
+                  value: pinned,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (v) => setModalState(() => pinned = v),
+                ),
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () async {
+                            if (!(formKey.currentState?.validate() ?? false)) {
+                              return;
+                            }
+                            try {
+                              await controller.createAnnouncement(
+                                title: titleCtrl.text,
+                                body: bodyCtrl.text,
+                                classGroupId: selectedClassGroupId,
+                                pinned: pinned,
+                              );
+                              if (ctx.mounted) Navigator.of(ctx).pop();
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(controller.statusMessage),
+                                  ),
+                                );
+                              }
+                            } catch (_) {
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(
+                                    content: Text(controller.statusMessage),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.send),
+                    label: const Text('등록'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

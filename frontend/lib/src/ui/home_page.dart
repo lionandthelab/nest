@@ -557,6 +557,31 @@ class _MainPanel extends StatefulWidget {
 class _MainPanelState extends State<_MainPanel> {
   bool _headerExpanded = false;
 
+  void _showRoleInfo(BuildContext context, NestController controller) {
+    final role = controller.currentRole ?? '';
+    final message = controller.isParentView
+        ? '부모 뷰에서는 내 아이의 시간표/갤러리를 중심으로 확인합니다.'
+        : controller.isTeacherView
+            ? '교사 뷰에서는 수업 운영과 활동 기록 중심으로 확인합니다.'
+            : controller.isAdminLike
+                ? '관리자 뷰에서는 운영/권한/신고 등 전체 관리 기능을 사용합니다.'
+                : '역할을 선택하면 해당 뷰에 맞는 기능이 활성화됩니다.';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('활성 역할: $role'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -580,6 +605,12 @@ class _MainPanelState extends State<_MainPanel> {
                       label: Text(controller.currentRole ?? '-'),
                       avatar: const Icon(Icons.verified_user, size: 14),
                       visualDensity: VisualDensity.compact,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.info_outline, size: 18),
+                      visualDensity: VisualDensity.compact,
+                      tooltip: '역할 안내',
+                      onPressed: () => _showRoleInfo(context, controller),
                     ),
                     const Spacer(),
                     IconButton(
