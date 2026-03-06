@@ -1984,6 +1984,9 @@ class NestController extends ChangeNotifier {
     if (trimmedName.isEmpty) {
       throw StateError('과목 이름을 입력하세요.');
     }
+    if (courses.any((c) => c.name.trim().toLowerCase() == trimmedName.toLowerCase())) {
+      throw StateError('이미 동일한 이름의 과목이 있습니다: $trimmedName');
+    }
     if (defaultDurationMin < 20 || defaultDurationMin > 300) {
       throw StateError('기본 수업 시간은 20~300분 사이여야 합니다.');
     }
@@ -2049,6 +2052,9 @@ class NestController extends ChangeNotifier {
     final trimmedName = familyName.trim();
     if (trimmedName.isEmpty) {
       throw StateError('가정 이름을 입력하세요.');
+    }
+    if (families.any((f) => f.familyName.trim().toLowerCase() == trimmedName.toLowerCase())) {
+      throw StateError('이미 동일한 이름의 가정이 있습니다: $trimmedName');
     }
 
     await _runBusy('가정을 생성하는 중...', () async {

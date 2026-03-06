@@ -978,7 +978,7 @@ class _TimetableTabState extends State<TimetableTab> {
             runSpacing: 8,
             children: [
               ElevatedButton.icon(
-                onPressed: controller.isBusy ? null : _generateScheduleOptions,
+                onPressed: controller.isBusy ? null : () => _generateScheduleOptions(openWizard: true),
                 icon: const Icon(Icons.auto_awesome),
                 label: const Text('프롬프트로 초안 생성'),
               ),
@@ -2087,7 +2087,7 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
-  Future<void> _generateScheduleOptions() async {
+  Future<void> _generateScheduleOptions({bool openWizard = false}) async {
     await _safeCall(() {
       return widget.controller.generateScheduleOptions(
         prompt: _promptController.text,
@@ -2101,6 +2101,9 @@ class _TimetableTabState extends State<TimetableTab> {
         keepExistingSessions: _keepExistingSessions,
       );
     });
+    if (openWizard && mounted && widget.controller.scheduleOptionDrafts.isNotEmpty) {
+      _openWizardModal(widget.controller);
+    }
   }
 
   Future<void> _reloadProposals() async {
@@ -2323,14 +2326,15 @@ class _TimetableTabState extends State<TimetableTab> {
   Future<void> _safeCall(Future<void> Function() action) async {
     try {
       await action();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) {
         return;
       }
 
+      final message = e is StateError ? e.message : widget.controller.statusMessage;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 }
