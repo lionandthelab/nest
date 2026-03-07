@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/hub_scaffold.dart';
+import '../widgets/search_select_field.dart';
 
 class TeacherHubTab extends StatefulWidget {
   const TeacherHubTab({super.key, required this.controller});
@@ -303,28 +304,14 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             if (managedClasses.isEmpty)
               _buildEmptyHint('담당 교사로 배정된 반이 없습니다.')
             else ...[
-              DropdownButtonFormField<String>(
-                key: ValueKey(
-                  'managed-class-${_selectedManagedClassGroupId ?? ''}',
-                ),
-                initialValue: _selectedManagedClassGroupId,
-                decoration: const InputDecoration(
-                  labelText: '담당 반 선택',
-                  prefixIcon: Icon(Icons.groups_2_outlined),
-                ),
-                items: managedClasses
-                    .map(
-                      (bundle) => DropdownMenuItem<String>(
-                        value: bundle.classGroup.id,
-                        child: Text(bundle.classGroup.name),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedManagedClassGroupId = value;
-                  });
-                },
+              SelectFieldCard(
+                label: '담당 반 선택',
+                hintText: '반을 선택하세요',
+                icon: Icons.groups_2_outlined,
+                enabled: !controller.isBusy,
+                value: selectedBundle?.classGroup.name,
+                helpText: '검색으로 담당 반을 빠르게 전환할 수 있습니다.',
+                onTap: () => _selectManagedClass(managedClasses),
               ),
               const SizedBox(height: 12),
               if (selectedBundle != null) ...[
@@ -438,27 +425,12 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     final teacherCandidates = controller.currentUserTeacherProfiles.isNotEmpty
         ? controller.currentUserTeacherProfiles
         : controller.teacherProfiles;
-
-    final sessionItems = sessions
-        .map(
-          (session) => DropdownMenuItem<String>(
-            value: session.id,
-            child: Text(
-              session.title.isEmpty
-                  ? controller.findCourseName(session.courseId)
-                  : session.title,
-            ),
-          ),
-        )
-        .toList(growable: false);
-    final teacherItems = teacherCandidates
-        .map(
-          (teacher) => DropdownMenuItem<String>(
-            value: teacher.id,
-            child: Text(teacher.displayName),
-          ),
-        )
-        .toList(growable: false);
+    final selectedSession = sessions
+        .where((session) => session.id == _planSessionId)
+        .firstOrNull;
+    final selectedTeacher = teacherCandidates
+        .where((teacher) => teacher.id == _planTeacherProfileId)
+        .firstOrNull;
 
     return Card(
       child: Padding(
@@ -470,31 +442,29 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             const SizedBox(height: 10),
             if (selectedBundle == null)
               _buildEmptyHint('먼저 담당 반을 선택하세요.')
-            else if (sessionItems.isEmpty || teacherItems.isEmpty)
+            else if (sessions.isEmpty || teacherCandidates.isEmpty)
               _buildEmptyHint('수업 세션/교사 프로필 데이터가 필요합니다.')
             else ...[
-              DropdownButtonFormField<String>(
-                initialValue: _planSessionId,
-                decoration: const InputDecoration(
-                  labelText: '수업 세션',
-                  prefixIcon: Icon(Icons.class_outlined),
-                ),
-                items: sessionItems,
-                onChanged: controller.isBusy
+              SelectFieldCard(
+                label: '수업 세션',
+                hintText: '세션을 선택하세요',
+                icon: Icons.class_outlined,
+                enabled: !controller.isBusy,
+                value: selectedSession == null
                     ? null
-                    : (value) => setState(() => _planSessionId = value),
+                    : _sessionTitle(controller, selectedSession),
+                helpText: '계획을 등록할 수업을 선택합니다.',
+                onTap: () => _selectPlanSession(controller, sessions),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _planTeacherProfileId,
-                decoration: const InputDecoration(
-                  labelText: '작성 교사',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                items: teacherItems,
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) => setState(() => _planTeacherProfileId = value),
+              SelectFieldCard(
+                label: '작성 교사',
+                hintText: '교사를 선택하세요',
+                icon: Icons.person_outline,
+                enabled: !controller.isBusy,
+                value: selectedTeacher?.displayName,
+                helpText: '현재 계정과 연결된 교사 프로필이 우선 노출됩니다.',
+                onTap: () => _selectPlanTeacher(teacherCandidates),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -676,34 +646,23 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             return right.compareTo(left);
           });
 
-    final sessionItems = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: '__NONE__', child: Text('세션 미지정')),
-      ...(selectedBundle?.sessions ?? const <ClassSession>[]).map(
-        (session) => DropdownMenuItem<String>(
-          value: session.id,
-          child: Text(
-            session.title.isEmpty
-                ? controller.findCourseName(session.courseId)
-                : session.title,
-          ),
-        ),
-      ),
-    ];
-
     final teacherCandidates = controller.currentUserTeacherProfiles.isNotEmpty
         ? controller.currentUserTeacherProfiles
         : controller.teacherProfiles;
-
-    final teacherItems = teacherCandidates
-        .map(
-          (teacher) => DropdownMenuItem<String>(
-            value: teacher.id,
-            child: Text(teacher.displayName),
-          ),
-        )
-        .toList(growable: false);
-
-    final sessionValue = _logSessionId ?? '__NONE__';
+    final selectedChild = children
+        .where((child) => child.id == _logChildId)
+        .firstOrNull;
+    final selectedSession = (selectedBundle?.sessions ?? const <ClassSession>[])
+        .where((session) => session.id == _logSessionId)
+        .firstOrNull;
+    final selectedTeacher = teacherCandidates
+        .where((teacher) => teacher.id == _logTeacherProfileId)
+        .firstOrNull;
+    final activityTypeLabel = switch (_logActivityType) {
+      'ATTENDANCE' => '출결',
+      'ASSIGNMENT' => '과제',
+      _ => '관찰',
+    };
 
     return Card(
       child: Padding(
@@ -715,78 +674,48 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             const SizedBox(height: 8),
             if (selectedBundle == null)
               _buildEmptyHint('반을 먼저 선택하세요.')
-            else if (children.isEmpty || teacherItems.isEmpty)
+            else if (children.isEmpty || teacherCandidates.isEmpty)
               _buildEmptyHint('아이/교사 데이터가 필요합니다.')
             else ...[
-              DropdownButtonFormField<String>(
-                initialValue: _logChildId,
-                decoration: const InputDecoration(
-                  labelText: '아이',
-                  prefixIcon: Icon(Icons.child_care_outlined),
-                ),
-                items: children
-                    .map(
-                      (child) => DropdownMenuItem<String>(
-                        value: child.id,
-                        child: Text('${child.name} (${child.familyName})'),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: controller.isBusy
+              SelectFieldCard(
+                label: '아이',
+                hintText: '아이를 선택하세요',
+                icon: Icons.child_care_outlined,
+                enabled: !controller.isBusy,
+                value: selectedChild == null
                     ? null
-                    : (value) => setState(() => _logChildId = value),
+                    : '${selectedChild.name} (${selectedChild.familyName})',
+                onTap: () => _selectLogChild(children),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                key: ValueKey('child-log-session-$sessionValue'),
-                initialValue: sessionValue,
-                decoration: const InputDecoration(
-                  labelText: '연결 수업',
-                  prefixIcon: Icon(Icons.class_outlined),
-                ),
-                items: sessionItems,
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _logSessionId = value == '__NONE__' ? null : value;
-                        });
-                      },
+              SelectFieldCard(
+                label: '연결 수업',
+                hintText: '세션 미지정',
+                icon: Icons.class_outlined,
+                enabled: !controller.isBusy,
+                value: selectedSession == null
+                    ? '세션 미지정'
+                    : _sessionTitle(controller, selectedSession),
+                helpText: '세션 없이 기록할 수도 있습니다.',
+                onTap: () => _selectLogSession(controller, selectedBundle),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _logTeacherProfileId,
-                decoration: const InputDecoration(
-                  labelText: '기록 교사',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                items: teacherItems,
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) => setState(() => _logTeacherProfileId = value),
+              SelectFieldCard(
+                label: '기록 교사',
+                hintText: '교사를 선택하세요',
+                icon: Icons.person_outline,
+                enabled: !controller.isBusy,
+                value: selectedTeacher?.displayName,
+                onTap: () => _selectLogTeacher(teacherCandidates),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _logActivityType,
-                decoration: const InputDecoration(
-                  labelText: '활동 유형',
-                  prefixIcon: Icon(Icons.category_outlined),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'ATTENDANCE', child: Text('출결')),
-                  DropdownMenuItem(value: 'OBSERVATION', child: Text('관찰')),
-                  DropdownMenuItem(value: 'ASSIGNMENT', child: Text('과제')),
-                ],
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setState(() {
-                          _logActivityType = value;
-                        });
-                      },
+              SelectFieldCard(
+                label: '활동 유형',
+                hintText: '유형 선택',
+                icon: Icons.category_outlined,
+                enabled: !controller.isBusy,
+                value: activityTypeLabel,
+                onTap: _selectLogActivityType,
               ),
               const SizedBox(height: 8),
               TextField(
@@ -878,58 +807,45 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             if (myProfiles.isEmpty)
               _buildEmptyHint('연결된 교사 프로필이 없습니다.')
             else ...[
-              DropdownButtonFormField<String>(
-                key: ValueKey('teacher-unavailable-${selectedProfileId ?? ''}'),
-                initialValue: selectedProfileId,
-                decoration: const InputDecoration(
-                  labelText: '교사 프로필',
-                  prefixIcon: Icon(Icons.person_outline),
+              SelectFieldCard(
+                label: '교사 프로필',
+                hintText: '교사 프로필을 선택하세요',
+                icon: Icons.person_outline,
+                enabled: !controller.isBusy,
+                value: myProfiles
+                    .where((profile) => profile.id == selectedProfileId)
+                    .map((profile) => profile.displayName)
+                    .firstOrNull,
+                onTap: () => _selectUnavailabilityTeacherProfile(myProfiles),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '요일 선택',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.74),
                 ),
-                items: myProfiles
-                    .map(
-                      (profile) => DropdownMenuItem<String>(
-                        value: profile.id,
-                        child: Text(profile.displayName),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _unavailabilityTeacherProfileId = value;
-                        });
-                      },
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: List.generate(7, (day) {
+                  return ChoiceChip(
+                    label: Text(_dayLabel(day)),
+                    selected: _selectedUnavailabilityDay == day,
+                    onSelected: controller.isBusy
+                        ? null
+                        : (_) {
+                            setState(() {
+                              _selectedUnavailabilityDay = day;
+                            });
+                          },
+                  );
+                }),
               ),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: _selectedUnavailabilityDay,
-                      decoration: const InputDecoration(labelText: '요일'),
-                      items: const [
-                        DropdownMenuItem(value: 0, child: Text('Sun')),
-                        DropdownMenuItem(value: 1, child: Text('Mon')),
-                        DropdownMenuItem(value: 2, child: Text('Tue')),
-                        DropdownMenuItem(value: 3, child: Text('Wed')),
-                        DropdownMenuItem(value: 4, child: Text('Thu')),
-                        DropdownMenuItem(value: 5, child: Text('Fri')),
-                        DropdownMenuItem(value: 6, child: Text('Sat')),
-                      ],
-                      onChanged: controller.isBusy
-                          ? null
-                          : (value) {
-                              if (value == null) {
-                                return;
-                              }
-                              setState(() {
-                                _selectedUnavailabilityDay = value;
-                              });
-                            },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   Expanded(
                     child: _buildTimeField(
                       controller: _unavailabilityStartController,
@@ -1046,6 +962,256 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       ),
       child: Text(message),
     );
+  }
+
+  String _sessionTitle(NestController controller, ClassSession session) {
+    return session.title.isEmpty
+        ? controller.findCourseName(session.courseId)
+        : session.title;
+  }
+
+  Future<void> _selectManagedClass(
+    List<_TeacherClassBundle> managedClasses,
+  ) async {
+    final options = managedClasses
+        .map(
+          (bundle) => SelectSheetOption<String>(
+            value: bundle.classGroup.id,
+            title: bundle.classGroup.name,
+            subtitle:
+                '수업 ${bundle.sessions.length}개 · 아동 ${bundle.children.length}명',
+            keywords: bundle.classGroup.name,
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '담당 반 선택',
+      helpText: '운영할 반을 선택하면 하단 정보가 즉시 갱신됩니다.',
+      options: options,
+      currentValue: _selectedManagedClassGroupId,
+    );
+    if (!mounted ||
+        selected == null ||
+        selected == _selectedManagedClassGroupId) {
+      return;
+    }
+    setState(() {
+      _selectedManagedClassGroupId = selected;
+    });
+  }
+
+  Future<void> _selectPlanSession(
+    NestController controller,
+    List<ClassSession> sessions,
+  ) async {
+    final options = sessions
+        .map(
+          (session) => SelectSheetOption<String>(
+            value: session.id,
+            title: _sessionTitle(controller, session),
+            subtitle: session.id,
+            keywords:
+                '${_sessionTitle(controller, session)} ${controller.findCourseName(session.courseId)}',
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '수업 세션 선택',
+      helpText: '수업 계획을 작성할 세션을 선택하세요.',
+      options: options,
+      currentValue: _planSessionId,
+    );
+    if (!mounted || selected == null || selected == _planSessionId) {
+      return;
+    }
+    setState(() {
+      _planSessionId = selected;
+    });
+  }
+
+  Future<void> _selectPlanTeacher(
+    List<TeacherProfile> teacherCandidates,
+  ) async {
+    final options = teacherCandidates
+        .map(
+          (teacher) => SelectSheetOption<String>(
+            value: teacher.id,
+            title: teacher.displayName,
+            subtitle: teacher.teacherType,
+            keywords: '${teacher.displayName} ${teacher.teacherType}',
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '작성 교사 선택',
+      helpText: '계획 기록자로 표시할 교사를 선택하세요.',
+      options: options,
+      currentValue: _planTeacherProfileId,
+    );
+    if (!mounted || selected == null || selected == _planTeacherProfileId) {
+      return;
+    }
+    setState(() {
+      _planTeacherProfileId = selected;
+    });
+  }
+
+  Future<void> _selectLogChild(List<ChildProfile> children) async {
+    final options = children
+        .map(
+          (child) => SelectSheetOption<String>(
+            value: child.id,
+            title: child.name,
+            subtitle: child.familyName,
+            keywords: '${child.name} ${child.familyName}',
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '아이 선택',
+      helpText: '상태 기록을 남길 아이를 선택하세요.',
+      options: options,
+      currentValue: _logChildId,
+    );
+    if (!mounted || selected == null || selected == _logChildId) {
+      return;
+    }
+    setState(() {
+      _logChildId = selected;
+    });
+  }
+
+  Future<void> _selectLogSession(
+    NestController controller,
+    _TeacherClassBundle? selectedBundle,
+  ) async {
+    final options = <SelectSheetOption<String>>[
+      const SelectSheetOption<String>(
+        value: '__NONE__',
+        title: '세션 미지정',
+        subtitle: '특정 수업에 연결하지 않습니다.',
+      ),
+      ...(selectedBundle?.sessions ?? const <ClassSession>[]).map(
+        (session) => SelectSheetOption<String>(
+          value: session.id,
+          title: _sessionTitle(controller, session),
+          subtitle: session.id,
+          keywords:
+              '${_sessionTitle(controller, session)} ${controller.findCourseName(session.courseId)}',
+        ),
+      ),
+    ];
+
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '연결 수업 선택',
+      helpText: '상태 기록과 연결할 수업을 선택하세요.',
+      options: options,
+      currentValue: _logSessionId ?? '__NONE__',
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    final nextValue = selected == '__NONE__' ? null : selected;
+    if (nextValue == _logSessionId) {
+      return;
+    }
+    setState(() {
+      _logSessionId = nextValue;
+    });
+  }
+
+  Future<void> _selectLogTeacher(List<TeacherProfile> teacherCandidates) async {
+    final options = teacherCandidates
+        .map(
+          (teacher) => SelectSheetOption<String>(
+            value: teacher.id,
+            title: teacher.displayName,
+            subtitle: teacher.teacherType,
+            keywords: '${teacher.displayName} ${teacher.teacherType}',
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '기록 교사 선택',
+      helpText: '상태 기록을 작성하는 교사 프로필을 선택하세요.',
+      options: options,
+      currentValue: _logTeacherProfileId,
+    );
+    if (!mounted || selected == null || selected == _logTeacherProfileId) {
+      return;
+    }
+    setState(() {
+      _logTeacherProfileId = selected;
+    });
+  }
+
+  Future<void> _selectLogActivityType() async {
+    const options = <SelectSheetOption<String>>[
+      SelectSheetOption<String>(
+        value: 'ATTENDANCE',
+        title: '출결',
+        subtitle: '출석/지각/결석 상태를 기록합니다.',
+      ),
+      SelectSheetOption<String>(
+        value: 'OBSERVATION',
+        title: '관찰',
+        subtitle: '학습 태도와 정서 관찰을 기록합니다.',
+      ),
+      SelectSheetOption<String>(
+        value: 'ASSIGNMENT',
+        title: '과제',
+        subtitle: '과제 수행/피드백 내용을 기록합니다.',
+      ),
+    ];
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '활동 유형 선택',
+      helpText: '기록의 성격에 맞는 활동 유형을 고르세요.',
+      options: options,
+      currentValue: _logActivityType,
+    );
+    if (!mounted || selected == null || selected == _logActivityType) {
+      return;
+    }
+    setState(() {
+      _logActivityType = selected;
+    });
+  }
+
+  Future<void> _selectUnavailabilityTeacherProfile(
+    List<TeacherProfile> profiles,
+  ) async {
+    final options = profiles
+        .map(
+          (profile) => SelectSheetOption<String>(
+            value: profile.id,
+            title: profile.displayName,
+            subtitle: profile.teacherType,
+            keywords: '${profile.displayName} ${profile.teacherType}',
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '교사 프로필 선택',
+      helpText: '불가 시간을 적용할 교사 프로필을 선택하세요.',
+      options: options,
+      currentValue: _unavailabilityTeacherProfileId,
+    );
+    if (!mounted ||
+        selected == null ||
+        selected == _unavailabilityTeacherProfileId) {
+      return;
+    }
+    setState(() {
+      _unavailabilityTeacherProfileId = selected;
+    });
   }
 
   Future<void> _createTeachingPlan() async {

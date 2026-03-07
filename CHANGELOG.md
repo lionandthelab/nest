@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.0.3+4 (2026-03-07)
+
+### Added
+
+- 공용 선택 UX 위젯 추가
+  - `search_select_field.dart`
+  - `SelectFieldCard`: 클릭형 카드 선택 필드
+  - `showSelectSheet`: 검색 가능한 바텀시트 선택창
+
+### Changed
+
+- `Term Setup` UX 개선 (`family_admin_tab.dart`)
+  - 가정 선택, 반 선택, 불가시간 대상 선택을 드롭다운에서 검색형 카드 선택으로 전환
+  - 불가시간 요일 선택을 드롭다운에서 `ChoiceChip` 기반 빠른 선택으로 전환
+  - 교사 유형 선택을 드롭다운에서 `SegmentedButton`으로 전환
+- `Teacher Hub` UX 개선 (`teacher_hub_tab.dart`)
+  - 담당 반/수업세션/작성교사/아이/활동유형/불가시간 프로필 선택을 검색형 카드 선택으로 전환
+  - 수업운영 입력의 문맥 설명(help text) 강화
+- `Parent` 아이 선택 UX 개선 (`child_selector_header.dart`)
+  - 아이 전환을 검색형 카드 선택으로 통일
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.2+3 (2026-03-06)
 
 ### Changed

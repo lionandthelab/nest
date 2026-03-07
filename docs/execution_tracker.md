@@ -1,6 +1,6 @@
 # Nest Execution Tracker
 
-Last updated: 2026-03-03
+Last updated: 2026-03-07
 
 ## Scope
 
@@ -58,6 +58,7 @@ Last updated: 2026-03-03
 | 2026-03-03 | Parent Hub 아이별 뷰(소속 반/반별 시간표/상태 로그) + Teacher Hub 담당 반별 뷰(시간표/공지/아동 상태 관리) 고도화 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-03 | 시간표 UX 강화: 단계형 초안 위자드 + 메인보드 프롬프트 액션바 + 반/교사 상황패널(웹 사이드바/모바일 모달) 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-03 | DnD 세션 생성 `location` 스키마 호환 수정(컬럼 없음/NOT NULL 대응) + `supabase db push`로 세션 위치 마이그레이션 적용 + 상단 컨텍스트 카드형 UX/도움말 개편 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
+| 2026-03-07 | 관리자/교사/학부모 선택 UX 고도화: 공용 검색 선택 시트 + 카드형 선택 필드 도입, Term Setup/Teacher Hub/Child Selector의 드롭다운 중심 입력 제거 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/search_select_field.dart';
 
 class FamilyAdminTab extends StatefulWidget {
   const FamilyAdminTab({super.key, required this.controller});
@@ -361,14 +362,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildChildCreateCard(NestController controller) {
-    final familyItems = controller.families
-        .map(
-          (family) => DropdownMenuItem(
-            value: family.id,
-            child: Text(family.familyName),
-          ),
-        )
-        .toList(growable: false);
+    final selectedFamily = controller.families
+        .where((row) => row.id == _selectedFamilyId)
+        .firstOrNull;
 
     return Card(
       child: Padding(
@@ -378,20 +374,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
           children: [
             Text('아이 등록', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
-            if (familyItems.isEmpty)
+            if (controller.families.isEmpty)
               const Text('먼저 가정을 등록하세요.')
             else ...[
-              DropdownButtonFormField<String>(
-                initialValue: _selectedFamilyId,
-                decoration: const InputDecoration(labelText: '소속 가정'),
-                items: familyItems,
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedFamilyId = value;
-                        });
-                      },
+              SelectFieldCard(
+                label: '소속 가정',
+                hintText: '가정을 선택하세요',
+                icon: Icons.home_outlined,
+                enabled: !controller.isBusy,
+                value: selectedFamily?.familyName,
+                helpText: '아이를 연결할 가정을 검색해서 선택합니다.',
+                onTap: () => _selectFamilyForChild(controller),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -426,11 +419,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildClassCrudCard(NestController controller) {
-    final classItems = controller.classGroups
-        .map(
-          (group) => DropdownMenuItem(value: group.id, child: Text(group.name)),
-        )
-        .toList(growable: false);
+    final selectedClass = controller.classGroups
+        .where((row) => row.id == _selectedClassGroupId)
+        .firstOrNull;
 
     return Card(
       child: Padding(
@@ -447,21 +438,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ),
             ),
             const SizedBox(height: 10),
-            if (classItems.isEmpty)
+            if (controller.classGroups.isEmpty)
               const Text('현재 학기에 등록된 반이 없습니다. 아래 정보로 새 반을 생성하세요.')
             else
-              DropdownButtonFormField<String>(
-                initialValue: _selectedClassGroupId,
-                decoration: const InputDecoration(labelText: '편집 대상 반'),
-                items: classItems,
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedClassGroupId = value;
-                          _syncClassForm(controller, force: true);
-                        });
-                      },
+              SelectFieldCard(
+                label: '편집 대상 반',
+                hintText: '반을 선택하세요',
+                icon: Icons.groups_2_outlined,
+                enabled: !controller.isBusy,
+                value: selectedClass?.name,
+                helpText: '수정/삭제할 반을 먼저 선택하세요.',
+                onTap: () => _selectClassGroup(controller),
               ),
             const SizedBox(height: 8),
             TextField(
@@ -616,13 +603,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildEnrollmentCard(NestController controller) {
-    final classItems = controller.classGroups
-        .map(
-          (group) => DropdownMenuItem(value: group.id, child: Text(group.name)),
-        )
-        .toList(growable: false);
-
     final classGroupId = _selectedClassGroupId;
+    final selectedClass = controller.classGroups
+        .where((row) => row.id == classGroupId)
+        .firstOrNull;
     final enrolledIds = classGroupId == null
         ? const <String>[]
         : controller.enrolledChildIdsForClassGroup(classGroupId);
@@ -642,21 +626,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ),
             ),
             const SizedBox(height: 10),
-            if (classItems.isEmpty)
+            if (controller.classGroups.isEmpty)
               const Text('현재 학기에 반이 없습니다.')
             else
-              DropdownButtonFormField<String>(
-                initialValue: classGroupId,
-                decoration: const InputDecoration(labelText: '반 선택'),
-                items: classItems,
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedClassGroupId = value;
-                          _syncClassForm(controller, force: true);
-                        });
-                      },
+              SelectFieldCard(
+                label: '반 선택',
+                hintText: '배정할 반을 선택하세요',
+                icon: Icons.class_outlined,
+                enabled: !controller.isBusy,
+                value: selectedClass?.name,
+                helpText: '아이 체크 시 선택한 반으로 즉시 배정됩니다.',
+                onTap: () => _selectClassGroup(controller),
               ),
             const SizedBox(height: 8),
             if (controller.children.isEmpty)
@@ -811,27 +791,35 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               decoration: const InputDecoration(labelText: '표시 이름'),
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: _teacherType,
-              decoration: const InputDecoration(labelText: '교사 유형'),
-              items: const [
-                DropdownMenuItem(
+            Text(
+              '교사 유형',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.74),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
                   value: 'PARENT_TEACHER',
-                  child: Text('PARENT_TEACHER'),
+                  label: Text('부모 교사'),
+                  icon: Icon(Icons.family_restroom, size: 16),
                 ),
-                DropdownMenuItem(
+                ButtonSegment(
                   value: 'GUEST_TEACHER',
-                  child: Text('GUEST_TEACHER'),
+                  label: Text('초청 교사'),
+                  icon: Icon(Icons.badge_outlined, size: 16),
                 ),
               ],
-              onChanged: controller.isBusy
+              selected: {_teacherType},
+              onSelectionChanged: controller.isBusy
                   ? null
-                  : (value) {
-                      if (value == null) {
+                  : (values) {
+                      if (values.isEmpty) {
                         return;
                       }
                       setState(() {
-                        _teacherType = value;
+                        _teacherType = values.first;
                       });
                     },
             ),
@@ -849,23 +837,31 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
   Widget _buildMemberUnavailabilityCard(NestController controller) {
     final isTeacher = _unavailabilityOwnerKind == 'TEACHER_PROFILE';
-    final ownerItems = isTeacher
+    final ownerOptions = isTeacher
         ? controller.teacherProfiles
               .map(
-                (row) => DropdownMenuItem<String>(
+                (row) => SelectSheetOption<String>(
                   value: row.id,
-                  child: Text(row.displayName),
+                  title: row.displayName,
+                  subtitle: row.teacherType,
+                  keywords: row.displayName,
                 ),
               )
               .toList(growable: false)
         : controller.parentCandidateUserIds
               .map(
-                (userId) => DropdownMenuItem<String>(
+                (userId) => SelectSheetOption<String>(
                   value: userId,
-                  child: Text(controller.findMemberDisplayName(userId)),
+                  title: controller.findMemberDisplayName(userId),
+                  subtitle: userId,
+                  keywords:
+                      '${controller.findMemberDisplayName(userId)} $userId',
                 ),
               )
               .toList(growable: false);
+    final selectedOwner = ownerOptions
+        .where((row) => row.value == _selectedUnavailabilityOwnerId)
+        .firstOrNull;
 
     final blocks = controller.memberUnavailabilityBlocks.toList(growable: false)
       ..sort((a, b) {
@@ -916,53 +912,46 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     },
             ),
             const SizedBox(height: 8),
-            if (ownerItems.isEmpty)
+            if (ownerOptions.isEmpty)
               Text(isTeacher ? '등록된 교사가 없습니다.' : '선택 가능한 부모 계정이 없습니다.')
             else
-              DropdownButtonFormField<String>(
-                key: ValueKey(
-                  'owner-${_unavailabilityOwnerKind}_${_selectedUnavailabilityOwnerId ?? ''}',
-                ),
-                initialValue: _selectedUnavailabilityOwnerId,
-                decoration: const InputDecoration(labelText: '대상'),
-                items: ownerItems,
-                onChanged: controller.isBusy
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedUnavailabilityOwnerId = value;
-                        });
-                      },
+              SelectFieldCard(
+                label: isTeacher ? '교사 선택' : '부모 선택',
+                hintText: '대상을 선택하세요',
+                icon: isTeacher ? Icons.school_outlined : Icons.people_outline,
+                enabled: !controller.isBusy,
+                value: selectedOwner?.title,
+                helpText: '검색으로 빠르게 대상을 찾을 수 있습니다.',
+                onTap: () => _selectUnavailabilityOwner(controller),
               ),
+            const SizedBox(height: 8),
+            Text(
+              '요일 선택',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.74),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: List.generate(7, (day) {
+                return ChoiceChip(
+                  label: Text(_dayLabel(day)),
+                  selected: _selectedUnavailabilityDay == day,
+                  onSelected: controller.isBusy
+                      ? null
+                      : (_) {
+                          setState(() {
+                            _selectedUnavailabilityDay = day;
+                          });
+                        },
+                );
+              }),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _selectedUnavailabilityDay,
-                    decoration: const InputDecoration(labelText: '요일'),
-                    items: const [
-                      DropdownMenuItem(value: 0, child: Text('Sun')),
-                      DropdownMenuItem(value: 1, child: Text('Mon')),
-                      DropdownMenuItem(value: 2, child: Text('Tue')),
-                      DropdownMenuItem(value: 3, child: Text('Wed')),
-                      DropdownMenuItem(value: 4, child: Text('Thu')),
-                      DropdownMenuItem(value: 5, child: Text('Fri')),
-                      DropdownMenuItem(value: 6, child: Text('Sat')),
-                    ],
-                    onChanged: controller.isBusy
-                        ? null
-                        : (value) {
-                            if (value == null) {
-                              return;
-                            }
-                            setState(() {
-                              _selectedUnavailabilityDay = value;
-                            });
-                          },
-                  ),
-                ),
-                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _unavailabilityStartController,
@@ -987,7 +976,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             ),
             const SizedBox(height: 10),
             ElevatedButton.icon(
-              onPressed: controller.isBusy || ownerItems.isEmpty
+              onPressed: controller.isBusy || ownerOptions.isEmpty
                   ? null
                   : _createUnavailabilityBlock,
               icon: const Icon(Icons.block),
@@ -1198,6 +1187,103 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _selectFamilyForChild(NestController controller) async {
+    final options = controller.families
+        .map(
+          (family) => SelectSheetOption<String>(
+            value: family.id,
+            title: family.familyName,
+            subtitle:
+                '아이 ${controller.childrenForFamily(family.id).length}명'
+                '${family.note.trim().isEmpty ? '' : ' · ${family.note.trim()}'}',
+            keywords: '${family.familyName} ${family.note}',
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '소속 가정 선택',
+      helpText: '아이를 등록할 가정을 선택하세요.',
+      options: options,
+      currentValue: _selectedFamilyId,
+    );
+    if (!mounted || selected == null || selected == _selectedFamilyId) {
+      return;
+    }
+    setState(() {
+      _selectedFamilyId = selected;
+    });
+  }
+
+  Future<void> _selectClassGroup(NestController controller) async {
+    final options = controller.classGroups
+        .map(
+          (group) => SelectSheetOption<String>(
+            value: group.id,
+            title: group.name,
+            subtitle: '정원 ${group.capacity}명',
+            keywords: group.name,
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '반 선택',
+      helpText: '편집 또는 배정에 사용할 반을 선택하세요.',
+      options: options,
+      currentValue: _selectedClassGroupId,
+    );
+    if (!mounted || selected == null || selected == _selectedClassGroupId) {
+      return;
+    }
+    setState(() {
+      _selectedClassGroupId = selected;
+      _syncClassForm(controller, force: true);
+    });
+  }
+
+  Future<void> _selectUnavailabilityOwner(NestController controller) async {
+    final isTeacher = _unavailabilityOwnerKind == 'TEACHER_PROFILE';
+    final options = isTeacher
+        ? controller.teacherProfiles
+              .map(
+                (row) => SelectSheetOption<String>(
+                  value: row.id,
+                  title: row.displayName,
+                  subtitle: row.teacherType,
+                  keywords: '${row.displayName} ${row.teacherType}',
+                ),
+              )
+              .toList(growable: false)
+        : controller.parentCandidateUserIds
+              .map(
+                (userId) => SelectSheetOption<String>(
+                  value: userId,
+                  title: controller.findMemberDisplayName(userId),
+                  subtitle: userId,
+                  keywords:
+                      '${controller.findMemberDisplayName(userId)} $userId',
+                ),
+              )
+              .toList(growable: false);
+
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: isTeacher ? '교사 선택' : '부모 선택',
+      helpText: '불가 시간을 등록할 대상을 선택하세요.',
+      options: options,
+      currentValue: _selectedUnavailabilityOwnerId,
+    );
+    if (!mounted ||
+        selected == null ||
+        selected == _selectedUnavailabilityOwnerId) {
+      return;
+    }
+    setState(() {
+      _selectedUnavailabilityOwnerId = selected;
+    });
   }
 
   Future<void> _createFamily() async {

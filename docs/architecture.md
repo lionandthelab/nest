@@ -1,6 +1,6 @@
 # Nest Flutter Architecture
 
-Last updated: 2026-03-03
+Last updated: 2026-03-07
 
 ## 1. Goals
 
@@ -58,11 +58,15 @@ frontend/
         login_page.dart
         home_page.dart
         widgets/
+          child_selector_header.dart
           hub_scaffold.dart
           nest_motion.dart
+          search_select_field.dart
         tabs/
           dashboard_tab.dart
-          parent_hub_tab.dart
+          parent_timetable_tab.dart
+          parent_progress_tab.dart
+          parent_news_tab.dart
           teacher_hub_tab.dart
           timetable_tab.dart
           gallery_tab.dart
@@ -136,6 +140,10 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - tap card -> searchable bottom-sheet picker
 - Inline `설정 도움말` explains recommended selection order.
 - Goal: reduce cognitive load and make context switching faster across all tabs.
+- The same selection primitive is reused in tab forms:
+  - `SelectFieldCard` (card-shaped selector)
+  - `showSelectSheet` (searchable bottom-sheet chooser)
+  - keeps mobile/web behavior consistent and avoids long dropdown lists.
 
 ## 5. State and Data Flow
 
@@ -258,6 +266,19 @@ Admin dashboard onboarding:
   - current teacher profiles를 기준으로 담당 반 자동 식별
   - 반별 시간표/공지/아동 상태를 한 반 컨텍스트로 관리
   - class-specific teaching plan, announcement, activity log authoring flow
+  - class/session/teacher/activity/unavailability target selection uses searchable selector cards instead of dense dropdown stacks
+
+### 6.5 Form Interaction UX
+
+- Term Setup (`family_admin_tab.dart`)
+  - family/class/unavailability owner selection migrated to searchable selector cards
+  - day-of-week input migrated to quick chips for faster blocked-time authoring
+  - teacher type input migrated to segmented control (`부모 교사`, `초청 교사`)
+- Parent child selector (`child_selector_header.dart`)
+  - child switching uses searchable selector sheet for large sibling lists
+- Shared objective:
+  - reduce initial setup friction in large homeschool contexts
+  - keep one-tap edit flow while preserving existing backend model
 - Both hubs use:
   - card-first layout with low cognitive load
   - section switching through `ChoiceChip` controls
