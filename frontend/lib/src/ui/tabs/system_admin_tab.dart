@@ -46,52 +46,99 @@ class _SystemAdminTabState extends State<SystemAdminTab> {
       _ => CommunityTab(controller: controller),
     };
 
-    return Column(
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('시스템 설정', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 6),
-                Text(
-                  'Google Drive 연동, SNS 모더레이션, 권한/운영 관리를 한 곳에서 처리합니다.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.72),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'SNS', label: Text('SNS 관리')),
-                    ButtonSegment(value: 'DRIVE', label: Text('Google Drive')),
-                    ButtonSegment(value: 'MEMBERS', label: Text('권한')),
-                    ButtonSegment(value: 'OPS', label: Text('운영')),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactSelector = constraints.maxWidth < 900;
+        return Column(
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '시스템 설정',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Google Drive 연동, SNS 모더레이션, 권한/운영 관리를 한 곳에서 처리합니다.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.72),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (compactSelector)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _sectionButtons
+                              .map(
+                                (button) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Text(button.label),
+                                    selected: _section == button.key,
+                                    onSelected: (_) {
+                                      setState(() {
+                                        _section = button.key;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
+                      )
+                    else
+                      SegmentedButton<String>(
+                        segments: _sectionButtons
+                            .map(
+                              (button) => ButtonSegment(
+                                value: button.key,
+                                label: Text(button.label),
+                              ),
+                            )
+                            .toList(growable: false),
+                        selected: {_section},
+                        onSelectionChanged: (values) {
+                          if (values.isEmpty) {
+                            return;
+                          }
+                          setState(() {
+                            _section = values.first;
+                          });
+                        },
+                      ),
                   ],
-                  selected: {_section},
-                  onSelectionChanged: (values) {
-                    if (values.isEmpty) {
-                      return;
-                    }
-                    setState(() {
-                      _section = values.first;
-                    });
-                  },
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: KeyedSubtree(key: ValueKey(_section), child: child),
-          ),
-        ),
-      ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: KeyedSubtree(key: ValueKey(_section), child: child),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
+
+class _SystemSectionButton {
+  const _SystemSectionButton({required this.key, required this.label});
+
+  final String key;
+  final String label;
+}
+
+const _sectionButtons = <_SystemSectionButton>[
+  _SystemSectionButton(key: 'SNS', label: 'SNS 관리'),
+  _SystemSectionButton(key: 'DRIVE', label: 'Google Drive'),
+  _SystemSectionButton(key: 'MEMBERS', label: '권한'),
+  _SystemSectionButton(key: 'OPS', label: '운영'),
+];

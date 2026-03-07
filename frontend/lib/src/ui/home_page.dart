@@ -585,6 +585,32 @@ class _MainPanelState extends State<_MainPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final controller = widget.controller;
+    final width = MediaQuery.sizeOf(context).width;
+    final compactHeader = width < 980;
+    final iconOnlyActions = width < 760;
+
+    final refreshAction = iconOnlyActions
+        ? IconButton(
+            tooltip: '새로고침',
+            onPressed: controller.isBusy ? null : widget.onRefresh,
+            icon: const Icon(Icons.refresh),
+          )
+        : FilledButton.tonalIcon(
+            onPressed: controller.isBusy ? null : widget.onRefresh,
+            icon: const Icon(Icons.refresh),
+            label: const Text('새로고침'),
+          );
+    final logoutAction = iconOnlyActions
+        ? IconButton(
+            tooltip: '로그아웃',
+            onPressed: controller.isBusy ? null : widget.onLogout,
+            icon: const Icon(Icons.logout),
+          )
+        : FilledButton.tonalIcon(
+            onPressed: controller.isBusy ? null : widget.onLogout,
+            icon: const Icon(Icons.logout),
+            label: const Text('로그아웃'),
+          );
 
     return Card(
       child: Column(
@@ -593,49 +619,92 @@ class _MainPanelState extends State<_MainPanel> {
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Text(
-                      '${AppConfig.appName} Administration',
-                      style: theme.textTheme.titleLarge,
-                    ),
-                    const SizedBox(width: 8),
-                    Chip(
-                      label: Text(controller.currentRole ?? '-'),
-                      avatar: const Icon(Icons.verified_user, size: 14),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.info_outline, size: 18),
-                      visualDensity: VisualDensity.compact,
-                      tooltip: '역할 안내',
-                      onPressed: () => _showRoleInfo(context, controller),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: AnimatedRotation(
-                        turns: _headerExpanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 200),
-                        child: const Icon(Icons.expand_more),
+                if (compactHeader)
+                  Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${AppConfig.appName} Administration',
+                              style: theme.textTheme.titleLarge,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: AnimatedRotation(
+                              turns: _headerExpanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 200),
+                              child: const Icon(Icons.expand_more),
+                            ),
+                            onPressed: () => setState(
+                              () => _headerExpanded = !_headerExpanded,
+                            ),
+                            tooltip: _headerExpanded ? '접기' : '펼치기',
+                          ),
+                        ],
                       ),
-                      onPressed: () =>
-                          setState(() => _headerExpanded = !_headerExpanded),
-                      tooltip: _headerExpanded ? '접기' : '펼치기',
-                    ),
-                    const SizedBox(width: 4),
-                    FilledButton.tonalIcon(
-                      onPressed: controller.isBusy ? null : widget.onRefresh,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('새로고침'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      onPressed: controller.isBusy ? null : widget.onLogout,
-                      icon: const Icon(Icons.logout),
-                      label: const Text('로그아웃'),
-                    ),
-                  ],
-                ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        alignment: WrapAlignment.start,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          Chip(
+                            label: Text(controller.currentRole ?? '-'),
+                            avatar: const Icon(Icons.verified_user, size: 14),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.info_outline, size: 18),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: '역할 안내',
+                            onPressed: () => _showRoleInfo(context, controller),
+                          ),
+                          refreshAction,
+                          logoutAction,
+                        ],
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      Text(
+                        '${AppConfig.appName} Administration',
+                        style: theme.textTheme.titleLarge,
+                      ),
+                      const SizedBox(width: 8),
+                      Chip(
+                        label: Text(controller.currentRole ?? '-'),
+                        avatar: const Icon(Icons.verified_user, size: 14),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.info_outline, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: '역할 안내',
+                        onPressed: () => _showRoleInfo(context, controller),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: AnimatedRotation(
+                          turns: _headerExpanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(Icons.expand_more),
+                        ),
+                        onPressed: () =>
+                            setState(() => _headerExpanded = !_headerExpanded),
+                        tooltip: _headerExpanded ? '접기' : '펼치기',
+                      ),
+                      const SizedBox(width: 4),
+                      refreshAction,
+                      const SizedBox(width: 8),
+                      logoutAction,
+                    ],
+                  ),
                 AnimatedSize(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
@@ -708,9 +777,14 @@ class _MainPanelState extends State<_MainPanel> {
                         ),
                     child: KeyedSubtree(
                       key: ValueKey<String>(widget.tabLabel),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: widget.tab,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1320),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: widget.tab,
+                          ),
+                        ),
                       ),
                     ),
                   ),

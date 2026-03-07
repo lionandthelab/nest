@@ -77,6 +77,10 @@ class NestTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
+      dividerTheme: DividerThemeData(
+        color: NestColors.roseMist.withValues(alpha: 0.8),
+        thickness: 1,
+      ),
       cardTheme: CardThemeData(
         color: Colors.white.withValues(alpha: 0.92),
         surfaceTintColor: Colors.transparent,
@@ -110,6 +114,12 @@ class NestTheme {
           borderSide: const BorderSide(color: NestColors.clay, width: 1.6),
         ),
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: NestColors.deepWood,
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -121,10 +131,74 @@ class NestTheme {
           ),
         ),
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: NestColors.deepWood,
+          side: BorderSide(color: NestColors.roseMist.withValues(alpha: 0.95)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: NestColors.roseMist,
         side: BorderSide.none,
         selectedColor: NestColors.mutedSage.withValues(alpha: 0.18),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          textStyle: WidgetStatePropertyAll(textTheme.bodyMedium),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          side: WidgetStatePropertyAll(
+            BorderSide(color: NestColors.roseMist.withValues(alpha: 0.95)),
+          ),
+          foregroundColor: const WidgetStatePropertyAll(NestColors.deepWood),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return NestColors.roseMist;
+            }
+            return Colors.white;
+          }),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.white.withValues(alpha: 0.94),
+        indicatorColor: NestColors.roseMist,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return textTheme.bodySmall?.copyWith(
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: NestColors.deepWood.withValues(alpha: selected ? 1 : 0.7),
+          );
+        }),
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: Colors.white.withValues(alpha: 0.74),
+        indicatorColor: NestColors.roseMist,
+        selectedIconTheme: const IconThemeData(color: NestColors.deepWood),
+        unselectedIconTheme: IconThemeData(
+          color: NestColors.deepWood.withValues(alpha: 0.62),
+        ),
+        selectedLabelTextStyle: textTheme.bodySmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: NestColors.deepWood,
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        modalBackgroundColor: Colors.white,
+        showDragHandle: true,
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: NestColors.dustyRose,

@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.0.4+5 (2026-03-07)
+
+### Added
+
+- UI 반복 점검 로그 문서 추가
+  - `docs/ui_iteration_100.md`
+  - 분석 → 개선제안 → 개선피드백 100회 루프 기록
+  - 원칙: 핵심기능/집중 신규피처 추가 없이 UI 품질 개선만 수행
+
+### Changed
+
+- 전역 UI 폴리시 정돈 (`nest_theme.dart`)
+  - 버튼/세그먼트/네비게이션/스낵바/바텀시트 시각 스타일 통일
+  - 구분선/상태 피드백 대비 보강
+- 메인 헤더 반응형 개선 (`home_page.dart`)
+  - 소형 폭에서 타이틀/역할/행동 버튼 재배치로 오버플로 방지
+  - 본문 콘텐츠 최대 폭 제한으로 데스크톱 가독성 개선
+- 허브 공통 레이아웃 개선 (`hub_scaffold.dart`)
+  - 좁은 화면에서 섹션 선택을 가로 스크롤 칩으로 전환
+  - 허브 카드 영역 최대 폭 최적화
+- 시스템 어드민 섹션 전환 개선 (`system_admin_tab.dart`)
+  - 화면 폭에 따라 `SegmentedButton` ↔ `ChoiceChip` 전환
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.3+4 (2026-03-07)
 
 ### Added

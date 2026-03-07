@@ -256,11 +256,12 @@ Admin dashboard onboarding:
 
 ### 6.4 Parent/Teacher Hub UX
 
-- Parent Hub (`parent_hub_tab.dart`)
-  - sections: `아이 정보` / `아이 시간표` / `아이 상태` / `내 불가 시간`
-  - parent-owned children 중심으로 child selector 제공
-  - 선택 아이 기준으로 소속 반 목록, 반별 시간표, 상태 로그 요약 제공
-  - class-level sessions/teacher assignments/announcements on-demand fetch
+- Parent view tabs:
+  - `parent_timetable_tab.dart`
+  - `parent_progress_tab.dart`
+  - `parent_news_tab.dart`
+  - shared child context via `child_selector_header.dart`
+  - selected child 기준으로 반/시간표/학습 상태를 일관되게 제공
 - Teacher Hub (`teacher_hub_tab.dart`)
   - sections: `반 운영보드` / `수업 운영` / `아이 상태`
   - current teacher profiles를 기준으로 담당 반 자동 식별
@@ -335,7 +336,7 @@ Admin dashboard onboarding:
     - class (bulk draft, class CRUD, enrollments)
     - course (course create/delete and duration)
   - setup progress bar + unit chips for direct switching
-- `parent_hub_tab.dart`:
+- `parent_timetable_tab.dart`:
   - parent self-service unavailability registration/deletion (own account only)
 - `teacher_hub_tab.dart`:
   - teacher self-service unavailability registration/deletion (own teacher profile only)
@@ -368,6 +369,18 @@ Admin dashboard onboarding:
     - `Google Drive` integration (`drive_tab.dart`)
     - `Members` role/invite management (`members_tab.dart`)
     - `Ops` announcements + audit logs (`ops_tab.dart`)
+
+### 6.14 UI Iteration Loop (100x)
+
+- UI-only 반복 개선 로그를 `docs/ui_iteration_100.md`에 유지
+- 루프 원칙:
+  - 기능 추가 없이 인터랙션 마찰, 가독성, 일관성만 개선
+  - 분석 → 개선제안 → 개선피드백 구조를 반복
+- 이번 루프에서 코드 반영된 공통 개선:
+  - `home_page.dart`: 반응형 헤더 액션 정렬 + 본문 최대 폭 제한
+  - `hub_scaffold.dart`: 좁은 화면 섹션 선택 가로 스크롤 칩 + 레이아웃 폭 최적화
+  - `system_admin_tab.dart`: 화면 폭별 세그먼트/칩 전환
+  - `nest_theme.dart`: 버튼/세그먼트/네비/스낵바/바텀시트 스타일 통일
 
 ## 7. Database and RLS Notes
 

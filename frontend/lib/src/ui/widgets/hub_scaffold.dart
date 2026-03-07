@@ -57,49 +57,82 @@ class HubScaffold extends StatelessWidget {
       (section) => section.id == selectedSectionId,
       orElse: () => sections.first,
     );
+    final width = MediaQuery.sizeOf(context).width;
+    final compactSectionSelector = width < 760;
 
-    return ListView(
-      children: [
-        _HubHeader(
-          title: title,
-          subtitle: subtitle,
-          icon: icon,
-          metrics: metrics,
-          isBusy: isBusy,
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: sections
-                  .map(
-                    (section) => ChoiceChip(
-                      selected: section.id == selected.id,
-                      label: Text(section.label),
-                      avatar: Icon(section.icon, size: 17),
-                      onSelected: (_) => onSelectSection(section.id),
-                    ),
-                  )
-                  .toList(growable: false),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth > 1280 ? 1220.0 : double.infinity;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: ListView(
+              children: [
+                _HubHeader(
+                  title: title,
+                  subtitle: subtitle,
+                  icon: icon,
+                  metrics: metrics,
+                  isBusy: isBusy,
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                    child: compactSectionSelector
+                        ? SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: sections
+                                  .map(
+                                    (section) => Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: ChoiceChip(
+                                        selected: section.id == selected.id,
+                                        label: Text(section.label),
+                                        avatar: Icon(section.icon, size: 17),
+                                        onSelected: (_) =>
+                                            onSelectSection(section.id),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                            ),
+                          )
+                        : Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: sections
+                                .map(
+                                  (section) => ChoiceChip(
+                                    selected: section.id == selected.id,
+                                    label: Text(section.label),
+                                    avatar: Icon(section.icon, size: 17),
+                                    onSelected: (_) =>
+                                        onSelectSection(section.id),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) =>
+                      nestFadeSlideTransition(child, animation),
+                  child: KeyedSubtree(
+                    key: ValueKey(selected.id),
+                    child: selected.content,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 280),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) =>
-              nestFadeSlideTransition(child, animation),
-          child: KeyedSubtree(
-            key: ValueKey(selected.id),
-            child: selected.content,
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -196,8 +229,11 @@ class _HubMetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final minWidth = width < 420 ? 132.0 : 152.0;
+
     return Container(
-      constraints: const BoxConstraints(minWidth: 152),
+      constraints: BoxConstraints(minWidth: minWidth),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
