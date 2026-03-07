@@ -253,8 +253,8 @@ class _HomePageState extends State<HomePage> {
           controller.classGroupsForChild(childId).toList(growable: false)
             ..sort((a, b) => a.name.compareTo(b.name));
 
-      final allAnnouncements =
-          await controller.fetchAnnouncementsForHomeschool();
+      final allAnnouncements = await controller
+          .fetchAnnouncementsForHomeschool();
       final bundleMap = <String, ChildClassBundle>{};
 
       for (final classGroup in classGroups) {
@@ -265,15 +265,14 @@ class _HomePageState extends State<HomePage> {
             .map((s) => s.id)
             .where((id) => id.isNotEmpty)
             .toList(growable: false);
-        final assignments =
-            await controller.fetchSessionTeacherAssignmentsForSessions(
-          classSessionIds: sessionIds,
-        );
+        final assignments = await controller
+            .fetchSessionTeacherAssignmentsForSessions(
+              classSessionIds: sessionIds,
+            );
         final classAnnouncements = allAnnouncements
             .where(
               (row) =>
-                  row.classGroupId == null ||
-                  row.classGroupId == classGroup.id,
+                  row.classGroupId == null || row.classGroupId == classGroup.id,
             )
             .toList(growable: false);
 
@@ -562,10 +561,10 @@ class _MainPanelState extends State<_MainPanel> {
     final message = controller.isParentView
         ? '부모 뷰에서는 내 아이의 시간표/갤러리를 중심으로 확인합니다.'
         : controller.isTeacherView
-            ? '교사 뷰에서는 수업 운영과 활동 기록 중심으로 확인합니다.'
-            : controller.isAdminLike
-                ? '관리자 뷰에서는 운영/권한/신고 등 전체 관리 기능을 사용합니다.'
-                : '역할을 선택하면 해당 뷰에 맞는 기능이 활성화됩니다.';
+        ? '교사 뷰에서는 수업 운영과 활동 기록 중심으로 확인합니다.'
+        : controller.isAdminLike
+        ? '관리자 뷰에서는 운영/권한/신고 등 전체 관리 기능을 사용합니다.'
+        : '역할을 선택하면 해당 뷰에 맞는 기능이 활성화됩니다.';
 
     showDialog(
       context: context,
@@ -728,7 +727,7 @@ class _MainPanelState extends State<_MainPanel> {
   }
 }
 
-class _ContextSelector extends StatelessWidget {
+class _ContextSelector extends StatefulWidget {
   const _ContextSelector({
     required this.controller,
     required this.onSelectHomeschool,
@@ -744,124 +743,359 @@ class _ContextSelector extends StatelessWidget {
   final Future<void> Function(String? value) onSelectViewRole;
 
   @override
+  State<_ContextSelector> createState() => _ContextSelectorState();
+}
+
+class _ContextSelectorState extends State<_ContextSelector> {
+  bool _showGuide = false;
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 860;
 
-    final homeschoolItems = controller.memberships
+    final homeschoolOptions = controller.memberships
         .map(
-          (membership) => DropdownMenuItem<String>(
-            value: membership.homeschoolId,
-            child: Text(membership.homeschool.name),
+          (membership) => _ContextOption(
+            id: membership.homeschoolId,
+            title: membership.homeschool.name,
+            subtitle: membership.role,
+          ),
+        )
+        .toList(growable: false);
+    final termOptions = controller.terms
+        .map(
+          (term) => _ContextOption(
+            id: term.id,
+            title: term.name,
+            subtitle: term.status,
+          ),
+        )
+        .toList(growable: false);
+    final classOptions = controller.classGroups
+        .map((group) => _ContextOption(id: group.id, title: group.name))
+        .toList(growable: false);
+    final roleOptions = controller.availableViewRoles
+        .map(
+          (role) => _ContextOption(
+            id: role,
+            title: _labelForRole(role),
+            subtitle: role,
           ),
         )
         .toList(growable: false);
 
-    final termItems = controller.terms
-        .map(
-          (term) => DropdownMenuItem<String>(
-            value: term.id,
-            child: Text('${term.name} (${term.status})'),
-          ),
-        )
-        .toList(growable: false);
-
-    final classItems = controller.classGroups
-        .map(
-          (group) => DropdownMenuItem<String>(
-            value: group.id,
-            child: Text(group.name),
-          ),
-        )
-        .toList(growable: false);
-
-    final roleItems = controller.availableViewRoles
-        .map(
-          (role) => DropdownMenuItem<String>(
-            value: role,
-            child: Text(_labelForRole(role)),
-          ),
-        )
-        .toList(growable: false);
-
-    final fields = [
-      _SelectorField(
+    final cards = [
+      _ContextCardData(
+        icon: Icons.home_outlined,
         label: '홈스쿨',
-        value: controller.selectedHomeschoolId,
-        items: homeschoolItems,
-        onChanged: controller.isBusy ? null : onSelectHomeschool,
+        value: homeschoolOptions
+            .where((row) => row.id == controller.selectedHomeschoolId)
+            .map((row) => row.title)
+            .firstOrNull,
+        help: '운영 단위가 되는 홈스쿨을 선택합니다.',
+        options: homeschoolOptions,
+        onSelect: widget.onSelectHomeschool,
       ),
-      _SelectorField(
+      _ContextCardData(
+        icon: Icons.calendar_month_outlined,
         label: '학기',
-        value: controller.selectedTermId,
-        items: termItems,
-        onChanged: controller.isBusy ? null : onSelectTerm,
+        value: termOptions
+            .where((row) => row.id == controller.selectedTermId)
+            .map((row) => row.title)
+            .firstOrNull,
+        help: '현재 운영 중인 학기를 선택합니다.',
+        options: termOptions,
+        onSelect: widget.onSelectTerm,
       ),
-      _SelectorField(
+      _ContextCardData(
+        icon: Icons.groups_2_outlined,
         label: '반',
-        value: controller.selectedClassGroupId,
-        items: classItems,
-        onChanged: controller.isBusy ? null : onSelectClassGroup,
+        value: classOptions
+            .where((row) => row.id == controller.selectedClassGroupId)
+            .map((row) => row.title)
+            .firstOrNull,
+        help: '시간표/공지/활동을 볼 기준 반을 선택합니다.',
+        options: classOptions,
+        onSelect: widget.onSelectClassGroup,
       ),
-      _SelectorField(
+      _ContextCardData(
+        icon: Icons.person_outline,
         label: '뷰 역할',
-        value: controller.currentRole,
-        items: roleItems,
-        onChanged: controller.isBusy ? null : onSelectViewRole,
+        value: roleOptions
+            .where((row) => row.id == controller.currentRole)
+            .map((row) => row.title)
+            .firstOrNull,
+        help: '같은 계정이라도 부모/교사/관리자 화면을 전환합니다.',
+        options: roleOptions,
+        onSelect: widget.onSelectViewRole,
       ),
     ];
 
-    if (compact) {
-      return Column(
-        children: fields
-            .map(
-              (field) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: field,
-              ),
-            )
-            .toList(growable: false),
-      );
+    final cardWidgets = cards
+        .map(
+          (card) => _ContextQuickCard(
+            icon: card.icon,
+            label: card.label,
+            value: card.value,
+            disabled: controller.isBusy || card.options.isEmpty,
+            onTap: () => _openContextPicker(
+              title: card.label,
+              help: card.help,
+              options: card.options,
+              currentId: card.options
+                  .where((row) => row.title == card.value)
+                  .map((row) => row.id)
+                  .firstOrNull,
+              onSelect: card.onSelect,
+            ),
+          ),
+        )
+        .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: compact
+              ? cardWidgets
+              : cardWidgets
+                    .map((widget) => SizedBox(width: 210, child: widget))
+                    .toList(growable: false),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => setState(() => _showGuide = !_showGuide),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _showGuide ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '설정 도움말',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.78),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: _showGuide
+              ? Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: NestColors.creamyWhite,
+                    border: Border.all(color: NestColors.roseMist),
+                  ),
+                  child: const Text(
+                    '추천 순서: 1) 홈스쿨 선택 → 2) 학기 선택 → 3) 반 선택 → 4) 뷰 역할 선택\n'
+                    '각 카드를 누르면 큰 선택창이 열리며, 모바일/웹에서 동일하게 동작합니다.',
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openContextPicker({
+    required String title,
+    required String help,
+    required List<_ContextOption> options,
+    required String? currentId,
+    required Future<void> Function(String? value) onSelect,
+  }) async {
+    if (options.isEmpty) {
+      return;
     }
 
-    return Row(
-      children: fields
-          .map(
-            (field) => Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: field,
+    var query = '';
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = query.trim().isEmpty
+                ? options
+                : options
+                      .where(
+                        (option) =>
+                            option.title.toLowerCase().contains(
+                              query.trim().toLowerCase(),
+                            ) ||
+                            option.subtitle.toLowerCase().contains(
+                              query.trim().toLowerCase(),
+                            ),
+                      )
+                      .toList(growable: false);
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    help,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.72),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    onChanged: (value) => setSheetState(() => query = value),
+                    decoration: const InputDecoration(
+                      labelText: '검색',
+                      hintText: '이름으로 빠르게 찾기',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Flexible(
+                    child: filtered.isEmpty
+                        ? const Center(child: Text('검색 결과가 없습니다.'))
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) {
+                              final option = filtered[index];
+                              final selected = option.id == currentId;
+                              return ListTile(
+                                dense: true,
+                                leading: selected
+                                    ? const Icon(Icons.check_circle)
+                                    : const Icon(Icons.circle_outlined),
+                                title: Text(option.title),
+                                subtitle: option.subtitle.isEmpty
+                                    ? null
+                                    : Text(option.subtitle),
+                                onTap: () async {
+                                  Navigator.of(context).pop();
+                                  await onSelect(option.id);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-            ),
-          )
-          .toList(growable: false),
+            );
+          },
+        );
+      },
     );
   }
 }
 
-class _SelectorField extends StatelessWidget {
-  const _SelectorField({
+class _ContextQuickCard extends StatelessWidget {
+  const _ContextQuickCard({
+    required this.icon,
     required this.label,
     required this.value,
-    required this.items,
-    required this.onChanged,
+    required this.disabled,
+    required this.onTap,
   });
 
+  final IconData icon;
   final String label;
   final String? value;
-  final List<DropdownMenuItem<String>> items;
-  final ValueChanged<String?>? onChanged;
+  final bool disabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      initialValue: items.any((item) => item.value == value) ? value : null,
-      decoration: InputDecoration(labelText: label),
-      items: items,
-      onChanged: onChanged,
-      hint: Text(items.isEmpty ? '데이터 없음' : '$label 선택'),
+    return Opacity(
+      opacity: disabled ? 0.55 : 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: disabled ? null : onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: NestColors.roseMist),
+            color: Colors.white,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.72),
+                      ),
+                    ),
+                    Text(
+                      value ?? '선택',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.expand_more, size: 18),
+            ],
+          ),
+        ),
+      ),
     );
   }
+}
+
+class _ContextCardData {
+  const _ContextCardData({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.help,
+    required this.options,
+    required this.onSelect,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? value;
+  final String help;
+  final List<_ContextOption> options;
+  final Future<void> Function(String? value) onSelect;
+}
+
+class _ContextOption {
+  const _ContextOption({
+    required this.id,
+    required this.title,
+    this.subtitle = '',
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
 }
 
 Icon _iconForLabel(String label, {required bool filled}) {

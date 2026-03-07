@@ -41,6 +41,7 @@ class NestRepository {
   NestRepository(this.client);
 
   final SupabaseClient client;
+  bool? _classSessionLocationSupported;
 
   User? get currentUser => client.auth.currentUser;
   Session? get currentSession => client.auth.currentSession;
@@ -753,15 +754,47 @@ class NestRepository {
   Future<List<ClassSession>> fetchSessions({
     required String classGroupId,
   }) async {
-    final data = await client
-        .from('class_sessions')
-        .select(
-          'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
-        )
-        .eq('class_group_id', classGroupId)
-        .neq('status', 'CANCELED');
+    if (_classSessionLocationSupported == false) {
+      final legacyData = await client
+          .from('class_sessions')
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+          )
+          .eq('class_group_id', classGroupId)
+          .neq('status', 'CANCELED');
 
-    return _asRows(data).map(ClassSession.fromMap).toList(growable: false);
+      return _asRows(legacyData)
+          .map((row) => ClassSession.fromMap({...row, 'location': null}))
+          .toList(growable: false);
+    }
+
+    try {
+      final data = await client
+          .from('class_sessions')
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
+          )
+          .eq('class_group_id', classGroupId)
+          .neq('status', 'CANCELED');
+      _classSessionLocationSupported = true;
+      return _asRows(data).map(ClassSession.fromMap).toList(growable: false);
+    } on PostgrestException catch (error) {
+      if (_isMissingLocationColumn(error)) {
+        _classSessionLocationSupported = false;
+        final legacyData = await client
+            .from('class_sessions')
+            .select(
+              'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+            )
+            .eq('class_group_id', classGroupId)
+            .neq('status', 'CANCELED');
+
+        return _asRows(legacyData)
+            .map((row) => ClassSession.fromMap({...row, 'location': null}))
+            .toList(growable: false);
+      }
+      rethrow;
+    }
   }
 
   Future<List<Proposal>> fetchProposals({required String termId}) async {
@@ -1000,6 +1033,7 @@ class NestRepository {
     required String timeSlotId,
     required String title,
     required String createdByUserId,
+    String? location,
   }) async {
     await createSessionAndReturn(
       classGroupId: classGroupId,
@@ -1008,6 +1042,7 @@ class NestRepository {
       title: title,
       createdByUserId: createdByUserId,
       sourceType: 'MANUAL',
+      location: location,
     );
   }
 
@@ -1020,34 +1055,98 @@ class NestRepository {
     String sourceType = 'MANUAL',
     String? location,
   }) async {
-    final row = await client
-        .from('class_sessions')
-        .insert({
-          'class_group_id': classGroupId,
-          'course_id': courseId,
-          'time_slot_id': timeSlotId,
-          'title': title,
-          'source_type': sourceType,
-          'status': 'PLANNED',
-          'created_by_user_id': createdByUserId,
-          'location': location,
-        })
-        .select(
-          'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
-        )
-        .single();
+    final normalizedLocation = _normalizeNullable(location) ?? '미정';
+    final payload = {
+      'class_group_id': classGroupId,
+      'course_id': courseId,
+      'time_slot_id': timeSlotId,
+      'title': title,
+      'source_type': sourceType,
+      'status': 'PLANNED',
+      'created_by_user_id': createdByUserId,
+    };
 
-    return ClassSession.fromMap(_asMap(row));
+    if (_classSessionLocationSupported == false) {
+      final legacyRow = await client
+          .from('class_sessions')
+          .insert(payload)
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+          )
+          .single();
+      final mapped = _asMap(legacyRow)..putIfAbsent('location', () => null);
+      return ClassSession.fromMap(mapped);
+    }
+
+    try {
+      final row = await client
+          .from('class_sessions')
+          .insert({...payload, 'location': normalizedLocation})
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
+          )
+          .single();
+      _classSessionLocationSupported = true;
+      return ClassSession.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingLocationColumn(error)) {
+        _classSessionLocationSupported = false;
+        final legacyRow = await client
+            .from('class_sessions')
+            .insert(payload)
+            .select(
+              'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+            )
+            .single();
+        final mapped = _asMap(legacyRow)..putIfAbsent('location', () => null);
+        return ClassSession.fromMap(mapped);
+      }
+      if (_isLocationNullViolation(error)) {
+        final retryRow = await client
+            .from('class_sessions')
+            .insert({...payload, 'location': '미정'})
+            .select(
+              'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
+            )
+            .single();
+        _classSessionLocationSupported = true;
+        return ClassSession.fromMap(_asMap(retryRow));
+      }
+      rethrow;
+    }
   }
 
   Future<void> updateSessionLocation({
     required String sessionId,
     required String? location,
-  }) {
-    return client
-        .from('class_sessions')
-        .update({'location': location})
-        .eq('id', sessionId);
+  }) async {
+    if (_classSessionLocationSupported == false) {
+      return;
+    }
+
+    final normalizedLocation = _normalizeNullable(location);
+
+    try {
+      await client
+          .from('class_sessions')
+          .update({'location': normalizedLocation})
+          .eq('id', sessionId);
+      _classSessionLocationSupported = true;
+    } on PostgrestException catch (error) {
+      if (_isMissingLocationColumn(error)) {
+        _classSessionLocationSupported = false;
+        return;
+      }
+      if (_isLocationNullViolation(error)) {
+        await client
+            .from('class_sessions')
+            .update({'location': '미정'})
+            .eq('id', sessionId);
+        _classSessionLocationSupported = true;
+        return;
+      }
+      rethrow;
+    }
   }
 
   /// Fetch all non-canceled sessions for all class groups in a list of IDs.
@@ -1055,15 +1154,47 @@ class NestRepository {
     required List<String> classGroupIds,
   }) async {
     if (classGroupIds.isEmpty) return const [];
-    final data = await client
-        .from('class_sessions')
-        .select(
-          'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
-        )
-        .inFilter('class_group_id', classGroupIds)
-        .neq('status', 'CANCELED');
+    if (_classSessionLocationSupported == false) {
+      final legacyData = await client
+          .from('class_sessions')
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+          )
+          .inFilter('class_group_id', classGroupIds)
+          .neq('status', 'CANCELED');
 
-    return _asRows(data).map(ClassSession.fromMap).toList(growable: false);
+      return _asRows(legacyData)
+          .map((row) => ClassSession.fromMap({...row, 'location': null}))
+          .toList(growable: false);
+    }
+
+    try {
+      final data = await client
+          .from('class_sessions')
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
+          )
+          .inFilter('class_group_id', classGroupIds)
+          .neq('status', 'CANCELED');
+      _classSessionLocationSupported = true;
+      return _asRows(data).map(ClassSession.fromMap).toList(growable: false);
+    } on PostgrestException catch (error) {
+      if (_isMissingLocationColumn(error)) {
+        _classSessionLocationSupported = false;
+        final legacyData = await client
+            .from('class_sessions')
+            .select(
+              'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+            )
+            .inFilter('class_group_id', classGroupIds)
+            .neq('status', 'CANCELED');
+
+        return _asRows(legacyData)
+            .map((row) => ClassSession.fromMap({...row, 'location': null}))
+            .toList(growable: false);
+      }
+      rethrow;
+    }
   }
 
   Future<void> moveSession({
@@ -1653,4 +1784,15 @@ String? _normalizeNullable(String? value) {
 
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
+}
+
+bool _isMissingLocationColumn(PostgrestException error) {
+  final message = error.message.toLowerCase();
+  return message.contains('location') &&
+      (message.contains('does not exist') || message.contains('not found'));
+}
+
+bool _isLocationNullViolation(PostgrestException error) {
+  final message = error.message.toLowerCase();
+  return message.contains('null value') && message.contains('location');
 }

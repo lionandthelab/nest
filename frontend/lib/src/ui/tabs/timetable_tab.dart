@@ -103,8 +103,7 @@ class _TimetableTabState extends State<TimetableTab> {
                     IconButton(
                       icon: const Icon(Icons.chevron_left),
                       tooltip: '상황 패널 열기',
-                      onPressed: () =>
-                          setState(() => _statusPanelOpen = true),
+                      onPressed: () => setState(() => _statusPanelOpen = true),
                     ),
                   ],
                 ),
@@ -182,8 +181,9 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Future<void> _exportTimetableImage() async {
-    final boundary = _timetableRepaintKey.currentContext?.findRenderObject()
-        as RenderRepaintBoundary?;
+    final boundary =
+        _timetableRepaintKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
     if (boundary == null) return;
 
     final image = await boundary.toImage(pixelRatio: 2.0);
@@ -978,7 +978,9 @@ class _TimetableTabState extends State<TimetableTab> {
             runSpacing: 8,
             children: [
               ElevatedButton.icon(
-                onPressed: controller.isBusy ? null : () => _generateScheduleOptions(openWizard: true),
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _generateScheduleOptions(openWizard: true),
                 icon: const Icon(Icons.auto_awesome),
                 label: const Text('프롬프트로 초안 생성'),
               ),
@@ -1501,9 +1503,8 @@ class _TimetableTabState extends State<TimetableTab> {
                   onPressed: _gridScale <= 0.5
                       ? null
                       : () => setState(
-                            () => _gridScale =
-                                (_gridScale - 0.1).clamp(0.5, 1.5),
-                          ),
+                          () => _gridScale = (_gridScale - 0.1).clamp(0.5, 1.5),
+                        ),
                 ),
                 Text(
                   '${(_gridScale * 100).round()}%',
@@ -1516,9 +1517,8 @@ class _TimetableTabState extends State<TimetableTab> {
                   onPressed: _gridScale >= 1.5
                       ? null
                       : () => setState(
-                            () => _gridScale =
-                                (_gridScale + 0.1).clamp(0.5, 1.5),
-                          ),
+                          () => _gridScale = (_gridScale + 0.1).clamp(0.5, 1.5),
+                        ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.fit_screen, size: 20),
@@ -1623,9 +1623,7 @@ class _TimetableTabState extends State<TimetableTab> {
           borderRadius: BorderRadius.circular(14),
           color: NestColors.roseMist.withValues(alpha: 0.36),
         ),
-        child: const Text(
-          '장소가 설정된 수업이 없습니다. 수업 카드의 교사 배정 다이얼로그에서 장소를 설정하세요.',
-        ),
+        child: const Text('장소가 설정된 수업이 없습니다. 수업 카드의 교사 배정 다이얼로그에서 장소를 설정하세요.'),
       );
     }
 
@@ -1760,78 +1758,83 @@ class _TimetableTabState extends State<TimetableTab> {
                               ? Center(
                                   child: Text(
                                     '-',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
+                                    style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
-                                          color: NestColors.deepWood
-                                              .withValues(alpha: 0.3),
+                                          color: NestColors.deepWood.withValues(
+                                            alpha: 0.3,
+                                          ),
                                         ),
                                   ),
                                 )
                               : Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: sessionsHere.map((s) {
-                                    final courseName =
-                                        controller.findCourseName(s.courseId);
-                                    final className =
-                                        controller.findClassGroupName(
-                                          s.classGroupId,
+                                  children: sessionsHere
+                                      .map((s) {
+                                        final courseName = controller
+                                            .findCourseName(s.courseId);
+                                        final className = controller
+                                            .findClassGroupName(s.classGroupId);
+                                        final slot = controller.findTimeSlot(
+                                          s.timeSlotId,
                                         );
-                                    final slot =
-                                        controller.findTimeSlot(s.timeSlotId);
-                                    final dayLabel = slot == null
-                                        ? ''
-                                        : _dayLabel(slot.dayOfWeek);
-                                    return Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 4),
-                                      child: Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          color: NestColors.creamyWhite,
-                                          border: Border.all(
-                                            color: NestColors.roseMist,
+                                        final dayLabel = slot == null
+                                            ? ''
+                                            : _dayLabel(slot.dayOfWeek);
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 4,
                                           ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              courseName,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
+                                          child: Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              color: NestColors.creamyWhite,
+                                              border: Border.all(
+                                                color: NestColors.roseMist,
+                                              ),
                                             ),
-                                            Text(
-                                              '$className · $dayLabel',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    fontSize: 11,
-                                                    color: NestColors.deepWood
-                                                        .withValues(
-                                                          alpha: 0.6,
-                                                        ),
-                                                  ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  courseName,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                                Text(
+                                                  '$className · $dayLabel',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        fontSize: 11,
+                                                        color: NestColors
+                                                            .deepWood
+                                                            .withValues(
+                                                              alpha: 0.6,
+                                                            ),
+                                                      ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(growable: false),
+                                          ),
+                                        );
+                                      })
+                                      .toList(growable: false),
                                 ),
                         );
                       }),
@@ -1928,157 +1931,172 @@ class _TimetableTabState extends State<TimetableTab> {
     return RepaintBoundary(
       key: _timetableRepaintKey,
       child: Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white,
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: scaledWidth,
-          child: Transform.scale(
-            scale: _gridScale,
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: minWidth,
-              child: Column(
-            children: [
-              Row(
-                children: [
-                  _GridHeaderCell(
-                    width: periodWidth,
-                    title: '교시',
-                    subtitle: '시간',
-                  ),
-                  ...dayOrder.map(
-                    (day) => _GridHeaderCell(
-                      width: dayColumnWidth,
-                      title: _dayLabel(day),
-                      subtitle: '$day요일',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...List.generate(maxPeriods, (periodIndex) {
-                TimeSlot? fallbackSlot;
-                for (final day in dayOrder) {
-                  final rows = slotsByDay[day] ?? const <TimeSlot>[];
-                  if (periodIndex < rows.length) {
-                    fallbackSlot = rows[periodIndex];
-                    break;
-                  }
-                }
-
-                final timeLabel = fallbackSlot == null
-                    ? '-'
-                    : '${_shortTime(fallbackSlot.startTime)}-${_shortTime(fallbackSlot.endTime)}';
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: periodWidth,
-                        constraints: const BoxConstraints(minHeight: 170),
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: NestColors.creamyWhite,
-                          border: Border.all(color: NestColors.roseMist),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          border: Border.all(color: NestColors.roseMist),
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: scaledWidth,
+            child: Transform.scale(
+              scale: _gridScale,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: minWidth,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        _GridHeaderCell(
+                          width: periodWidth,
+                          title: '교시',
+                          subtitle: '시간',
                         ),
-                        child: Column(
+                        ...dayOrder.map(
+                          (day) => _GridHeaderCell(
+                            width: dayColumnWidth,
+                            title: _dayLabel(day),
+                            subtitle: '$day요일',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...List.generate(maxPeriods, (periodIndex) {
+                      TimeSlot? fallbackSlot;
+                      for (final day in dayOrder) {
+                        final rows = slotsByDay[day] ?? const <TimeSlot>[];
+                        if (periodIndex < rows.length) {
+                          fallbackSlot = rows[periodIndex];
+                          break;
+                        }
+                      }
+
+                      final timeLabel = fallbackSlot == null
+                          ? '-'
+                          : '${_shortTime(fallbackSlot.startTime)}-${_shortTime(fallbackSlot.endTime)}';
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${periodIndex + 1}교시',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              timeLabel,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      ...dayOrder.map((day) {
-                        final rows = slotsByDay[day] ?? const <TimeSlot>[];
-                        final slot = periodIndex < rows.length
-                            ? rows[periodIndex]
-                            : null;
-                        if (slot == null) {
-                          return Container(
-                            width: dayColumnWidth,
-                            constraints: const BoxConstraints(minHeight: 170),
-                            margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.grey.shade100,
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '해당 슬롯 없음',
-                                style: Theme.of(context).textTheme.bodySmall,
+                            Container(
+                              width: periodWidth,
+                              constraints: const BoxConstraints(minHeight: 170),
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: NestColors.creamyWhite,
+                                border: Border.all(color: NestColors.roseMist),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${periodIndex + 1}교시',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    timeLabel,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        }
-
-                        final slotSessions = controller.sessionsForSlot(
-                          slot.id,
-                        );
-                        return Container(
-                          width: dayColumnWidth,
-                          constraints: const BoxConstraints(minHeight: 170),
-                          margin: const EdgeInsets.only(right: 6),
-                          child: _TimetableGridSlotCell(
-                            controller: controller,
-                            slot: slot,
-                            sessions: slotSessions,
-                            onManageTeachers: _openTeacherAssignDialog,
-                            onCreateOrMove: (payload) async {
-                              if (payload.type == DragPayloadType.course) {
-                                await _safeCall(() {
-                                  return controller.createSessionByCourse(
-                                    courseId: payload.id,
-                                    slotId: slot.id,
-                                  );
-                                });
-                                return;
+                            ...dayOrder.map((day) {
+                              final rows =
+                                  slotsByDay[day] ?? const <TimeSlot>[];
+                              final slot = periodIndex < rows.length
+                                  ? rows[periodIndex]
+                                  : null;
+                              if (slot == null) {
+                                return Container(
+                                  width: dayColumnWidth,
+                                  constraints: const BoxConstraints(
+                                    minHeight: 170,
+                                  ),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.grey.shade100,
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '해당 슬롯 없음',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                );
                               }
 
-                              await _safeCall(() {
-                                return controller.moveSession(
-                                  sessionId: payload.id,
-                                  targetSlotId: slot.id,
-                                );
-                              });
-                            },
-                            onDeleteSession: (sessionId) async {
-                              await _safeCall(
-                                () => controller.cancelSession(sessionId),
+                              final slotSessions = controller.sessionsForSlot(
+                                slot.id,
                               );
-                            },
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
+                              return Container(
+                                width: dayColumnWidth,
+                                constraints: const BoxConstraints(
+                                  minHeight: 170,
+                                ),
+                                margin: const EdgeInsets.only(right: 6),
+                                child: _TimetableGridSlotCell(
+                                  controller: controller,
+                                  slot: slot,
+                                  sessions: slotSessions,
+                                  onManageTeachers: _openTeacherAssignDialog,
+                                  onCreateOrMove: (payload) async {
+                                    if (payload.type ==
+                                        DragPayloadType.course) {
+                                      await _safeCall(() {
+                                        return controller.createSessionByCourse(
+                                          courseId: payload.id,
+                                          slotId: slot.id,
+                                        );
+                                      });
+                                      return;
+                                    }
+
+                                    await _safeCall(() {
+                                      return controller.moveSession(
+                                        sessionId: payload.id,
+                                        targetSlotId: slot.id,
+                                      );
+                                    });
+                                  },
+                                  onDeleteSession: (sessionId) async {
+                                    await _safeCall(
+                                      () => controller.cancelSession(sessionId),
+                                    );
+                                  },
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 
   Future<void> _generateProposal() async {
@@ -2101,7 +2119,9 @@ class _TimetableTabState extends State<TimetableTab> {
         keepExistingSessions: _keepExistingSessions,
       );
     });
-    if (openWizard && mounted && widget.controller.scheduleOptionDrafts.isNotEmpty) {
+    if (openWizard &&
+        mounted &&
+        widget.controller.scheduleOptionDrafts.isNotEmpty) {
       _openWizardModal(widget.controller);
     }
   }
@@ -2331,7 +2351,9 @@ class _TimetableTabState extends State<TimetableTab> {
         return;
       }
 
-      final message = e is StateError ? e.message : widget.controller.statusMessage;
+      final message = e is StateError
+          ? e.message
+          : widget.controller.statusMessage;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));

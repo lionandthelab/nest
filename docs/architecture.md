@@ -129,6 +129,14 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - same section-chip navigation
   - same card density and spacing rhythm for predictable interaction
 
+### 4.4 Global Context UX
+
+- Top context controls use quick cards instead of stacked dropdowns:
+  - `홈스쿨`, `학기`, `반`, `뷰 역할`
+  - tap card -> searchable bottom-sheet picker
+- Inline `설정 도움말` explains recommended selection order.
+- Goal: reduce cognitive load and make context switching faster across all tabs.
+
 ## 5. State and Data Flow
 
 ### 5.1 `NestController`
@@ -217,6 +225,15 @@ Admin dashboard onboarding:
   - board-level health summary (teacher conflict + missing main teacher)
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
+
+### 6.2.1 Session Location Compatibility
+
+- Some deployments had `class_sessions.location` while older ones did not.
+- Repository layer now supports both schemas safely:
+  - with location column: normal read/write
+  - without location column: fallback queries/inserts without location
+  - null violation on location: fallback value (`미정`) to keep DnD scheduling working
+- Canonical migration: `20260306100000_session_location.sql`
 
 ### 6.3 Community
 
