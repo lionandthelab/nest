@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.0.19+20 (2026-03-08)
+
+### Changed
+
+- 부모 헤더바 공지 프리뷰 추가 (`home_page.dart`)
+  - 홈 상단에 최신 공지 3건을 카드로 노출
+  - 공지 항목 탭 시 상세 다이얼로그 확인
+  - `모두 보기`로 부모 `소식` 탭 이동 지원
+- 부모 아이 선택 UX 통합
+  - 아이 선택을 각 탭 카드에서 제거
+  - 홈 헤더바 전역 아이 선택기로 일원화(시간표/학습현황 탭 공통 적용)
+  - 부모는 guardian 연동된 아이만 선택 가능
+- 부모 탭 레이아웃 정리
+  - `parent_timetable_tab.dart`, `parent_progress_tab.dart`에서 탭 내부 ChildSelector 제거
+  - 로딩 시 상단 progress 표시로 상태 전달
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.18+19 (2026-03-08)
 
 ### Changed

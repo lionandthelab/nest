@@ -75,6 +75,7 @@ Last updated: 2026-03-08
 | 2026-03-08 | 온보딩 개편: `초대` 섹션 유지 + `홈스쿨 검색/가입 요청` UI 추가 + `새 홈스쿨 개설` 폼을 모달로 전환, `homeschool_join_requests` 테이블/RLS 및 `search_homeschool_directory` RPC 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 초대 카드 개선: 비소속 계정에서 `Unknown Homeschool` 표시 문제 수정(`homeschool_invites.homeschool_name` 스냅샷 + 동기화 트리거), 대기 초대를 풀너비 초대장 스타일 UI로 리디자인 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 부모 뷰 제약 강화: 부모 로그인 시 아이 선택 대상을 guardian 연동된 내 아이로만 제한, 부모 시간표를 `요일 x 교시` 스케줄표 메인보드로 개편(반별 상세는 보조 섹션 유지) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 부모 홈 헤더 UX 보강: 부모 공지 최신 3개 프리뷰 + `모두 보기` 탭 이동, 아이 선택을 탭별 카드에서 제거하고 헤더바 전역 선택기로 통합 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 

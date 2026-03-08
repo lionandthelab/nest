@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../config/app_config.dart';
+import '../models/nest_models.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
 import 'nest_theme.dart';
@@ -89,6 +90,9 @@ class _HomePageState extends State<HomePage> {
                         onSelectTerm: _handleTermChange,
                         onSelectClassGroup: _handleClassGroupChange,
                         onSelectViewRole: _handleViewRoleChange,
+                        selectedChildId: _selectedChildId,
+                        onSelectChild: _handleChildChange,
+                        onOpenParentAnnouncements: _openParentAnnouncementsTab,
                       )
                     : _MobileScaffold(
                         currentIndex: safeIndex,
@@ -107,6 +111,9 @@ class _HomePageState extends State<HomePage> {
                         onSelectTerm: _handleTermChange,
                         onSelectClassGroup: _handleClassGroupChange,
                         onSelectViewRole: _handleViewRoleChange,
+                        selectedChildId: _selectedChildId,
+                        onSelectChild: _handleChildChange,
+                        onOpenParentAnnouncements: _openParentAnnouncementsTab,
                       ),
               ),
             ],
@@ -166,7 +173,6 @@ class _HomePageState extends State<HomePage> {
             controller: controller,
             selectedChildId: _selectedChildId,
             childClassBundles: _childClassBundles,
-            onSelectChild: _handleChildChange,
             isLoadingChildClasses: _isLoadingChildClasses,
           ),
         ),
@@ -176,7 +182,6 @@ class _HomePageState extends State<HomePage> {
             controller: controller,
             selectedChildId: _selectedChildId,
             childClassBundles: _childClassBundles,
-            onSelectChild: _handleChildChange,
             isLoadingChildClasses: _isLoadingChildClasses,
           ),
         ),
@@ -440,6 +445,10 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _openParentAnnouncementsTab() {
+    _navigateToTabLabel('소식');
+  }
+
   void _showMessage(String message) {
     if (!mounted || message.isEmpty) {
       return;
@@ -472,6 +481,9 @@ class _DesktopScaffold extends StatelessWidget {
     required this.onSelectTerm,
     required this.onSelectClassGroup,
     required this.onSelectViewRole,
+    required this.selectedChildId,
+    required this.onSelectChild,
+    required this.onOpenParentAnnouncements,
   });
 
   final int currentIndex;
@@ -486,6 +498,9 @@ class _DesktopScaffold extends StatelessWidget {
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
   final Future<void> Function(String? value) onSelectViewRole;
+  final String? selectedChildId;
+  final ValueChanged<String?> onSelectChild;
+  final VoidCallback onOpenParentAnnouncements;
 
   @override
   Widget build(BuildContext context) {
@@ -526,6 +541,9 @@ class _DesktopScaffold extends StatelessWidget {
               onSelectTerm: onSelectTerm,
               onSelectClassGroup: onSelectClassGroup,
               onSelectViewRole: onSelectViewRole,
+              selectedChildId: selectedChildId,
+              onSelectChild: onSelectChild,
+              onOpenParentAnnouncements: onOpenParentAnnouncements,
             ),
           ),
         ),
@@ -548,6 +566,9 @@ class _MobileScaffold extends StatelessWidget {
     required this.onSelectTerm,
     required this.onSelectClassGroup,
     required this.onSelectViewRole,
+    required this.selectedChildId,
+    required this.onSelectChild,
+    required this.onOpenParentAnnouncements,
   });
 
   final int currentIndex;
@@ -562,6 +583,9 @@ class _MobileScaffold extends StatelessWidget {
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
   final Future<void> Function(String? value) onSelectViewRole;
+  final String? selectedChildId;
+  final ValueChanged<String?> onSelectChild;
+  final VoidCallback onOpenParentAnnouncements;
 
   @override
   Widget build(BuildContext context) {
@@ -580,6 +604,9 @@ class _MobileScaffold extends StatelessWidget {
               onSelectTerm: onSelectTerm,
               onSelectClassGroup: onSelectClassGroup,
               onSelectViewRole: onSelectViewRole,
+              selectedChildId: selectedChildId,
+              onSelectChild: onSelectChild,
+              onOpenParentAnnouncements: onOpenParentAnnouncements,
             ),
           ),
         ),
@@ -618,6 +645,9 @@ class _MainPanel extends StatefulWidget {
     required this.onSelectTerm,
     required this.onSelectClassGroup,
     required this.onSelectViewRole,
+    required this.selectedChildId,
+    required this.onSelectChild,
+    required this.onOpenParentAnnouncements,
   });
 
   final NestController controller;
@@ -629,6 +659,9 @@ class _MainPanel extends StatefulWidget {
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
   final Future<void> Function(String? value) onSelectViewRole;
+  final String? selectedChildId;
+  final ValueChanged<String?> onSelectChild;
+  final VoidCallback onOpenParentAnnouncements;
 
   @override
   State<_MainPanel> createState() => _MainPanelState();
@@ -694,6 +727,82 @@ class _MainPanelState extends State<_MainPanel> {
     );
   }
 
+  List<Announcement> _latestParentAnnouncements(NestController controller) {
+    final rows = controller.announcements.toList(growable: false)
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) {
+          return a.pinned ? -1 : 1;
+        }
+        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
+        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
+        return right.compareTo(left);
+      });
+    if (rows.length <= 3) {
+      return rows;
+    }
+    return rows.sublist(0, 3);
+  }
+
+  Widget _buildParentChildSwitchButton(NestController controller) {
+    if (!controller.isParentView) {
+      return const SizedBox.shrink();
+    }
+
+    final children = controller.myChildren.toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    if (children.isEmpty) {
+      return Chip(
+        label: const Text('내 아이 미연동'),
+        avatar: const Icon(Icons.child_care_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    final selected = children
+        .where((child) => child.id == widget.selectedChildId)
+        .firstOrNull;
+    final label = selected == null
+        ? '아이 선택'
+        : '${selected.name} (${selected.familyName})';
+
+    return PopupMenuButton<String>(
+      tooltip: '아이 선택',
+      onSelected: widget.onSelectChild,
+      itemBuilder: (context) => children
+          .map(
+            (child) => PopupMenuItem<String>(
+              value: child.id,
+              child: Row(
+                children: [
+                  Icon(
+                    child.id == widget.selectedChildId
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${child.name} (${child.familyName})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+      child: Chip(
+        label: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: Text(label, overflow: TextOverflow.ellipsis),
+        ),
+        avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -701,6 +810,9 @@ class _MainPanelState extends State<_MainPanel> {
     final width = MediaQuery.sizeOf(context).width;
     final compactHeader = width < 980;
     final iconOnlyActions = width < 760;
+    final latestParentAnnouncements = controller.isParentView
+        ? _latestParentAnnouncements(controller)
+        : const <Announcement>[];
 
     final refreshAction = iconOnlyActions
         ? IconButton(
@@ -770,6 +882,7 @@ class _MainPanelState extends State<_MainPanel> {
                             avatar: const Icon(Icons.verified_user, size: 14),
                             visualDensity: VisualDensity.compact,
                           ),
+                          _buildParentChildSwitchButton(controller),
                           _buildRoleSwitchButton(controller),
                           IconButton(
                             icon: const Icon(Icons.info_outline, size: 18),
@@ -796,6 +909,7 @@ class _MainPanelState extends State<_MainPanel> {
                         avatar: const Icon(Icons.verified_user, size: 14),
                         visualDensity: VisualDensity.compact,
                       ),
+                      _buildParentChildSwitchButton(controller),
                       _buildRoleSwitchButton(controller),
                       IconButton(
                         icon: const Icon(Icons.info_outline, size: 18),
@@ -872,6 +986,13 @@ class _MainPanelState extends State<_MainPanel> {
                     padding: EdgeInsets.only(top: 6),
                     child: LinearProgressIndicator(minHeight: 3),
                   ),
+                if (controller.isParentView) ...[
+                  const SizedBox(height: 10),
+                  _ParentAnnouncementPreviewCard(
+                    announcements: latestParentAnnouncements,
+                    onViewAll: widget.onOpenParentAnnouncements,
+                  ),
+                ],
               ],
             ),
           ),
@@ -904,6 +1025,137 @@ class _MainPanelState extends State<_MainPanel> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ParentAnnouncementPreviewCard extends StatelessWidget {
+  const _ParentAnnouncementPreviewCard({
+    required this.announcements,
+    required this.onViewAll,
+  });
+
+  final List<Announcement> announcements;
+  final VoidCallback onViewAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.campaign_outlined, color: NestColors.deepWood),
+              const SizedBox(width: 8),
+              Text('학부모 공지사항', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              TextButton(onPressed: onViewAll, child: const Text('모두 보기')),
+            ],
+          ),
+          if (announcements.isEmpty)
+            Text(
+              '등록된 공지가 없습니다.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.65),
+              ),
+            )
+          else
+            ...announcements.map(
+              (notice) => Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => _showAnnouncementDetail(context, notice),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: NestColors.creamyWhite,
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Row(
+                      children: [
+                        if (notice.pinned)
+                          Icon(
+                            Icons.push_pin,
+                            size: 14,
+                            color: NestColors.dustyRose,
+                          )
+                        else
+                          const Icon(Icons.circle, size: 7),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            notice.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showAnnouncementDetail(BuildContext context, Announcement notice) {
+    final when = notice.createdAt == null
+        ? '-'
+        : '${notice.createdAt!.year.toString().padLeft(4, '0')}-'
+              '${notice.createdAt!.month.toString().padLeft(2, '0')}-'
+              '${notice.createdAt!.day.toString().padLeft(2, '0')} '
+              '${notice.createdAt!.hour.toString().padLeft(2, '0')}:'
+              '${notice.createdAt!.minute.toString().padLeft(2, '0')}';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(notice.title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              when,
+              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(notice.body.trim().isEmpty ? '(본문 없음)' : notice.body),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('닫기'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              onViewAll();
+            },
+            child: const Text('모두 보기로 이동'),
           ),
         ],
       ),

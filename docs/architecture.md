@@ -261,6 +261,7 @@ Admin dashboard onboarding:
   - read-only schedule visibility (editing hidden/disabled)
   - visual session cards with icon rows for course/time/teacher/room scanning.
   - parent timetable includes weekly board view (`요일 x 교시`) for selected child.
+  - parent notice preview shows latest 3 announcements at home header with `모두 보기` jump.
 
 ### 6.2.1 Session Location Compatibility
 
@@ -288,7 +289,7 @@ Admin dashboard onboarding:
   - `parent_timetable_tab.dart`
   - `parent_progress_tab.dart`
   - `parent_news_tab.dart`
-  - shared child context via `child_selector_header.dart`
+  - child selection moved to home header bar (global for parent tabs)
   - parent child selector only exposes guardian-linked children (`NestController.myChildren`)
   - selected child 기준으로 반/시간표/학습 상태를 일관되게 제공
   - avatar-first visual identity for child/class entities in selectors and cards
@@ -316,8 +317,8 @@ Admin dashboard onboarding:
     - existing account link/unlink (name/email/UUID search)
     - unavailable-time add/remove in the same dialog
   - class tab onboarding draft generator removed to keep class setup focused on direct CRUD + enrollment
-- Parent child selector (`child_selector_header.dart`)
-  - child switching uses searchable selector sheet for large sibling lists
+- Parent child selector (`home_page.dart` header bar)
+  - child switching is centralized in global header and shared across all parent tabs
 - Shared objective:
   - reduce initial setup friction in large homeschool contexts
   - keep one-tap edit flow while preserving existing backend model

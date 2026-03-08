@@ -5,7 +5,6 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
-import '../widgets/child_selector_header.dart';
 import '../widgets/entity_visuals.dart';
 
 class ParentProgressTab extends StatelessWidget {
@@ -14,14 +13,12 @@ class ParentProgressTab extends StatelessWidget {
     required this.controller,
     required this.selectedChildId,
     required this.childClassBundles,
-    required this.onSelectChild,
     required this.isLoadingChildClasses,
   });
 
   final NestController controller;
   final String? selectedChildId;
   final Map<String, ChildClassBundle> childClassBundles;
-  final ValueChanged<String?> onSelectChild;
   final bool isLoadingChildClasses;
 
   @override
@@ -54,14 +51,10 @@ class ParentProgressTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        ChildSelectorHeader(
-          controller: controller,
-          selectedChildId: selectedChildId,
-          childClassBundles: childClassBundles,
-          onSelectChild: onSelectChild,
-          isLoadingChildClasses: isLoadingChildClasses,
-        ),
-        const SizedBox(height: 12),
+        if (isLoadingChildClasses) ...[
+          const LinearProgressIndicator(),
+          const SizedBox(height: 10),
+        ],
         Row(
           children: [
             Icon(
