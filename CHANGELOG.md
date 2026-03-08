@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.8+9 (2026-03-08)
+
+### Changed
+
+- 학기 설정 `반` 탭 정리 (`family_admin_tab.dart`)
+  - `운영 초안 생성기` 제거
+  - 반 관리/반 배정에서 반 선택을 카드 클릭 전환으로 통일
+- 학기 설정 `선생님` 탭 통합 편집 UX 적용 (`family_admin_tab.dart`)
+  - 선생님 카드 클릭 시 생성/수정 공용 모달 오픈
+  - 모달에서 교사 정보 수정 + 기존 계정 연결/해제 + 불가 시간 등록/삭제를 한 번에 처리
+- 교사 프로필 수정 API/상태 흐름 추가
+  - `nest_repository.dart`: `updateTeacherProfile`
+  - `nest_controller.dart`: `updateTeacherProfile` + 감사 로그(`TEACHER_PROFILE_UPDATE`)
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.7+8 (2026-03-08)
 
 ### Changed

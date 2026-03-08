@@ -285,10 +285,15 @@ Admin dashboard onboarding:
 ### 6.5 Form Interaction UX
 
 - Term Setup (`family_admin_tab.dart`)
-  - family/class/unavailability owner selection migrated to searchable selector cards
+  - class selection in class CRUD/enrollment migrated to direct card-click selection
   - day-of-week input migrated to quick chips for faster blocked-time authoring
   - teacher type input migrated to segmented control (`부모 교사`, `초청 교사`)
   - family/child/class lists upgraded with visual entity tiles (avatar + status/meta)
+  - teacher card click opens a unified create/edit dialog:
+    - profile edit (`표시 이름`, `교사 유형`)
+    - existing account link/unlink (name/email/UUID search)
+    - unavailable-time add/remove in the same dialog
+  - class tab onboarding draft generator removed to keep class setup focused on direct CRUD + enrollment
 - Parent child selector (`child_selector_header.dart`)
   - child switching uses searchable selector sheet for large sibling lists
 - Shared objective:
@@ -346,8 +351,8 @@ Admin dashboard onboarding:
 - `family_admin_tab.dart`:
   - term setup workspace with unit-level sections:
     - family (family/child creation + overview)
-    - teacher (teacher profile + unavailability)
-    - class (bulk draft, class CRUD, enrollments)
+    - teacher (teacher profile edit + account link/unlink + unavailability in one modal)
+    - class (card-based class selection, class CRUD, enrollments)
     - course (course create/delete and duration)
   - setup progress bar + unit chips for direct switching
 - `parent_timetable_tab.dart`:

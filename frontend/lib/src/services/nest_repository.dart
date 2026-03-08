@@ -399,6 +399,28 @@ class NestRepository {
     return TeacherProfile.fromMap(_asMap(row));
   }
 
+  Future<TeacherProfile> updateTeacherProfile({
+    required String teacherProfileId,
+    required String displayName,
+    required String teacherType,
+    String? userId,
+  }) async {
+    final row = await client
+        .from('teacher_profiles')
+        .update({
+          'display_name': displayName.trim(),
+          'teacher_type': teacherType,
+          'user_id': _normalizeNullable(userId),
+        })
+        .eq('id', teacherProfileId)
+        .select(
+          'id, homeschool_id, user_id, display_name, teacher_type, specialties, bio, created_at',
+        )
+        .single();
+
+    return TeacherProfile.fromMap(_asMap(row));
+  }
+
   Future<List<MemberUnavailabilityBlock>> fetchMemberUnavailabilityBlocks({
     required String homeschoolId,
   }) async {

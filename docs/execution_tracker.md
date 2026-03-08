@@ -63,6 +63,7 @@ Last updated: 2026-03-08
 | 2026-03-08 | 시간표 탭 전면 단순화: 풀너비 메인보드, 반 스위처, AI 배정 단일 입력, 과목/교사/교실 팔레트 DnD, 수업카드 설정 모달(교사/장소), 수정 확정/롤백, 탭 이탈 경고 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 시간표 마감 UX 미세조정: 메인보드 우측 상단 `수정 확정` 단일화, AI 배정 채팅 입력+도움말 툴팁, 전체 반 기준 요일/교시별 장소 배정 상황표 PNG 내보내기 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 전 탭 Full-width 레이아웃 적용 + Parent/Teacher/Admin 주요 카드 UI 시각화 개편(아바타/아이콘 기반 엔티티 타일, 시간표/활동/소식 카드 스캔성 강화) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 학기 설정 UX 통합 정리: 반 탭 운영 초안 생성기 제거, 반 관리/반 배정 반선택 카드 클릭 전환, 선생님 카드 클릭 편집 + 계정 연결/불가시간을 단일 생성·수정 모달로 통합 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 

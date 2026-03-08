@@ -1984,7 +1984,9 @@ class NestController extends ChangeNotifier {
     if (trimmedName.isEmpty) {
       throw StateError('과목 이름을 입력하세요.');
     }
-    if (courses.any((c) => c.name.trim().toLowerCase() == trimmedName.toLowerCase())) {
+    if (courses.any(
+      (c) => c.name.trim().toLowerCase() == trimmedName.toLowerCase(),
+    )) {
       throw StateError('이미 동일한 이름의 과목이 있습니다: $trimmedName');
     }
     if (defaultDurationMin < 20 || defaultDurationMin > 300) {
@@ -2053,7 +2055,9 @@ class NestController extends ChangeNotifier {
     if (trimmedName.isEmpty) {
       throw StateError('가정 이름을 입력하세요.');
     }
-    if (families.any((f) => f.familyName.trim().toLowerCase() == trimmedName.toLowerCase())) {
+    if (families.any(
+      (f) => f.familyName.trim().toLowerCase() == trimmedName.toLowerCase(),
+    )) {
       throw StateError('이미 동일한 이름의 가정이 있습니다: $trimmedName');
     }
 
@@ -2159,7 +2163,7 @@ class NestController extends ChangeNotifier {
     });
   }
 
-  Future<void> createTeacherProfile({
+  Future<TeacherProfile> createTeacherProfile({
     required String displayName,
     required String teacherType,
     String? userId,
@@ -2178,8 +2182,9 @@ class NestController extends ChangeNotifier {
       throw StateError('교사 표시 이름을 입력하세요.');
     }
 
+    late final TeacherProfile created;
     await _runBusy('교사 프로필을 생성하는 중...', () async {
-      final created = await _repository.createTeacherProfile(
+      created = await _repository.createTeacherProfile(
         homeschoolId: homeschoolId,
         displayName: trimmedName,
         teacherType: teacherType,
@@ -2194,6 +2199,51 @@ class NestController extends ChangeNotifier {
       );
       _setStatus('교사 프로필을 생성했습니다.');
     });
+    return created;
+  }
+
+  Future<TeacherProfile> updateTeacherProfile({
+    required String teacherProfileId,
+    required String displayName,
+    required String teacherType,
+    String? userId,
+  }) async {
+    if (!canManageTeacherAssignments) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(teacherProfileId);
+    if (normalizedId == null) {
+      throw StateError('수정할 교사 프로필을 선택하세요.');
+    }
+
+    final trimmedName = displayName.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('교사 표시 이름을 입력하세요.');
+    }
+
+    late final TeacherProfile updated;
+    await _runBusy('교사 프로필을 수정하는 중...', () async {
+      updated = await _repository.updateTeacherProfile(
+        teacherProfileId: normalizedId,
+        displayName: trimmedName,
+        teacherType: teacherType,
+        userId: _normalizeNullable(userId),
+      );
+      await loadTeacherProfiles();
+      await _logAudit(
+        actionType: 'TEACHER_PROFILE_UPDATE',
+        resourceType: 'teacher_profiles',
+        resourceId: updated.id,
+        afterJson: {
+          'display_name': updated.displayName,
+          'type': updated.teacherType,
+          'user_id': updated.userId,
+        },
+      );
+      _setStatus('교사 프로필을 수정했습니다.');
+    });
+    return updated;
   }
 
   Future<void> createMemberUnavailabilityBlock({
@@ -3366,75 +3416,145 @@ class NestController extends ChangeNotifier {
     selectedClassGroupId = cachedMeta['selectedClassGroupId'] as String?;
     currentRole = cachedMeta['currentRole'] as String?;
 
-    memberships = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'memberships', fromMap: Membership.fromMap,
-    ) ?? const [];
-    terms = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'terms', fromMap: Term.fromMap,
-    ) ?? const [];
-    classGroups = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'classGroups', fromMap: ClassGroup.fromMap,
-    ) ?? const [];
-    courses = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'courses', fromMap: Course.fromMap,
-    ) ?? const [];
-    timeSlots = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'timeSlots', fromMap: TimeSlot.fromMap,
-    ) ?? const [];
-    sessions = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'sessions', fromMap: ClassSession.fromMap,
-    ) ?? const [];
-    proposals = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'proposals', fromMap: Proposal.fromMap,
-    ) ?? const [];
-    proposalSessionsById = _restoreProposalSessionsMap(userId, lastHomeschoolId);
-    families = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'families', fromMap: Family.fromMap,
-    ) ?? const [];
-    children = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'children', fromMap: ChildProfile.fromMap,
-    ) ?? const [];
-    classEnrollments = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'classEnrollments', fromMap: ClassEnrollment.fromMap,
-    ) ?? const [];
-    familyGuardianUserIdsByFamily = NestCache.loadStringListMap(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'familyGuardians',
-    ) ?? const {};
-    teacherProfiles = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'teacherProfiles', fromMap: TeacherProfile.fromMap,
-    ) ?? const [];
-    memberUnavailabilityBlocks = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'unavailabilityBlocks', fromMap: MemberUnavailabilityBlock.fromMap,
-    ) ?? const [];
-    sessionTeacherAssignments = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'teacherAssignments', fromMap: SessionTeacherAssignment.fromMap,
-    ) ?? const [];
-    teachingPlans = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'teachingPlans', fromMap: TeachingPlan.fromMap,
-    ) ?? const [];
-    studentActivityLogs = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'activityLogs', fromMap: StudentActivityLog.fromMap,
-    ) ?? const [];
-    homeschoolMemberships = NestCache.loadCollection(
-      userId: userId, homeschoolId: lastHomeschoolId,
-      collection: 'homeschoolMemberships', fromMap: Membership.fromMap,
-    ) ?? const [];
+    memberships =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'memberships',
+          fromMap: Membership.fromMap,
+        ) ??
+        const [];
+    terms =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'terms',
+          fromMap: Term.fromMap,
+        ) ??
+        const [];
+    classGroups =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'classGroups',
+          fromMap: ClassGroup.fromMap,
+        ) ??
+        const [];
+    courses =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'courses',
+          fromMap: Course.fromMap,
+        ) ??
+        const [];
+    timeSlots =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'timeSlots',
+          fromMap: TimeSlot.fromMap,
+        ) ??
+        const [];
+    sessions =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'sessions',
+          fromMap: ClassSession.fromMap,
+        ) ??
+        const [];
+    proposals =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'proposals',
+          fromMap: Proposal.fromMap,
+        ) ??
+        const [];
+    proposalSessionsById = _restoreProposalSessionsMap(
+      userId,
+      lastHomeschoolId,
+    );
+    families =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'families',
+          fromMap: Family.fromMap,
+        ) ??
+        const [];
+    children =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'children',
+          fromMap: ChildProfile.fromMap,
+        ) ??
+        const [];
+    classEnrollments =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'classEnrollments',
+          fromMap: ClassEnrollment.fromMap,
+        ) ??
+        const [];
+    familyGuardianUserIdsByFamily =
+        NestCache.loadStringListMap(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'familyGuardians',
+        ) ??
+        const {};
+    teacherProfiles =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'teacherProfiles',
+          fromMap: TeacherProfile.fromMap,
+        ) ??
+        const [];
+    memberUnavailabilityBlocks =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'unavailabilityBlocks',
+          fromMap: MemberUnavailabilityBlock.fromMap,
+        ) ??
+        const [];
+    sessionTeacherAssignments =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'teacherAssignments',
+          fromMap: SessionTeacherAssignment.fromMap,
+        ) ??
+        const [];
+    teachingPlans =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'teachingPlans',
+          fromMap: TeachingPlan.fromMap,
+        ) ??
+        const [];
+    studentActivityLogs =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'activityLogs',
+          fromMap: StudentActivityLog.fromMap,
+        ) ??
+        const [];
+    homeschoolMemberships =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'homeschoolMemberships',
+          fromMap: Membership.fromMap,
+        ) ??
+        const [];
   }
 
   Map<String, List<ProposalSession>> _restoreProposalSessionsMap(
@@ -3442,8 +3562,10 @@ class NestController extends ChangeNotifier {
     String homeschoolId,
   ) {
     final flat = NestCache.loadCollection(
-      userId: userId, homeschoolId: homeschoolId,
-      collection: 'proposalSessions', fromMap: ProposalSession.fromMap,
+      userId: userId,
+      homeschoolId: homeschoolId,
+      collection: 'proposalSessions',
+      fromMap: ProposalSession.fromMap,
     );
     if (flat == null) return const {};
     final result = <String, List<ProposalSession>>{};
@@ -3473,93 +3595,128 @@ class NestController extends ChangeNotifier {
 
     await Future.wait([
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'memberships', items: memberships,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'memberships',
+        items: memberships,
         toMap: (m) => m.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'terms', items: terms,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'terms',
+        items: terms,
         toMap: (t) => t.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'classGroups', items: classGroups,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'classGroups',
+        items: classGroups,
         toMap: (c) => c.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'courses', items: courses,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'courses',
+        items: courses,
         toMap: (c) => c.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'timeSlots', items: timeSlots,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'timeSlots',
+        items: timeSlots,
         toMap: (t) => t.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'sessions', items: sessions,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'sessions',
+        items: sessions,
         toMap: (s) => s.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'proposals', items: proposals,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'proposals',
+        items: proposals,
         toMap: (p) => p.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
+        userId: userId,
+        homeschoolId: homeschoolId,
         collection: 'proposalSessions',
         items: proposalSessionsById.values.expand((v) => v).toList(),
         toMap: (ps) => ps.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'families', items: families,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'families',
+        items: families,
         toMap: (f) => f.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'children', items: children,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'children',
+        items: children,
         toMap: (c) => c.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'classEnrollments', items: classEnrollments,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'classEnrollments',
+        items: classEnrollments,
         toMap: (e) => e.toMap(),
       ),
       NestCache.saveStringListMap(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'familyGuardians', data: familyGuardianUserIdsByFamily,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'familyGuardians',
+        data: familyGuardianUserIdsByFamily,
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'teacherProfiles', items: teacherProfiles,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'teacherProfiles',
+        items: teacherProfiles,
         toMap: (t) => t.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'unavailabilityBlocks', items: memberUnavailabilityBlocks,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'unavailabilityBlocks',
+        items: memberUnavailabilityBlocks,
         toMap: (b) => b.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'teacherAssignments', items: sessionTeacherAssignments,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'teacherAssignments',
+        items: sessionTeacherAssignments,
         toMap: (a) => a.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'teachingPlans', items: teachingPlans,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'teachingPlans',
+        items: teachingPlans,
         toMap: (p) => p.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'activityLogs', items: studentActivityLogs,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'activityLogs',
+        items: studentActivityLogs,
         toMap: (l) => l.toMap(),
       ),
       NestCache.saveCollection(
-        userId: userId, homeschoolId: homeschoolId,
-        collection: 'homeschoolMemberships', items: homeschoolMemberships,
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'homeschoolMemberships',
+        items: homeschoolMemberships,
         toMap: (m) => m.toMap(),
       ),
     ]);
