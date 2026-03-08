@@ -89,6 +89,36 @@ class NestRepository {
     return _asRows(data).map(Membership.fromMap).toList(growable: false);
   }
 
+  Future<List<HomeschoolDirectoryEntry>> searchHomeschoolDirectory({
+    String query = '',
+    int limit = 24,
+  }) async {
+    final data = await client.rpc(
+      'search_homeschool_directory',
+      params: {'p_query': query.trim(), 'p_limit': limit},
+    );
+    return _asRows(
+      data,
+    ).map(HomeschoolDirectoryEntry.fromMap).toList(growable: false);
+  }
+
+  Future<void> createHomeschoolJoinRequest({
+    required String homeschoolId,
+    required String requesterUserId,
+    required String requesterEmail,
+    required String requesterName,
+    String requestNote = '',
+  }) {
+    return client.from('homeschool_join_requests').insert({
+      'homeschool_id': homeschoolId,
+      'requester_user_id': requesterUserId,
+      'requester_email': requesterEmail.trim().toLowerCase(),
+      'requester_name': requesterName.trim(),
+      'request_note': requestNote.trim(),
+      'status': 'PENDING',
+    });
+  }
+
   Future<List<Membership>> fetchHomeschoolMemberships({
     required String homeschoolId,
   }) async {

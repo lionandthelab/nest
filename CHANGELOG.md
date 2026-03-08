@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.0.16+17 (2026-03-08)
+
+### Changed
+
+- 초기 온보딩 UX 개편 (`dashboard_tab.dart`)
+  - `초대를 받았나요?` 섹션 유지
+  - 비소속 사용자를 위한 `홈스쿨 검색 및 가입 요청` 카드 추가
+  - 검색 결과 카드에서 가입 요청 메시지 입력 후 즉시 요청 전송 지원
+  - `새 홈스쿨을 직접 개설`의 하단 인라인 폼 제거, `홈스쿨 개설 열기` 모달로 전환
+- 홈스쿨 검색/가입요청 API 추가
+  - `nest_models.dart`: `HomeschoolDirectoryEntry`
+  - `nest_repository.dart`: `searchHomeschoolDirectory`, `createHomeschoolJoinRequest`
+  - `nest_controller.dart`: `searchHomeschoolDirectory`, `requestJoinHomeschool`
+- Supabase 스키마 확장
+  - `supabase/migrations/20260309003000_homeschool_join_requests_and_directory.sql`
+  - `homeschool_join_requests` 테이블 + RLS 정책 추가
+  - `search_homeschool_directory` security-definer RPC 추가
+- 테스트 보강
+  - `frontend/test/models_test.dart`: `HomeschoolDirectoryEntry.fromMap` 파싱 테스트 추가
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과
+
 ## 1.0.15+16 (2026-03-08)
 
 ### Changed

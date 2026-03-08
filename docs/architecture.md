@@ -13,9 +13,9 @@ Last updated: 2026-03-08
 - Community dual mode:
   - User feed (post/comment/like/report)
   - Admin moderation (report queue/hide/pin/delete)
-- Membership onboarding via email invite:
-  - admin invite create/cancel
-  - invited user self-accept from dashboard
+- Membership onboarding (2 paths):
+  - admin invite create/cancel + invited user self-accept
+  - non-member search homeschool directory + send join request
 - Prompt timetable generation plus manual drag-and-drop editing.
 - Questionnaire-based schedule concierge with multiple draft options and live conflict checks.
 - Google Drive based media upload and gallery sharing.
@@ -98,6 +98,7 @@ supabase/
     20260308223000_courses_delete_policy.sql
     20260308233000_classrooms.sql
     20260308235500_family_guardians_delete_policy.sql
+    20260309003000_homeschool_join_requests_and_directory.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -184,6 +185,8 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `createHomeschoolInvite(...)`
   - `cancelHomeschoolInvite(inviteId)`
   - `acceptHomeschoolInvite(inviteToken)`
+  - `searchHomeschoolDirectory(query, limit)` (`search_homeschool_directory` RPC)
+  - `createHomeschoolJoinRequest(...)`
   - `fetchFamilies`, `createFamily`
   - `createCourse`, `updateCourse`, `deleteCourse`
   - `fetchClassrooms`, `createClassroom`, `updateClassroom`, `deleteClassroom`
@@ -363,6 +366,20 @@ Admin dashboard onboarding:
   3. DB activates `homeschool_memberships` row
   4. controller reloads memberships/context and role tabs
 
+### 6.8.1 No-membership Onboarding UX
+
+- `Dashboard` no-membership state now offers three choices:
+  - `초대를 받았나요?` 안내 + 대기 초대 수락
+  - 홈스쿨 검색 후 가입 요청
+  - 새 홈스쿨 직접 개설
+- 가입 요청 flow:
+  1. user searches by homeschool name
+  2. app calls `search_homeschool_directory` RPC
+  3. user submits request note in modal
+  4. app inserts `homeschool_join_requests` with `PENDING`
+- 홈스쿨 개설 flow:
+  - previously inline section -> now modal dialog (`홈스쿨 개설 열기`) for first onboarding step
+
 ### 6.9 Family and Enrollment Admin
 
 - `family_admin_tab.dart`:
@@ -509,6 +526,13 @@ Migration `20260308235500_family_guardians_delete_policy.sql`:
 
 - adds `family_guardians_delete_admin_staff` RLS policy
 - enables guardian unlink (`family_guardians` delete) from family management UI
+
+Migration `20260309003000_homeschool_join_requests_and_directory.sql`:
+
+- adds `homeschool_join_requests` table (`PENDING`, `APPROVED`, `REJECTED`, `CANCELED`)
+- adds RLS for requester self-read/insert and admin/staff moderation
+- adds `search_homeschool_directory(query, limit)` security-definer RPC
+- enables authenticated non-members to discover homeschools and request joining without loosening `homeschools` base RLS
 
 ## 8. Environment Variables
 

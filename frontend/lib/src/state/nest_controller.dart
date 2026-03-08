@@ -3067,6 +3067,63 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<List<HomeschoolDirectoryEntry>> searchHomeschoolDirectory({
+    required String query,
+    int limit = 24,
+  }) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const [];
+    }
+
+    return _repository.searchHomeschoolDirectory(
+      query: normalizedQuery,
+      limit: limit,
+    );
+  }
+
+  Future<void> requestJoinHomeschool({
+    required String homeschoolId,
+    String requestNote = '',
+  }) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final normalizedHomeschoolId = _normalizeNullable(homeschoolId);
+    if (normalizedHomeschoolId == null) {
+      throw StateError('가입 요청할 홈스쿨을 선택하세요.');
+    }
+
+    final alreadyMember = memberships.any(
+      (membership) => membership.homeschoolId == normalizedHomeschoolId,
+    );
+    if (alreadyMember) {
+      throw StateError('이미 가입된 홈스쿨입니다.');
+    }
+
+    final normalizedEmail = _normalizeNullable(user?.email);
+    if (normalizedEmail == null || !_looksLikeEmail(normalizedEmail)) {
+      throw StateError('계정 이메일 정보를 확인할 수 없습니다.');
+    }
+
+    final metadataName = user?.userMetadata?['full_name'];
+    final derivedName = metadataName is String
+        ? metadataName.trim()
+        : normalizedEmail.split('@').first;
+
+    await _runBusy('홈스쿨 가입 요청을 보내는 중...', () async {
+      await _repository.createHomeschoolJoinRequest(
+        homeschoolId: normalizedHomeschoolId,
+        requesterUserId: user!.id,
+        requesterEmail: normalizedEmail,
+        requesterName: derivedName,
+        requestNote: requestNote,
+      );
+      _setStatus('가입 요청을 보냈습니다. 홈스쿨 관리자 승인 후 참여할 수 있습니다.');
+    });
+  }
+
   Future<void> grantMembershipRole({
     required String targetUserId,
     required String role,

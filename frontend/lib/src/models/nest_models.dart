@@ -52,6 +52,48 @@ class Homeschool {
   };
 }
 
+class HomeschoolDirectoryEntry {
+  const HomeschoolDirectoryEntry({
+    required this.id,
+    required this.name,
+    required this.timezone,
+    required this.activeMemberCount,
+    required this.hasPendingRequest,
+  });
+
+  final String id;
+  final String name;
+  final String timezone;
+  final int activeMemberCount;
+  final bool hasPendingRequest;
+
+  HomeschoolDirectoryEntry copyWith({
+    String? id,
+    String? name,
+    String? timezone,
+    int? activeMemberCount,
+    bool? hasPendingRequest,
+  }) {
+    return HomeschoolDirectoryEntry(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      timezone: timezone ?? this.timezone,
+      activeMemberCount: activeMemberCount ?? this.activeMemberCount,
+      hasPendingRequest: hasPendingRequest ?? this.hasPendingRequest,
+    );
+  }
+
+  factory HomeschoolDirectoryEntry.fromMap(Map<String, dynamic> map) {
+    return HomeschoolDirectoryEntry(
+      id: (map['id'] as String?) ?? '',
+      name: (map['name'] as String?) ?? 'Unnamed Homeschool',
+      timezone: (map['timezone'] as String?) ?? 'Asia/Seoul',
+      activeMemberCount: (map['active_member_count'] as num?)?.toInt() ?? 0,
+      hasPendingRequest: parseBool(map['has_pending_request']),
+    );
+  }
+}
+
 class Membership {
   const Membership({
     required this.userId,

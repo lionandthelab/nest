@@ -109,5 +109,20 @@ void main() {
       expect(entry.roles, containsAll(['TEACHER', 'PARENT']));
       expect(entry.displayLabel, 'Teacher Kim <teacher@example.com>');
     });
+
+    test('HomeschoolDirectoryEntry.fromMap parses search payload fields', () {
+      final entry = HomeschoolDirectoryEntry.fromMap({
+        'id': 'school-3',
+        'name': 'Nest Warm Home',
+        'timezone': 'Asia/Seoul',
+        'active_member_count': 17,
+        'has_pending_request': true,
+      });
+
+      expect(entry.id, 'school-3');
+      expect(entry.name, 'Nest Warm Home');
+      expect(entry.activeMemberCount, 17);
+      expect(entry.hasPendingRequest, isTrue);
+    });
   });
 }

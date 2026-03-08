@@ -21,11 +21,17 @@ class DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<DashboardTab> {
   final _formKey = GlobalKey<FormState>();
+  final _joinSearchController = TextEditingController();
+  final _joinRequestNoteController = TextEditingController();
   bool _bootstrapExpanded = false;
   final _homeschoolController = TextEditingController(text: 'Nest Warm Home');
   final _termController = TextEditingController(text: '2026 Spring');
   final _classController = TextEditingController(text: 'Robin Class');
   final _courseController = TextEditingController(text: '국어, 수학, 자연탐구, 미술');
+  bool _joinSearching = false;
+  List<HomeschoolDirectoryEntry> _joinSearchResults = const [];
+  String? _joinSearchMessage;
+  final Set<String> _joinRequestingIds = <String>{};
 
   late final TextEditingController _startDateController;
   late final TextEditingController _endDateController;
@@ -45,6 +51,8 @@ class _DashboardTabState extends State<DashboardTab> {
 
   @override
   void dispose() {
+    _joinSearchController.dispose();
+    _joinRequestNoteController.dispose();
     _homeschoolController.dispose();
     _termController.dispose();
     _classController.dispose();
@@ -71,6 +79,8 @@ class _DashboardTabState extends State<DashboardTab> {
             _PendingInvitesCard(controller: controller),
           ],
           const SizedBox(height: 16),
+          _buildOnboardingJoinRequestCard(theme, controller),
+          const SizedBox(height: 16),
           _buildOnboardingCreateCard(theme, controller),
         ],
       );
@@ -78,11 +88,13 @@ class _DashboardTabState extends State<DashboardTab> {
 
     // ── Normal dashboard ──
     // Determine if setup guide should show (admin + not all steps done)
-    final showSetupGuide = controller.isAdminLike &&
+    final showSetupGuide =
+        controller.isAdminLike &&
         !_setupSteps(controller).every((s) => s.completed);
 
     // Bootstrap already done when homeschool + term + class all exist
-    final bootstrapDone = controller.selectedHomeschoolId != null &&
+    final bootstrapDone =
+        controller.selectedHomeschoolId != null &&
         controller.terms.isNotEmpty &&
         controller.classGroups.isNotEmpty;
 
@@ -233,29 +245,32 @@ class _DashboardTabState extends State<DashboardTab> {
                           Text(
                             '관리 운영의 기본 틀(홈스쿨, 학기, 반, 과목, 시간 슬롯)을 자동으로 만듭니다.',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color:
-                                  NestColors.deepWood.withValues(alpha: 0.72),
+                              color: NestColors.deepWood.withValues(
+                                alpha: 0.72,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _homeschoolController,
-                            decoration:
-                                const InputDecoration(labelText: '홈스쿨 이름'),
+                            decoration: const InputDecoration(
+                              labelText: '홈스쿨 이름',
+                            ),
                             validator: (value) =>
                                 (value == null || value.trim().isEmpty)
-                                    ? '필수값입니다.'
-                                    : null,
+                                ? '필수값입니다.'
+                                : null,
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: _termController,
-                            decoration:
-                                const InputDecoration(labelText: '학기 이름'),
+                            decoration: const InputDecoration(
+                              labelText: '학기 이름',
+                            ),
                             validator: (value) =>
                                 (value == null || value.trim().isEmpty)
-                                    ? '필수값입니다.'
-                                    : null,
+                                ? '필수값입니다.'
+                                : null,
                           ),
                           const SizedBox(height: 10),
                           Row(
@@ -284,12 +299,13 @@ class _DashboardTabState extends State<DashboardTab> {
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: _classController,
-                            decoration:
-                                const InputDecoration(labelText: '반 이름'),
+                            decoration: const InputDecoration(
+                              labelText: '반 이름',
+                            ),
                             validator: (value) =>
                                 (value == null || value.trim().isEmpty)
-                                    ? '필수값입니다.'
-                                    : null,
+                                ? '필수값입니다.'
+                                : null,
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
@@ -300,8 +316,9 @@ class _DashboardTabState extends State<DashboardTab> {
                           ),
                           const SizedBox(height: 14),
                           ElevatedButton.icon(
-                            onPressed:
-                                controller.isBusy ? null : _submitBootstrap,
+                            onPressed: controller.isBusy
+                                ? null
+                                : () => _submitBootstrap(),
                             icon: const Icon(Icons.auto_awesome),
                             label: const Text('운영 틀 생성'),
                           ),
@@ -344,10 +361,7 @@ class _DashboardTabState extends State<DashboardTab> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '공지사항 작성',
-                  style: Theme.of(ctx).textTheme.titleLarge,
-                ),
+                Text('공지사항 작성', style: Theme.of(ctx).textTheme.titleLarge),
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: titleCtrl,
@@ -370,10 +384,8 @@ class _DashboardTabState extends State<DashboardTab> {
                   items: [
                     const DropdownMenuItem(value: null, child: Text('전체')),
                     ...controller.classGroups.map(
-                      (cg) => DropdownMenuItem(
-                        value: cg.id,
-                        child: Text(cg.name),
-                      ),
+                      (cg) =>
+                          DropdownMenuItem(value: cg.id, child: Text(cg.name)),
                     ),
                   ],
                   onChanged: (v) =>
@@ -486,12 +498,21 @@ class _DashboardTabState extends State<DashboardTab> {
               highlight: controller.pendingInvites.isNotEmpty,
             ),
             const SizedBox(height: 10),
+            const _OnboardingOption(
+              icon: Icons.travel_explore,
+              title: '홈스쿨 검색 후 가입 요청',
+              description:
+                  '홈스쿨 이름으로 검색하고 가입 요청을 보낼 수 있습니다.\n'
+                  '요청은 홈스쿨 관리자 승인 후 참여가 완료됩니다.',
+              highlight: false,
+            ),
+            const SizedBox(height: 10),
             _OnboardingOption(
               icon: Icons.add_home,
               title: '새 홈스쿨을 직접 개설',
               description:
                   '관리자로서 새 홈스쿨을 개설하고 학기, 반, 과목을 한번에 설정합니다.\n'
-                  '아래 "홈스쿨 개설" 폼을 작성하세요.',
+                  '아래 버튼을 눌러 개설 모달에서 진행하세요.',
               highlight: false,
             ),
           ],
@@ -507,94 +528,397 @@ class _DashboardTabState extends State<DashboardTab> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.add_home, color: NestColors.dustyRose),
-                  const SizedBox(width: 8),
-                  Text('홈스쿨 개설', style: theme.textTheme.titleLarge),
-                ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.add_home, color: NestColors.dustyRose),
+                const SizedBox(width: 8),
+                Text('홈스쿨 개설', style: theme.textTheme.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '홈스쿨, 학기, 반, 과목, 시간 슬롯을 한번에 만들고 관리자로 시작합니다.\n'
+              '개설 버튼을 누르면 모달에서 입력할 수 있습니다.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
-              const SizedBox(height: 6),
-              Text(
-                '홈스쿨, 학기, 반, 과목, 시간 슬롯을 한번에 만들고 관리자로 시작합니다.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.72),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _homeschoolController,
-                decoration: const InputDecoration(labelText: '홈스쿨 이름'),
-                validator: (value) =>
-                    (value == null || value.trim().isEmpty)
-                    ? '필수값입니다.'
-                    : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _termController,
-                decoration: const InputDecoration(labelText: '학기 이름'),
-                validator: (value) =>
-                    (value == null || value.trim().isEmpty)
-                    ? '필수값입니다.'
-                    : null,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _startDateController,
-                      decoration: const InputDecoration(
-                        labelText: '시작일 (YYYY-MM-DD)',
-                      ),
-                      validator: _validateDate,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _endDateController,
-                      decoration: const InputDecoration(
-                        labelText: '종료일 (YYYY-MM-DD)',
-                      ),
-                      validator: _validateDate,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _classController,
-                decoration: const InputDecoration(labelText: '반 이름'),
-                validator: (value) =>
-                    (value == null || value.trim().isEmpty)
-                    ? '필수값입니다.'
-                    : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _courseController,
-                decoration: const InputDecoration(
-                  labelText: '기본 과목 (콤마 구분)',
-                ),
-              ),
-              const SizedBox(height: 14),
-              ElevatedButton.icon(
-                onPressed: controller.isBusy ? null : _submitBootstrap,
-                icon: const Icon(Icons.auto_awesome),
-                label: const Text('홈스쿨 개설하기'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 14),
+            ElevatedButton.icon(
+              onPressed: controller.isBusy ? null : _showOnboardingCreateModal,
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('홈스쿨 개설 열기'),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildOnboardingJoinRequestCard(
+    ThemeData theme,
+    NestController controller,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.travel_explore, color: NestColors.dustyRose),
+                const SizedBox(width: 8),
+                Text('홈스쿨 검색 및 가입 요청', style: theme.textTheme.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '이름으로 홈스쿨을 검색한 뒤 가입 요청을 보낼 수 있습니다.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _joinSearchController,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _searchHomeschools(),
+                    decoration: const InputDecoration(
+                      labelText: '홈스쿨 이름 검색',
+                      hintText: '예: Nest Warm Home',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton.tonalIcon(
+                  onPressed: _joinSearching ? null : _searchHomeschools,
+                  icon: const Icon(Icons.search),
+                  label: const Text('검색'),
+                ),
+              ],
+            ),
+            if (_joinSearchMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _joinSearchMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.72),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (_joinSearching)
+              const Center(child: CircularProgressIndicator())
+            else if (_joinSearchResults.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: NestColors.roseMist),
+                  color: NestColors.creamyWhite,
+                ),
+                child: Text(
+                  '검색어를 입력하고 홈스쿨을 찾아보세요.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              )
+            else
+              ..._joinSearchResults.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _OnboardingJoinResultTile(
+                    entry: entry,
+                    isRequesting: _joinRequestingIds.contains(entry.id),
+                    onRequest: () => _promptJoinRequest(entry),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showOnboardingCreateModal() async {
+    final controller = widget.controller;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !controller.isBusy,
+      builder: (dialogContext) {
+        final maxWidth = MediaQuery.of(dialogContext).size.width < 700
+            ? double.infinity
+            : 680.0;
+        return Dialog(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '홈스쿨 개설',
+                      style: Theme.of(dialogContext).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '운영에 필요한 기본 틀을 한 번에 생성합니다.',
+                      style: Theme.of(dialogContext).textTheme.bodyMedium
+                          ?.copyWith(
+                            color: NestColors.deepWood.withValues(alpha: 0.72),
+                          ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _homeschoolController,
+                      decoration: const InputDecoration(labelText: '홈스쿨 이름'),
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? '필수값입니다.'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _termController,
+                      decoration: const InputDecoration(labelText: '학기 이름'),
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? '필수값입니다.'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _startDateController,
+                            decoration: const InputDecoration(
+                              labelText: '시작일 (YYYY-MM-DD)',
+                            ),
+                            validator: _validateDate,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _endDateController,
+                            decoration: const InputDecoration(
+                              labelText: '종료일 (YYYY-MM-DD)',
+                            ),
+                            validator: _validateDate,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _classController,
+                      decoration: const InputDecoration(labelText: '반 이름'),
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? '필수값입니다.'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _courseController,
+                      decoration: const InputDecoration(
+                        labelText: '기본 과목 (콤마 구분)',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(),
+                          child: const Text('닫기'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () async {
+                                  final ok = await _submitBootstrap();
+                                  if (!ok || !dialogContext.mounted) {
+                                    return;
+                                  }
+                                  Navigator.of(dialogContext).pop();
+                                },
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const Text('홈스쿨 개설하기'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _searchHomeschools() async {
+    final query = _joinSearchController.text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _joinSearchResults = const [];
+        _joinSearchMessage = '검색어를 입력해주세요.';
+      });
+      return;
+    }
+
+    setState(() {
+      _joinSearching = true;
+      _joinSearchMessage = null;
+    });
+
+    try {
+      final rows = await widget.controller.searchHomeschoolDirectory(
+        query: query,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _joinSearchResults = rows;
+        _joinSearchMessage = rows.isEmpty
+            ? '검색 결과가 없습니다. 다른 키워드로 시도해보세요.'
+            : null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _joinSearchMessage = widget.controller.statusMessage;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _joinSearching = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _promptJoinRequest(HomeschoolDirectoryEntry entry) async {
+    _joinRequestNoteController.clear();
+    final note = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${entry.name} 가입 요청',
+              style: Theme.of(ctx).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '관리자에게 전달할 메시지를 남길 수 있습니다. (선택)',
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _joinRequestNoteController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: '요청 메시지',
+                hintText: '예: 아이 2명이 함께 참여하려고 합니다.',
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text('취소'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () =>
+                      Navigator.of(ctx).pop(_joinRequestNoteController.text),
+                  child: const Text('가입 요청 보내기'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (note == null) {
+      return;
+    }
+
+    await _requestJoin(entry, note);
+  }
+
+  Future<void> _requestJoin(HomeschoolDirectoryEntry entry, String note) async {
+    setState(() => _joinRequestingIds.add(entry.id));
+    try {
+      await widget.controller.requestJoinHomeschool(
+        homeschoolId: entry.id,
+        requestNote: note,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _joinSearchResults = _joinSearchResults
+            .map(
+              (row) => row.id == entry.id
+                  ? row.copyWith(hasPendingRequest: true)
+                  : row,
+            )
+            .toList(growable: false);
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
+    } finally {
+      if (mounted) {
+        setState(() => _joinRequestingIds.remove(entry.id));
+      }
+    }
   }
 
   String? _validateDate(String? value) {
@@ -740,10 +1064,10 @@ class _DashboardTabState extends State<DashboardTab> {
     ];
   }
 
-  Future<void> _submitBootstrap() async {
+  Future<bool> _submitBootstrap() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
-      return;
+      return false;
     }
 
     try {
@@ -757,20 +1081,22 @@ class _DashboardTabState extends State<DashboardTab> {
       );
 
       if (!mounted) {
-        return;
+        return true;
       }
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
+      return true;
     } catch (_) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
+      return false;
     }
   }
 }
@@ -1046,6 +1372,78 @@ class _SetupStepTile extends StatelessWidget {
             icon: const Icon(Icons.open_in_new, size: 16),
             label: Text(step.actionLabel),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OnboardingJoinResultTile extends StatelessWidget {
+  const _OnboardingJoinResultTile({
+    required this.entry,
+    required this.isRequesting,
+    required this.onRequest,
+  });
+
+  final HomeschoolDirectoryEntry entry;
+  final bool isRequesting;
+  final VoidCallback onRequest;
+
+  @override
+  Widget build(BuildContext context) {
+    final memberLabel = '활성 구성원 ${entry.activeMemberCount}명';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: NestColors.roseMist,
+            foregroundColor: NestColors.deepWood,
+            child: const Icon(Icons.school_outlined, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.name,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$memberLabel · ${entry.timezone}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.72),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (entry.hasPendingRequest)
+            Chip(
+              label: const Text('요청 대기중'),
+              avatar: const Icon(Icons.hourglass_top, size: 16),
+              visualDensity: VisualDensity.compact,
+            )
+          else
+            FilledButton.tonal(
+              onPressed: isRequesting ? null : onRequest,
+              child: isRequesting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('가입 요청'),
+            ),
         ],
       ),
     );
