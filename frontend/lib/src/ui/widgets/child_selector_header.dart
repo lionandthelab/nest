@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
+import 'entity_visuals.dart';
 import 'search_select_field.dart';
 
 class ChildSelectorHeader extends StatelessWidget {
@@ -53,48 +54,117 @@ class ChildSelectorHeader extends StatelessWidget {
               ),
               if (selectedChild != null) ...[
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    Chip(
-                      avatar: const Icon(Icons.flag_circle_outlined, size: 16),
-                      label: Text('상태: ${selectedChild.status}'),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: LinearGradient(
+                      colors: [
+                        NestColors.roseMist.withValues(alpha: 0.88),
+                        Colors.white,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    Chip(
-                      avatar: const Icon(Icons.home_outlined, size: 16),
-                      label: Text('가정: ${selectedChild.familyName}'),
-                    ),
-                    Chip(
-                      avatar: const Icon(Icons.cake_outlined, size: 16),
-                      label: Text(
-                        selectedChild.birthDate == null
-                            ? '생년월일 미등록'
-                            : DateFormat(
-                                'yyyy-MM-dd',
-                              ).format(selectedChild.birthDate!),
+                    border: Border.all(color: NestColors.roseMist),
+                  ),
+                  child: Row(
+                    children: [
+                      EntityAvatar(
+                        label: selectedChild.name,
+                        icon: Icons.child_care_outlined,
+                        size: 52,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              selectedChild.name,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              selectedChild.familyName,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: NestColors.deepWood.withValues(
+                                      alpha: 0.72,
+                                    ),
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                Chip(
+                                  avatar: const Icon(
+                                    Icons.flag_circle_outlined,
+                                    size: 14,
+                                  ),
+                                  label: Text(selectedChild.status),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                Chip(
+                                  avatar: const Icon(
+                                    Icons.cake_outlined,
+                                    size: 14,
+                                  ),
+                                  label: Text(
+                                    selectedChild.birthDate == null
+                                        ? '생일 미등록'
+                                        : DateFormat(
+                                            'yyyy-MM-dd',
+                                          ).format(selectedChild.birthDate!),
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 if (childClassBundles.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: childClassBundles.values
-                        .map(
-                          (bundle) => Chip(
-                            avatar: const Icon(
-                              Icons.groups_2_outlined,
-                              size: 16,
-                            ),
-                            label: Text(
-                              '${bundle.classGroup.name} (${bundle.sessions.length}수업)',
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
+                  const SizedBox(height: 10),
+                  Text('소속 반', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 640;
+                      final itemWidth = compact
+                          ? constraints.maxWidth
+                          : (constraints.maxWidth - 10) / 2;
+                      return Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: childClassBundles.values
+                            .map(
+                              (bundle) => SizedBox(
+                                width: itemWidth,
+                                child: LabeledEntityTile(
+                                  title: bundle.classGroup.name,
+                                  subtitle: '주간 ${bundle.sessions.length}수업',
+                                  icon: Icons.groups_2_outlined,
+                                  compact: true,
+                                  trailing: Icon(
+                                    Icons.chevron_right,
+                                    color: NestColors.deepWood.withValues(
+                                      alpha: 0.55,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                      );
+                    },
                   ),
                 ],
                 if (isLoadingChildClasses) ...[

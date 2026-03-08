@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.7+8 (2026-03-08)
+
+### Changed
+
+- 전 탭 레이아웃 full-width 정책 적용
+  - `home_page.dart`: 메인 패널 콘텐츠 max-width 제한 제거
+  - `hub_scaffold.dart`: 허브 공통 레이아웃 max-width 제한 제거
+- 공통 비주얼 컴포넌트 추가
+  - `entity_visuals.dart`: `EntityAvatar`, `LabeledEntityTile`
+- Parent/Teacher/Admin 주요 UX 시각 개편
+  - `child_selector_header.dart`: 아이 선택 후 아바타 중심 프로필 카드 + 소속 반 시각 타일
+  - `parent_timetable_tab.dart`: 반/수업 카드 레이아웃 개선, 수업 카드에 교사/시간/장소 아이콘 메타
+  - `parent_progress_tab.dart`: 학습 지표 카드화 + 활동 로그 타임라인 시각화
+  - `parent_news_tab.dart`: 소식 헤더 카드화 + 공지 카드 아바타 시각 강화
+  - `teacher_hub_tab.dart`: 반 운영보드/수업카드/아이 상태 기록을 아바타/아이콘 중심으로 개편
+  - `family_admin_tab.dart`: 반 목록/반 배정/가정 현황/교사 검색결과를 엔티티 타일 기반으로 개선
+  - `hub_scaffold.dart`: 허브 헤더에 시각 배너 스타일 적용
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.6+7 (2026-03-08)
 
 ### Changed

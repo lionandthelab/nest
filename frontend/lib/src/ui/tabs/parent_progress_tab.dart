@@ -6,6 +6,7 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/child_selector_header.dart';
+import '../widgets/entity_visuals.dart';
 
 class ParentProgressTab extends StatelessWidget {
   const ParentProgressTab({
@@ -25,11 +26,12 @@ class ParentProgressTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final childLogs = selectedChildId == null
-        ? const <StudentActivityLog>[]
-        : controller
-              .activityLogsForChild(selectedChildId!)
-              .toList(growable: false)
+    final childLogs =
+        selectedChildId == null
+              ? const <StudentActivityLog>[]
+              : controller
+                    .activityLogsForChild(selectedChildId!)
+                    .toList(growable: false)
           ..sort((a, b) {
             final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
             final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
@@ -60,29 +62,50 @@ class ParentProgressTab extends StatelessWidget {
           isLoadingChildClasses: isLoadingChildClasses,
         ),
         const SizedBox(height: 12),
-        Text('학습 현황', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Icon(
+              Icons.insights_outlined,
+              color: NestColors.deepWood.withValues(alpha: 0.76),
+            ),
+            const SizedBox(width: 8),
+            Text('학습 현황', style: Theme.of(context).textTheme.titleLarge),
+          ],
+        ),
         const SizedBox(height: 8),
         if (selectedChildId == null)
           _buildEmptyHint('아이를 먼저 선택하세요.')
         else ...[
-          // Metrics
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Chip(
-                avatar: const Icon(Icons.assignment, size: 16),
-                label: Text('총 기록 ${childLogs.length}건'),
-              ),
-              ...countsByType.entries.map(
-                (entry) => Chip(
-                  label: Text('${entry.key} ${entry.value}건'),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 840;
+              final itemWidth = compact
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - 16) / 3;
+              final metricTiles = <Widget>[
+                _ProgressMetricTile(
+                  label: '총 기록',
+                  value: '${childLogs.length}',
+                  icon: Icons.assignment_outlined,
                 ),
-              ),
-            ],
+                ...countsByType.entries.map(
+                  (entry) => _ProgressMetricTile(
+                    label: _activityTypeLabel(entry.key),
+                    value: '${entry.value}',
+                    icon: _activityIcon(entry.key),
+                  ),
+                ),
+              ];
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: metricTiles
+                    .map((tile) => SizedBox(width: itemWidth, child: tile))
+                    .toList(growable: false),
+              );
+            },
           ),
           const SizedBox(height: 12),
-          // Activity log list
           if (childLogs.isEmpty)
             _buildEmptyHint('등록된 상태 로그가 없습니다.')
           else
@@ -101,20 +124,42 @@ class ParentProgressTab extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: NestColors.roseMist),
+                    color: Colors.white,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '${log.activityType} · $className',
-                        style: Theme.of(context).textTheme.titleSmall,
+                      Row(
+                        children: [
+                          EntityAvatar(
+                            label: controller.findTeacherName(
+                              log.recordedByTeacherId,
+                            ),
+                            icon: _activityIcon(log.activityType),
+                            size: 30,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${_activityTypeLabel(log.activityType)} · $className',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          Text(
+                            when,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(log.content),
                       const SizedBox(height: 4),
-                      Text(
-                        '$when · ${controller.findTeacherName(log.recordedByTeacherId)}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                      _MetaText(
+                        icon: Icons.school_outlined,
+                        text: controller.findTeacherName(
+                          log.recordedByTeacherId,
+                        ),
                       ),
                     ],
                   ),
@@ -135,6 +180,101 @@ class ParentProgressTab extends StatelessWidget {
         color: NestColors.roseMist.withValues(alpha: 0.36),
       ),
       child: Text(message),
+    );
+  }
+
+  static IconData _activityIcon(String type) {
+    return switch (type) {
+      'ATTENDANCE' => Icons.how_to_reg_outlined,
+      'ASSIGNMENT' => Icons.task_alt_outlined,
+      _ => Icons.visibility_outlined,
+    };
+  }
+
+  static String _activityTypeLabel(String type) {
+    return switch (type) {
+      'ATTENDANCE' => '출결',
+      'ASSIGNMENT' => '과제',
+      'OBSERVATION' => '관찰',
+      _ => type,
+    };
+  }
+}
+
+class _ProgressMetricTile extends StatelessWidget {
+  const _ProgressMetricTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+        color: Colors.white,
+      ),
+      child: Row(
+        children: [
+          EntityAvatar(label: label, icon: icon, size: 34),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.72),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaText extends StatelessWidget {
+  const _MetaText({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 14,
+          color: NestColors.deepWood.withValues(alpha: 0.65),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.74),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

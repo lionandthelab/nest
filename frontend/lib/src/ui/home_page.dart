@@ -665,8 +665,6 @@ class _MainPanelState extends State<_MainPanel> {
     final theme = Theme.of(context);
     final controller = widget.controller;
     final width = MediaQuery.sizeOf(context).width;
-    final isScheduleTab =
-        widget.tabLabel == 'Schedule' || widget.tabLabel == 'Timetable';
     final compactHeader = width < 980;
     final iconOnlyActions = width < 760;
 
@@ -858,16 +856,9 @@ class _MainPanelState extends State<_MainPanel> {
                         ),
                     child: KeyedSubtree(
                       key: ValueKey<String>(widget.tabLabel),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: isScheduleTab ? double.infinity : 1320,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: widget.tab,
-                          ),
-                        ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: widget.tab,
                       ),
                     ),
                   ),

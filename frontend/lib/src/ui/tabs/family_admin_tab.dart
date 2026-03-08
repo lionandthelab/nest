@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/entity_visuals.dart';
 import '../widgets/search_select_field.dart';
 
 class FamilyAdminTab extends StatefulWidget {
@@ -236,6 +237,35 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
+            if (controller.classGroups.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text('현재 반 목록', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: controller.classGroups
+                    .map(
+                      (group) => SizedBox(
+                        width: 220,
+                        child: LabeledEntityTile(
+                          title: group.name,
+                          subtitle: '정원 ${group.capacity}명',
+                          icon: Icons.groups_2_outlined,
+                          compact: true,
+                          trailing: group.id == _selectedClassGroupId
+                              ? Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: NestColors.mutedSage,
+                                )
+                              : null,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ],
           ],
         ),
       ),
@@ -644,19 +674,60 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             else
               ...controller.children.map((child) {
                 final checked = enrolledIds.contains(child.id);
-                return CheckboxListTile(
-                  value: checked,
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(child.name),
-                  subtitle: Text('${child.familyName} · ${child.status}'),
-                  onChanged: controller.isBusy || classGroupId == null
-                      ? null
-                      : (value) => _toggleEnrollment(
-                          childId: child.id,
-                          checked: value == true,
-                          classGroupId: classGroupId,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: NestColors.roseMist),
+                      color: Colors.white,
+                    ),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: checked,
+                          onChanged: controller.isBusy || classGroupId == null
+                              ? null
+                              : (value) => _toggleEnrollment(
+                                  childId: child.id,
+                                  checked: value == true,
+                                  classGroupId: classGroupId,
+                                ),
                         ),
+                        EntityAvatar(
+                          label: child.name,
+                          icon: Icons.child_care_outlined,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                child.name,
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              Text(
+                                '${child.familyName} · ${child.status}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (checked)
+                          Icon(
+                            Icons.check_circle,
+                            size: 18,
+                            color: NestColors.mutedSage,
+                          ),
+                      ],
+                    ),
+                  ),
                 );
               }),
           ],
@@ -731,11 +802,14 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       return ListTile(
                         dense: true,
                         selected: selected,
-                        leading: Icon(
-                          selected
+                        leading: EntityAvatar(
+                          label: member.fullName.trim().isEmpty
+                              ? member.email
+                              : member.fullName,
+                          icon: selected
                               ? Icons.radio_button_checked
                               : Icons.radio_button_off,
-                          size: 18,
+                          size: 30,
                         ),
                         title: Text(
                           member.fullName.trim().isEmpty
@@ -1155,9 +1229,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          family.familyName,
-                          style: Theme.of(context).textTheme.titleMedium,
+                        Row(
+                          children: [
+                            EntityAvatar(
+                              label: family.familyName,
+                              icon: Icons.home_outlined,
+                              size: 34,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                family.familyName,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                          ],
                         ),
                         if (family.note.trim().isNotEmpty)
                           Padding(
@@ -1175,7 +1261,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             spacing: 8,
                             runSpacing: 8,
                             children: familyChildren
-                                .map((child) => Chip(label: Text(child.name)))
+                                .map(
+                                  (child) => SizedBox(
+                                    width: 170,
+                                    child: LabeledEntityTile(
+                                      title: child.name,
+                                      subtitle: child.status,
+                                      icon: Icons.child_care_outlined,
+                                      compact: true,
+                                    ),
+                                  ),
+                                )
                                 .toList(growable: false),
                           ),
                       ],

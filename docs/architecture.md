@@ -144,6 +144,9 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `SelectFieldCard` (card-shaped selector)
   - `showSelectSheet` (searchable bottom-sheet chooser)
   - keeps mobile/web behavior consistent and avoids long dropdown lists.
+- Full-width workspace policy:
+  - desktop/mobile tab content uses full available width
+  - no per-tab max-width clamp in the main panel and hub scaffold.
 
 ## 5. State and Data Flow
 
@@ -240,6 +243,7 @@ Admin dashboard onboarding:
     - export to PNG from `장소 상황표 내보내기`
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
+  - visual session cards with icon rows for course/time/teacher/room scanning.
 
 ### 6.2.1 Session Location Compatibility
 
@@ -269,12 +273,14 @@ Admin dashboard onboarding:
   - `parent_news_tab.dart`
   - shared child context via `child_selector_header.dart`
   - selected child 기준으로 반/시간표/학습 상태를 일관되게 제공
+  - avatar-first visual identity for child/class entities in selectors and cards
 - Teacher Hub (`teacher_hub_tab.dart`)
   - sections: `반 운영보드` / `수업 운영` / `아이 상태`
   - current teacher profiles를 기준으로 담당 반 자동 식별
   - 반별 시간표/공지/아동 상태를 한 반 컨텍스트로 관리
   - class-specific teaching plan, announcement, activity log authoring flow
   - class/session/teacher/activity/unavailability target selection uses searchable selector cards instead of dense dropdown stacks
+  - session and activity timeline cards use avatar/icon metadata for quick class operations.
 
 ### 6.5 Form Interaction UX
 
@@ -282,6 +288,7 @@ Admin dashboard onboarding:
   - family/class/unavailability owner selection migrated to searchable selector cards
   - day-of-week input migrated to quick chips for faster blocked-time authoring
   - teacher type input migrated to segmented control (`부모 교사`, `초청 교사`)
+  - family/child/class lists upgraded with visual entity tiles (avatar + status/meta)
 - Parent child selector (`child_selector_header.dart`)
   - child switching uses searchable selector sheet for large sibling lists
 - Shared objective:

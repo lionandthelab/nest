@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../nest_theme.dart';
+import 'entity_visuals.dart';
 import 'nest_motion.dart';
 
 class HubMetric {
@@ -60,79 +61,67 @@ class HubScaffold extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final compactSectionSelector = width < 760;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth > 1280 ? 1220.0 : double.infinity;
-        return Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: ListView(
-              children: [
-                _HubHeader(
-                  title: title,
-                  subtitle: subtitle,
-                  icon: icon,
-                  metrics: metrics,
-                  isBusy: isBusy,
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                    child: compactSectionSelector
-                        ? SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: sections
-                                  .map(
-                                    (section) => Padding(
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: ChoiceChip(
-                                        selected: section.id == selected.id,
-                                        label: Text(section.label),
-                                        avatar: Icon(section.icon, size: 17),
-                                        onSelected: (_) =>
-                                            onSelectSection(section.id),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(growable: false),
+    return ListView(
+      children: [
+        _HubHeader(
+          title: title,
+          subtitle: subtitle,
+          icon: icon,
+          metrics: metrics,
+          isBusy: isBusy,
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: compactSectionSelector
+                ? SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: sections
+                          .map(
+                            (section) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                selected: section.id == selected.id,
+                                label: Text(section.label),
+                                avatar: Icon(section.icon, size: 17),
+                                onSelected: (_) => onSelectSection(section.id),
+                              ),
                             ),
                           )
-                        : Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: sections
-                                .map(
-                                  (section) => ChoiceChip(
-                                    selected: section.id == selected.id,
-                                    label: Text(section.label),
-                                    avatar: Icon(section.icon, size: 17),
-                                    onSelected: (_) =>
-                                        onSelectSection(section.id),
-                                  ),
-                                )
-                                .toList(growable: false),
+                          .toList(growable: false),
+                    ),
+                  )
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: sections
+                        .map(
+                          (section) => ChoiceChip(
+                            selected: section.id == selected.id,
+                            label: Text(section.label),
+                            avatar: Icon(section.icon, size: 17),
+                            onSelected: (_) => onSelectSection(section.id),
                           ),
+                        )
+                        .toList(growable: false),
                   ),
-                ),
-                const SizedBox(height: 12),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) =>
-                      nestFadeSlideTransition(child, animation),
-                  child: KeyedSubtree(
-                    key: ValueKey(selected.id),
-                    child: selected.content,
-                  ),
-                ),
-              ],
-            ),
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 12),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) =>
+              nestFadeSlideTransition(child, animation),
+          child: KeyedSubtree(
+            key: ValueKey(selected.id),
+            child: selected.content,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -162,34 +151,42 @@ class _HubHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: NestColors.roseMist,
-                  ),
-                  child: Icon(icon, color: NestColors.deepWood),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: LinearGradient(
+                  colors: [
+                    NestColors.roseMist.withValues(alpha: 0.9),
+                    Colors.white,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: theme.textTheme.titleLarge),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.72),
+                border: Border.all(color: NestColors.roseMist),
+              ),
+              child: Row(
+                children: [
+                  EntityAvatar(label: title, icon: icon, size: 42),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: theme.textTheme.titleLarge),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: NestColors.deepWood.withValues(alpha: 0.72),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             if (isBusy) ...[
               const SizedBox(height: 14),
@@ -243,7 +240,7 @@ class _HubMetricTile extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: NestColors.deepWood),
+          EntityAvatar(label: label, icon: icon, size: 32),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,

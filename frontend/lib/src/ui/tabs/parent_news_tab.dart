@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/entity_visuals.dart';
 import 'community_feed_tab.dart';
 import 'gallery_tab.dart';
 
@@ -24,38 +25,60 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
 
     return Column(
       children: [
-        // Section chips
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Row(
-            children: [
-              Text('소식', style: theme.textTheme.titleLarge),
-              const Spacer(),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _sectionChip(
-                    id: 'announcements',
-                    label: '공지사항',
-                    icon: Icons.campaign_outlined,
-                  ),
-                  _sectionChip(
-                    id: 'community',
-                    label: '커뮤니티',
-                    icon: Icons.forum_outlined,
-                  ),
-                  _sectionChip(
-                    id: 'gallery',
-                    label: '갤러리',
-                    icon: Icons.photo_library_outlined,
-                  ),
-                ],
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 760;
+                  final chips = Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _sectionChip(
+                        id: 'announcements',
+                        label: '공지사항',
+                        icon: Icons.campaign_outlined,
+                      ),
+                      _sectionChip(
+                        id: 'community',
+                        label: '커뮤니티',
+                        icon: Icons.forum_outlined,
+                      ),
+                      _sectionChip(
+                        id: 'gallery',
+                        label: '갤러리',
+                        icon: Icons.photo_library_outlined,
+                      ),
+                    ],
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(theme),
+                        const SizedBox(height: 8),
+                        chips,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: _buildHeader(theme)),
+                      const SizedBox(width: 10),
+                      chips,
+                    ],
+                  );
+                },
               ),
-            ],
+            ),
           ),
         ),
         const SizedBox(height: 8),
-        // Content
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
@@ -63,6 +86,29 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
               key: ValueKey(_sectionId),
               child: _buildSection(),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme) {
+    return Row(
+      children: [
+        EntityAvatar(label: '소식', icon: Icons.notifications_active_outlined),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('소식', style: theme.textTheme.titleLarge),
+              Text(
+                '공지, 커뮤니티, 갤러리를 한곳에서 확인하세요.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.72),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -93,15 +139,14 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
   }
 
   Widget _buildAnnouncementsSection() {
-    final announcements = widget.controller.announcements
-        .toList(growable: false)
-      ..sort((a, b) {
-        // Pinned first, then by date desc
-        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
-        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
-        return right.compareTo(left);
-      });
+    final announcements =
+        widget.controller.announcements.toList(growable: false)..sort((a, b) {
+          // Pinned first, then by date desc
+          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+          final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
+          final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
+          return right.compareTo(left);
+        });
 
     if (announcements.isEmpty) {
       return Center(
@@ -149,15 +194,14 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
               children: [
                 Row(
                   children: [
-                    if (a.pinned)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Icon(
-                          Icons.push_pin,
-                          size: 16,
-                          color: NestColors.dustyRose,
-                        ),
-                      ),
+                    EntityAvatar(
+                      label: classGroupName,
+                      icon: a.pinned
+                          ? Icons.push_pin_outlined
+                          : Icons.campaign_outlined,
+                      size: 34,
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         a.title,
@@ -165,6 +209,12 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
+                    if (a.pinned)
+                      Icon(
+                        Icons.push_pin,
+                        size: 16,
+                        color: NestColors.dustyRose,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 4),

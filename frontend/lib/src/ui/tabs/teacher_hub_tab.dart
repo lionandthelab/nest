@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/entity_visuals.dart';
 import '../widgets/hub_scaffold.dart';
 import '../widgets/search_select_field.dart';
 
@@ -299,7 +300,17 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('담당 반별 뷰', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                EntityAvatar(
+                  label: selectedBundle?.classGroup.name ?? '담당 반',
+                  icon: Icons.space_dashboard_outlined,
+                  size: 36,
+                ),
+                const SizedBox(width: 10),
+                Text('담당 반별 뷰', style: Theme.of(context).textTheme.titleLarge),
+              ],
+            ),
             const SizedBox(height: 8),
             if (managedClasses.isEmpty)
               _buildEmptyHint('담당 교사로 배정된 반이 없습니다.')
@@ -315,23 +326,46 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               ),
               const SizedBox(height: 12),
               if (selectedBundle != null) ...[
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    Chip(
-                      avatar: const Icon(Icons.view_week_outlined, size: 16),
-                      label: Text('수업 ${selectedBundle.sessions.length}개'),
-                    ),
-                    Chip(
-                      avatar: const Icon(Icons.child_care_outlined, size: 16),
-                      label: Text('아동 ${selectedBundle.children.length}명'),
-                    ),
-                    Chip(
-                      avatar: const Icon(Icons.menu_book_outlined, size: 16),
-                      label: Text('계획 ${selectedBundle.plans.length}건'),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 860;
+                    final width = compact
+                        ? constraints.maxWidth
+                        : (constraints.maxWidth - 16) / 3;
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        SizedBox(
+                          width: width,
+                          child: LabeledEntityTile(
+                            title: '수업 ${selectedBundle.sessions.length}',
+                            subtitle: '이번 주 운영 수업',
+                            icon: Icons.view_week_outlined,
+                            compact: true,
+                          ),
+                        ),
+                        SizedBox(
+                          width: width,
+                          child: LabeledEntityTile(
+                            title: '아동 ${selectedBundle.children.length}',
+                            subtitle: '반 소속 아동',
+                            icon: Icons.child_care_outlined,
+                            compact: true,
+                          ),
+                        ),
+                        SizedBox(
+                          width: width,
+                          child: LabeledEntityTile(
+                            title: '계획 ${selectedBundle.plans.length}',
+                            subtitle: '등록된 수업 계획',
+                            icon: Icons.menu_book_outlined,
+                            compact: true,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 Text('시간표', style: Theme.of(context).textTheme.titleMedium),
@@ -378,6 +412,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             sessionId: session.id,
             assignments: bundle.assignments,
           );
+          final room = (session.location ?? '').trim();
+          final roomLabel = room.isEmpty ? '장소 미지정' : room;
 
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
@@ -385,16 +421,37 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: NestColors.roseMist),
+              color: Colors.white,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  controller.findCourseName(session.courseId),
-                  style: Theme.of(context).textTheme.titleMedium,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.menu_book_rounded,
+                      size: 17,
+                      color: NestColors.clay,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        controller.findCourseName(session.courseId),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text('$slotLabel · $teacherLabel'),
+                const SizedBox(height: 6),
+                _SessionMeta(icon: Icons.schedule_outlined, text: slotLabel),
+                const SizedBox(height: 3),
+                _SessionMeta(icon: Icons.school_outlined, text: teacherLabel),
+                const SizedBox(height: 3),
+                _SessionMeta(
+                  icon: Icons.meeting_room_outlined,
+                  text: roomLabel,
+                ),
               ],
             ),
           );
@@ -750,15 +807,64 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 final when = log.recordedAt == null
                     ? '-'
                     : DateFormat('MM-dd HH:mm').format(log.recordedAt!);
-                return ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.history, size: 18),
-                  title: Text('$childName · ${log.activityType}'),
-                  subtitle: Text(log.content),
-                  trailing: Text(
-                    when,
-                    style: Theme.of(context).textTheme.bodySmall,
+                final activityLabel = switch (log.activityType) {
+                  'ATTENDANCE' => '출결',
+                  'ASSIGNMENT' => '과제',
+                  _ => '관찰',
+                };
+                final activityIcon = switch (log.activityType) {
+                  'ATTENDANCE' => Icons.how_to_reg_outlined,
+                  'ASSIGNMENT' => Icons.task_alt_outlined,
+                  _ => Icons.visibility_outlined,
+                };
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: NestColors.roseMist),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      EntityAvatar(
+                        label: childName,
+                        icon: Icons.child_care_outlined,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$childName · $activityLabel',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(log.content),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  activityIcon,
+                                  size: 14,
+                                  color: NestColors.deepWood.withValues(
+                                    alpha: 0.64,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  when,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }),
@@ -1348,6 +1454,36 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _SessionMeta extends StatelessWidget {
+  const _SessionMeta({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: 14,
+          color: NestColors.deepWood.withValues(alpha: 0.66),
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.78),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
