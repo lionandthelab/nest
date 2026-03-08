@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.6+7 (2026-03-08)
+
+### Changed
+
+- 시간표 관리 마감 UX 보강 (`timetable_tab.dart`)
+  - 메인보드 카드 우측 상단에 `수정 확정` 단일 저장 동선으로 정리
+  - 별도 수정상황 섹션 제거
+  - `AI 배정`을 채팅형 단일 입력창으로 단순화하고 도움말 툴팁/다이얼로그 추가
+- 장소 배정 가시화/내보내기 추가 (`timetable_tab.dart`)
+  - 전체 반 기준 `요일 x 교시` 장소 배정 상황표 다이얼로그 제공
+  - `장소 상황표 내보내기` 버튼으로 PNG 다운로드 지원
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.5+6 (2026-03-08)
 
 ### Changed

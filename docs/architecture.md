@@ -214,11 +214,12 @@ Admin dashboard onboarding:
 ### 6.2 Timetable
 
 - Admin view:
-  - simple `AI 배정` input (single prompt) that generates a local draft for current class
+  - simple `AI 배정` chat input (single prompt) that generates a local draft for current class
+  - inline help tooltip/dialog for AI prompt examples and save flow guidance
   - no wizard/proposal panel/status side panel in main flow
   - explicit draft lifecycle:
-    - `수정 확정`: persist staged changes
-    - `롤백`: discard staged changes and restore latest saved state
+    - `수정 확정` (board top-right): persist staged changes
+    - discard/rollback is handled only via confirmation when switching class/tab with unsaved edits
   - unsaved-change guard on tab leave (warning dialog)
   - class-first editing UX:
     - dedicated class switcher card in schedule tab
@@ -234,6 +235,9 @@ Admin dashboard onboarding:
     - location(room) assignment
   - room management UI:
     - room palette add/remove for quick reuse
+  - room utilization export:
+    - all-class board by day/period showing room assignment status
+    - export to PNG from `장소 상황표 내보내기`
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
 

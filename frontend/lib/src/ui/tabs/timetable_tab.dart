@@ -28,6 +28,7 @@ class _TimetableTabState extends State<TimetableTab> {
   final _aiPromptController = TextEditingController();
   final _roomInputController = TextEditingController();
   final _timetableRepaintKey = GlobalKey();
+  final _roomUtilizationRepaintKey = GlobalKey();
 
   String? _draftClassGroupId;
   String _controllerSignature = '';
@@ -59,10 +60,6 @@ class _TimetableTabState extends State<TimetableTab> {
     return ListView(
       children: [
         _buildClassContextCard(controller),
-        const SizedBox(height: 12),
-        _buildAiAssignCard(controller),
-        const SizedBox(height: 12),
-        _buildDraftActionCard(controller),
         const SizedBox(height: 12),
         _buildBoardCard(controller),
       ],
@@ -172,123 +169,6 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
-  Widget _buildAiAssignCard(NestController controller) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('AI 배정', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '문장을 입력하면 현재 반 기준으로 시간표 초안을 생성해 편집 보드에 반영합니다. 아직 DB에는 저장되지 않습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _aiPromptController,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'AI 배정 문장',
-                hintText: '예: 월수금 오전은 국어/수학, 화목은 과학/미술 위주로 배치해줘',
-              ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              onPressed: controller.isBusy || _isApplyingDraft
-                  ? null
-                  : _runAiAssignment,
-              icon: const Icon(Icons.auto_awesome),
-              label: const Text('AI 배정 실행'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDraftActionCard(NestController controller) {
-    final newCount = _draftSessions.where((row) => row.isNew).length;
-    final existingCount = _draftSessions.length - newCount;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('수정 상태', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            if (_isDraftDirty)
-              Text(
-                '확정 전까지는 로컬 초안 상태입니다. 확정하지 않으면 서버에 반영되지 않습니다.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.72),
-                ),
-              )
-            else
-              Text(
-                '저장되지 않은 변경사항이 없습니다.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.72),
-                ),
-              ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Chip(
-                  avatar: const Icon(Icons.menu_book_outlined, size: 16),
-                  label: Text('총 수업 ${_draftSessions.length}개'),
-                ),
-                Chip(
-                  avatar: const Icon(Icons.add_circle_outline, size: 16),
-                  label: Text('신규 $newCount개'),
-                ),
-                Chip(
-                  avatar: const Icon(Icons.history, size: 16),
-                  label: Text('기존 $existingCount개'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed:
-                      !_isDraftDirty || controller.isBusy || _isApplyingDraft
-                      ? null
-                      : _commitDraftChanges,
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('수정 확정'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed:
-                      !_isDraftDirty || controller.isBusy || _isApplyingDraft
-                      ? null
-                      : _rollbackDraftChanges,
-                  icon: const Icon(Icons.restore),
-                  label: const Text('롤백'),
-                ),
-              ],
-            ),
-            if (_isApplyingDraft) ...[
-              const SizedBox(height: 10),
-              const LinearProgressIndicator(minHeight: 3),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildBoardCard(NestController controller) {
     final sortedSlots = controller.timeSlots.toList(growable: false)
       ..sort((a, b) {
@@ -327,6 +207,23 @@ class _TimetableTabState extends State<TimetableTab> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                ElevatedButton.icon(
+                  onPressed:
+                      !_isDraftDirty || controller.isBusy || _isApplyingDraft
+                      ? null
+                      : _commitDraftChanges,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('수정 확정'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy || _isApplyingDraft
+                      ? null
+                      : () => _openRoomUtilizationExportDialog(controller),
+                  icon: const Icon(Icons.meeting_room_outlined),
+                  label: const Text('장소 상황표 내보내기'),
+                ),
+                const SizedBox(width: 8),
                 IconButton(
                   icon: Icon(
                     _paletteOpen
@@ -338,13 +235,12 @@ class _TimetableTabState extends State<TimetableTab> {
                 ),
               ],
             ),
+            if (_isApplyingDraft) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(minHeight: 3),
+            ],
             const SizedBox(height: 6),
-            Text(
-              '과목/교사/교실 팔레트에서 드래그해 배치하거나, 수업 카드를 눌러 교사와 장소를 설정하세요.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
+            _buildAiChatInput(controller),
             const SizedBox(height: 10),
             if (sortedSlots.isEmpty)
               const Text('시간 슬롯이 없습니다. Dashboard에서 초기 세팅을 먼저 진행하세요.')
@@ -394,6 +290,310 @@ class _TimetableTabState extends State<TimetableTab> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAiChatInput(NestController controller) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: NestColors.creamyWhite,
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'AI 배정 도움말',
+            visualDensity: VisualDensity.compact,
+            onPressed: _showAiHelpDialog,
+            icon: const Icon(Icons.help_outline, size: 18),
+          ),
+          Expanded(
+            child: TextField(
+              controller: _aiPromptController,
+              minLines: 1,
+              maxLines: 1,
+              textInputAction: TextInputAction.send,
+              onSubmitted: controller.isBusy || _isApplyingDraft
+                  ? null
+                  : (_) => _runAiAssignment(),
+              decoration: const InputDecoration(
+                labelText: 'AI 배정',
+                hintText: '예: 월수금은 국어/수학, 화목은 과학/미술 중심으로 배치',
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'AI 배정 실행',
+            onPressed: controller.isBusy || _isApplyingDraft
+                ? null
+                : _runAiAssignment,
+            icon: const Icon(Icons.send_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAiHelpDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('AI 배정 도움말'),
+        content: const Text(
+          '한 줄로 원하는 시간표 방향을 적어주세요.\n'
+          '예) "월수금 오전은 수학/국어, 화목 오후는 탐구/미술 중심"\n'
+          '생성된 결과는 먼저 로컬 초안으로 반영되며, 우측 상단의 "수정 확정"을 눌러 저장됩니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openRoomUtilizationExportDialog(
+    NestController controller,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('장소 배정 상황표'),
+          content: SizedBox(
+            width: 1100,
+            child: SingleChildScrollView(
+              child: RepaintBoundary(
+                key: _roomUtilizationRepaintKey,
+                child: _buildRoomUtilizationBoard(
+                  controller: controller,
+                  forExport: true,
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('닫기'),
+            ),
+            ElevatedButton.icon(
+              onPressed: _exportRoomUtilizationImage,
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('PNG 저장'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRoomUtilizationBoard({
+    required NestController controller,
+    required bool forExport,
+  }) {
+    final sortedSlots = controller.timeSlots.toList(growable: false)
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) {
+          return day;
+        }
+        return a.startTime.compareTo(b.startTime);
+      });
+
+    if (sortedSlots.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: NestColors.creamyWhite,
+          border: Border.all(color: NestColors.roseMist),
+        ),
+        child: const Text('시간 슬롯이 없습니다.'),
+      );
+    }
+
+    final slotsByDay = <int, List<TimeSlot>>{};
+    for (final slot in sortedSlots) {
+      slotsByDay.putIfAbsent(slot.dayOfWeek, () => <TimeSlot>[]);
+      slotsByDay[slot.dayOfWeek]!.add(slot);
+    }
+    final dayOrder = slotsByDay.keys.toList(growable: false)..sort();
+    var maxPeriods = 0;
+    for (final rows in slotsByDay.values) {
+      if (rows.length > maxPeriods) {
+        maxPeriods = rows.length;
+      }
+    }
+
+    final sessionsBySlotId = <String, List<ClassSession>>{};
+    for (final session in controller.allTermSessions) {
+      sessionsBySlotId.putIfAbsent(session.timeSlotId, () => <ClassSession>[]);
+      sessionsBySlotId[session.timeSlotId]!.add(session);
+    }
+    for (final rows in sessionsBySlotId.values) {
+      rows.sort((a, b) {
+        final leftLocation = (a.location ?? '').trim();
+        final rightLocation = (b.location ?? '').trim();
+        final locationOrder = leftLocation.compareTo(rightLocation);
+        if (locationOrder != 0) {
+          return locationOrder;
+        }
+        return controller
+            .findClassGroupName(a.classGroupId)
+            .compareTo(controller.findClassGroupName(b.classGroupId));
+      });
+    }
+
+    const periodWidth = 118.0;
+    final dayWidth = forExport ? 265.0 : 245.0;
+    final minWidth =
+        periodWidth + (dayOrder.length * dayWidth) + (dayOrder.length + 1) * 6;
+
+    return Container(
+      width: forExport ? minWidth : null,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white,
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '요일/교시별 장소 배정 상황표 (전체 반)',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _GridHeaderCell(width: periodWidth, title: '교시', subtitle: '시간'),
+              ...dayOrder.map(
+                (day) => _GridHeaderCell(
+                  width: dayWidth,
+                  title: _dayLabel(day),
+                  subtitle: '$day요일',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...List.generate(maxPeriods, (periodIndex) {
+            TimeSlot? fallbackSlot;
+            for (final day in dayOrder) {
+              final rows = slotsByDay[day] ?? const <TimeSlot>[];
+              if (periodIndex < rows.length) {
+                fallbackSlot = rows[periodIndex];
+                break;
+              }
+            }
+
+            final timeLabel = fallbackSlot == null
+                ? '-'
+                : '${_shortTime(fallbackSlot.startTime)}-${_shortTime(fallbackSlot.endTime)}';
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: periodWidth,
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: NestColors.creamyWhite,
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${periodIndex + 1}교시',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          timeLabel,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  ...dayOrder.map((day) {
+                    final rows = slotsByDay[day] ?? const <TimeSlot>[];
+                    final slot = periodIndex < rows.length
+                        ? rows[periodIndex]
+                        : null;
+                    final sessions = slot == null
+                        ? const <ClassSession>[]
+                        : (sessionsBySlotId[slot.id] ?? const <ClassSession>[]);
+
+                    return Container(
+                      width: dayWidth,
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white,
+                        border: Border.all(color: NestColors.roseMist),
+                      ),
+                      child: sessions.isEmpty
+                          ? Text(
+                              '배정 없음',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: sessions
+                                  .map((session) {
+                                    final className = controller
+                                        .findClassGroupName(
+                                          session.classGroupId,
+                                        );
+                                    final courseName = controller
+                                        .findCourseName(session.courseId);
+                                    final location = (session.location ?? '')
+                                        .trim();
+                                    final locationLabel = location.isEmpty
+                                        ? '미지정'
+                                        : location;
+                                    return Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        color: NestColors.creamyWhite,
+                                        border: Border.all(
+                                          color: NestColors.roseMist,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '$locationLabel · $className · $courseName',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                    );
+                                  })
+                                  .toList(growable: false),
+                            ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -1124,21 +1324,6 @@ class _TimetableTabState extends State<TimetableTab> {
     }
   }
 
-  Future<void> _rollbackDraftChanges() async {
-    final discard = await _confirmDiscardDialog(
-      title: '수정 롤백',
-      message: '현재 수정사항을 모두 버리고 마지막 저장 상태로 되돌릴까요?',
-    );
-    if (discard != true) {
-      return;
-    }
-
-    _rollbackDraftLocal(widget.controller);
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   void _rollbackDraftLocal(NestController controller) {
     _loadDraftFromController(controller);
   }
@@ -1605,6 +1790,30 @@ class _TimetableTabState extends State<TimetableTab> {
     helper.downloadBytes(
       bytes: bytes,
       filename: 'timetable_${DateTime.now().millisecondsSinceEpoch}.png',
+      mimeType: 'image/png',
+    );
+  }
+
+  Future<void> _exportRoomUtilizationImage() async {
+    final boundary =
+        _roomUtilizationRepaintKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+    if (boundary == null) {
+      _showMessage('내보낼 장소 상황표를 먼저 열어주세요.');
+      return;
+    }
+
+    final image = await boundary.toImage(pixelRatio: 2.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) {
+      return;
+    }
+
+    final bytes = byteData.buffer.asUint8List();
+    final helper = createDownloadHelper();
+    helper.downloadBytes(
+      bytes: bytes,
+      filename: 'room_utilization_${DateTime.now().millisecondsSinceEpoch}.png',
       mimeType: 'image/png',
     );
   }
