@@ -2128,6 +2128,32 @@ class NestController extends ChangeNotifier {
     return updated;
   }
 
+  Future<void> deleteFamily({required String familyId}) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(familyId);
+    if (normalizedId == null) {
+      throw StateError('삭제할 가정을 선택하세요.');
+    }
+
+    await _runBusy('가정을 삭제하는 중...', () async {
+      await _repository.deleteFamily(familyId: normalizedId);
+      await loadFamilies();
+      await loadFamilyGuardians();
+      await loadChildren();
+      await loadClassEnrollments();
+      await loadStudentActivityLogs();
+      await _logAudit(
+        actionType: 'FAMILY_DELETE',
+        resourceType: 'families',
+        resourceId: normalizedId,
+      );
+      _setStatus('가정을 삭제했습니다.');
+    });
+  }
+
   Future<ChildProfile> createChild({
     required String familyId,
     required String name,
@@ -2223,6 +2249,30 @@ class NestController extends ChangeNotifier {
       _setStatus('아이 정보를 수정했습니다.');
     });
     return updated;
+  }
+
+  Future<void> deleteChild({required String childId}) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(childId);
+    if (normalizedId == null) {
+      throw StateError('삭제할 아이를 선택하세요.');
+    }
+
+    await _runBusy('아이 정보를 삭제하는 중...', () async {
+      await _repository.deleteChild(childId: normalizedId);
+      await loadChildren();
+      await loadClassEnrollments();
+      await loadStudentActivityLogs();
+      await _logAudit(
+        actionType: 'CHILD_DELETE',
+        resourceType: 'children',
+        resourceId: normalizedId,
+      );
+      _setStatus('아이 정보를 삭제했습니다.');
+    });
   }
 
   Future<void> assignChildToClass({

@@ -278,6 +278,10 @@ class NestRepository {
     return Family.fromMap(_asMap(row));
   }
 
+  Future<void> deleteFamily({required String familyId}) {
+    return client.from('families').delete().eq('id', familyId);
+  }
+
   Future<List<ChildProfile>> fetchChildren({
     required String homeschoolId,
   }) async {
@@ -362,6 +366,10 @@ class NestRepository {
         .single();
 
     return ChildProfile.fromMap(_asMap(row));
+  }
+
+  Future<void> deleteChild({required String childId}) {
+    return client.from('children').delete().eq('id', childId);
   }
 
   Future<List<ClassEnrollment>> fetchClassEnrollments({

@@ -94,6 +94,7 @@ supabase/
     20260303150000_invite_rpc_fix.sql
     20260303162000_class_groups_delete_and_member_search.sql
     20260303190000_member_unavailability_blocks.sql
+    20260308201000_family_child_delete_policies.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -359,6 +360,7 @@ Admin dashboard onboarding:
 - `family_admin_tab.dart`:
   - term setup workspace with unit-level sections:
     - family (family card management + child card management with unified edit dialogs)
+    - family/child edit dialogs include delete actions with confirmation guardrails
     - teacher (teacher profile edit + account link/unlink + unavailability in one modal)
     - class (card-based class selection, class CRUD, enrollments)
     - course (course create/delete and duration)
@@ -472,6 +474,12 @@ Migration `20260303190000_member_unavailability_blocks.sql`:
   - admin/staff full management
   - owner self-management (teacher profile owner or parent user owner)
 - update trigger: `set_updated_at()`
+
+Migration `20260308201000_family_child_delete_policies.sql`:
+
+- adds `families_delete_admin_staff` RLS policy
+- adds `children_delete_admin_staff` RLS policy
+- enables admin/staff delete flows used by family/child management dialogs
 
 ## 8. Environment Variables
 

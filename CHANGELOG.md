@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.11+12 (2026-03-08)
+
+### Changed
+
+- 가정/아이 삭제 기능 추가 (`family_admin_tab.dart`)
+  - `가정 수정` 모달에 삭제 버튼 + 확인 다이얼로그 추가
+  - `아이 수정` 모달에 삭제 버튼 + 확인 다이얼로그 추가
+  - 삭제 시 연관 데이터(배정/활동/태깅) 정리 가능성을 명시한 가드 문구 제공
+- 삭제 API 추가
+  - `nest_repository.dart`: `deleteFamily`, `deleteChild`
+  - `nest_controller.dart`: `deleteFamily`, `deleteChild`
+  - 감사 로그 이벤트 추가: `FAMILY_DELETE`, `CHILD_DELETE`
+- Supabase RLS 삭제 정책 추가
+  - `supabase/migrations/20260308201000_family_child_delete_policies.sql`
+  - 원격 반영 완료: `supabase db push`
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과
+
 ## 1.0.10+11 (2026-03-08)
 
 ### Changed

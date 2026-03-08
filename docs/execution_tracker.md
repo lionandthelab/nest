@@ -66,6 +66,7 @@ Last updated: 2026-03-08
 | 2026-03-08 | 학기 설정 UX 통합 정리: 반 탭 운영 초안 생성기 제거, 반 관리/반 배정 반선택 카드 클릭 전환, 선생님 카드 클릭 편집 + 계정 연결/불가시간을 단일 생성·수정 모달로 통합 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 학기 설정 가정 탭 일관화: 가정/아이를 카드 중심 관리로 재구성, 카드 클릭 생성·수정 통합 모달 도입, 아이 수정 시 가정 재배정/생년월일/메모를 한 화면에서 편집 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 다중 역할 전환 UX 강화: 권한 탭에 관리자 본인 `부모/교사` 역할 빠른 토글 추가 + 홈 헤더 `뷰 전환` 즉시 스위처 추가(관리자/부모/교사 모드 전환) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 가정/아이 삭제 기능 추가: 가정/아이 수정 모달에 삭제+확인 다이얼로그, Repository/Controller 삭제 API(`FAMILY_DELETE`/`CHILD_DELETE`) 구현, RLS delete 정책 마이그레이션 적용(`supabase db push`) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 
 ## Next Batch
 

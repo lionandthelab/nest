@@ -585,6 +585,64 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 }
               }
 
+              Future<void> deleteFamily() async {
+                final target = initial;
+                if (target == null || isSaving) {
+                  return;
+                }
+
+                final childCount = controller
+                    .childrenForFamily(target.id)
+                    .length;
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (confirmContext) => AlertDialog(
+                    title: const Text('가정 삭제'),
+                    content: Text(
+                      '"${target.familyName}" 가정을 삭제할까요?\n'
+                      '소속 아이 $childCount명과 연결된 배정/기록이 함께 정리될 수 있습니다.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(confirmContext).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(confirmContext).pop(true),
+                        child: const Text('삭제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) {
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  await controller.deleteFamily(familyId: target.id);
+                  if (mounted) {
+                    setState(() {
+                      _selectedFamilyId = controller.families.firstOrNull?.id;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
               return AlertDialog(
                 title: Text(initial == null ? '가정 추가' : '가정 수정'),
                 content: SizedBox(
@@ -608,6 +666,15 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   ),
                 ),
                 actions: [
+                  if (initial != null)
+                    TextButton.icon(
+                      onPressed: isSaving ? null : deleteFamily,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('삭제'),
+                    ),
                   TextButton(
                     onPressed: isSaving
                         ? null
@@ -711,6 +778,66 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 }
               }
 
+              Future<void> deleteChild() async {
+                final target = initial;
+                if (target == null || isSaving) {
+                  return;
+                }
+
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (confirmContext) => AlertDialog(
+                    title: const Text('아이 삭제'),
+                    content: Text(
+                      '"${target.name}" 정보를 삭제할까요?\n'
+                      '반 배정, 활동 기록, 태깅된 미디어 연결이 함께 정리될 수 있습니다.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(confirmContext).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(confirmContext).pop(true),
+                        child: const Text('삭제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) {
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  await controller.deleteChild(childId: target.id);
+                  if (mounted) {
+                    setState(() {
+                      _selectedFamilyId =
+                          controller.families
+                              .where((row) => row.id == target.familyId)
+                              .firstOrNull
+                              ?.id ??
+                          controller.families.firstOrNull?.id;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
               final selectedFamilyName = controller.families
                   .where((row) => row.id == selectedFamilyId)
                   .map((row) => row.familyName)
@@ -769,6 +896,15 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   ),
                 ),
                 actions: [
+                  if (initial != null)
+                    TextButton.icon(
+                      onPressed: isSaving ? null : deleteChild,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('삭제'),
+                    ),
                   TextButton(
                     onPressed: isSaving
                         ? null
