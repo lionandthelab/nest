@@ -386,8 +386,11 @@ Admin dashboard onboarding:
 
 ### 6.9 Family and Enrollment Admin
 
-- `family_admin_tab.dart`:
+  - `family_admin_tab.dart`:
   - term setup workspace with unit-level sections:
+    - top KPI summary cards (large metric + unit):
+      - families (`가정`), children (`명`), guardians (`명`), teachers (`명`), classes (`반`), courses (`개`), classrooms (`개`)
+      - single-glance visibility so admins can read scale without counting cards
     - family (family card management + child card management with unified edit dialogs)
       - family edit dialog includes parent-account link/unlink controls (`family_guardians`)
       - family/child edit dialogs include delete actions with confirmation guardrails
@@ -398,6 +401,8 @@ Admin dashboard onboarding:
       - child assignment in the same modal with multi-select
     - course (course cards + unified course create/edit/delete modal)
     - classroom (classroom cards + unified classroom create/edit/delete modal)
+    - section header count badges on each unit card:
+      - family/child/teacher/class/course/classroom totals
   - setup progress bar + unit chips for direct switching
 - `parent_timetable_tab.dart`:
   - selected child weekly schedule board (`요일 x 교시`) as primary view
@@ -419,6 +424,16 @@ Admin dashboard onboarding:
   - per-session teacher assignment dialog
   - main/assistant assignment controls
   - slot conflict warning badges (UI) + DB trigger enforcement
+  - dirty-state synchronization guard:
+    - after `수정 확정`, schedule draft dirty flag is force-synced to parent tab guard
+    - prevents stale unsaved-change warning when navigating away from schedule tab
+  - left palette quick resource management (without leaving schedule tab):
+    - course quick create/delete
+    - teacher quick create/delete
+    - classroom quick create/delete (or palette-only cleanup for unlinked room tags)
+  - export board width/padding calibration:
+    - timetable/room-utilization PNG exports use symmetric left-right padding
+    - avoids right edge sticking/clipping in exported images
 
 ### 6.12 Operations
 
@@ -546,6 +561,11 @@ Migration `20260309011500_homeschool_invites_name_snapshot.sql`:
 - backfills existing invite rows with homeschool names
 - adds triggers to keep invite name synced on invite insert/home rename
 - fixes no-membership invite list showing `Unknown Homeschool` when relation join is blocked by RLS
+
+Migration `20260309020000_teacher_profiles_delete_policy.sql`:
+
+- adds `teacher_profiles_delete_admin_staff` RLS policy
+- enables teacher delete flow used by schedule palette quick actions
 
 ## 8. Environment Variables
 

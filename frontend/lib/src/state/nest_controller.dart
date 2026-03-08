@@ -2732,6 +2732,37 @@ class NestController extends ChangeNotifier {
     return updated;
   }
 
+  Future<void> deleteTeacherProfile({required String teacherProfileId}) async {
+    if (!canManageTeacherAssignments) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(teacherProfileId);
+    if (normalizedId == null) {
+      throw StateError('삭제할 교사 프로필을 선택하세요.');
+    }
+
+    if (sessionTeacherAssignments.any(
+      (row) => row.teacherProfileId == normalizedId,
+    )) {
+      throw StateError('현재 반 시간표에서 사용 중인 교사는 삭제할 수 없습니다.');
+    }
+
+    await _runBusy('교사 프로필을 삭제하는 중...', () async {
+      await _repository.deleteTeacherProfile(teacherProfileId: normalizedId);
+      await loadTeacherProfiles();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
+      await loadStudentActivityLogs();
+      await _logAudit(
+        actionType: 'TEACHER_PROFILE_DELETE',
+        resourceType: 'teacher_profiles',
+        resourceId: normalizedId,
+      );
+      _setStatus('교사 프로필을 삭제했습니다.');
+    });
+  }
+
   Future<void> createMemberUnavailabilityBlock({
     required String ownerKind,
     required String ownerId,

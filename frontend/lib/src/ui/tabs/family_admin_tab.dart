@@ -85,6 +85,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       courseDone,
       classroomDone,
     ].where((done) => done).length;
+    final guardianCount = controller.familyGuardianUserIdsByFamily.values
+        .expand((rows) => rows)
+        .toSet()
+        .length;
 
     Widget stepChip({
       required int order,
@@ -125,6 +129,67 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
+            ),
+            const SizedBox(height: 12),
+            _buildSetupSummaryGrid(
+              stats: [
+                _SetupStat(
+                  title: '가정',
+                  value: controller.families.length,
+                  unit: '가정',
+                  subtitle: '운영 중인 가정',
+                  icon: Icons.home_work_outlined,
+                  accent: NestColors.dustyRose,
+                ),
+                _SetupStat(
+                  title: '아이',
+                  value: controller.children.length,
+                  unit: '명',
+                  subtitle: '전체 아동',
+                  icon: Icons.child_friendly_outlined,
+                  accent: NestColors.mutedSage,
+                ),
+                _SetupStat(
+                  title: '학부모',
+                  value: guardianCount,
+                  unit: '명',
+                  subtitle: '연결된 보호자',
+                  icon: Icons.family_restroom_outlined,
+                  accent: NestColors.clay,
+                ),
+                _SetupStat(
+                  title: '선생님',
+                  value: controller.teacherProfiles.length,
+                  unit: '명',
+                  subtitle: '배정 가능한 교사',
+                  icon: Icons.school_outlined,
+                  accent: NestColors.deepWood,
+                ),
+                _SetupStat(
+                  title: '반',
+                  value: controller.classGroups.length,
+                  unit: '반',
+                  subtitle: '운영 클래스',
+                  icon: Icons.groups_2_outlined,
+                  accent: NestColors.dustyRose,
+                ),
+                _SetupStat(
+                  title: '과목',
+                  value: controller.courses.length,
+                  unit: '개',
+                  subtitle: '등록 과목',
+                  icon: Icons.menu_book_outlined,
+                  accent: NestColors.mutedSage,
+                ),
+                _SetupStat(
+                  title: '교실',
+                  value: controller.classrooms.length,
+                  unit: '개',
+                  subtitle: '사용 교실',
+                  icon: Icons.meeting_room_outlined,
+                  accent: NestColors.clay,
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             ClipRRect(
@@ -237,9 +302,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    '가정 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '가정 관리',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      _buildSectionCountBadge(
+                        value: families.length,
+                        unit: '가정',
+                        icon: Icons.home_work_outlined,
+                      ),
+                    ],
                   ),
                 ),
                 ElevatedButton.icon(
@@ -400,9 +477,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    '아이 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '아이 관리',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      _buildSectionCountBadge(
+                        value: controller.children.length,
+                        unit: '명',
+                        icon: Icons.child_friendly_outlined,
+                      ),
+                    ],
                   ),
                 ),
                 ElevatedButton.icon(
@@ -1218,9 +1307,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    '반 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '반 관리',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      _buildSectionCountBadge(
+                        value: classGroups.length,
+                        unit: '반',
+                        icon: Icons.groups_2_outlined,
+                      ),
+                    ],
                   ),
                 ),
                 ElevatedButton.icon(
@@ -1634,9 +1735,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    '선생님 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '선생님 관리',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      _buildSectionCountBadge(
+                        value: teachers.length,
+                        unit: '명',
+                        icon: Icons.school_outlined,
+                      ),
+                    ],
                   ),
                 ),
                 ElevatedButton.icon(
@@ -2139,6 +2252,134 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     );
   }
 
+  Widget _buildSetupSummaryGrid({required List<_SetupStat> stats}) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: stats
+          .map((item) => _buildSetupSummaryCard(stat: item))
+          .toList(growable: false),
+    );
+  }
+
+  Widget _buildSetupSummaryCard({required _SetupStat stat}) {
+    final formattedValue = NumberFormat.decimalPattern().format(stat.value);
+    return Container(
+      width: 180,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: stat.accent.withValues(alpha: 0.34)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [stat.accent.withValues(alpha: 0.18), Colors.white],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: stat.accent.withValues(alpha: 0.2),
+                ),
+                child: Icon(stat.icon, size: 16, color: NestColors.deepWood),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  stat.title,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: NestColors.deepWood.withValues(alpha: 0.84),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text(
+                  formattedValue,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                    fontSize: 32,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    color: NestColors.deepWood,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  stat.unit,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: NestColors.deepWood.withValues(alpha: 0.82),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            stat.subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.66),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCountBadge({
+    required int value,
+    required String unit,
+    required IconData icon,
+  }) {
+    final label = '${NumberFormat.decimalPattern().format(value)}$unit';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: NestColors.roseMist.withValues(alpha: 0.78),
+        border: Border.all(color: NestColors.dustyRose.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: NestColors.deepWood.withValues(alpha: 0.72),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: NestColors.deepWood,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCourseManageCard(NestController controller) {
     final courses = controller.courses.toList(growable: false)
       ..sort((a, b) => a.name.compareTo(b.name));
@@ -2152,9 +2393,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    '과목 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '과목 관리',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      _buildSectionCountBadge(
+                        value: courses.length,
+                        unit: '개',
+                        icon: Icons.menu_book_outlined,
+                      ),
+                    ],
                   ),
                 ),
                 ElevatedButton.icon(
@@ -2446,9 +2699,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    '교실 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '교실 관리',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      _buildSectionCountBadge(
+                        value: classrooms.length,
+                        unit: '개',
+                        icon: Icons.meeting_room_outlined,
+                      ),
+                    ],
                   ),
                 ),
                 ElevatedButton.icon(
@@ -2782,6 +3047,24 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
+}
+
+class _SetupStat {
+  const _SetupStat({
+    required this.title,
+    required this.value,
+    required this.unit,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+  });
+
+  final String title;
+  final int value;
+  final String unit;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
 }
 
 extension _FirstOrNull<T> on List<T> {

@@ -76,6 +76,9 @@ Last updated: 2026-03-08
 | 2026-03-08 | 초대 카드 개선: 비소속 계정에서 `Unknown Homeschool` 표시 문제 수정(`homeschool_invites.homeschool_name` 스냅샷 + 동기화 트리거), 대기 초대를 풀너비 초대장 스타일 UI로 리디자인 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 부모 뷰 제약 강화: 부모 로그인 시 아이 선택 대상을 guardian 연동된 내 아이로만 제한, 부모 시간표를 `요일 x 교시` 스케줄표 메인보드로 개편(반별 상세는 보조 섹션 유지) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 부모 홈 헤더 UX 보강: 부모 공지 최신 3개 프리뷰 + `모두 보기` 탭 이동, 아이 선택을 탭별 카드에서 제거하고 헤더바 전역 선택기로 통합 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 학기 설정 정보 스캔성 강화: 관리자 `Term Setup` 헤더에 KPI 요약 카드(가정/아이/학부모/선생님/반/과목/교실) 추가, 각 관리 섹션 헤더에 총량 배지 적용으로 카드 개수 세기 없이 즉시 현황 파악 가능하도록 UI 개선 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 스케줄 탭 UX 보강: 시간표/교실 상황표 내보내기 우측 패딩 불균형 수정(좌우 대칭), 좌측 팔레트에서 과목/선생님/교실 리소스 즉시 추가·삭제 지원(교사 삭제 API + `teacher_profiles` delete RLS 포함) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
+| 2026-03-08 | 스케줄 확정 후 경고 잔여 버그 수정: `수정 확정` 성공 시 dirty 상태를 상위 탭 가드로 강제 재동기화하고, 반/선택 해제 상태에서도 dirty false를 보장하여 탭 이동 시 잘못된 `수정사항 경고` 반복 노출 제거 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 

@@ -1,5 +1,62 @@
 # Changelog
 
+## 1.0.22+23 (2026-03-08)
+
+### Fixed
+
+- 시간표 탭 dirty 상태 동기화 버그 수정 (`timetable_tab.dart`)
+  - `수정 확정` 성공 후 dirty 상태를 상위 탭 경고 가드(`HomePage`)로 강제 false 동기화
+  - 반 선택 해제/무효 상태에서도 draft 정리 시 dirty false를 보장
+  - 확정 후 탭 이동 시 `수정사항 경고`가 반복적으로 뜨던 문제 해결
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
+## 1.0.21+22 (2026-03-08)
+
+### Changed
+
+- 시간표/교실 상황표 이미지 내보내기 여백 보정 (`timetable_tab.dart`)
+  - export 보드 폭 계산을 `콘텐츠 폭 + 좌우 패딩`으로 수정
+  - 우측이 붙어 보이던 문제를 제거하고 좌우 패딩을 대칭으로 맞춤
+- 스케줄 탭 좌측 팔레트 즉시 관리 기능 추가
+  - 과목 팔레트: `+`로 생성, 칩 `×`로 삭제
+  - 선생님 팔레트: `+`로 생성, 칩 `×`로 삭제
+  - 교실 팔레트: `+`로 생성, 칩 `×`로 삭제(연결 리소스 없는 항목은 팔레트 정리)
+  - 삭제 시 현재 draft에 연결된 항목 정리(과목/교사/교실)로 일관성 유지
+- 교사 삭제 API/권한 추가
+  - `nest_repository.dart`: `deleteTeacherProfile`
+  - `nest_controller.dart`: `deleteTeacherProfile` + 감사 로그(`TEACHER_PROFILE_DELETE`)
+  - `supabase/migrations/20260309020000_teacher_profiles_delete_policy.sql` 추가
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과
+
+## 1.0.20+21 (2026-03-08)
+
+### Changed
+
+- 관리자 학기 설정 KPI 대시보드 추가 (`family_admin_tab.dart`)
+  - `Term Setup` 헤더에 큰 숫자+단위 기반 요약 카드 도입
+  - 지표: 가정(`가정`), 아이(`명`), 학부모(`명`), 선생님(`명`), 반(`반`), 과목(`개`), 교실(`개`)
+  - 카드 개수를 세지 않고도 운영 규모를 한눈에 파악 가능하도록 개선
+- 관리 섹션 헤더 스캔성 개선
+  - 가정/아이/선생님/반/과목/교실 관리 카드 제목 옆에 총량 배지 추가
+  - 섹션 이동 시 현재 등록 규모를 즉시 확인 가능
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.19+20 (2026-03-08)
 
 ### Changed

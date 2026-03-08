@@ -522,6 +522,10 @@ class NestRepository {
     return TeacherProfile.fromMap(_asMap(row));
   }
 
+  Future<void> deleteTeacherProfile({required String teacherProfileId}) {
+    return client.from('teacher_profiles').delete().eq('id', teacherProfileId);
+  }
+
   Future<List<MemberUnavailabilityBlock>> fetchMemberUnavailabilityBlocks({
     required String homeschoolId,
   }) async {

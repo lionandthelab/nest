@@ -474,11 +474,12 @@ class _TimetableTabState extends State<TimetableTab> {
         periodWidth +
         (dayOrder.length * dayWidth) +
         (dayOrder.length + 1) * gap;
-    final renderWidth = forExport ? boardWidth + 12 : null;
+    final boardPadding = forExport ? 18.0 : 10.0;
+    final renderWidth = forExport ? boardWidth + (boardPadding * 2) : null;
 
     return Container(
       width: renderWidth,
-      padding: EdgeInsets.all(forExport ? 18 : 10),
+      padding: EdgeInsets.all(boardPadding),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: Colors.white,
@@ -647,15 +648,27 @@ class _TimetableTabState extends State<TimetableTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('과목 팔레트', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Text('과목 팔레트', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            IconButton(
+              onPressed: controller.isBusy
+                  ? null
+                  : () => _openQuickCourseDialog(controller),
+              tooltip: '과목 추가',
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
-          '과목을 슬롯으로 드래그해 수업을 생성합니다.',
+          '과목을 슬롯으로 드래그해 수업을 생성합니다. 칩의 ×로 과목을 삭제할 수 있습니다.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
         if (controller.courses.isEmpty)
-          const Text('과목이 없습니다. Term Setup에서 과목을 추가하세요.')
+          const Text('과목이 없습니다. 우측 + 버튼으로 바로 추가하세요.')
         else
           Wrap(
             spacing: 8,
@@ -685,6 +698,10 @@ class _TimetableTabState extends State<TimetableTab> {
                     child: _PaletteChip(
                       label: '${course.name} ${course.defaultDurationMin}m',
                       tone: _PaletteTone.course,
+                      onDelete: controller.isBusy
+                          ? null
+                          : () => _deleteCourseFromPalette(controller, course),
+                      deleteTooltip: '과목 삭제',
                     ),
                   ),
                 )
@@ -698,15 +715,27 @@ class _TimetableTabState extends State<TimetableTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('선생님 팔레트', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Text('선생님 팔레트', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            IconButton(
+              onPressed: controller.isBusy
+                  ? null
+                  : () => _openQuickTeacherDialog(controller),
+              tooltip: '선생님 추가',
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
-          '교사를 슬롯/수업 카드로 드래그해 주강사로 지정합니다.',
+          '교사를 슬롯/수업 카드로 드래그해 주강사로 지정합니다. 칩의 ×로 삭제할 수 있습니다.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
         if (controller.teacherProfiles.isEmpty)
-          const Text('등록된 교사가 없습니다.')
+          const Text('등록된 교사가 없습니다. 우측 + 버튼으로 바로 추가하세요.')
         else
           Wrap(
             spacing: 8,
@@ -736,6 +765,11 @@ class _TimetableTabState extends State<TimetableTab> {
                     child: _PaletteChip(
                       label: teacher.displayName,
                       tone: _PaletteTone.teacher,
+                      onDelete: controller.isBusy
+                          ? null
+                          : () =>
+                                _deleteTeacherFromPalette(controller, teacher),
+                      deleteTooltip: '선생님 삭제',
                     ),
                   ),
                 )
@@ -747,26 +781,43 @@ class _TimetableTabState extends State<TimetableTab> {
 
   Widget _buildRoomPalette(NestController controller) {
     final rooms = _roomPalette.toList(growable: false)..sort();
+    final classroomByName = {
+      for (final classroom in controller.classrooms)
+        classroom.name.trim().toLowerCase(): classroom,
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('교실 팔레트', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Text('교실 팔레트', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            IconButton(
+              onPressed: controller.isBusy
+                  ? null
+                  : () => _openQuickClassroomDialog(controller),
+              tooltip: '교실 추가',
+              icon: const Icon(Icons.add_home_work_outlined),
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
-          '학기 설정 > 교실 관리에서 등록된 교실을 슬롯/수업 카드로 드래그해 배정합니다.',
+          '교실을 슬롯/수업 카드로 드래그해 배정합니다. 칩의 ×로 삭제/정리할 수 있습니다.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
         if (rooms.isEmpty)
-          const Text('등록된 교실이 없습니다. 학기 설정 > 교실 관리에서 먼저 추가하세요.')
+          const Text('등록된 교실이 없습니다. 우측 + 버튼으로 바로 추가하세요.')
         else
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: rooms
-                .map(
-                  (room) => LongPressDraggable<DragPayload>(
+                .map((room) {
+                  final linkedClassroom = classroomByName[room.toLowerCase()];
+                  return LongPressDraggable<DragPayload>(
                     data: DragPayload(type: DragPayloadType.room, id: room),
                     feedback: Material(
                       color: Colors.transparent,
@@ -780,9 +831,22 @@ class _TimetableTabState extends State<TimetableTab> {
                       opacity: 0.35,
                       child: _PaletteChip(label: room, tone: _PaletteTone.room),
                     ),
-                    child: _PaletteChip(label: room, tone: _PaletteTone.room),
-                  ),
-                )
+                    child: _PaletteChip(
+                      label: room,
+                      tone: _PaletteTone.room,
+                      onDelete: controller.isBusy
+                          ? null
+                          : () => _deleteRoomFromPalette(
+                              controller,
+                              room,
+                              linkedClassroom,
+                            ),
+                      deleteTooltip: linkedClassroom == null
+                          ? '팔레트에서 제거'
+                          : '교실 삭제',
+                    ),
+                  );
+                })
                 .toList(growable: false),
           ),
         if (controller.classrooms.isNotEmpty) ...[
@@ -795,6 +859,476 @@ class _TimetableTabState extends State<TimetableTab> {
           ),
         ],
       ],
+    );
+  }
+
+  Future<void> _openQuickCourseDialog(NestController controller) async {
+    final nameController = TextEditingController();
+    final durationController = TextEditingController(text: '50');
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> saveCourse() async {
+                if (isSaving) {
+                  return;
+                }
+                final trimmedName = nameController.text.trim();
+                final duration = int.tryParse(durationController.text.trim());
+                if (trimmedName.isEmpty) {
+                  _showMessage('과목 이름을 입력하세요.');
+                  return;
+                }
+                if (duration == null) {
+                  _showMessage('기본 수업 시간을 숫자로 입력하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+
+                final ok = await _tryAction(
+                  () => controller.createCourse(
+                    name: trimmedName,
+                    defaultDurationMin: duration,
+                  ),
+                );
+                if (!context.mounted) {
+                  return;
+                }
+                if (!ok) {
+                  setDialogState(() {
+                    isSaving = false;
+                  });
+                  return;
+                }
+
+                _showMessage(controller.statusMessage);
+                Navigator.of(context).pop();
+              }
+
+              return AlertDialog(
+                title: const Text('과목 추가'),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '과목 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: durationController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '기본 수업 시간(분)',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('취소'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving ? null : saveCourse,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('생성'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      durationController.dispose();
+    }
+  }
+
+  Future<void> _deleteCourseFromPalette(
+    NestController controller,
+    Course course,
+  ) async {
+    final confirmed = await _confirmDeleteDialog(
+      title: '과목 삭제',
+      message: '"${course.name}" 과목을 삭제할까요?',
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    final ok = await _tryAction(
+      () => controller.deleteCourse(courseId: course.id),
+    );
+    if (!ok || !mounted) {
+      return;
+    }
+
+    final removedSessionIds = _draftSessions
+        .where((row) => row.courseId == course.id)
+        .map((row) => row.id)
+        .toSet();
+    if (removedSessionIds.isNotEmpty) {
+      setState(() {
+        _draftSessions = _draftSessions
+            .where((row) => !removedSessionIds.contains(row.id))
+            .toList(growable: false);
+        _draftAssignments = {
+          for (final entry in _draftAssignments.entries)
+            if (!removedSessionIds.contains(entry.key)) entry.key: entry.value,
+        };
+        _setDirty(true);
+      });
+    }
+    _showMessage(controller.statusMessage);
+  }
+
+  Future<void> _openQuickTeacherDialog(NestController controller) async {
+    final nameController = TextEditingController();
+    var teacherType = 'GUEST_TEACHER';
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> saveTeacher() async {
+                if (isSaving) {
+                  return;
+                }
+                final trimmedName = nameController.text.trim();
+                if (trimmedName.isEmpty) {
+                  _showMessage('선생님 이름을 입력하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+
+                final ok = await _tryAction(
+                  () => controller.createTeacherProfile(
+                    displayName: trimmedName,
+                    teacherType: teacherType,
+                  ),
+                );
+                if (!context.mounted) {
+                  return;
+                }
+                if (!ok) {
+                  setDialogState(() {
+                    isSaving = false;
+                  });
+                  return;
+                }
+
+                _showMessage(controller.statusMessage);
+                Navigator.of(context).pop();
+              }
+
+              return AlertDialog(
+                title: const Text('선생님 추가'),
+                content: SizedBox(
+                  width: 460,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '표시 이름'),
+                      ),
+                      const SizedBox(height: 10),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                            value: 'PARENT_TEACHER',
+                            label: Text('부모 교사'),
+                            icon: Icon(Icons.family_restroom, size: 16),
+                          ),
+                          ButtonSegment(
+                            value: 'GUEST_TEACHER',
+                            label: Text('초청 교사'),
+                            icon: Icon(Icons.badge_outlined, size: 16),
+                          ),
+                        ],
+                        selected: {teacherType},
+                        onSelectionChanged: isSaving
+                            ? null
+                            : (values) {
+                                if (values.isEmpty) {
+                                  return;
+                                }
+                                setDialogState(() {
+                                  teacherType = values.first;
+                                });
+                              },
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('취소'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving ? null : saveTeacher,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('생성'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+    }
+  }
+
+  Future<void> _deleteTeacherFromPalette(
+    NestController controller,
+    TeacherProfile teacher,
+  ) async {
+    final confirmed = await _confirmDeleteDialog(
+      title: '선생님 삭제',
+      message:
+          '"${teacher.displayName}" 선생님을 삭제할까요?\n시간표/기록에서 사용 중이면 삭제할 수 없습니다.',
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    final ok = await _tryAction(
+      () => controller.deleteTeacherProfile(teacherProfileId: teacher.id),
+    );
+    if (!ok || !mounted) {
+      return;
+    }
+
+    var changed = false;
+    final nextAssignments = <String, List<_EditableAssignment>>{};
+    for (final entry in _draftAssignments.entries) {
+      final filtered = entry.value
+          .where((row) => row.teacherProfileId != teacher.id)
+          .toList(growable: false);
+      if (filtered.length != entry.value.length) {
+        changed = true;
+      }
+      nextAssignments[entry.key] = filtered;
+    }
+    if (changed) {
+      setState(() {
+        _draftAssignments = nextAssignments;
+        _setDirty(true);
+      });
+    }
+    _showMessage(controller.statusMessage);
+  }
+
+  Future<void> _openQuickClassroomDialog(NestController controller) async {
+    final nameController = TextEditingController();
+    final capacityController = TextEditingController(text: '20');
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> saveClassroom() async {
+                if (isSaving) {
+                  return;
+                }
+                final trimmedName = nameController.text.trim();
+                final capacity = int.tryParse(capacityController.text.trim());
+                if (trimmedName.isEmpty) {
+                  _showMessage('교실 이름을 입력하세요.');
+                  return;
+                }
+                if (capacity == null) {
+                  _showMessage('수용 인원을 숫자로 입력하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+
+                final ok = await _tryAction(
+                  () => controller.createClassroom(
+                    name: trimmedName,
+                    capacity: capacity,
+                    note: '',
+                  ),
+                );
+                if (!context.mounted) {
+                  return;
+                }
+                if (!ok) {
+                  setDialogState(() {
+                    isSaving = false;
+                  });
+                  return;
+                }
+
+                if (mounted) {
+                  setState(() {
+                    _ensureRoomPaletteFromController(controller);
+                  });
+                }
+                _showMessage(controller.statusMessage);
+                Navigator.of(context).pop();
+              }
+
+              return AlertDialog(
+                title: const Text('교실 추가'),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '교실 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: capacityController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '수용 인원'),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('취소'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving ? null : saveClassroom,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('생성'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      capacityController.dispose();
+    }
+  }
+
+  Future<void> _deleteRoomFromPalette(
+    NestController controller,
+    String room,
+    Classroom? linkedClassroom,
+  ) async {
+    final normalizedRoom = room.trim();
+    if (normalizedRoom.isEmpty) {
+      return;
+    }
+
+    if (linkedClassroom == null) {
+      final confirmed = await _confirmDeleteDialog(
+        title: '교실 정리',
+        message: '"$normalizedRoom" 항목은 교실 리소스에 연결되지 않았습니다. 팔레트에서 제거할까요?',
+        confirmLabel: '정리',
+      );
+      if (confirmed != true || !mounted) {
+        return;
+      }
+      setState(() {
+        _roomPalette = {..._roomPalette}..remove(normalizedRoom);
+      });
+      _showMessage('팔레트에서 "$normalizedRoom" 항목을 제거했습니다.');
+      return;
+    }
+
+    final confirmed = await _confirmDeleteDialog(
+      title: '교실 삭제',
+      message: '"${linkedClassroom.name}" 교실을 삭제할까요?\n시간표에서 사용 중이면 삭제할 수 없습니다.',
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    final ok = await _tryAction(
+      () => controller.deleteClassroom(classroomId: linkedClassroom.id),
+    );
+    if (!ok || !mounted) {
+      return;
+    }
+
+    var removedFromDraft = false;
+    final nextDraftSessions = _draftSessions
+        .map((row) {
+          final location = (row.location ?? '').trim();
+          if (location.toLowerCase() != normalizedRoom.toLowerCase()) {
+            return row;
+          }
+          removedFromDraft = true;
+          return row.copyWith(clearLocation: true);
+        })
+        .toList(growable: false);
+
+    setState(() {
+      _ensureRoomPaletteFromController(controller);
+      if (removedFromDraft) {
+        _draftSessions = nextDraftSessions;
+        _setDirty(true);
+      }
+    });
+    _showMessage(controller.statusMessage);
+  }
+
+  Future<bool?> _confirmDeleteDialog({
+    required String title,
+    required String message,
+    String confirmLabel = '삭제',
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
     );
   }
 
@@ -890,6 +1424,7 @@ class _TimetableTabState extends State<TimetableTab> {
         final minDayColumnWidth = forExport ? 72.0 : 188.0;
         final maxDayColumnWidth = forExport ? 240.0 : 320.0;
         final slotMinHeight = forExport ? 132.0 : 156.0;
+        final boardPadding = forExport ? 16.0 : 10.0;
 
         final availableWidth = constraints.maxWidth;
         final usable =
@@ -911,12 +1446,12 @@ class _TimetableTabState extends State<TimetableTab> {
             (dayOrder.length + 1) * gap;
         final shouldScroll = !forExport && gridWidth > availableWidth;
         final renderWidth = forExport
-            ? gridWidth + 12
+            ? gridWidth + (boardPadding * 2)
             : (shouldScroll ? gridWidth : availableWidth);
 
         Widget grid = Container(
           width: renderWidth,
-          padding: EdgeInsets.all(forExport ? 16 : 10),
+          padding: EdgeInsets.all(boardPadding),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             color: Colors.white,
@@ -1234,6 +1769,8 @@ class _TimetableTabState extends State<TimetableTab> {
         }
       }
 
+      // Ensure parent tab guard state is cleared immediately after successful commit.
+      _setDirty(false, forceNotify: true);
       _loadDraftFromController(controller);
       _showMessage('시간표 수정을 확정했습니다.');
     } catch (error) {
@@ -1774,13 +2311,15 @@ class _TimetableTabState extends State<TimetableTab> {
   void _syncDraftWithController(NestController controller) {
     final classId = controller.selectedClassGroupId;
     if (classId == null || classId.isEmpty) {
-      if (_draftClassGroupId != null || _draftSessions.isNotEmpty) {
+      if (_draftClassGroupId != null ||
+          _draftSessions.isNotEmpty ||
+          _isDraftDirty) {
         _draftClassGroupId = null;
         _draftSessions = const [];
         _draftAssignments = const {};
         _roomPalette = const {};
         _controllerSignature = '';
-        _setDirty(false);
+        _setDirty(false, forceNotify: true);
       }
       return;
     }
@@ -1849,6 +2388,12 @@ class _TimetableTabState extends State<TimetableTab> {
   void _loadDraftFromController(NestController controller) {
     final classId = controller.selectedClassGroupId;
     if (classId == null || classId.isEmpty) {
+      _draftClassGroupId = null;
+      _draftSessions = const [];
+      _draftAssignments = const {};
+      _roomPalette = const {};
+      _controllerSignature = '';
+      _setDirty(false, forceNotify: true);
       return;
     }
 
@@ -1925,8 +2470,9 @@ class _TimetableTabState extends State<TimetableTab> {
     _roomPalette = rooms;
   }
 
-  void _setDirty(bool value) {
-    if (_isDraftDirty == value) {
+  void _setDirty(bool value, {bool forceNotify = false}) {
+    final changed = _isDraftDirty != value;
+    if (!changed && !forceNotify) {
       return;
     }
     _isDraftDirty = value;
@@ -1941,19 +2487,25 @@ class _TimetableTabState extends State<TimetableTab> {
     return '${_dayLabel(slot.dayOfWeek)} ${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}';
   }
 
-  Future<void> _safeCall(Future<void> Function() action) async {
+  Future<bool> _tryAction(Future<void> Function() action) async {
     try {
       await action();
+      return true;
     } catch (error) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       final message = error is StateError
           ? error.message
           : widget.controller.statusMessage;
       _showMessage(message);
+      return false;
     }
+  }
+
+  Future<void> _safeCall(Future<void> Function() action) async {
+    await _tryAction(action);
   }
 
   void _showMessage(String text) {
@@ -2367,11 +2919,15 @@ class _PaletteChip extends StatelessWidget {
     required this.label,
     required this.tone,
     this.dragging = false,
+    this.onDelete,
+    this.deleteTooltip,
   });
 
   final String label;
   final _PaletteTone tone;
   final bool dragging;
+  final VoidCallback? onDelete;
+  final String? deleteTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -2400,6 +2956,23 @@ class _PaletteChip extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (onDelete != null) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: deleteTooltip ?? '삭제',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onDelete,
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 14,
+                  color: dragging
+                      ? Colors.white
+                      : NestColors.deepWood.withValues(alpha: 0.74),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
