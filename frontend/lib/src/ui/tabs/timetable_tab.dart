@@ -1650,6 +1650,10 @@ class _TimetableTabState extends State<TimetableTab> {
     final classChanged = _draftClassGroupId != classId;
 
     if (classChanged && _isDraftDirty) {
+      _loadDraftFromController(controller);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showMessage('반이 변경되어 미확정 수정사항을 롤백했습니다.');
+      });
       return;
     }
 
