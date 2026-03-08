@@ -263,6 +263,21 @@ class NestRepository {
     return Family.fromMap(_asMap(row));
   }
 
+  Future<Family> updateFamily({
+    required String familyId,
+    required String familyName,
+    required String note,
+  }) async {
+    final row = await client
+        .from('families')
+        .update({'family_name': familyName.trim(), 'note': note.trim()})
+        .eq('id', familyId)
+        .select('id, homeschool_id, family_name, note, created_at')
+        .single();
+
+    return Family.fromMap(_asMap(row));
+  }
+
   Future<List<ChildProfile>> fetchChildren({
     required String homeschoolId,
   }) async {
@@ -322,6 +337,31 @@ class NestRepository {
     );
 
     return ChildProfile.fromMap(_asMap(data));
+  }
+
+  Future<ChildProfile> updateChild({
+    required String childId,
+    required String familyId,
+    required String name,
+    required String birthDate,
+    required String profileNote,
+  }) async {
+    final row = await client
+        .from('children')
+        .update({
+          'family_id': familyId,
+          'name': name.trim(),
+          'birth_date': birthDate,
+          'profile_note': profileNote.trim(),
+        })
+        .eq('id', childId)
+        .select(
+          'id, family_id, name, birth_date, profile_note, status, created_at, '
+          'families!inner(homeschool_id, family_name)',
+        )
+        .single();
+
+    return ChildProfile.fromMap(_asMap(row));
   }
 
   Future<List<ClassEnrollment>> fetchClassEnrollments({

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.9+10 (2026-03-08)
+
+### Changed
+
+- 학기 설정 `가정` 탭 UI 일관화 (`family_admin_tab.dart`)
+  - 기존 분리 폼(`가정 등록`, `아이 등록`, `가정 현황`)을 카드 중심 흐름으로 재구성
+  - `가정 관리`: 가정 카드 클릭으로 즉시 수정, `가정 추가`는 동일 모달 재사용
+  - `아이 관리`: 가정 선택 카드 + 아이 카드 클릭 수정, `아이 추가`는 동일 모달 재사용
+  - 아이 편집 모달에서 소속 가정 재배정, 생년월일, 프로필 메모를 한 화면에서 수정
+- 가정/아이 수정 API 추가
+  - `nest_repository.dart`: `updateFamily`, `updateChild`
+  - `nest_controller.dart`: `updateFamily`, `updateChild`
+  - 감사 로그 이벤트 추가: `FAMILY_UPDATE`, `CHILD_UPDATE`
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.8+9 (2026-03-08)
 
 ### Changed

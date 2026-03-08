@@ -5,7 +5,6 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
-import '../widgets/search_select_field.dart';
 
 class FamilyAdminTab extends StatefulWidget {
   const FamilyAdminTab({super.key, required this.controller});
@@ -17,15 +16,10 @@ class FamilyAdminTab extends StatefulWidget {
 }
 
 class _FamilyAdminTabState extends State<FamilyAdminTab> {
-  final _familyNameController = TextEditingController();
-  final _familyNoteController = TextEditingController();
-  final _childNameController = TextEditingController();
-  final _childNoteController = TextEditingController();
   final _classNameController = TextEditingController();
   final _classCapacityController = TextEditingController(text: '12');
   final _courseNameController = TextEditingController();
   final _courseDurationController = TextEditingController(text: '50');
-  late final TextEditingController _birthDateController;
 
   String? _selectedFamilyId;
   String? _selectedClassGroupId;
@@ -35,25 +29,11 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   String _setupUnit = 'FAMILY';
 
   @override
-  void initState() {
-    super.initState();
-    final defaultBirth = DateTime.now().subtract(const Duration(days: 365 * 6));
-    _birthDateController = TextEditingController(
-      text: DateFormat('yyyy-MM-dd').format(defaultBirth),
-    );
-  }
-
-  @override
   void dispose() {
-    _familyNameController.dispose();
-    _familyNoteController.dispose();
-    _childNameController.dispose();
-    _childNoteController.dispose();
     _classNameController.dispose();
     _classCapacityController.dispose();
     _courseNameController.dispose();
     _courseDurationController.dispose();
-    _birthDateController.dispose();
     super.dispose();
   }
 
@@ -81,11 +61,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
     final unitCards = switch (_setupUnit) {
       'FAMILY' => [
-        _buildFamilyCreateCard(controller),
+        _buildFamilyManagementCard(controller),
         const SizedBox(height: 12),
-        _buildChildCreateCard(controller),
-        const SizedBox(height: 12),
-        _buildFamilyOverviewCard(controller),
+        _buildChildManagementCard(controller),
       ],
       'TEACHER' => [_buildTeacherManagementCard(controller)],
       'CLASS' => [
@@ -94,7 +72,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         _buildEnrollmentCard(controller),
       ],
       'COURSE' => [_buildCourseManageCard(controller)],
-      _ => [_buildFamilyCreateCard(controller)],
+      _ => [_buildFamilyManagementCard(controller)],
     };
 
     return ListView(
@@ -288,60 +266,172 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     }
   }
 
-  Widget _buildFamilyCreateCard(NestController controller) {
+  Widget _buildFamilyManagementCard(NestController controller) {
+    final families = controller.families.toList(growable: false)
+      ..sort((a, b) => a.familyName.compareTo(b.familyName));
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('가정 등록', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '가정 관리',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => _openFamilyEditorDialog(controller: controller),
+                  icon: const Icon(Icons.group_add),
+                  label: const Text('가정 추가'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy ? null : _refreshFamilyDomain,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('새로고침'),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(
-              '홈스쿨 내 가정 단위를 먼저 만들고 아이를 연결합니다.',
+              '카드를 클릭하면 가정 정보 수정으로 바로 이동합니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _familyNameController,
-              decoration: const InputDecoration(labelText: '가정 이름'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _familyNoteController,
-              decoration: const InputDecoration(labelText: '메모'),
-              minLines: 1,
-              maxLines: 2,
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: controller.isBusy ? null : _createFamily,
-                  icon: const Icon(Icons.group_add),
-                  label: const Text('가정 생성'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: controller.isBusy ? null : _refreshFamilyDomain,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('가정/아이 새로고침'),
-                ),
-              ],
-            ),
+            if (families.isEmpty)
+              _buildEmptyHint('등록된 가정이 없습니다. 가정 추가로 시작하세요.')
+            else
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: families
+                    .map((family) {
+                      final childCount = controller
+                          .childrenForFamily(family.id)
+                          .length;
+                      final selected = _selectedFamilyId == family.id;
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: controller.isBusy
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedFamilyId = family.id;
+                                });
+                                _openFamilyEditorDialog(
+                                  controller: controller,
+                                  initial: family,
+                                );
+                              },
+                        child: SizedBox(
+                          width: 300,
+                          child: LabeledEntityTile(
+                            title: family.familyName,
+                            subtitle:
+                                '아이 $childCount명'
+                                '${family.note.trim().isEmpty ? '' : ' · ${family.note.trim()}'}',
+                            icon: Icons.home_outlined,
+                            trailing: Icon(
+                              selected
+                                  ? Icons.check_circle
+                                  : Icons.edit_outlined,
+                              size: 18,
+                              color: selected
+                                  ? NestColors.mutedSage
+                                  : NestColors.deepWood.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildChildCreateCard(NestController controller) {
+  Widget _buildFamilySelectionCards({
+    required NestController controller,
+    required String title,
+    required String? selectedFamilyId,
+    required ValueChanged<String> onSelect,
+  }) {
+    final families = controller.families.toList(growable: false)
+      ..sort((a, b) => a.familyName.compareTo(b.familyName));
+
+    if (families.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: NestColors.deepWood.withValues(alpha: 0.74),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: families
+              .map((family) {
+                final selected = family.id == selectedFamilyId;
+                final childCount = controller
+                    .childrenForFamily(family.id)
+                    .length;
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: controller.isBusy ? null : () => onSelect(family.id),
+                  child: SizedBox(
+                    width: 240,
+                    child: LabeledEntityTile(
+                      title: family.familyName,
+                      subtitle: '아이 $childCount명',
+                      icon: Icons.home_outlined,
+                      compact: true,
+                      trailing: Icon(
+                        selected
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        size: 18,
+                        color: selected
+                            ? NestColors.mutedSage
+                            : NestColors.deepWood.withValues(alpha: 0.46),
+                      ),
+                    ),
+                  ),
+                );
+              })
+              .toList(growable: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChildManagementCard(NestController controller) {
     final selectedFamily = controller.families
         .where((row) => row.id == _selectedFamilyId)
         .firstOrNull;
+    final familyChildren =
+        (selectedFamily == null
+                ? const <ChildProfile>[]
+                : controller.childrenForFamily(selectedFamily.id))
+            .toList(growable: false)
+          ..sort((a, b) => a.name.compareTo(b.name));
 
     return Card(
       child: Padding(
@@ -349,50 +439,358 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('아이 등록', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '아이 관리',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy || controller.families.isEmpty
+                      ? null
+                      : () => _openChildEditorDialog(
+                          controller: controller,
+                          initialFamilyId:
+                              _selectedFamilyId ?? controller.families.first.id,
+                        ),
+                  icon: const Icon(Icons.child_care_outlined),
+                  label: const Text('아이 추가'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '가정을 선택하고 카드를 클릭하면 아이 정보를 바로 수정할 수 있습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
             const SizedBox(height: 10),
             if (controller.families.isEmpty)
-              const Text('먼저 가정을 등록하세요.')
+              _buildEmptyHint('먼저 가정을 등록하세요.')
             else ...[
-              SelectFieldCard(
-                label: '소속 가정',
-                hintText: '가정을 선택하세요',
-                icon: Icons.home_outlined,
-                enabled: !controller.isBusy,
-                value: selectedFamily?.familyName,
-                helpText: '아이를 연결할 가정을 검색해서 선택합니다.',
-                onTap: () => _selectFamilyForChild(controller),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _childNameController,
-                decoration: const InputDecoration(labelText: '아이 이름'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _birthDateController,
-                decoration: const InputDecoration(
-                  labelText: '생년월일 (YYYY-MM-DD)',
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _childNoteController,
-                decoration: const InputDecoration(labelText: '프로필 메모'),
-                minLines: 1,
-                maxLines: 3,
+              _buildFamilySelectionCards(
+                controller: controller,
+                title: '아이 조회 대상 가정',
+                selectedFamilyId: selectedFamily?.id,
+                onSelect: (familyId) {
+                  if (controller.isBusy) {
+                    return;
+                  }
+                  setState(() {
+                    _selectedFamilyId = familyId;
+                  });
+                },
               ),
               const SizedBox(height: 10),
-              ElevatedButton.icon(
-                onPressed: controller.isBusy ? null : _createChild,
-                icon: const Icon(Icons.child_friendly),
-                label: const Text('아이 등록'),
-              ),
+              if (selectedFamily == null)
+                _buildEmptyHint('가정을 선택하세요.')
+              else if (familyChildren.isEmpty)
+                _buildEmptyHint('선택한 가정에 등록된 아이가 없습니다. 아이 추가를 눌러주세요.')
+              else
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: familyChildren
+                      .map((child) {
+                        final birthLabel = child.birthDate == null
+                            ? '생일 미입력'
+                            : DateFormat('yyyy-MM-dd').format(child.birthDate!);
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: controller.isBusy
+                              ? null
+                              : () => _openChildEditorDialog(
+                                  controller: controller,
+                                  initial: child,
+                                ),
+                          child: SizedBox(
+                            width: 290,
+                            child: LabeledEntityTile(
+                              title: child.name,
+                              subtitle: '$birthLabel · ${child.status}',
+                              icon: Icons.child_care_outlined,
+                              trailing: const Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
+                ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openFamilyEditorDialog({
+    required NestController controller,
+    Family? initial,
+  }) async {
+    final nameController = TextEditingController(
+      text: initial?.familyName ?? '',
+    );
+    final noteController = TextEditingController(text: initial?.note ?? '');
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> saveFamily() async {
+                if (isSaving || nameController.text.trim().isEmpty) {
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+
+                try {
+                  final updatedFamily = initial == null
+                      ? await controller.createFamily(
+                          familyName: nameController.text,
+                          note: noteController.text,
+                        )
+                      : await controller.updateFamily(
+                          familyId: initial.id,
+                          familyName: nameController.text,
+                          note: noteController.text,
+                        );
+
+                  if (mounted) {
+                    setState(() {
+                      _selectedFamilyId = updatedFamily.id;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              return AlertDialog(
+                title: Text(initial == null ? '가정 추가' : '가정 수정'),
+                content: SizedBox(
+                  width: 520,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '가정 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: noteController,
+                        decoration: const InputDecoration(labelText: '메모'),
+                        minLines: 1,
+                        maxLines: 3,
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('닫기'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving ? null : saveFamily,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(initial == null ? '생성' : '저장'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      noteController.dispose();
+    }
+  }
+
+  Future<void> _openChildEditorDialog({
+    required NestController controller,
+    ChildProfile? initial,
+    String? initialFamilyId,
+  }) async {
+    final nameController = TextEditingController(text: initial?.name ?? '');
+    final birthController = TextEditingController(
+      text: initial?.birthDate == null
+          ? DateFormat(
+              'yyyy-MM-dd',
+            ).format(DateTime.now().subtract(const Duration(days: 365 * 6)))
+          : DateFormat('yyyy-MM-dd').format(initial!.birthDate!),
+    );
+    final noteController = TextEditingController(
+      text: initial?.profileNote ?? '',
+    );
+    var selectedFamilyId =
+        initial?.familyId ??
+        initialFamilyId ??
+        controller.families.firstOrNull?.id;
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> saveChild() async {
+                if (isSaving) {
+                  return;
+                }
+                final familyId = selectedFamilyId;
+                if (familyId == null || familyId.isEmpty) {
+                  _showMessage('가정을 선택하세요.');
+                  return;
+                }
+                if (nameController.text.trim().isEmpty) {
+                  _showMessage('아이 이름을 입력하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+
+                try {
+                  final updatedChild = initial == null
+                      ? await controller.createChild(
+                          familyId: familyId,
+                          name: nameController.text,
+                          birthDate: birthController.text,
+                          profileNote: noteController.text,
+                        )
+                      : await controller.updateChild(
+                          childId: initial.id,
+                          familyId: familyId,
+                          name: nameController.text,
+                          birthDate: birthController.text,
+                          profileNote: noteController.text,
+                        );
+                  if (mounted) {
+                    setState(() {
+                      _selectedFamilyId = updatedChild.familyId;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              final selectedFamilyName = controller.families
+                  .where((row) => row.id == selectedFamilyId)
+                  .map((row) => row.familyName)
+                  .firstOrNull;
+
+              return AlertDialog(
+                title: Text(initial == null ? '아이 추가' : '아이 수정'),
+                content: SizedBox(
+                  width: 620,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildFamilySelectionCards(
+                          controller: controller,
+                          title: '소속 가정',
+                          selectedFamilyId: selectedFamilyId,
+                          onSelect: (familyId) {
+                            if (isSaving || controller.isBusy) {
+                              return;
+                            }
+                            setDialogState(() {
+                              selectedFamilyId = familyId;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        if (selectedFamilyName != null)
+                          Chip(
+                            avatar: const Icon(Icons.home_outlined, size: 16),
+                            label: Text('선택됨: $selectedFamilyName'),
+                          ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: nameController,
+                          decoration: const InputDecoration(labelText: '아이 이름'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: birthController,
+                          decoration: const InputDecoration(
+                            labelText: '생년월일 (YYYY-MM-DD)',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: noteController,
+                          decoration: const InputDecoration(
+                            labelText: '프로필 메모',
+                          ),
+                          minLines: 1,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('닫기'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving ? null : saveChild,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(initial == null ? '생성' : '저장'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      birthController.dispose();
+      noteController.dispose();
+    }
   }
 
   Widget _buildClassCrudCard(NestController controller) {
@@ -1256,154 +1654,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         ),
       ),
     );
-  }
-
-  Widget _buildFamilyOverviewCard(NestController controller) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('가정 현황', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
-            if (controller.families.isEmpty)
-              const Text('등록된 가정이 없습니다.')
-            else
-              ...controller.families.map((family) {
-                final familyChildren = controller.childrenForFamily(family.id);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: NestColors.roseMist),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            EntityAvatar(
-                              label: family.familyName,
-                              icon: Icons.home_outlined,
-                              size: 34,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                family.familyName,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (family.note.trim().isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              family.note,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                        const SizedBox(height: 8),
-                        if (familyChildren.isEmpty)
-                          const Text('등록된 아이 없음')
-                        else
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: familyChildren
-                                .map(
-                                  (child) => SizedBox(
-                                    width: 170,
-                                    child: LabeledEntityTile(
-                                      title: child.name,
-                                      subtitle: child.status,
-                                      icon: Icons.child_care_outlined,
-                                      compact: true,
-                                    ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _selectFamilyForChild(NestController controller) async {
-    final options = controller.families
-        .map(
-          (family) => SelectSheetOption<String>(
-            value: family.id,
-            title: family.familyName,
-            subtitle:
-                '아이 ${controller.childrenForFamily(family.id).length}명'
-                '${family.note.trim().isEmpty ? '' : ' · ${family.note.trim()}'}',
-            keywords: '${family.familyName} ${family.note}',
-          ),
-        )
-        .toList(growable: false);
-    final selected = await showSelectSheet<String>(
-      context: context,
-      title: '소속 가정 선택',
-      helpText: '아이를 등록할 가정을 선택하세요.',
-      options: options,
-      currentValue: _selectedFamilyId,
-    );
-    if (!mounted || selected == null || selected == _selectedFamilyId) {
-      return;
-    }
-    setState(() {
-      _selectedFamilyId = selected;
-    });
-  }
-
-  Future<void> _createFamily() async {
-    try {
-      await widget.controller.createFamily(
-        familyName: _familyNameController.text,
-        note: _familyNoteController.text,
-      );
-      _familyNameController.clear();
-      _familyNoteController.clear();
-      setState(() {
-        _selectedFamilyId = widget.controller.families.firstOrNull?.id;
-      });
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _createChild() async {
-    final familyId = _selectedFamilyId;
-    if (familyId == null || familyId.isEmpty) {
-      _showMessage('가정을 선택하세요.');
-      return;
-    }
-
-    try {
-      await widget.controller.createChild(
-        familyId: familyId,
-        name: _childNameController.text,
-        birthDate: _birthDateController.text,
-        profileNote: _childNoteController.text,
-      );
-      _childNameController.clear();
-      _childNoteController.clear();
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
   }
 
   Future<void> _createClassGroup() async {

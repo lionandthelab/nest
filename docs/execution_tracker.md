@@ -64,6 +64,7 @@ Last updated: 2026-03-08
 | 2026-03-08 | 시간표 마감 UX 미세조정: 메인보드 우측 상단 `수정 확정` 단일화, AI 배정 채팅 입력+도움말 툴팁, 전체 반 기준 요일/교시별 장소 배정 상황표 PNG 내보내기 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 전 탭 Full-width 레이아웃 적용 + Parent/Teacher/Admin 주요 카드 UI 시각화 개편(아바타/아이콘 기반 엔티티 타일, 시간표/활동/소식 카드 스캔성 강화) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 학기 설정 UX 통합 정리: 반 탭 운영 초안 생성기 제거, 반 관리/반 배정 반선택 카드 클릭 전환, 선생님 카드 클릭 편집 + 계정 연결/불가시간을 단일 생성·수정 모달로 통합 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 학기 설정 가정 탭 일관화: 가정/아이를 카드 중심 관리로 재구성, 카드 클릭 생성·수정 통합 모달 도입, 아이 수정 시 가정 재배정/생년월일/메모를 한 화면에서 편집 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 

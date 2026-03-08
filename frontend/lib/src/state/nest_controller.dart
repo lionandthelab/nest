@@ -2038,7 +2038,7 @@ class NestController extends ChangeNotifier {
     });
   }
 
-  Future<void> createFamily({
+  Future<Family> createFamily({
     required String familyName,
     required String note,
   }) async {
@@ -2061,8 +2061,9 @@ class NestController extends ChangeNotifier {
       throw StateError('이미 동일한 이름의 가정이 있습니다: $trimmedName');
     }
 
+    late final Family created;
     await _runBusy('가정을 생성하는 중...', () async {
-      final created = await _repository.createFamily(
+      created = await _repository.createFamily(
         homeschoolId: homeschoolId,
         familyName: trimmedName,
         note: note,
@@ -2078,9 +2079,56 @@ class NestController extends ChangeNotifier {
       );
       _setStatus('가정을 생성했습니다.');
     });
+    return created;
   }
 
-  Future<void> createChild({
+  Future<Family> updateFamily({
+    required String familyId,
+    required String familyName,
+    required String note,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(familyId);
+    if (normalizedId == null) {
+      throw StateError('수정할 가정을 선택하세요.');
+    }
+
+    final trimmedName = familyName.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('가정 이름을 입력하세요.');
+    }
+    if (families.any(
+      (f) =>
+          f.id != normalizedId &&
+          f.familyName.trim().toLowerCase() == trimmedName.toLowerCase(),
+    )) {
+      throw StateError('이미 동일한 이름의 가정이 있습니다: $trimmedName');
+    }
+
+    late final Family updated;
+    await _runBusy('가정 정보를 수정하는 중...', () async {
+      updated = await _repository.updateFamily(
+        familyId: normalizedId,
+        familyName: trimmedName,
+        note: note,
+      );
+      await loadFamilies();
+      await loadChildren();
+      await _logAudit(
+        actionType: 'FAMILY_UPDATE',
+        resourceType: 'families',
+        resourceId: updated.id,
+        afterJson: {'family_name': updated.familyName, 'note': updated.note},
+      );
+      _setStatus('가정 정보를 수정했습니다.');
+    });
+    return updated;
+  }
+
+  Future<ChildProfile> createChild({
     required String familyId,
     required String name,
     required String birthDate,
@@ -2088,6 +2136,11 @@ class NestController extends ChangeNotifier {
   }) async {
     if (!canManageFamilies) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedFamilyId = _normalizeNullable(familyId);
+    if (normalizedFamilyId == null) {
+      throw StateError('소속 가정을 선택하세요.');
     }
 
     final trimmedName = name.trim();
@@ -2098,9 +2151,10 @@ class NestController extends ChangeNotifier {
       throw StateError('생년월일은 YYYY-MM-DD 형식으로 입력하세요.');
     }
 
+    late final ChildProfile created;
     await _runBusy('아이 정보를 등록하는 중...', () async {
-      final created = await _repository.createChild(
-        familyId: familyId,
+      created = await _repository.createChild(
+        familyId: normalizedFamilyId,
         name: trimmedName,
         birthDate: birthDate.trim(),
         profileNote: profileNote,
@@ -2115,6 +2169,60 @@ class NestController extends ChangeNotifier {
       );
       _setStatus('아이 정보를 등록했습니다.');
     });
+    return created;
+  }
+
+  Future<ChildProfile> updateChild({
+    required String childId,
+    required String familyId,
+    required String name,
+    required String birthDate,
+    required String profileNote,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedChildId = _normalizeNullable(childId);
+    if (normalizedChildId == null) {
+      throw StateError('수정할 아이를 선택하세요.');
+    }
+    final normalizedFamilyId = _normalizeNullable(familyId);
+    if (normalizedFamilyId == null) {
+      throw StateError('소속 가정을 선택하세요.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('아이 이름을 입력하세요.');
+    }
+    if (DateTime.tryParse(birthDate.trim()) == null) {
+      throw StateError('생년월일은 YYYY-MM-DD 형식으로 입력하세요.');
+    }
+
+    late final ChildProfile updated;
+    await _runBusy('아이 정보를 수정하는 중...', () async {
+      updated = await _repository.updateChild(
+        childId: normalizedChildId,
+        familyId: normalizedFamilyId,
+        name: trimmedName,
+        birthDate: birthDate.trim(),
+        profileNote: profileNote,
+      );
+      await loadChildren();
+      await _logAudit(
+        actionType: 'CHILD_UPDATE',
+        resourceType: 'children',
+        resourceId: updated.id,
+        afterJson: {
+          'name': updated.name,
+          'family_id': updated.familyId,
+          'birth_date': birthDate.trim(),
+        },
+      );
+      _setStatus('아이 정보를 수정했습니다.');
+    });
+    return updated;
   }
 
   Future<void> assignChildToClass({
