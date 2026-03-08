@@ -495,6 +495,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       text: initial?.familyName ?? '',
     );
     final noteController = TextEditingController(text: initial?.note ?? '');
+    final accountQueryController = TextEditingController();
+    var guardianType = 'GUARDIAN';
+    HomeschoolMemberDirectoryEntry? selectedGuardianAccount;
     var isSaving = false;
 
     try {
@@ -542,6 +545,117 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   }
                 }
               }
+
+              Future<void> connectGuardian() async {
+                final target = initial;
+                if (target == null) {
+                  _showMessage('가정을 먼저 저장한 뒤 학부모 계정을 연결하세요.');
+                  return;
+                }
+                if (selectedGuardianAccount == null) {
+                  _showMessage('연결할 학부모 계정을 선택하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  await controller.upsertFamilyGuardian(
+                    familyId: target.id,
+                    userId: selectedGuardianAccount!.userId,
+                    guardianType: guardianType,
+                  );
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      selectedGuardianAccount = null;
+                      accountQueryController.clear();
+                      isSaving = false;
+                    });
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              Future<void> disconnectGuardian(String userId) async {
+                final target = initial;
+                if (target == null || isSaving) {
+                  return;
+                }
+                final label = controller.findMemberDisplayName(userId);
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (confirmContext) => AlertDialog(
+                    title: const Text('학부모 연결 해제'),
+                    content: Text('"$label" 계정을 이 가정에서 연결 해제할까요?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(confirmContext).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(confirmContext).pop(true),
+                        child: const Text('해제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) {
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  await controller.deleteFamilyGuardian(
+                    familyId: target.id,
+                    userId: userId,
+                  );
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              final linkedGuardianUserIds =
+                  initial == null
+                        ? const <String>[]
+                        : (controller.familyGuardianUserIdsByFamily[initial
+                                      .id] ??
+                                  const <String>[])
+                              .toList(growable: false)
+                    ..sort();
+              final linkedSet = linkedGuardianUserIds.toSet();
+              final parentMatches = controller
+                  .searchHomeschoolMemberDirectory(
+                    accountQueryController.text,
+                    maxResults: 12,
+                  )
+                  .where(
+                    (entry) =>
+                        entry.roles.contains('PARENT') &&
+                        !linkedSet.contains(entry.userId),
+                  )
+                  .toList(growable: false);
 
               Future<void> deleteFamily() async {
                 final target = initial;
@@ -604,23 +718,226 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               return AlertDialog(
                 title: Text(initial == null ? '가정 추가' : '가정 수정'),
                 content: SizedBox(
-                  width: 520,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: '가정 이름'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: noteController,
-                        decoration: const InputDecoration(labelText: '메모'),
-                        minLines: 1,
-                        maxLines: 3,
-                      ),
-                    ],
+                  width: 640,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: nameController,
+                          decoration: const InputDecoration(labelText: '가정 이름'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: noteController,
+                          decoration: const InputDecoration(labelText: '메모'),
+                          minLines: 1,
+                          maxLines: 3,
+                        ),
+                        const SizedBox(height: 12),
+                        if (initial == null)
+                          _buildEmptyHint('가정을 먼저 생성하면 학부모 계정 연결 기능이 열립니다.')
+                        else ...[
+                          Text(
+                            '학부모 계정 연결',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'PARENT 권한을 가진 계정을 검색해 이 가정에 연결합니다.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: NestColors.deepWood.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: accountQueryController,
+                            decoration: const InputDecoration(
+                              labelText: '학부모 계정 검색',
+                              hintText: '이름, 이메일, UUID',
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                          const SizedBox(height: 8),
+                          if (parentMatches.isEmpty)
+                            _buildEmptyHint('연결 가능한 학부모 계정이 없습니다.')
+                          else
+                            Container(
+                              constraints: const BoxConstraints(maxHeight: 180),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: NestColors.roseMist),
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: parentMatches.length,
+                                itemBuilder: (context, index) {
+                                  final member = parentMatches[index];
+                                  final selected =
+                                      selectedGuardianAccount?.userId ==
+                                      member.userId;
+                                  return ListTile(
+                                    dense: true,
+                                    leading: Icon(
+                                      selected
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_unchecked,
+                                      size: 18,
+                                    ),
+                                    title: Text(
+                                      member.fullName.trim().isEmpty
+                                          ? member.email
+                                          : member.fullName,
+                                    ),
+                                    subtitle: Text(
+                                      member.email.isEmpty
+                                          ? member.userId
+                                          : member.email,
+                                    ),
+                                    onTap: isSaving
+                                        ? null
+                                        : () {
+                                            setDialogState(() {
+                                              selectedGuardianAccount = member;
+                                            });
+                                          },
+                                  );
+                                },
+                              ),
+                            ),
+                          const SizedBox(height: 8),
+                          if (selectedGuardianAccount != null)
+                            Chip(
+                              avatar: const Icon(
+                                Icons.person_outline,
+                                size: 16,
+                              ),
+                              label: Text(
+                                selectedGuardianAccount!.displayLabel,
+                              ),
+                              onDeleted: isSaving
+                                  ? null
+                                  : () {
+                                      setDialogState(() {
+                                        selectedGuardianAccount = null;
+                                      });
+                                    },
+                            ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: guardianType,
+                                  decoration: const InputDecoration(
+                                    labelText: '보호자 유형',
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'FATHER',
+                                      child: Text('아버지'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'MOTHER',
+                                      child: Text('어머니'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'GUARDIAN',
+                                      child: Text('보호자'),
+                                    ),
+                                  ],
+                                  onChanged: isSaving
+                                      ? null
+                                      : (value) {
+                                          if (value == null) {
+                                            return;
+                                          }
+                                          setDialogState(() {
+                                            guardianType = value;
+                                          });
+                                        },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: isSaving ? null : connectGuardian,
+                                icon: const Icon(Icons.link),
+                                label: const Text('연결'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            '연결된 학부모',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          if (linkedGuardianUserIds.isEmpty)
+                            _buildEmptyHint('연결된 학부모 계정이 없습니다.')
+                          else
+                            ...linkedGuardianUserIds.map((userId) {
+                              final entry = _directoryEntryForUserId(userId);
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: NestColors.roseMist,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.family_restroom_outlined,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              entry.fullName.trim().isEmpty
+                                                  ? entry.email
+                                                  : entry.fullName,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleSmall,
+                                            ),
+                                            Text(
+                                              entry.email.isEmpty
+                                                  ? entry.userId
+                                                  : entry.email,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      FilledButton.tonalIcon(
+                                        onPressed: isSaving
+                                            ? null
+                                            : () => disconnectGuardian(userId),
+                                        icon: const Icon(Icons.link_off),
+                                        label: const Text('연결 해제'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
                 actions: [
@@ -653,6 +970,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     } finally {
       nameController.dispose();
       noteController.dispose();
+      accountQueryController.dispose();
     }
   }
 

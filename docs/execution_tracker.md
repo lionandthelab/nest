@@ -70,6 +70,7 @@ Last updated: 2026-03-08
 | 2026-03-08 | 반 탭 UX 통합: 학기 설정 헤더의 반 목록 제거, 반 관리를 카드형 목록으로 일원화, 반 생성/수정 모달에서 아이 복수 선택 배정(저장 시 배정 동기화) 지원 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 과목 탭 UX 통합: 과목 카드 목록 + 생성/수정/삭제 통합 모달 도입, `updateCourse` API 추가, `courses_delete_admin_staff` RLS 정책 마이그레이션 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 시간표/교실 관리 개편: 시간표 탭 AI 배정 UI 제거, 시간표/교실 상황표 내보내기 fit-to-width+패딩 개선, 내보내기 시 미배정 셀 빈칸 처리, 학기 설정 `교실 관리`(카드 CRUD) 및 시간표 교실 팔레트 연동, `classrooms` 스키마/RLS 마이그레이션 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
+| 2026-03-08 | 가정-학부모 계정 연동 관리 보강: 가정 수정 모달에 학부모 검색 연결 + `연결 해제` 버튼 추가, `family_guardians` upsert/delete API 구현, guardian delete RLS 정책 추가, 시간표/교실 상황표 내보내기 우측 잘림(마지막 카드) 레이아웃 계산 보정 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 
 ## Next Batch
 

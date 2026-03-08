@@ -2342,6 +2342,85 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> upsertFamilyGuardian({
+    required String familyId,
+    required String userId,
+    required String guardianType,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedFamilyId = _normalizeNullable(familyId);
+    final normalizedUserId = _normalizeNullable(userId);
+    if (normalizedFamilyId == null) {
+      throw StateError('대상 가정을 선택하세요.');
+    }
+    if (normalizedUserId == null) {
+      throw StateError('연결할 사용자 계정을 선택하세요.');
+    }
+
+    final normalizedType = guardianType.trim().toUpperCase();
+    if (!const {'FATHER', 'MOTHER', 'GUARDIAN'}.contains(normalizedType)) {
+      throw StateError('보호자 유형이 올바르지 않습니다.');
+    }
+
+    final hasParentRole = homeschoolMemberships.any(
+      (row) =>
+          row.userId == normalizedUserId &&
+          row.role == 'PARENT' &&
+          row.status == 'ACTIVE',
+    );
+    if (!hasParentRole) {
+      throw StateError('해당 계정은 아직 PARENT 권한이 없습니다. 먼저 권한을 부여하세요.');
+    }
+
+    await _runBusy('가정에 학부모 계정을 연결하는 중...', () async {
+      await _repository.upsertFamilyGuardian(
+        familyId: normalizedFamilyId,
+        userId: normalizedUserId,
+        guardianType: normalizedType,
+      );
+      await loadFamilyGuardians();
+      await _logAudit(
+        actionType: 'FAMILY_GUARDIAN_UPSERT',
+        resourceType: 'family_guardians',
+        resourceId: '$normalizedFamilyId:$normalizedUserId',
+        afterJson: {'guardian_type': normalizedType},
+      );
+      _setStatus('가정과 학부모 계정을 연결했습니다.');
+    });
+  }
+
+  Future<void> deleteFamilyGuardian({
+    required String familyId,
+    required String userId,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedFamilyId = _normalizeNullable(familyId);
+    final normalizedUserId = _normalizeNullable(userId);
+    if (normalizedFamilyId == null || normalizedUserId == null) {
+      throw StateError('해제할 가정/사용자 정보가 올바르지 않습니다.');
+    }
+
+    await _runBusy('가정 연결을 해제하는 중...', () async {
+      await _repository.deleteFamilyGuardian(
+        familyId: normalizedFamilyId,
+        userId: normalizedUserId,
+      );
+      await loadFamilyGuardians();
+      await _logAudit(
+        actionType: 'FAMILY_GUARDIAN_DELETE',
+        resourceType: 'family_guardians',
+        resourceId: '$normalizedFamilyId:$normalizedUserId',
+      );
+      _setStatus('가정과 학부모 계정 연결을 해제했습니다.');
+    });
+  }
+
   Future<ChildProfile> createChild({
     required String familyId,
     required String name,

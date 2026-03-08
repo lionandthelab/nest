@@ -322,24 +322,28 @@ class _TimetableTabState extends State<TimetableTab> {
           content: SizedBox(
             width: 1280,
             child: SingleChildScrollView(
-              child: sortedSlots.isEmpty || dayOrder.isEmpty || maxPeriods == 0
-                  ? Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: NestColors.creamyWhite,
-                        border: Border.all(color: NestColors.roseMist),
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child:
+                    sortedSlots.isEmpty || dayOrder.isEmpty || maxPeriods == 0
+                    ? Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: NestColors.creamyWhite,
+                          border: Border.all(color: NestColors.roseMist),
+                        ),
+                        child: const Text('내보낼 시간표 데이터가 없습니다.'),
+                      )
+                    : _buildEditableGrid(
+                        controller: controller,
+                        dayOrder: dayOrder,
+                        slotsByDay: slotsByDay,
+                        maxPeriods: maxPeriods,
+                        forExport: true,
+                        repaintKey: _timetableExportRepaintKey,
                       ),
-                      child: const Text('내보낼 시간표 데이터가 없습니다.'),
-                    )
-                  : _buildEditableGrid(
-                      controller: controller,
-                      dayOrder: dayOrder,
-                      slotsByDay: slotsByDay,
-                      maxPeriods: maxPeriods,
-                      forExport: true,
-                      repaintKey: _timetableExportRepaintKey,
-                    ),
+              ),
             ),
           ),
           actions: [
@@ -369,13 +373,16 @@ class _TimetableTabState extends State<TimetableTab> {
           content: SizedBox(
             width: 1280,
             child: SingleChildScrollView(
-              child: RepaintBoundary(
-                key: _roomUtilizationRepaintKey,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildRoomUtilizationBoard(
-                    controller: controller,
-                    forExport: true,
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child: RepaintBoundary(
+                  key: _roomUtilizationRepaintKey,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _buildRoomUtilizationBoard(
+                      controller: controller,
+                      forExport: true,
+                    ),
                   ),
                 ),
               ),
@@ -467,7 +474,7 @@ class _TimetableTabState extends State<TimetableTab> {
         periodWidth +
         (dayOrder.length * dayWidth) +
         (dayOrder.length + 1) * gap;
-    final renderWidth = forExport ? boardWidth : null;
+    final renderWidth = forExport ? boardWidth + 12 : null;
 
     return Container(
       width: renderWidth,
@@ -880,7 +887,7 @@ class _TimetableTabState extends State<TimetableTab> {
       builder: (context, constraints) {
         const gap = 6.0;
         final periodWidth = forExport ? 102.0 : 108.0;
-        final minDayColumnWidth = forExport ? 96.0 : 188.0;
+        final minDayColumnWidth = forExport ? 72.0 : 188.0;
         final maxDayColumnWidth = forExport ? 240.0 : 320.0;
         final slotMinHeight = forExport ? 132.0 : 156.0;
 
@@ -903,9 +910,12 @@ class _TimetableTabState extends State<TimetableTab> {
             (dayOrder.length * dynamicDayWidth) +
             (dayOrder.length + 1) * gap;
         final shouldScroll = !forExport && gridWidth > availableWidth;
+        final renderWidth = forExport
+            ? gridWidth + 12
+            : (shouldScroll ? gridWidth : availableWidth);
 
         Widget grid = Container(
-          width: shouldScroll ? gridWidth : availableWidth,
+          width: renderWidth,
           padding: EdgeInsets.all(forExport ? 16 : 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),

@@ -324,6 +324,29 @@ class NestRepository {
     return grouped;
   }
 
+  Future<void> upsertFamilyGuardian({
+    required String familyId,
+    required String userId,
+    required String guardianType,
+  }) {
+    return client.from('family_guardians').upsert({
+      'family_id': familyId,
+      'user_id': userId,
+      'guardian_type': guardianType,
+    }, onConflict: 'family_id,user_id');
+  }
+
+  Future<void> deleteFamilyGuardian({
+    required String familyId,
+    required String userId,
+  }) {
+    return client
+        .from('family_guardians')
+        .delete()
+        .eq('family_id', familyId)
+        .eq('user_id', userId);
+  }
+
   Future<ChildProfile> createChild({
     required String familyId,
     required String name,

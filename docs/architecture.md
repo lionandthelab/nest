@@ -97,6 +97,7 @@ supabase/
     20260308201000_family_child_delete_policies.sql
     20260308223000_courses_delete_policy.sql
     20260308233000_classrooms.sql
+    20260308235500_family_guardians_delete_policy.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -186,6 +187,7 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `fetchFamilies`, `createFamily`
   - `createCourse`, `updateCourse`, `deleteCourse`
   - `fetchClassrooms`, `createClassroom`, `updateClassroom`, `deleteClassroom`
+  - `upsertFamilyGuardian`, `deleteFamilyGuardian`
   - `fetchFamilyGuardianUserIds`
   - `fetchChildren`, `createChild` (`create_child_admin` RPC)
   - `createClassGroup`, `updateClassGroup`, `deleteClassGroup`
@@ -366,7 +368,8 @@ Admin dashboard onboarding:
 - `family_admin_tab.dart`:
   - term setup workspace with unit-level sections:
     - family (family card management + child card management with unified edit dialogs)
-    - family/child edit dialogs include delete actions with confirmation guardrails
+      - family edit dialog includes parent-account link/unlink controls (`family_guardians`)
+      - family/child edit dialogs include delete actions with confirmation guardrails
     - teacher (teacher profile edit + account link/unlink + unavailability in one modal)
     - class (class cards + unified class create/edit modal)
     - class modal supports:
@@ -501,6 +504,11 @@ Migration `20260308233000_classrooms.sql`:
 - adds `classrooms` table (`term_id`, `name`, `capacity`, `note`)
 - adds `classrooms_*` RLS policies for member read and admin/staff CRUD
 - enables term-level classroom resource management linked to timetable location assignment
+
+Migration `20260308235500_family_guardians_delete_policy.sql`:
+
+- adds `family_guardians_delete_admin_staff` RLS policy
+- enables guardian unlink (`family_guardians` delete) from family management UI
 
 ## 8. Environment Variables
 

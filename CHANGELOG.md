@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.0.15+16 (2026-03-08)
+
+### Changed
+
+- 가정-학부모 연동 UX 강화 (`family_admin_tab.dart`)
+  - `가정 수정` 모달에 학부모 계정 검색/선택/연결 UI 추가
+  - 연결된 학부모 목록에 `연결 해제` 버튼 추가
+  - 보호자 유형(`FATHER`/`MOTHER`/`GUARDIAN`) 지정 지원
+- 가정-학부모 연동 API 추가
+  - `nest_repository.dart`: `upsertFamilyGuardian`, `deleteFamilyGuardian`
+  - `nest_controller.dart`: `upsertFamilyGuardian`, `deleteFamilyGuardian`
+  - 감사 로그 이벤트 추가: `FAMILY_GUARDIAN_UPSERT`, `FAMILY_GUARDIAN_DELETE`
+- 시간표/교실 상황표 이미지 내보내기 레이아웃 보정 (`timetable_tab.dart`)
+  - 내보내기 미리보기 다이얼로그를 가로+세로 스크롤 구조로 변경
+  - export 전용 보드 너비 계산 보정으로 우측 마지막 카드 잘림/삐져나옴 완화
+  - 우측 패딩 확보를 위해 export 캔버스 너비 여유 추가
+- Supabase RLS 보강
+  - `supabase/migrations/20260308235500_family_guardians_delete_policy.sql`
+  - 정책 추가: `family_guardians_delete_admin_staff`
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과
+
 ## 1.0.14+15 (2026-03-08)
 
 ### Changed
