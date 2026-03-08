@@ -25,9 +25,8 @@ class TimetableTab extends StatefulWidget {
 }
 
 class _TimetableTabState extends State<TimetableTab> {
-  final _aiPromptController = TextEditingController();
-  final _roomInputController = TextEditingController();
   final _timetableRepaintKey = GlobalKey();
+  final _timetableExportRepaintKey = GlobalKey();
   final _roomUtilizationRepaintKey = GlobalKey();
 
   String? _draftClassGroupId;
@@ -42,8 +41,6 @@ class _TimetableTabState extends State<TimetableTab> {
 
   @override
   void dispose() {
-    _aiPromptController.dispose();
-    _roomInputController.dispose();
     widget.onDirtyChanged?.call(false);
     super.dispose();
   }
@@ -119,9 +116,11 @@ class _TimetableTabState extends State<TimetableTab> {
                   ),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: controller.isBusy ? null : _exportTimetableImage,
+                  onPressed: controller.isBusy
+                      ? null
+                      : _openTimetableExportDialog,
                   icon: const Icon(Icons.image_outlined),
-                  label: const Text('이미지 내보내기'),
+                  label: const Text('시간표 내보내기'),
                 ),
               ],
             ),
@@ -221,7 +220,7 @@ class _TimetableTabState extends State<TimetableTab> {
                       ? null
                       : () => _openRoomUtilizationExportDialog(controller),
                   icon: const Icon(Icons.meeting_room_outlined),
-                  label: const Text('장소 상황표 내보내기'),
+                  label: const Text('교실 상황표 내보내기'),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
@@ -240,8 +239,6 @@ class _TimetableTabState extends State<TimetableTab> {
               const LinearProgressIndicator(minHeight: 3),
             ],
             const SizedBox(height: 6),
-            _buildAiChatInput(controller),
-            const SizedBox(height: 10),
             if (sortedSlots.isEmpty)
               const Text('시간 슬롯이 없습니다. Dashboard에서 초기 세팅을 먼저 진행하세요.')
             else if (dayOrder.isEmpty || maxPeriods == 0)
@@ -294,67 +291,70 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
-  Widget _buildAiChatInput(NestController controller) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: NestColors.creamyWhite,
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'AI 배정 도움말',
-            visualDensity: VisualDensity.compact,
-            onPressed: _showAiHelpDialog,
-            icon: const Icon(Icons.help_outline, size: 18),
-          ),
-          Expanded(
-            child: TextField(
-              controller: _aiPromptController,
-              minLines: 1,
-              maxLines: 1,
-              textInputAction: TextInputAction.send,
-              onSubmitted: controller.isBusy || _isApplyingDraft
-                  ? null
-                  : (_) => _runAiAssignment(),
-              decoration: const InputDecoration(
-                labelText: 'AI 배정',
-                hintText: '예: 월수금은 국어/수학, 화목은 과학/미술 중심으로 배치',
-              ),
+  Future<void> _openTimetableExportDialog() async {
+    final controller = widget.controller;
+    final sortedSlots = controller.timeSlots.toList(growable: false)
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) {
+          return day;
+        }
+        return a.startTime.compareTo(b.startTime);
+      });
+    final slotsByDay = <int, List<TimeSlot>>{};
+    for (final slot in sortedSlots) {
+      slotsByDay.putIfAbsent(slot.dayOfWeek, () => <TimeSlot>[]);
+      slotsByDay[slot.dayOfWeek]!.add(slot);
+    }
+    final dayOrder = slotsByDay.keys.toList(growable: false)..sort();
+    var maxPeriods = 0;
+    for (final slots in slotsByDay.values) {
+      if (slots.length > maxPeriods) {
+        maxPeriods = slots.length;
+      }
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('시간표 이미지 내보내기'),
+          content: SizedBox(
+            width: 1280,
+            child: SingleChildScrollView(
+              child: sortedSlots.isEmpty || dayOrder.isEmpty || maxPeriods == 0
+                  ? Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: NestColors.creamyWhite,
+                        border: Border.all(color: NestColors.roseMist),
+                      ),
+                      child: const Text('내보낼 시간표 데이터가 없습니다.'),
+                    )
+                  : _buildEditableGrid(
+                      controller: controller,
+                      dayOrder: dayOrder,
+                      slotsByDay: slotsByDay,
+                      maxPeriods: maxPeriods,
+                      forExport: true,
+                      repaintKey: _timetableExportRepaintKey,
+                    ),
             ),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'AI 배정 실행',
-            onPressed: controller.isBusy || _isApplyingDraft
-                ? null
-                : _runAiAssignment,
-            icon: const Icon(Icons.send_rounded),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAiHelpDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('AI 배정 도움말'),
-        content: const Text(
-          '한 줄로 원하는 시간표 방향을 적어주세요.\n'
-          '예) "월수금 오전은 수학/국어, 화목 오후는 탐구/미술 중심"\n'
-          '생성된 결과는 먼저 로컬 초안으로 반영되며, 우측 상단의 "수정 확정"을 눌러 저장됩니다.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('닫기'),
+            ),
+            ElevatedButton.icon(
+              onPressed: sortedSlots.isEmpty ? null : _exportTimetableImage,
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('PNG 저장'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -365,15 +365,18 @@ class _TimetableTabState extends State<TimetableTab> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('장소 배정 상황표'),
+          title: const Text('교실 배정 상황표'),
           content: SizedBox(
-            width: 1100,
+            width: 1280,
             child: SingleChildScrollView(
               child: RepaintBoundary(
                 key: _roomUtilizationRepaintKey,
-                child: _buildRoomUtilizationBoard(
-                  controller: controller,
-                  forExport: true,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildRoomUtilizationBoard(
+                    controller: controller,
+                    forExport: true,
+                  ),
                 ),
               ),
             ),
@@ -451,14 +454,24 @@ class _TimetableTabState extends State<TimetableTab> {
       });
     }
 
-    const periodWidth = 118.0;
-    final dayWidth = forExport ? 265.0 : 245.0;
-    final minWidth =
-        periodWidth + (dayOrder.length * dayWidth) + (dayOrder.length + 1) * 6;
+    const periodWidth = 112.0;
+    const gap = 6.0;
+    const targetExportWidth = 1260.0;
+    final baseDayWidth = dayOrder.isEmpty
+        ? 210.0
+        : ((targetExportWidth - periodWidth - (dayOrder.length + 1) * gap) /
+                  dayOrder.length)
+              .clamp(145.0, 220.0);
+    final dayWidth = forExport ? baseDayWidth : 220.0;
+    final boardWidth =
+        periodWidth +
+        (dayOrder.length * dayWidth) +
+        (dayOrder.length + 1) * gap;
+    final renderWidth = forExport ? boardWidth : null;
 
     return Container(
-      width: forExport ? minWidth : null,
-      padding: const EdgeInsets.all(10),
+      width: renderWidth,
+      padding: EdgeInsets.all(forExport ? 18 : 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: Colors.white,
@@ -468,7 +481,7 @@ class _TimetableTabState extends State<TimetableTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '요일/교시별 장소 배정 상황표 (전체 반)',
+            '요일/교시별 교실 배정 상황표 (전체 반)',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
@@ -547,10 +560,14 @@ class _TimetableTabState extends State<TimetableTab> {
                         border: Border.all(color: NestColors.roseMist),
                       ),
                       child: sessions.isEmpty
-                          ? Text(
-                              '배정 없음',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            )
+                          ? (forExport
+                                ? const SizedBox(height: 8)
+                                : Text(
+                                    '배정 없음',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ))
                           : Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: sessions
@@ -564,7 +581,7 @@ class _TimetableTabState extends State<TimetableTab> {
                                     final location = (session.location ?? '')
                                         .trim();
                                     final locationLabel = location.isEmpty
-                                        ? '미지정'
+                                        ? '교실 미지정'
                                         : location;
                                     return Container(
                                       width: double.infinity,
@@ -613,7 +630,7 @@ class _TimetableTabState extends State<TimetableTab> {
           const SizedBox(height: 14),
           _buildTeacherPalette(controller),
           const SizedBox(height: 14),
-          _buildRoomPalette(),
+          _buildRoomPalette(controller),
         ],
       ),
     );
@@ -721,7 +738,7 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
-  Widget _buildRoomPalette() {
+  Widget _buildRoomPalette(NestController controller) {
     final rooms = _roomPalette.toList(growable: false)..sort();
 
     return Column(
@@ -730,31 +747,12 @@ class _TimetableTabState extends State<TimetableTab> {
         Text('교실 팔레트', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          '교실을 슬롯/수업 카드로 드래그해 장소를 지정합니다.',
+          '학기 설정 > 교실 관리에서 등록된 교실을 슬롯/수업 카드로 드래그해 배정합니다.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _roomInputController,
-                decoration: const InputDecoration(
-                  labelText: '장소 이름',
-                  hintText: '예: 교실A, 음악실',
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonal(
-              onPressed: _addRoomToPalette,
-              child: const Text('추가'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
         if (rooms.isEmpty)
-          const Text('등록된 장소가 없습니다.')
+          const Text('등록된 교실이 없습니다. 학기 설정 > 교실 관리에서 먼저 추가하세요.')
         else
           Wrap(
             spacing: 8,
@@ -775,15 +773,20 @@ class _TimetableTabState extends State<TimetableTab> {
                       opacity: 0.35,
                       child: _PaletteChip(label: room, tone: _PaletteTone.room),
                     ),
-                    child: _PaletteChip(
-                      label: room,
-                      tone: _PaletteTone.room,
-                      onDelete: () => _removeRoomFromPalette(room),
-                    ),
+                    child: _PaletteChip(label: room, tone: _PaletteTone.room),
                   ),
                 )
                 .toList(growable: false),
           ),
+        if (controller.classrooms.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            '연동 교실 ${controller.classrooms.length}개',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -835,13 +838,16 @@ class _TimetableTabState extends State<TimetableTab> {
     required List<int> dayOrder,
     required Map<int, List<TimeSlot>> slotsByDay,
     required int maxPeriods,
+    bool forExport = false,
+    GlobalKey? repaintKey,
   }) {
     return RepaintBoundary(
-      key: _timetableRepaintKey,
+      key: repaintKey ?? _timetableRepaintKey,
       child: _buildGridScaffold(
         dayOrder: dayOrder,
         slotsByDay: slotsByDay,
         maxPeriods: maxPeriods,
+        forExport: forExport,
         slotCellBuilder: (slot) {
           final slotSessions = _draftSessionsForSlot(slot.id);
           return _EditableSlotCell(
@@ -856,6 +862,7 @@ class _TimetableTabState extends State<TimetableTab> {
             onDropPayload: (payload) => _handleDropOnSlot(slot.id, payload),
             onTapSession: _openSessionSettingDialog,
             onDeleteSession: _deleteDraftSession,
+            forExport: forExport,
           );
         },
       ),
@@ -867,13 +874,15 @@ class _TimetableTabState extends State<TimetableTab> {
     required Map<int, List<TimeSlot>> slotsByDay,
     required int maxPeriods,
     required Widget Function(TimeSlot slot) slotCellBuilder,
+    bool forExport = false,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         const gap = 6.0;
-        const periodWidth = 108.0;
-        const minDayColumnWidth = 188.0;
-        const maxDayColumnWidth = 320.0;
+        final periodWidth = forExport ? 102.0 : 108.0;
+        final minDayColumnWidth = forExport ? 96.0 : 188.0;
+        final maxDayColumnWidth = forExport ? 240.0 : 320.0;
+        final slotMinHeight = forExport ? 132.0 : 156.0;
 
         final availableWidth = constraints.maxWidth;
         final usable =
@@ -893,11 +902,11 @@ class _TimetableTabState extends State<TimetableTab> {
             periodWidth +
             (dayOrder.length * dynamicDayWidth) +
             (dayOrder.length + 1) * gap;
-        final shouldScroll = gridWidth > availableWidth;
+        final shouldScroll = !forExport && gridWidth > availableWidth;
 
         Widget grid = Container(
           width: shouldScroll ? gridWidth : availableWidth,
-          padding: const EdgeInsets.all(10),
+          padding: EdgeInsets.all(forExport ? 16 : 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             color: Colors.white,
@@ -943,7 +952,7 @@ class _TimetableTabState extends State<TimetableTab> {
                     children: [
                       Container(
                         width: periodWidth,
-                        constraints: const BoxConstraints(minHeight: 156),
+                        constraints: BoxConstraints(minHeight: slotMinHeight),
                         margin: const EdgeInsets.only(right: 6),
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
@@ -974,7 +983,9 @@ class _TimetableTabState extends State<TimetableTab> {
                         if (slot == null) {
                           return Container(
                             width: dynamicDayWidth,
-                            constraints: const BoxConstraints(minHeight: 156),
+                            constraints: BoxConstraints(
+                              minHeight: slotMinHeight,
+                            ),
                             margin: const EdgeInsets.only(right: 6),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
@@ -992,7 +1003,7 @@ class _TimetableTabState extends State<TimetableTab> {
 
                         return Container(
                           width: dynamicDayWidth,
-                          constraints: const BoxConstraints(minHeight: 156),
+                          constraints: BoxConstraints(minHeight: slotMinHeight),
                           margin: const EdgeInsets.only(right: 6),
                           child: slotCellBuilder(slot),
                         );
@@ -1067,102 +1078,6 @@ class _TimetableTabState extends State<TimetableTab> {
     }
 
     await _safeCall(() => controller.changeClassGroup(classGroupId));
-  }
-
-  Future<void> _runAiAssignment() async {
-    final controller = widget.controller;
-    final classGroupId = controller.selectedClassGroupId;
-    if (classGroupId == null || classGroupId.isEmpty) {
-      _showMessage('반을 먼저 선택하세요.');
-      return;
-    }
-
-    final prompt = _aiPromptController.text.trim();
-    if (prompt.isEmpty) {
-      _showMessage('AI 배정 문장을 입력하세요.');
-      return;
-    }
-
-    final courseWeights = {
-      for (final course in controller.courses) course.id: 1,
-    };
-
-    await _safeCall(() {
-      return controller.generateScheduleOptions(
-        prompt: prompt,
-        preferredDays: const {1, 2, 3, 4, 5},
-        sessionsPerDay: 2,
-        courseWeightsById: courseWeights,
-        preferredTeacherIds: const {},
-        teacherStrategy: 'BALANCED',
-        preferOnlySelectedTeachers: false,
-        optionCount: 1,
-        keepExistingSessions: false,
-      );
-    });
-
-    final draft = controller.scheduleOptionDrafts.firstOrNull;
-    if (draft == null) {
-      _showMessage('AI 배정 초안을 만들지 못했습니다.');
-      return;
-    }
-
-    final sessions =
-        draft.sessions
-            .where((row) => row.classGroupId == classGroupId)
-            .toList(growable: false)
-          ..sort((a, b) {
-            final left = controller.findTimeSlot(a.timeSlotId);
-            final right = controller.findTimeSlot(b.timeSlotId);
-            if (left == null || right == null) {
-              return a.timeSlotId.compareTo(b.timeSlotId);
-            }
-            final day = left.dayOfWeek.compareTo(right.dayOfWeek);
-            if (day != 0) {
-              return day;
-            }
-            return left.startTime.compareTo(right.startTime);
-          });
-
-    if (sessions.isEmpty) {
-      _showMessage('현재 반 기준으로 생성된 세션이 없습니다.');
-      return;
-    }
-
-    final nextSessions = <_EditableSession>[];
-    final nextAssignments = <String, List<_EditableAssignment>>{};
-
-    for (var index = 0; index < sessions.length; index += 1) {
-      final row = sessions[index];
-      final tempId = 'tmp-ai-${DateTime.now().microsecondsSinceEpoch}-$index';
-      nextSessions.add(
-        _EditableSession(
-          id: tempId,
-          courseId: row.courseId,
-          timeSlotId: row.timeSlotId,
-          title: '${controller.findCourseName(row.courseId)} 수업',
-          location: null,
-          isNew: true,
-        ),
-      );
-
-      final teacherId = row.teacherMainId;
-      if (teacherId != null && teacherId.isNotEmpty) {
-        nextAssignments[tempId] = [
-          _EditableAssignment(
-            teacherProfileId: teacherId,
-            assignmentRole: 'MAIN',
-          ),
-        ];
-      }
-    }
-
-    setState(() {
-      _draftSessions = nextSessions;
-      _draftAssignments = nextAssignments;
-      _ensureRoomPaletteFromDraft();
-      _setDirty(true);
-    });
   }
 
   Future<void> _commitDraftChanges() async {
@@ -1424,7 +1339,7 @@ class _TimetableTabState extends State<TimetableTab> {
 
     final session = slotSessions.length == 1
         ? slotSessions.first
-        : await _pickSessionForSlot(slotSessions, '장소를 지정할 수업 선택');
+        : await _pickSessionForSlot(slotSessions, '교실을 지정할 수업 선택');
 
     if (session == null) {
       return;
@@ -1478,9 +1393,9 @@ class _TimetableTabState extends State<TimetableTab> {
       return;
     }
 
-    final locationController = TextEditingController(
-      text: session.location ?? '',
-    );
+    String? selectedClassroom = (session.location ?? '').trim().isEmpty
+        ? null
+        : (session.location ?? '').trim();
     String? mainTeacherId = (_draftAssignments[sessionId] ?? const [])
         .where((row) => row.assignmentRole == 'MAIN')
         .map((row) => row.teacherProfileId)
@@ -1495,6 +1410,14 @@ class _TimetableTabState extends State<TimetableTab> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setLocalState) {
+            final roomOptions = _roomPalette.toList(growable: false)..sort();
+            if (selectedClassroom != null &&
+                selectedClassroom!.isNotEmpty &&
+                !roomOptions.contains(selectedClassroom)) {
+              roomOptions.add(selectedClassroom!);
+              roomOptions.sort();
+            }
+
             return AlertDialog(
               title: const Text('수업 설정'),
               content: SizedBox(
@@ -1572,25 +1495,39 @@ class _TimetableTabState extends State<TimetableTab> {
                               .toList(growable: false),
                         ),
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: locationController,
-                        decoration: const InputDecoration(
-                          labelText: '장소(교실)',
-                          hintText: '예: 교실A',
-                        ),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedClassroom,
+                        decoration: const InputDecoration(labelText: '교실'),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('미지정'),
+                          ),
+                          ...roomOptions.map(
+                            (room) => DropdownMenuItem<String>(
+                              value: room,
+                              child: Text(room),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setLocalState(() {
+                            selectedClassroom = value;
+                          });
+                        },
                       ),
                       const SizedBox(height: 8),
-                      if (_roomPalette.isNotEmpty)
+                      if (roomOptions.isNotEmpty)
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: _roomPalette
+                          children: roomOptions
                               .map(
                                 (room) => ActionChip(
                                   label: Text(room),
                                   onPressed: () {
                                     setLocalState(() {
-                                      locationController.text = room;
+                                      selectedClassroom = room;
                                     });
                                   },
                                 ),
@@ -1613,7 +1550,7 @@ class _TimetableTabState extends State<TimetableTab> {
                       mainTeacherId: mainTeacherId,
                       assistantIds: assistantIds,
                     );
-                    _setSessionLocation(sessionId, locationController.text);
+                    _setSessionLocation(sessionId, selectedClassroom ?? '');
                     Navigator.of(context).pop();
                   },
                   child: const Text('적용'),
@@ -1624,8 +1561,6 @@ class _TimetableTabState extends State<TimetableTab> {
         );
       },
     );
-
-    locationController.dispose();
   }
 
   void _replaceAssignments(
@@ -1754,28 +1689,12 @@ class _TimetableTabState extends State<TimetableTab> {
     return conflicts.toSet().toList(growable: false);
   }
 
-  void _addRoomToPalette() {
-    final name = _roomInputController.text.trim();
-    if (name.isEmpty) {
-      return;
-    }
-    setState(() {
-      _roomPalette = {..._roomPalette, name};
-      _roomInputController.clear();
-    });
-  }
-
-  void _removeRoomFromPalette(String room) {
-    setState(() {
-      _roomPalette = {..._roomPalette}..remove(room);
-    });
-  }
-
   Future<void> _exportTimetableImage() async {
     final boundary =
-        _timetableRepaintKey.currentContext?.findRenderObject()
+        _timetableExportRepaintKey.currentContext?.findRenderObject()
             as RenderRepaintBoundary?;
     if (boundary == null) {
+      _showMessage('내보낼 시간표를 먼저 열어주세요.');
       return;
     }
 
@@ -1799,7 +1718,7 @@ class _TimetableTabState extends State<TimetableTab> {
         _roomUtilizationRepaintKey.currentContext?.findRenderObject()
             as RenderRepaintBoundary?;
     if (boundary == null) {
-      _showMessage('내보낼 장소 상황표를 먼저 열어주세요.');
+      _showMessage('내보낼 교실 상황표를 먼저 열어주세요.');
       return;
     }
 
@@ -1813,7 +1732,8 @@ class _TimetableTabState extends State<TimetableTab> {
     final helper = createDownloadHelper();
     helper.downloadBytes(
       bytes: bytes,
-      filename: 'room_utilization_${DateTime.now().millisecondsSinceEpoch}.png',
+      filename:
+          'classroom_utilization_${DateTime.now().millisecondsSinceEpoch}.png',
       mimeType: 'image/png',
     );
   }
@@ -1907,8 +1827,13 @@ class _TimetableTabState extends State<TimetableTab> {
               '${row.classSessionId}/${row.teacherProfileId}/${row.assignmentRole}',
         )
         .join('|');
+    final classroomSig = controller.classrooms.toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final classroomMerged = classroomSig
+        .map((row) => '${row.id}/${row.name}/${row.capacity}/${row.note}')
+        .join('|');
 
-    return '$classId::$sessionSig::$assignmentSig';
+    return '$classId::$sessionSig::$assignmentSig::$classroomMerged';
   }
 
   void _loadDraftFromController(NestController controller) {
@@ -1969,23 +1894,18 @@ class _TimetableTabState extends State<TimetableTab> {
 
   void _ensureRoomPaletteFromController(NestController controller) {
     final rooms = <String>{};
+    for (final classroom in controller.classrooms) {
+      final name = classroom.name.trim();
+      if (name.isNotEmpty) {
+        rooms.add(name);
+      }
+    }
     for (final session in controller.allTermSessions) {
       final location = session.location?.trim();
       if (location != null && location.isNotEmpty) {
         rooms.add(location);
       }
     }
-    for (final session in _draftSessions) {
-      final location = session.location?.trim();
-      if (location != null && location.isNotEmpty) {
-        rooms.add(location);
-      }
-    }
-    _roomPalette = rooms;
-  }
-
-  void _ensureRoomPaletteFromDraft() {
-    final rooms = <String>{..._roomPalette};
     for (final session in _draftSessions) {
       final location = session.location?.trim();
       if (location != null && location.isNotEmpty) {
@@ -2044,6 +1964,7 @@ class _EditableSlotCell extends StatelessWidget {
     required this.onDropPayload,
     required this.onTapSession,
     required this.onDeleteSession,
+    required this.forExport,
   });
 
   final TimeSlot slot;
@@ -2054,6 +1975,7 @@ class _EditableSlotCell extends StatelessWidget {
   final Future<void> Function(DragPayload payload) onDropPayload;
   final void Function(String sessionId) onTapSession;
   final void Function(String sessionId) onDeleteSession;
+  final bool forExport;
 
   @override
   Widget build(BuildContext context) {
@@ -2098,10 +2020,12 @@ class _EditableSlotCell extends StatelessWidget {
                     color: NestColors.creamyWhite,
                     border: Border.all(color: NestColors.roseMist),
                   ),
-                  child: Text(
-                    '과목/교사/교실을 드래그',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  child: forExport
+                      ? const SizedBox(height: 16)
+                      : Text(
+                          '과목/교사/교실을 드래그',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                 )
               else
                 ...sessions.map((session) {
@@ -2156,9 +2080,13 @@ class _EditableSlotCell extends StatelessWidget {
                         location: session.location,
                         teacherBadges: teacherBadges,
                         conflictMessages: conflictRows,
-                        canDelete: true,
-                        onDelete: () => onDeleteSession(session.id),
-                        onTap: () => onTapSession(session.id),
+                        canDelete: !forExport,
+                        onDelete: forExport
+                            ? null
+                            : () => onDeleteSession(session.id),
+                        onTap: forExport
+                            ? null
+                            : () => onTapSession(session.id),
                       ),
                     ),
                   );
@@ -2227,7 +2155,7 @@ class _ReadOnlySlotCell extends StatelessWidget {
                       ),
                       if ((session.location ?? '').trim().isNotEmpty)
                         Text(
-                          '장소: ${session.location!.trim()}',
+                          '교실: ${session.location!.trim()}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                     ],
@@ -2429,13 +2357,11 @@ class _PaletteChip extends StatelessWidget {
     required this.label,
     required this.tone,
     this.dragging = false,
-    this.onDelete,
   });
 
   final String label;
   final _PaletteTone tone;
   final bool dragging;
-  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -2464,17 +2390,6 @@ class _PaletteChip extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          if (onDelete != null) ...[
-            const SizedBox(width: 6),
-            GestureDetector(
-              onTap: onDelete,
-              child: Icon(
-                Icons.close,
-                size: 14,
-                color: dragging ? Colors.white : NestColors.deepWood,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2547,8 +2462,4 @@ String _shortTime(String value) {
     return fallback == null ? value : DateFormat('HH:mm').format(fallback);
   }
   return DateFormat('HH:mm').format(parsed);
-}
-
-extension _FirstOrNull<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

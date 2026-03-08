@@ -68,6 +68,8 @@ Last updated: 2026-03-08
 | 2026-03-08 | 다중 역할 전환 UX 강화: 권한 탭에 관리자 본인 `부모/교사` 역할 빠른 토글 추가 + 홈 헤더 `뷰 전환` 즉시 스위처 추가(관리자/부모/교사 모드 전환) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 가정/아이 삭제 기능 추가: 가정/아이 수정 모달에 삭제+확인 다이얼로그, Repository/Controller 삭제 API(`FAMILY_DELETE`/`CHILD_DELETE`) 구현, RLS delete 정책 마이그레이션 적용(`supabase db push`) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 반 탭 UX 통합: 학기 설정 헤더의 반 목록 제거, 반 관리를 카드형 목록으로 일원화, 반 생성/수정 모달에서 아이 복수 선택 배정(저장 시 배정 동기화) 지원 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 과목 탭 UX 통합: 과목 카드 목록 + 생성/수정/삭제 통합 모달 도입, `updateCourse` API 추가, `courses_delete_admin_staff` RLS 정책 마이그레이션 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
+| 2026-03-08 | 시간표/교실 관리 개편: 시간표 탭 AI 배정 UI 제거, 시간표/교실 상황표 내보내기 fit-to-width+패딩 개선, 내보내기 시 미배정 셀 빈칸 처리, 학기 설정 `교실 관리`(카드 CRUD) 및 시간표 교실 팔레트 연동, `classrooms` 스키마/RLS 마이그레이션 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 
 ## Next Batch
 

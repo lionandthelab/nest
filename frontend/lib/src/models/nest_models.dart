@@ -713,6 +713,40 @@ class Course {
   };
 }
 
+class Classroom {
+  const Classroom({
+    required this.id,
+    required this.termId,
+    required this.name,
+    required this.capacity,
+    required this.note,
+  });
+
+  final String id;
+  final String termId;
+  final String name;
+  final int capacity;
+  final String note;
+
+  factory Classroom.fromMap(Map<String, dynamic> map) {
+    return Classroom(
+      id: map['id'] as String,
+      termId: (map['term_id'] as String?) ?? '',
+      name: (map['name'] as String?) ?? 'Unnamed Classroom',
+      capacity: (map['capacity'] as int?) ?? 20,
+      note: (map['note'] as String?) ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'term_id': termId,
+    'name': name,
+    'capacity': capacity,
+    'note': note,
+  };
+}
+
 class TimeSlot {
   const TimeSlot({
     required this.id,

@@ -58,6 +58,7 @@ class NestController extends ChangeNotifier {
   String? selectedClassGroupId;
 
   List<Course> courses = const [];
+  List<Classroom> classrooms = const [];
   List<TimeSlot> timeSlots = const [];
   List<ClassSession> sessions = const [];
   List<ClassSession> allTermSessions = const [];
@@ -856,13 +857,13 @@ class NestController extends ChangeNotifier {
       throw StateError('관리자/스태프 권한이 필요합니다.');
     }
 
-    await _runBusy('장소를 변경하는 중...', () async {
+    await _runBusy('교실을 변경하는 중...', () async {
       await _repository.updateSessionLocation(
         sessionId: sessionId,
         location: location?.trim().isEmpty == true ? null : location?.trim(),
       );
       await _loadSessions();
-      _setStatus('장소 변경 완료');
+      _setStatus('교실 변경 완료');
     });
   }
 
@@ -1123,6 +1124,7 @@ class NestController extends ChangeNotifier {
       terms = const [];
       classGroups = const [];
       courses = const [];
+      classrooms = const [];
       timeSlots = const [];
       sessions = const [];
       proposals = const [];
@@ -2013,6 +2015,55 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> updateCourse({
+    required String courseId,
+    required String name,
+    required int defaultDurationMin,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(courseId);
+    if (normalizedId == null) {
+      throw StateError('수정할 과목을 선택하세요.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('과목 이름을 입력하세요.');
+    }
+    if (courses.any(
+      (c) =>
+          c.id != normalizedId &&
+          c.name.trim().toLowerCase() == trimmedName.toLowerCase(),
+    )) {
+      throw StateError('이미 동일한 이름의 과목이 있습니다: $trimmedName');
+    }
+    if (defaultDurationMin < 20 || defaultDurationMin > 300) {
+      throw StateError('기본 수업 시간은 20~300분 사이여야 합니다.');
+    }
+
+    await _runBusy('과목 정보를 수정하는 중...', () async {
+      final updated = await _repository.updateCourse(
+        courseId: normalizedId,
+        name: trimmedName,
+        defaultDurationMin: defaultDurationMin,
+      );
+      await _loadTimetableAssets();
+      await _logAudit(
+        actionType: 'COURSE_UPDATE',
+        resourceType: 'courses',
+        resourceId: normalizedId,
+        afterJson: {
+          'name': updated.name,
+          'default_duration_min': updated.defaultDurationMin,
+        },
+      );
+      _setStatus('과목 정보를 수정했습니다.');
+    });
+  }
+
   Future<void> deleteCourse({required String courseId}) async {
     if (!isAdminLike) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
@@ -2035,6 +2086,143 @@ class NestController extends ChangeNotifier {
         resourceId: normalizedId,
       );
       _setStatus('과목을 삭제했습니다.');
+    });
+  }
+
+  Future<void> createClassroom({
+    required String name,
+    required int capacity,
+    required String note,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('교실 이름을 입력하세요.');
+    }
+    if (classrooms.any(
+      (c) => c.name.trim().toLowerCase() == trimmedName.toLowerCase(),
+    )) {
+      throw StateError('이미 동일한 이름의 교실이 있습니다: $trimmedName');
+    }
+    if (capacity < 1 || capacity > 300) {
+      throw StateError('교실 수용 인원은 1~300 사이여야 합니다.');
+    }
+
+    await _runBusy('교실을 생성하는 중...', () async {
+      final created = await _repository.createClassroom(
+        termId: termId,
+        name: trimmedName,
+        capacity: capacity,
+        note: note,
+      );
+      await _loadTimetableAssets();
+      await _logAudit(
+        actionType: 'CLASSROOM_CREATE',
+        resourceType: 'classrooms',
+        resourceId: created.id,
+        afterJson: {
+          'name': created.name,
+          'capacity': created.capacity,
+          'note': created.note,
+        },
+      );
+      _setStatus('교실을 생성했습니다.');
+    });
+  }
+
+  Future<void> updateClassroom({
+    required String classroomId,
+    required String name,
+    required int capacity,
+    required String note,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(classroomId);
+    if (normalizedId == null) {
+      throw StateError('수정할 교실을 선택하세요.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw StateError('교실 이름을 입력하세요.');
+    }
+    if (classrooms.any(
+      (c) =>
+          c.id != normalizedId &&
+          c.name.trim().toLowerCase() == trimmedName.toLowerCase(),
+    )) {
+      throw StateError('이미 동일한 이름의 교실이 있습니다: $trimmedName');
+    }
+    if (capacity < 1 || capacity > 300) {
+      throw StateError('교실 수용 인원은 1~300 사이여야 합니다.');
+    }
+
+    await _runBusy('교실 정보를 수정하는 중...', () async {
+      final updated = await _repository.updateClassroom(
+        classroomId: normalizedId,
+        name: trimmedName,
+        capacity: capacity,
+        note: note,
+      );
+      await _loadTimetableAssets();
+      await _logAudit(
+        actionType: 'CLASSROOM_UPDATE',
+        resourceType: 'classrooms',
+        resourceId: normalizedId,
+        afterJson: {
+          'name': updated.name,
+          'capacity': updated.capacity,
+          'note': updated.note,
+        },
+      );
+      _setStatus('교실 정보를 수정했습니다.');
+    });
+  }
+
+  Future<void> deleteClassroom({required String classroomId}) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedId = _normalizeNullable(classroomId);
+    if (normalizedId == null) {
+      throw StateError('삭제할 교실을 선택하세요.');
+    }
+
+    final target = classrooms
+        .where((room) => room.id == normalizedId)
+        .toList(growable: false)
+        .firstOrNull;
+    if (target != null) {
+      final roomName = target.name.trim();
+      if (roomName.isNotEmpty &&
+          allTermSessions.any(
+            (session) => (session.location ?? '').trim() == roomName,
+          )) {
+        throw StateError('현재 시간표에서 사용 중인 교실은 삭제할 수 없습니다.');
+      }
+    }
+
+    await _runBusy('교실을 삭제하는 중...', () async {
+      await _repository.deleteClassroom(classroomId: normalizedId);
+      await _loadTimetableAssets();
+      await _logAudit(
+        actionType: 'CLASSROOM_DELETE',
+        resourceType: 'classrooms',
+        resourceId: normalizedId,
+      );
+      _setStatus('교실을 삭제했습니다.');
     });
   }
 
@@ -3326,7 +3514,7 @@ class NestController extends ChangeNotifier {
       }
     }
 
-    // Location conflicts: same time slot + same location across all class groups
+    // Classroom conflicts: same time slot + same classroom across all class groups
     final locationBySlot = <String, List<ClassSession>>{};
     for (final session in allTermSessions) {
       final loc = session.location;
@@ -3345,7 +3533,7 @@ class NestController extends ChangeNotifier {
       final names = entry.value
           .map((s) => findCourseName(s.courseId))
           .join(', ');
-      issues.add('장소 충돌: $loc ($slotLabel) - $names');
+      issues.add('교실 충돌: $loc ($slotLabel) - $names');
     }
 
     return issues.toList(growable: false);
@@ -3476,11 +3664,13 @@ class NestController extends ChangeNotifier {
 
     if (homeschoolId == null || termId == null) {
       courses = const [];
+      classrooms = const [];
       timeSlots = const [];
       return;
     }
 
     courses = await _repository.fetchCourses(homeschoolId: homeschoolId);
+    classrooms = await _repository.fetchClassrooms(termId: termId);
     timeSlots = await _repository.fetchTimeSlots(termId: termId);
   }
 
@@ -3667,6 +3857,14 @@ class NestController extends ChangeNotifier {
           fromMap: Course.fromMap,
         ) ??
         const [];
+    classrooms =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'classrooms',
+          fromMap: Classroom.fromMap,
+        ) ??
+        const [];
     timeSlots =
         NestCache.loadCollection(
           userId: userId,
@@ -3844,6 +4042,13 @@ class NestController extends ChangeNotifier {
       NestCache.saveCollection(
         userId: userId,
         homeschoolId: homeschoolId,
+        collection: 'classrooms',
+        items: classrooms,
+        toMap: (c) => c.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId,
+        homeschoolId: homeschoolId,
         collection: 'timeSlots',
         items: timeSlots,
         toMap: (t) => t.toMap(),
@@ -3966,6 +4171,7 @@ class NestController extends ChangeNotifier {
     classGroups = const [];
     selectedClassGroupId = null;
     courses = const [];
+    classrooms = const [];
     timeSlots = const [];
     sessions = const [];
     proposals = const [];

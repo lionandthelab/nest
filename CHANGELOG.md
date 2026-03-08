@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.0.14+15 (2026-03-08)
+
+### Changed
+
+- 시간표 관리 UI 단순화 (`timetable_tab.dart`)
+  - `AI 배정` 입력/도움말/실행 UI 제거
+  - 시간표 상단 내보내기 버튼 라벨을 `시간표 내보내기`로 변경
+  - 시간표 편집 내 장소 용어를 `교실` 기준으로 통일
+- 이미지 내보내기 품질 개선 (`timetable_tab.dart`)
+  - 시간표/교실 상황표 모두 내보내기 전용 다이얼로그에서 fit-to-width 레이아웃으로 렌더링
+  - 캡처 보드 상하좌우 패딩 확보로 이미지 가장자리 잘림 완화
+  - 내보내기 이미지에서 미배정 슬롯은 안내 문구 대신 빈칸으로 렌더링
+- 교실 리소스 도메인 추가
+  - `family_admin_tab.dart`: 학기 설정 `교실` 단계 추가 + 교실 카드형 CRUD(생성/수정/삭제) 통합 모달 구현
+  - `nest_repository.dart`: `fetchClassrooms`, `createClassroom`, `updateClassroom`, `deleteClassroom`
+  - `nest_controller.dart`: `classrooms` 상태/캐시 연동 + `create/update/deleteClassroom` + 감사 로그(`CLASSROOM_*`)
+  - `timetable_tab.dart`: 교실 팔레트를 학기 설정 교실 리소스와 연동
+- Supabase 마이그레이션 추가
+  - `supabase/migrations/20260308233000_classrooms.sql`
+  - `classrooms` 테이블 + RLS 정책(`classrooms_select/insert/update/delete_admin_staff`) 추가
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과
+
+## 1.0.13+14 (2026-03-08)
+
+### Changed
+
+- 과목 관리 UX 일관화 (`family_admin_tab.dart`)
+  - 인라인 입력형 UI를 제거하고 카드형 과목 목록으로 전환
+  - `과목 추가`/카드 클릭 편집을 동일한 생성·수정 통합 모달로 일원화
+  - 과목 수정 모달에서 이름/기본 수업시간 편집 및 삭제 지원
+  - 현재 반 시간표 사용 과목은 삭제 비활성화 가이드 제공
+- 과목 수정 API 추가
+  - `nest_repository.dart`: `updateCourse`
+  - `nest_controller.dart`: `updateCourse`
+  - 감사 로그 이벤트 추가: `COURSE_UPDATE`
+- Supabase RLS 보강
+  - `supabase/migrations/20260308223000_courses_delete_policy.sql`
+  - 정책 추가: `courses_delete_admin_staff`
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과
+
 ## 1.0.12+13 (2026-03-08)
 
 ### Changed

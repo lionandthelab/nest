@@ -16,21 +16,15 @@ class FamilyAdminTab extends StatefulWidget {
 }
 
 class _FamilyAdminTabState extends State<FamilyAdminTab> {
-  final _courseNameController = TextEditingController();
-  final _courseDurationController = TextEditingController(text: '50');
-
   String? _selectedFamilyId;
   String? _selectedClassGroupId;
+  String? _selectedCourseId;
+  String? _selectedClassroomId;
   bool _familyInitialized = false;
   bool _classInitialized = false;
+  bool _courseInitialized = false;
+  bool _classroomInitialized = false;
   String _setupUnit = 'FAMILY';
-
-  @override
-  void dispose() {
-    _courseNameController.dispose();
-    _courseDurationController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +56,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       'TEACHER' => [_buildTeacherManagementCard(controller)],
       'CLASS' => [_buildClassCrudCard(controller)],
       'COURSE' => [_buildCourseManageCard(controller)],
+      'CLASSROOM' => [_buildClassroomManageCard(controller)],
       _ => [_buildFamilyManagementCard(controller)],
     };
 
@@ -82,11 +77,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         controller.classGroups.isNotEmpty &&
         controller.classEnrollments.isNotEmpty;
     final courseDone = controller.courses.isNotEmpty;
+    final classroomDone = controller.classrooms.isNotEmpty;
     final completed = [
       familyDone,
       teacherDone,
       classDone,
       courseDone,
+      classroomDone,
     ].where((done) => done).length;
 
     Widget stepChip({
@@ -124,7 +121,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             Text('학기 설정', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
-              '가정, 선생님, 반, 과목을 단위별로 설정한 뒤 시간표 탭에서 배치하세요.',
+              '가정, 선생님, 반, 과목, 교실을 단위별로 설정한 뒤 시간표 탭에서 배치하세요.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
@@ -134,14 +131,14 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
                 minHeight: 8,
-                value: completed / 4,
+                value: completed / 5,
                 color: NestColors.dustyRose,
                 backgroundColor: NestColors.roseMist,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              '완료 $completed / 4',
+              '완료 $completed / 5',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 10),
@@ -168,6 +165,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   done: courseDone,
                   key: 'COURSE',
                 ),
+                stepChip(
+                  order: 5,
+                  title: '교실',
+                  done: classroomDone,
+                  key: 'CLASSROOM',
+                ),
               ],
             ),
           ],
@@ -179,6 +182,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   void _syncSelections(NestController controller) {
     final familyIds = controller.families.map((row) => row.id).toSet();
     final classIds = controller.classGroups.map((row) => row.id).toSet();
+    final courseIds = controller.courses.map((row) => row.id).toSet();
+    final classroomIds = controller.classrooms.map((row) => row.id).toSet();
 
     if (!_familyInitialized) {
       _selectedFamilyId = controller.families.firstOrNull?.id;
@@ -199,6 +204,23 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       _selectedClassGroupId =
           controller.selectedClassGroupId ??
           controller.classGroups.firstOrNull?.id;
+    }
+
+    if (!_courseInitialized) {
+      _selectedCourseId = controller.courses.firstOrNull?.id;
+      _courseInitialized = true;
+    }
+    if (_selectedCourseId != null && !courseIds.contains(_selectedCourseId)) {
+      _selectedCourseId = controller.courses.firstOrNull?.id;
+    }
+
+    if (!_classroomInitialized) {
+      _selectedClassroomId = controller.classrooms.firstOrNull?.id;
+      _classroomInitialized = true;
+    }
+    if (_selectedClassroomId != null &&
+        !classroomIds.contains(_selectedClassroomId)) {
+      _selectedClassroomId = controller.classrooms.firstOrNull?.id;
     }
   }
 
@@ -1809,91 +1831,594 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('과목 관리', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '과목 관리',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => _openCourseEditorDialog(controller: controller),
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('과목 추가'),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(
-              '시간표 배치에 사용할 과목을 관리합니다.',
+              '과목 카드를 클릭하면 기본 수업 시간 수정과 삭제를 한 번에 처리할 수 있습니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _courseNameController,
-                    decoration: const InputDecoration(labelText: '과목 이름'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 140,
-                  child: TextField(
-                    controller: _courseDurationController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '기본 분(min)'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              onPressed: controller.isBusy ? null : _createCourse,
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('과목 추가'),
-            ),
-            const SizedBox(height: 12),
             if (courses.isEmpty)
-              const Text('등록된 과목이 없습니다.')
+              _buildEmptyHint('등록된 과목이 없습니다. 과목 추가로 시작하세요.')
             else
-              ...courses.map((course) {
-                final usedInCurrentClass = controller.sessions.any(
-                  (session) => session.courseId == course.id,
-                );
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: NestColors.roseMist),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                course.name,
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              Text(
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: courses
+                    .map((course) {
+                      final usedInCurrentClass = controller.sessions.any(
+                        (session) => session.courseId == course.id,
+                      );
+                      final selected = _selectedCourseId == course.id;
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: controller.isBusy
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedCourseId = course.id;
+                                });
+                                _openCourseEditorDialog(
+                                  controller: controller,
+                                  initial: course,
+                                );
+                              },
+                        child: SizedBox(
+                          width: 290,
+                          child: LabeledEntityTile(
+                            title: course.name,
+                            subtitle:
                                 '기본 ${course.defaultDurationMin}분${usedInCurrentClass ? ' · 현재 반 시간표 사용중' : ''}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
+                            icon: Icons.menu_book_outlined,
+                            trailing: Icon(
+                              selected
+                                  ? Icons.check_circle
+                                  : Icons.edit_outlined,
+                              size: 18,
+                              color: selected
+                                  ? NestColors.mutedSage
+                                  : NestColors.deepWood.withValues(alpha: 0.62),
+                            ),
                           ),
                         ),
-                        IconButton(
-                          onPressed: controller.isBusy || usedInCurrentClass
-                              ? null
-                              : () => _deleteCourse(course.id),
-                          icon: const Icon(Icons.delete_outline),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openCourseEditorDialog({
+    required NestController controller,
+    Course? initial,
+  }) async {
+    final nameController = TextEditingController(text: initial?.name ?? '');
+    final durationController = TextEditingController(
+      text: initial?.defaultDurationMin.toString() ?? '50',
+    );
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final usedInCurrentClass =
+                  initial != null &&
+                  controller.sessions.any(
+                    (session) => session.courseId == initial.id,
+                  );
+
+              Future<void> saveCourse() async {
+                if (isSaving) {
+                  return;
+                }
+
+                final trimmedName = nameController.text.trim();
+                final duration = int.tryParse(durationController.text.trim());
+                if (trimmedName.isEmpty) {
+                  _showMessage('과목 이름을 입력하세요.');
+                  return;
+                }
+                if (duration == null) {
+                  _showMessage('기본 수업 시간은 숫자로 입력하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  if (initial == null) {
+                    await controller.createCourse(
+                      name: trimmedName,
+                      defaultDurationMin: duration,
+                    );
+                    if (mounted) {
+                      final matched = controller.courses
+                          .where(
+                            (course) =>
+                                course.name.toLowerCase() ==
+                                    trimmedName.toLowerCase() &&
+                                course.defaultDurationMin == duration,
+                          )
+                          .toList(growable: false);
+                      setState(() {
+                        _selectedCourseId = matched.firstOrNull?.id;
+                      });
+                    }
+                  } else {
+                    await controller.updateCourse(
+                      courseId: initial.id,
+                      name: trimmedName,
+                      defaultDurationMin: duration,
+                    );
+                    if (mounted) {
+                      setState(() {
+                        _selectedCourseId = initial.id;
+                      });
+                    }
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              Future<void> deleteCourse() async {
+                final target = initial;
+                if (target == null || isSaving || usedInCurrentClass) {
+                  return;
+                }
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (confirmContext) => AlertDialog(
+                    title: const Text('과목 삭제'),
+                    content: Text(
+                      '"${target.name}" 과목을 삭제할까요?\n'
+                      '시간표에서 사용 중인 과목은 삭제할 수 없습니다.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(confirmContext).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(confirmContext).pop(true),
+                        child: const Text('삭제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) {
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  await controller.deleteCourse(courseId: target.id);
+                  if (mounted) {
+                    setState(() {
+                      _selectedCourseId = controller.courses.firstOrNull?.id;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              return AlertDialog(
+                title: Text(initial == null ? '과목 추가' : '과목 수정'),
+                content: SizedBox(
+                  width: 480,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '과목 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: durationController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '기본 수업 시간(분)',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (usedInCurrentClass)
+                        _buildEmptyHint(
+                          '현재 선택된 반의 시간표에서 사용 중인 과목입니다. 삭제는 불가능하며 이름/시간 수정만 가능합니다.',
+                        ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  if (initial != null)
+                    TextButton.icon(
+                      onPressed:
+                          isSaving || controller.isBusy || usedInCurrentClass
+                          ? null
+                          : deleteCourse,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('삭제'),
+                    ),
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('닫기'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving || controller.isBusy
+                        ? null
+                        : saveCourse,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(initial == null ? '생성' : '저장'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      durationController.dispose();
+    }
+  }
+
+  Widget _buildClassroomManageCard(NestController controller) {
+    final classrooms = controller.classrooms.toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '교실 관리',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () =>
+                            _openClassroomEditorDialog(controller: controller),
+                  icon: const Icon(Icons.add_home_work_outlined),
+                  label: const Text('교실 추가'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '교실 카드를 클릭하면 수용 인원/메모 수정과 삭제를 한 번에 처리할 수 있습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (classrooms.isEmpty)
+              _buildEmptyHint('등록된 교실이 없습니다. 교실 추가로 시작하세요.')
+            else
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: classrooms
+                    .map((classroom) {
+                      final used = controller.allTermSessions.any(
+                        (session) =>
+                            (session.location ?? '').trim() == classroom.name,
+                      );
+                      final selected = _selectedClassroomId == classroom.id;
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: controller.isBusy
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedClassroomId = classroom.id;
+                                });
+                                _openClassroomEditorDialog(
+                                  controller: controller,
+                                  initial: classroom,
+                                );
+                              },
+                        child: SizedBox(
+                          width: 290,
+                          child: LabeledEntityTile(
+                            title: classroom.name,
+                            subtitle:
+                                '정원 ${classroom.capacity}명${used ? ' · 시간표 사용중' : ''}',
+                            icon: Icons.meeting_room_outlined,
+                            trailing: Icon(
+                              selected
+                                  ? Icons.check_circle
+                                  : Icons.edit_outlined,
+                              size: 18,
+                              color: selected
+                                  ? NestColors.mutedSage
+                                  : NestColors.deepWood.withValues(alpha: 0.62),
+                            ),
+                          ),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openClassroomEditorDialog({
+    required NestController controller,
+    Classroom? initial,
+  }) async {
+    final nameController = TextEditingController(text: initial?.name ?? '');
+    final capacityController = TextEditingController(
+      text: initial?.capacity.toString() ?? '20',
+    );
+    final noteController = TextEditingController(text: initial?.note ?? '');
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final usedBySession =
+                  initial != null &&
+                  controller.allTermSessions.any(
+                    (session) =>
+                        (session.location ?? '').trim() == initial.name.trim(),
+                  );
+
+              Future<void> saveClassroom() async {
+                if (isSaving) {
+                  return;
+                }
+                final trimmedName = nameController.text.trim();
+                final capacity = int.tryParse(capacityController.text.trim());
+                if (trimmedName.isEmpty) {
+                  _showMessage('교실 이름을 입력하세요.');
+                  return;
+                }
+                if (capacity == null) {
+                  _showMessage('수용 인원은 숫자로 입력하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  if (initial == null) {
+                    await controller.createClassroom(
+                      name: trimmedName,
+                      capacity: capacity,
+                      note: noteController.text,
+                    );
+                    if (mounted) {
+                      final matched = controller.classrooms
+                          .where(
+                            (classroom) =>
+                                classroom.name.toLowerCase() ==
+                                    trimmedName.toLowerCase() &&
+                                classroom.capacity == capacity,
+                          )
+                          .toList(growable: false);
+                      setState(() {
+                        _selectedClassroomId = matched.firstOrNull?.id;
+                      });
+                    }
+                  } else {
+                    await controller.updateClassroom(
+                      classroomId: initial.id,
+                      name: trimmedName,
+                      capacity: capacity,
+                      note: noteController.text,
+                    );
+                    if (mounted) {
+                      setState(() {
+                        _selectedClassroomId = initial.id;
+                      });
+                    }
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              Future<void> deleteClassroom() async {
+                final target = initial;
+                if (target == null || isSaving || usedBySession) {
+                  return;
+                }
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (confirmContext) => AlertDialog(
+                    title: const Text('교실 삭제'),
+                    content: Text(
+                      '"${target.name}" 교실을 삭제할까요?\n'
+                      '시간표에서 사용 중인 교실은 삭제할 수 없습니다.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(confirmContext).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(confirmContext).pop(true),
+                        child: const Text('삭제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) {
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  await controller.deleteClassroom(classroomId: target.id);
+                  if (mounted) {
+                    setState(() {
+                      _selectedClassroomId =
+                          controller.classrooms.firstOrNull?.id;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              return AlertDialog(
+                title: Text(initial == null ? '교실 추가' : '교실 수정'),
+                content: SizedBox(
+                  width: 500,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '교실 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: capacityController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '수용 인원'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: noteController,
+                        decoration: const InputDecoration(labelText: '메모'),
+                        minLines: 1,
+                        maxLines: 3,
+                      ),
+                      if (usedBySession) ...[
+                        const SizedBox(height: 8),
+                        _buildEmptyHint(
+                          '현재 시간표에서 사용 중인 교실입니다. 이름/정보 수정은 가능하지만 삭제는 제한됩니다.',
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  if (initial != null)
+                    TextButton.icon(
+                      onPressed: isSaving || controller.isBusy || usedBySession
+                          ? null
+                          : deleteClassroom,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('삭제'),
+                    ),
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('닫기'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving || controller.isBusy
+                        ? null
+                        : saveClassroom,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(initial == null ? '생성' : '저장'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      capacityController.dispose();
+      noteController.dispose();
+    }
   }
 
   Future<void> _refreshFamilyDomain() async {
@@ -1906,35 +2431,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       await widget.controller.loadMemberUnavailabilityBlocks();
       await widget.controller.loadHomeschoolMemberDirectory();
       _showMessage('가정/아이/배정 목록을 갱신했습니다.');
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _createCourse() async {
-    final duration = int.tryParse(_courseDurationController.text.trim());
-    if (duration == null) {
-      _showMessage('기본 시간은 숫자로 입력하세요.');
-      return;
-    }
-
-    try {
-      await widget.controller.createCourse(
-        name: _courseNameController.text,
-        defaultDurationMin: duration,
-      );
-      _courseNameController.clear();
-      _courseDurationController.text = '50';
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _deleteCourse(String courseId) async {
-    try {
-      await widget.controller.deleteCourse(courseId: courseId);
-      _showMessage(widget.controller.statusMessage);
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }

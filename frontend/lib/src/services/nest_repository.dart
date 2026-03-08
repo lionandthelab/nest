@@ -806,8 +806,80 @@ class NestRepository {
     return Course.fromMap(_asMap(row));
   }
 
+  Future<Course> updateCourse({
+    required String courseId,
+    required String name,
+    required int defaultDurationMin,
+  }) async {
+    final row = await client
+        .from('courses')
+        .update({
+          'name': name.trim(),
+          'default_duration_min': defaultDurationMin,
+        })
+        .eq('id', courseId)
+        .select('id, homeschool_id, name, default_duration_min')
+        .single();
+
+    return Course.fromMap(_asMap(row));
+  }
+
   Future<void> deleteCourse({required String courseId}) {
     return client.from('courses').delete().eq('id', courseId);
+  }
+
+  Future<List<Classroom>> fetchClassrooms({required String termId}) async {
+    final data = await client
+        .from('classrooms')
+        .select('id, term_id, name, capacity, note')
+        .eq('term_id', termId)
+        .order('name');
+
+    return _asRows(data).map(Classroom.fromMap).toList(growable: false);
+  }
+
+  Future<Classroom> createClassroom({
+    required String termId,
+    required String name,
+    required int capacity,
+    required String note,
+  }) async {
+    final row = await client
+        .from('classrooms')
+        .insert({
+          'term_id': termId,
+          'name': name.trim(),
+          'capacity': capacity,
+          'note': note.trim(),
+        })
+        .select('id, term_id, name, capacity, note')
+        .single();
+
+    return Classroom.fromMap(_asMap(row));
+  }
+
+  Future<Classroom> updateClassroom({
+    required String classroomId,
+    required String name,
+    required int capacity,
+    required String note,
+  }) async {
+    final row = await client
+        .from('classrooms')
+        .update({
+          'name': name.trim(),
+          'capacity': capacity,
+          'note': note.trim(),
+        })
+        .eq('id', classroomId)
+        .select('id, term_id, name, capacity, note')
+        .single();
+
+    return Classroom.fromMap(_asMap(row));
+  }
+
+  Future<void> deleteClassroom({required String classroomId}) {
+    return client.from('classrooms').delete().eq('id', classroomId);
   }
 
   Future<List<TimeSlot>> fetchTimeSlots({required String termId}) async {

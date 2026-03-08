@@ -95,6 +95,8 @@ supabase/
     20260303162000_class_groups_delete_and_member_search.sql
     20260303190000_member_unavailability_blocks.sql
     20260308201000_family_child_delete_policies.sql
+    20260308223000_courses_delete_policy.sql
+    20260308233000_classrooms.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -182,7 +184,8 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `cancelHomeschoolInvite(inviteId)`
   - `acceptHomeschoolInvite(inviteToken)`
   - `fetchFamilies`, `createFamily`
-  - `createCourse`, `deleteCourse`
+  - `createCourse`, `updateCourse`, `deleteCourse`
+  - `fetchClassrooms`, `createClassroom`, `updateClassroom`, `deleteClassroom`
   - `fetchFamilyGuardianUserIds`
   - `fetchChildren`, `createChild` (`create_child_admin` RPC)
   - `createClassGroup`, `updateClassGroup`, `deleteClassGroup`
@@ -221,8 +224,7 @@ Admin dashboard onboarding:
 ### 6.2 Timetable
 
 - Admin view:
-  - simple `AI 배정` chat input (single prompt) that generates a local draft for current class
-  - inline help tooltip/dialog for AI prompt examples and save flow guidance
+  - no AI prompt input in timetable management
   - no wizard/proposal panel/status side panel in main flow
   - explicit draft lifecycle:
     - `수정 확정` (board top-right): persist staged changes
@@ -241,10 +243,14 @@ Admin dashboard onboarding:
     - main/assistant teacher assignment
     - location(room) assignment
   - room management UI:
-    - room palette add/remove for quick reuse
+    - room palette is synced from `Term Setup > 교실 관리`
+    - manual room typing is removed from timetable board flow
   - room utilization export:
     - all-class board by day/period showing room assignment status
-    - export to PNG from `장소 상황표 내보내기`
+    - export to PNG from `교실 상황표 내보내기`
+  - timetable export:
+    - dedicated export dialog with fit-to-width layout and safe paddings
+    - unassigned cells render blank in export images (no drag hint text)
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
   - visual session cards with icon rows for course/time/teacher/room scanning.
@@ -366,7 +372,8 @@ Admin dashboard onboarding:
     - class modal supports:
       - class create/update/delete
       - child assignment in the same modal with multi-select
-    - course (course create/delete and duration)
+    - course (course cards + unified course create/edit/delete modal)
+    - classroom (classroom cards + unified classroom create/edit/delete modal)
   - setup progress bar + unit chips for direct switching
 - `parent_timetable_tab.dart`:
   - parent self-service unavailability registration/deletion (own account only)
@@ -483,6 +490,17 @@ Migration `20260308201000_family_child_delete_policies.sql`:
 - adds `families_delete_admin_staff` RLS policy
 - adds `children_delete_admin_staff` RLS policy
 - enables admin/staff delete flows used by family/child management dialogs
+
+Migration `20260308223000_courses_delete_policy.sql`:
+
+- adds `courses_delete_admin_staff` RLS policy
+- enables admin/staff course delete flow (while keeping FK protection for in-use courses)
+
+Migration `20260308233000_classrooms.sql`:
+
+- adds `classrooms` table (`term_id`, `name`, `capacity`, `note`)
+- adds `classrooms_*` RLS policies for member read and admin/staff CRUD
+- enables term-level classroom resource management linked to timetable location assignment
 
 ## 8. Environment Variables
 
