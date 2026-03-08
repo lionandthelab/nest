@@ -228,14 +228,18 @@ class HomeschoolInvite {
         (map['homeschool_id'] as String?) ??
         (homeschoolMap['id'] as String?) ??
         '';
+    final nestedName = (homeschoolMap['name'] as String?)?.trim();
+    final flatName = (map['homeschool_name'] as String?)?.trim();
+    final resolvedName = (nestedName != null && nestedName.isNotEmpty)
+        ? nestedName
+        : (flatName != null && flatName.isNotEmpty)
+        ? flatName
+        : 'Unknown Homeschool';
 
     return HomeschoolInvite(
       id: (map['id'] as String?) ?? '',
       homeschoolId: fallbackId,
-      homeschoolName:
-          (homeschoolMap['name'] as String?) ??
-          (map['homeschool_name'] as String?) ??
-          'Unknown Homeschool',
+      homeschoolName: resolvedName,
       inviteEmail: (map['invite_email'] as String?) ?? '',
       role: (map['role'] as String?) ?? 'PARENT',
       status: (map['status'] as String?) ?? 'PENDING',

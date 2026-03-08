@@ -99,6 +99,7 @@ supabase/
     20260308233000_classrooms.sql
     20260308235500_family_guardians_delete_policy.sql
     20260309003000_homeschool_join_requests_and_directory.sql
+    20260309011500_homeschool_invites_name_snapshot.sql
 ```
 
 ## 4. Role Model and View Switching
@@ -533,6 +534,13 @@ Migration `20260309003000_homeschool_join_requests_and_directory.sql`:
 - adds RLS for requester self-read/insert and admin/staff moderation
 - adds `search_homeschool_directory(query, limit)` security-definer RPC
 - enables authenticated non-members to discover homeschools and request joining without loosening `homeschools` base RLS
+
+Migration `20260309011500_homeschool_invites_name_snapshot.sql`:
+
+- adds `homeschool_invites.homeschool_name` snapshot column
+- backfills existing invite rows with homeschool names
+- adds triggers to keep invite name synced on invite insert/home rename
+- fixes no-membership invite list showing `Unknown Homeschool` when relation join is blocked by RLS
 
 ## 8. Environment Variables
 

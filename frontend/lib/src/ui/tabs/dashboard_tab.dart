@@ -1108,6 +1108,7 @@ class _PendingInvitesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final pending =
         controller.pendingInvites
             .where((invite) => invite.canAccept)
@@ -1122,26 +1123,88 @@ class _PendingInvitesCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('대기 중 초대', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '홈스쿨 관리자에게 받은 초대를 수락하면 바로 멤버십이 활성화됩니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...pending.map(
-              (invite) => _InviteItem(controller: controller, invite: invite),
-            ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            NestColors.creamyWhite,
+            NestColors.roseMist.withValues(alpha: 0.55),
           ],
         ),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: NestColors.dustyRose.withValues(alpha: 0.22),
+                foregroundColor: NestColors.deepWood,
+                child: const Icon(Icons.mail_rounded, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('대기 중 초대', style: theme.textTheme.titleLarge),
+              ),
+              Chip(
+                visualDensity: VisualDensity.compact,
+                avatar: const Icon(Icons.confirmation_num_outlined, size: 16),
+                label: Text('${pending.length}건'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '홈스쿨 관리자에게 받은 초대를 수락하면 바로 멤버십이 활성화됩니다.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.72),
+            ),
+          ),
+          const SizedBox(height: 14),
+          ...pending.map(
+            (invite) => _InviteItem(controller: controller, invite: invite),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InviteMetaChip extends StatelessWidget {
+  const _InviteMetaChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withValues(alpha: 0.72),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: NestColors.deepWood),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: NestColors.deepWood,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1155,64 +1218,116 @@ class _InviteItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final created = invite.createdAt == null
         ? '-'
         : DateFormat('yyyy-MM-dd HH:mm').format(invite.createdAt!);
     final expires = invite.expiresAt == null
         ? '-'
         : DateFormat('yyyy-MM-dd').format(invite.expiresAt!);
+    final schoolName = invite.homeschoolName == 'Unknown Homeschool'
+        ? '홈스쿨 이름 확인 중'
+        : invite.homeschoolName;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.white, NestColors.creamyWhite],
+          ),
           border: Border.all(color: NestColors.roseMist),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.card_membership_rounded,
+                  color: NestColors.dustyRose,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '홈스쿨 초대장',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: NestColors.deepWood,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              schoolName,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: NestColors.deepWood,
+              ),
+            ),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                Chip(label: Text(invite.homeschoolName)),
-                Chip(label: Text(invite.role)),
-                Chip(label: Text('만료: $expires')),
+                _InviteMetaChip(icon: Icons.badge_outlined, label: invite.role),
+                _InviteMetaChip(
+                  icon: Icons.event_available_outlined,
+                  label: '만료 $expires',
+                ),
+                _InviteMetaChip(
+                  icon: Icons.schedule_outlined,
+                  label: '발송 $created',
+                ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              '초대 생성: $created',
-              style: Theme.of(context).textTheme.bodySmall,
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              height: 1,
+              color: NestColors.roseMist,
             ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: controller.isBusy
-                  ? null
-                  : () async {
-                      try {
-                        await controller.acceptPendingInvite(
-                          invite.inviteToken,
-                        );
-                        if (!context.mounted) {
-                          return;
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () async {
+                        try {
+                          await controller.acceptPendingInvite(
+                            invite.inviteToken,
+                          );
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(controller.statusMessage)),
+                          );
+                        } catch (_) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(controller.statusMessage)),
+                          );
                         }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(controller.statusMessage)),
-                        );
-                      } catch (_) {
-                        if (!context.mounted) {
-                          return;
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(controller.statusMessage)),
-                        );
-                      }
-                    },
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('초대 수락'),
+                      },
+                icon: const Icon(Icons.mark_email_read_outlined),
+                label: const Text('이 초대 수락하기'),
+              ),
             ),
           ],
         ),

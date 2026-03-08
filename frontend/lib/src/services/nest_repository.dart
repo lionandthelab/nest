@@ -188,7 +188,7 @@ class NestRepository {
     final data = await client
         .from('homeschool_invites')
         .select(
-          'id, homeschool_id, invite_email, role, status, invite_token, '
+          'id, homeschool_id, homeschool_name, invite_email, role, status, invite_token, '
           'expires_at, created_at, homeschools(id, name)',
         )
         .eq('homeschool_id', homeschoolId)
@@ -209,7 +209,7 @@ class NestRepository {
     final data = await client
         .from('homeschool_invites')
         .select(
-          'id, homeschool_id, invite_email, role, status, invite_token, '
+          'id, homeschool_id, homeschool_name, invite_email, role, status, invite_token, '
           'expires_at, created_at, homeschools(id, name)',
         )
         .ilike('invite_email', normalized)
@@ -238,7 +238,7 @@ class NestRepository {
           'expires_at': expiresAt.toUtc().toIso8601String(),
         })
         .select(
-          'id, homeschool_id, invite_email, role, status, invite_token, '
+          'id, homeschool_id, homeschool_name, invite_email, role, status, invite_token, '
           'expires_at, created_at, homeschools(id, name)',
         )
         .single();

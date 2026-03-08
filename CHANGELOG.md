@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.17+18 (2026-03-08)
+
+### Changed
+
+- 대기 중 초대 UX 개선 (`dashboard_tab.dart`)
+  - 초대 아이템을 풀너비 `초대장` 스타일 카드로 리디자인
+  - 초대장 메타 정보(역할/만료/발송일) 칩화 및 수락 CTA 강조
+  - `Unknown Homeschool` 문구는 UI에서 `홈스쿨 이름 확인 중`으로 보조 처리
+- 초대 홈스쿨 이름 안정화
+  - `nest_repository.dart`: 초대 조회/생성 select 필드에 `homeschool_name` 추가
+  - `nest_models.dart`: `HomeschoolInvite.fromMap` 이름 해석 로직 강화(빈 문자열/조인 실패 fallback 처리)
+- Supabase 스키마 보강
+  - `supabase/migrations/20260309011500_homeschool_invites_name_snapshot.sql`
+  - `homeschool_invites.homeschool_name` 스냅샷 컬럼 추가 + 기존 데이터 백필
+  - 초대 생성/홈스쿨 이름 변경 시 스냅샷 동기화 트리거 추가
+- 테스트 보강
+  - `frontend/test/models_test.dart`: flat `homeschool_name` 파싱 검증 추가
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+- `supabase db push` 통과
+
 ## 1.0.16+17 (2026-03-08)
 
 ### Changed

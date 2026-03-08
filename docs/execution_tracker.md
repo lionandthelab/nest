@@ -73,6 +73,7 @@ Last updated: 2026-03-08
 | 2026-03-08 | 시간표/교실 관리 개편: 시간표 탭 AI 배정 UI 제거, 시간표/교실 상황표 내보내기 fit-to-width+패딩 개선, 내보내기 시 미배정 셀 빈칸 처리, 학기 설정 `교실 관리`(카드 CRUD) 및 시간표 교실 팔레트 연동, `classrooms` 스키마/RLS 마이그레이션 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 가정-학부모 계정 연동 관리 보강: 가정 수정 모달에 학부모 검색 연결 + `연결 해제` 버튼 추가, `family_guardians` upsert/delete API 구현, guardian delete RLS 정책 추가, 시간표/교실 상황표 내보내기 우측 잘림(마지막 카드) 레이아웃 계산 보정 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 온보딩 개편: `초대` 섹션 유지 + `홈스쿨 검색/가입 요청` UI 추가 + `새 홈스쿨 개설` 폼을 모달로 전환, `homeschool_join_requests` 테이블/RLS 및 `search_homeschool_directory` RPC 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
+| 2026-03-08 | 초대 카드 개선: 비소속 계정에서 `Unknown Homeschool` 표시 문제 수정(`homeschool_invites.homeschool_name` 스냅샷 + 동기화 트리거), 대기 초대를 풀너비 초대장 스타일 UI로 리디자인 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 
 ## Next Batch
 

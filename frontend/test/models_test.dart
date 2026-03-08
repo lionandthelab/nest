@@ -46,6 +46,7 @@ void main() {
       final invite = HomeschoolInvite.fromMap({
         'id': 'inv-2',
         'homeschool_id': 'school-2',
+        'homeschool_name': 'Warm Nest 2',
         'invite_email': 'teacher@example.com',
         'role': 'TEACHER',
         'status': 'PENDING',
@@ -59,6 +60,7 @@ void main() {
       expect(invite.isPending, isTrue);
       expect(invite.isExpired, isTrue);
       expect(invite.canAccept, isFalse);
+      expect(invite.homeschoolName, 'Warm Nest 2');
     });
 
     test('ChildProfile.fromMap reads nested family fields', () {
