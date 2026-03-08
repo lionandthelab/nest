@@ -1,6 +1,6 @@
 # Nest Flutter Architecture
 
-Last updated: 2026-03-07
+Last updated: 2026-03-08
 
 ## 1. Goals
 
@@ -214,23 +214,26 @@ Admin dashboard onboarding:
 ### 6.2 Timetable
 
 - Admin view:
-  - schedule concierge (few-question wizard) -> multi-option drafts
-  - step-based draft wizard (기본 설정 -> 리소스 조건 -> 생성/검토)
-  - course-frequency weighting controls (per course low/medium/high)
-  - teacher preference strategy controls (balanced/preferred-first/parent-first)
-  - parent/teacher blocked-time constraints are auto-avoided in draft generation
-  - draft/board conflict checks include parent-blocked and teacher-blocked slot issues
-  - draft session editor (course/slot/main teacher) with immediate conflict feedback
-  - draft apply flow with slot-collision skip and teacher conflict reporting
-  - prompt action bar from main board (prompt edit -> draft generate / proposal save)
-  - prompt generation + apply/discard proposals (legacy path)
-  - drag-and-drop visual schedule studio:
-    - course palette
-    - timetable grid (day columns x period rows)
-    - slot-level drop targets and session card drag-move
-    - compact session cards with teacher badges/conflict indicators
-    - status insight panel (class/teacher) in desktop sidebar and mobile modal sheet
-  - board-level health summary (teacher conflict + missing main teacher)
+  - simple `AI 배정` input (single prompt) that generates a local draft for current class
+  - no wizard/proposal panel/status side panel in main flow
+  - explicit draft lifecycle:
+    - `수정 확정`: persist staged changes
+    - `롤백`: discard staged changes and restore latest saved state
+  - unsaved-change guard on tab leave (warning dialog)
+  - class-first editing UX:
+    - dedicated class switcher card in schedule tab
+    - current class summary (session count / assigned teacher count)
+  - drag-and-drop schedule studio:
+    - full-width prioritized timetable board (reduced horizontal scroll pressure)
+    - course palette + teacher palette + room palette
+    - drag course -> create session
+    - drag session -> move session
+    - drag teacher/room -> assign to slot/session
+  - per-session setting modal on card tap:
+    - main/assistant teacher assignment
+    - location(room) assignment
+  - room management UI:
+    - room palette add/remove for quick reuse
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
 

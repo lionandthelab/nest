@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.5+6 (2026-03-08)
+
+### Changed
+
+- 시간표 관리 탭 대규모 UX 단순화 (`timetable_tab.dart`)
+  - 메인보드 중심 레이아웃으로 재구성 (상황 패널 제거)
+  - 가용 폭을 최대 활용하도록 그리드 컬럼 폭을 동적 계산해 가로 스크롤 부담 완화
+  - 탭 내부 반 스위처 카드 추가 (반별 시간표 즉시 전환)
+  - `AI 배정` 단일 입력 UI 도입 (복잡한 위자드/프롬프트 패널/생성안 저장 UI 제거)
+  - 과목 카드 탭 시 설정 모달에서 교사(주/보조)와 장소(교실) 지정 지원
+  - 과목 팔레트 아래 `선생님 팔레트`, `교실 팔레트` 추가 및 DnD 배정 지원
+  - 장소(교실) 팔레트 관리 UI 추가(추가/삭제)
+  - 로컬 초안 편집 흐름 추가: `수정 확정` / `롤백`
+- 탭 이탈 경고 추가 (`home_page.dart`)
+  - 시간표 탭에 미확정 변경사항이 있을 때 다른 탭 이동 시 경고 다이얼로그 표시
+- DnD payload 타입 확장 (`nest_models.dart`)
+  - `DragPayloadType.teacher`, `DragPayloadType.room` 추가
+- 메인 패널 폭 정책 조정 (`home_page.dart`)
+  - Schedule/Timetable 탭은 최대폭 제한을 풀어 보드 가용폭 확보
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.4+5 (2026-03-07)
 
 ### Added

@@ -1,6 +1,6 @@
 # Nest Execution Tracker
 
-Last updated: 2026-03-07
+Last updated: 2026-03-08
 
 ## Scope
 
@@ -60,6 +60,7 @@ Last updated: 2026-03-07
 | 2026-03-03 | DnD 세션 생성 `location` 스키마 호환 수정(컬럼 없음/NOT NULL 대응) + `supabase db push`로 세션 위치 마이그레이션 적용 + 상단 컨텍스트 카드형 UX/도움말 개편 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-07 | 관리자/교사/학부모 선택 UX 고도화: 공용 검색 선택 시트 + 카드형 선택 필드 도입, Term Setup/Teacher Hub/Child Selector의 드롭다운 중심 입력 제거 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-07 | UI 반복개선 100회 루프 수행(분석/개선제안/피드백) + 공통 UI 폴리시 적용(테마 통일, 반응형 헤더, 허브/시스템 탭 반응형 섹션 전환, 본문 폭 최적화) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 시간표 탭 전면 단순화: 풀너비 메인보드, 반 스위처, AI 배정 단일 입력, 과목/교사/교실 팔레트 DnD, 수업카드 설정 모달(교사/장소), 수정 확정/롤백, 탭 이탈 경고 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 

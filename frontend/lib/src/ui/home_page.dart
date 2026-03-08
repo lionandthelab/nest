@@ -27,6 +27,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
+  bool _hasUnsavedScheduleChanges = false;
 
   // ── Parent child selector state (shared across parent tabs) ──
   String? _selectedChildId;
@@ -71,8 +72,11 @@ class _HomePageState extends State<HomePage> {
                 child: desktopLike
                     ? _DesktopScaffold(
                         currentIndex: safeIndex,
-                        onSelectIndex: (value) =>
-                            setState(() => _currentIndex = value),
+                        onSelectIndex: (value) => _handleTabSelection(
+                          nextIndex: value,
+                          tabs: tabs,
+                          currentIndex: safeIndex,
+                        ),
                         labels: labels,
                         controller: widget.controller,
                         tabLabel: tabs[safeIndex].label,
@@ -86,8 +90,11 @@ class _HomePageState extends State<HomePage> {
                       )
                     : _MobileScaffold(
                         currentIndex: safeIndex,
-                        onSelectIndex: (value) =>
-                            setState(() => _currentIndex = value),
+                        onSelectIndex: (value) => _handleTabSelection(
+                          nextIndex: value,
+                          tabs: tabs,
+                          currentIndex: safeIndex,
+                        ),
                         labels: labels,
                         controller: widget.controller,
                         tabLabel: tabs[safeIndex].label,
@@ -136,7 +143,10 @@ class _HomePageState extends State<HomePage> {
         ),
         _TabSpec(
           label: 'Schedule',
-          page: TimetableTab(controller: controller),
+          page: TimetableTab(
+            controller: controller,
+            onDirtyChanged: _handleScheduleDirtyChanged,
+          ),
         ),
         _TabSpec(
           label: 'System',
@@ -191,7 +201,10 @@ class _HomePageState extends State<HomePage> {
         ),
       _TabSpec(
         label: 'Timetable',
-        page: TimetableTab(controller: controller),
+        page: TimetableTab(
+          controller: controller,
+          onDirtyChanged: _handleScheduleDirtyChanged,
+        ),
       ),
       _TabSpec(
         label: 'Gallery',
@@ -240,6 +253,72 @@ class _HomePageState extends State<HomePage> {
       _childClassBundles = const {};
       _lastScheduledChildLoadId = null;
     });
+  }
+
+  void _handleScheduleDirtyChanged(bool dirty) {
+    if (!mounted || _hasUnsavedScheduleChanges == dirty) {
+      return;
+    }
+    setState(() {
+      _hasUnsavedScheduleChanges = dirty;
+    });
+  }
+
+  Future<void> _handleTabSelection({
+    required int nextIndex,
+    required List<_TabSpec> tabs,
+    required int currentIndex,
+  }) async {
+    if (nextIndex == currentIndex || !mounted) {
+      return;
+    }
+
+    final leavingSchedule =
+        _isScheduleTabLabel(tabs[currentIndex].label) &&
+        !_isScheduleTabLabel(tabs[nextIndex].label);
+
+    if (leavingSchedule && _hasUnsavedScheduleChanges) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('수정사항 경고'),
+          content: const Text(
+            '시간표 탭에 저장되지 않은 수정사항이 있습니다. 탭을 이동하면 현재 수정사항이 사라집니다. 이동할까요?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('이동'),
+            ),
+          ],
+        ),
+      );
+
+      if (discard != true || !mounted) {
+        return;
+      }
+
+      setState(() {
+        _hasUnsavedScheduleChanges = false;
+      });
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentIndex = nextIndex;
+    });
+  }
+
+  bool _isScheduleTabLabel(String label) {
+    final normalized = label.trim().toLowerCase();
+    return normalized == 'schedule' || normalized == 'timetable';
   }
 
   Future<void> _loadChildClassBundles(String childId) async {
@@ -586,6 +665,8 @@ class _MainPanelState extends State<_MainPanel> {
     final theme = Theme.of(context);
     final controller = widget.controller;
     final width = MediaQuery.sizeOf(context).width;
+    final isScheduleTab =
+        widget.tabLabel == 'Schedule' || widget.tabLabel == 'Timetable';
     final compactHeader = width < 980;
     final iconOnlyActions = width < 760;
 
@@ -779,7 +860,9 @@ class _MainPanelState extends State<_MainPanel> {
                       key: ValueKey<String>(widget.tabLabel),
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1320),
+                          constraints: BoxConstraints(
+                            maxWidth: isScheduleTab ? double.infinity : 1320,
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: widget.tab,

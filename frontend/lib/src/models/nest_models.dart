@@ -1233,7 +1233,7 @@ class ScheduleOptionDraft {
   }
 }
 
-enum DragPayloadType { course, session }
+enum DragPayloadType { course, session, teacher, room }
 
 class DragPayload {
   const DragPayload({required this.type, required this.id});
