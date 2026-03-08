@@ -3412,10 +3412,6 @@ class NestController extends ChangeNotifier {
     if (mine.isNotEmpty) {
       return mine;
     }
-
-    if (isParentView) {
-      return children;
-    }
     return const [];
   }
 

@@ -115,8 +115,13 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           _buildEmptyHint('아이를 먼저 선택하세요.')
         else if (bundles.isEmpty && !widget.isLoadingChildClasses)
           _buildEmptyHint('배정된 반 또는 시간표가 없습니다.')
-        else
+        else ...[
+          _buildWeeklyScheduleBoard(controller, bundles),
+          const SizedBox(height: 14),
+          Text('반별 상세', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
           ..._buildTimetableCards(controller, bundles),
+        ],
       ],
     );
   }
@@ -278,6 +283,278 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           );
         })
         .toList(growable: false);
+  }
+
+  Widget _buildWeeklyScheduleBoard(
+    NestController controller,
+    Map<String, ChildClassBundle> bundles,
+  ) {
+    final entries = _collectScheduleEntries(controller, bundles);
+    if (entries.isEmpty) {
+      return _buildEmptyHint('시간표 데이터가 없습니다.');
+    }
+
+    final slotById = {for (final slot in controller.timeSlots) slot.id: slot};
+    final days = <int>{};
+    final periodKeys = <String>{};
+    final byPeriodDay = <String, Map<int, List<_ParentScheduleEntry>>>{};
+
+    for (final entry in entries) {
+      final slot = slotById[entry.session.timeSlotId];
+      if (slot == null) {
+        continue;
+      }
+
+      final periodKey = '${slot.startTime}-${slot.endTime}';
+      days.add(slot.dayOfWeek);
+      periodKeys.add(periodKey);
+
+      final perDay = byPeriodDay.putIfAbsent(
+        periodKey,
+        () => <int, List<_ParentScheduleEntry>>{},
+      );
+      final rows = perDay.putIfAbsent(
+        slot.dayOfWeek,
+        () => <_ParentScheduleEntry>[],
+      );
+      rows.add(entry);
+    }
+
+    if (days.isEmpty || periodKeys.isEmpty) {
+      return _buildEmptyHint('시간표 슬롯 정보를 찾을 수 없습니다.');
+    }
+
+    final sortedDays = days.toList(growable: false)..sort();
+    final sortedPeriods = periodKeys.toList(growable: false)
+      ..sort((a, b) => _comparePeriodKey(a, b));
+
+    const timeColWidth = 128.0;
+    final dayColWidth = sortedDays.length >= 5 ? 210.0 : 230.0;
+    final boardWidth = timeColWidth + dayColWidth * sortedDays.length;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NestColors.roseMist),
+        color: Colors.white,
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: boardWidth,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _ScheduleHeaderCell(
+                    width: timeColWidth,
+                    label: '교시 / 시간',
+                    align: Alignment.center,
+                  ),
+                  ...sortedDays.map(
+                    (day) => _ScheduleHeaderCell(
+                      width: dayColWidth,
+                      label: _dayLabel(day),
+                      align: Alignment.center,
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 1, thickness: 1),
+              ...sortedPeriods.asMap().entries.map((rowEntry) {
+                final periodIndex = rowEntry.key + 1;
+                final periodKey = rowEntry.value;
+                final segments = periodKey.split('-');
+                final periodLabel = segments.length == 2
+                    ? '${_shortTime(segments[0])} - ${_shortTime(segments[1])}'
+                    : periodKey;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: NestColors.roseMist.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: timeColWidth,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '$periodIndex교시',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                periodLabel,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: NestColors.deepWood.withValues(
+                                        alpha: 0.72,
+                                      ),
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      ...sortedDays.map((day) {
+                        final cells =
+                            byPeriodDay[periodKey]?[day] ??
+                            const <_ParentScheduleEntry>[];
+                        return Container(
+                          width: dayColWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: NestColors.roseMist.withValues(
+                                  alpha: 0.45,
+                                ),
+                              ),
+                            ),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: cells.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    '-',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: NestColors.deepWood.withValues(
+                                            alpha: 0.48,
+                                          ),
+                                        ),
+                                  ),
+                                )
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: cells
+                                      .map(
+                                        (cell) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: _ParentScheduleCell(
+                                            courseName: controller
+                                                .findCourseName(
+                                                  cell.session.courseId,
+                                                ),
+                                            className: cell.className,
+                                            teacherLabel:
+                                                _teacherLabelForSession(
+                                                  controller: controller,
+                                                  sessionId: cell.session.id,
+                                                  assignments: cell.assignments,
+                                                ),
+                                            locationLabel:
+                                                (cell.session.location ?? '')
+                                                    .trim()
+                                                    .isEmpty
+                                                ? '장소 미지정'
+                                                : (cell.session.location ?? '')
+                                                      .trim(),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(growable: false),
+                                ),
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<_ParentScheduleEntry> _collectScheduleEntries(
+    NestController controller,
+    Map<String, ChildClassBundle> bundles,
+  ) {
+    final rows = <_ParentScheduleEntry>[];
+    final sorted = bundles.values.toList(growable: false)
+      ..sort((a, b) => a.classGroup.name.compareTo(b.classGroup.name));
+
+    for (final bundle in sorted) {
+      for (final session in bundle.sessions) {
+        if (controller.findTimeSlot(session.timeSlotId) == null) {
+          continue;
+        }
+        rows.add(
+          _ParentScheduleEntry(
+            className: bundle.classGroup.name,
+            session: session,
+            assignments: bundle.assignments,
+          ),
+        );
+      }
+    }
+
+    rows.sort((a, b) {
+      final leftSlot = controller.findTimeSlot(a.session.timeSlotId);
+      final rightSlot = controller.findTimeSlot(b.session.timeSlotId);
+      if (leftSlot == null || rightSlot == null) {
+        return a.className.compareTo(b.className);
+      }
+      final dayCompare = leftSlot.dayOfWeek.compareTo(rightSlot.dayOfWeek);
+      if (dayCompare != 0) {
+        return dayCompare;
+      }
+      final startCompare = leftSlot.startTime.compareTo(rightSlot.startTime);
+      if (startCompare != 0) {
+        return startCompare;
+      }
+      return a.className.compareTo(b.className);
+    });
+    return rows;
+  }
+
+  int _comparePeriodKey(String left, String right) {
+    final leftParts = left.split('-');
+    final rightParts = right.split('-');
+    final leftStart = leftParts.firstOrNull ?? left;
+    final rightStart = rightParts.firstOrNull ?? right;
+
+    final startCompare = _clockToMinute(
+      leftStart,
+    ).compareTo(_clockToMinute(rightStart));
+    if (startCompare != 0) {
+      return startCompare;
+    }
+
+    final leftEnd = leftParts.length > 1 ? leftParts[1] : left;
+    final rightEnd = rightParts.length > 1 ? rightParts[1] : right;
+    return _clockToMinute(leftEnd).compareTo(_clockToMinute(rightEnd));
+  }
+
+  int _clockToMinute(String value) {
+    final source = value.trim();
+    final parts = source.split(':');
+    if (parts.length < 2) {
+      return 0;
+    }
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    return hour * 60 + minute;
   }
 
   void _openUnavailabilitySheet(NestController controller) {
@@ -581,6 +858,114 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
   void _showMessage(String text) {
     if (!mounted || text.isEmpty) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _ParentScheduleEntry {
+  const _ParentScheduleEntry({
+    required this.className,
+    required this.session,
+    required this.assignments,
+  });
+
+  final String className;
+  final ClassSession session;
+  final List<SessionTeacherAssignment> assignments;
+}
+
+class _ScheduleHeaderCell extends StatelessWidget {
+  const _ScheduleHeaderCell({
+    required this.width,
+    required this.label,
+    required this.align,
+  });
+
+  final double width;
+  final String label;
+  final Alignment align;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      alignment: align,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: NestColors.creamyWhite,
+        border: Border(
+          left: BorderSide(color: NestColors.roseMist.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _ParentScheduleCell extends StatelessWidget {
+  const _ParentScheduleCell({
+    required this.courseName,
+    required this.className,
+    required this.teacherLabel,
+    required this.locationLabel,
+  });
+
+  final String courseName;
+  final String className;
+  final String teacherLabel;
+  final String locationLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: NestColors.roseMist.withValues(alpha: 0.26),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            courseName,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            className,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            teacherLabel,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.72),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            locationLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.72),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

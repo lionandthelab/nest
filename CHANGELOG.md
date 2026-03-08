@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.18+19 (2026-03-08)
+
+### Changed
+
+- 부모 아이 선택 범위 제한 강화
+  - `nest_controller.dart`: `myChildren` fallback 제거
+  - 부모 뷰에서는 guardian으로 연동된 아이만 선택 가능
+  - guardian 연동이 없는 경우 아이 선택 목록이 비어 있으며 안내 메시지 노출
+- 부모 시간표 UI 개선 (`parent_timetable_tab.dart`)
+  - `요일 x 교시` 형태의 주간 스케줄표를 메인 보드로 추가
+  - 과목/반/교사/장소를 셀 카드로 한눈에 확인 가능
+  - 기존 반별 상세 카드는 보조 섹션으로 유지
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.17+18 (2026-03-08)
 
 ### Changed

@@ -260,6 +260,7 @@ Admin dashboard onboarding:
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
   - visual session cards with icon rows for course/time/teacher/room scanning.
+  - parent timetable includes weekly board view (`요일 x 교시`) for selected child.
 
 ### 6.2.1 Session Location Compatibility
 
@@ -288,6 +289,7 @@ Admin dashboard onboarding:
   - `parent_progress_tab.dart`
   - `parent_news_tab.dart`
   - shared child context via `child_selector_header.dart`
+  - parent child selector only exposes guardian-linked children (`NestController.myChildren`)
   - selected child 기준으로 반/시간표/학습 상태를 일관되게 제공
   - avatar-first visual identity for child/class entities in selectors and cards
 - Teacher Hub (`teacher_hub_tab.dart`)
@@ -397,6 +399,8 @@ Admin dashboard onboarding:
     - classroom (classroom cards + unified classroom create/edit/delete modal)
   - setup progress bar + unit chips for direct switching
 - `parent_timetable_tab.dart`:
+  - selected child weekly schedule board (`요일 x 교시`) as primary view
+  - class-level detail cards remain as secondary section
   - parent self-service unavailability registration/deletion (own account only)
 - `teacher_hub_tab.dart`:
   - teacher self-service unavailability registration/deletion (own teacher profile only)
