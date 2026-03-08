@@ -112,6 +112,9 @@ supabase/
 - `NestController.availableViewRoles` computes switchable roles from active memberships.
 - `NestController.changeViewRole()` sets the current active view role and persists preference in-memory by homeschool.
 - Current role is shown and switched in the top context selector (`뷰 역할`).
+- Header quick action:
+  - when 2+ roles are available, a `뷰 전환` popup button is shown next to the current role chip
+  - role switching works without opening the full context panel
 
 ### 4.3 Dynamic Tab Composition
 
@@ -323,6 +326,7 @@ Admin dashboard onboarding:
 ### 6.6 Membership and Permission Admin
 
 - `members_tab.dart` (HOMESCHOOL_ADMIN only):
+  - quick self-role card (`내 계정 역할 전환`) to grant/revoke `PARENT`/`TEACHER`/`GUEST_TEACHER` on the current admin account
   - grant role to target `auth.users.id`
   - revoke specific role
   - guardrail: cannot remove last remaining `HOMESCHOOL_ADMIN`

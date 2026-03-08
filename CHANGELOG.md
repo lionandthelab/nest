@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.10+11 (2026-03-08)
+
+### Changed
+
+- 다중 역할 전환 UX 강화
+  - `members_tab.dart`: `내 계정 역할 전환` 카드 추가
+  - 관리자 본인 계정에 `부모`/`교사`/`외부교사` 역할을 토글로 바로 부여/회수
+  - 역할 토글 후 `currentRole`/멤버십 재로드가 자동 반영되어 즉시 뷰 전환 가능
+- 홈 헤더 즉시 뷰 스위처 추가 (`home_page.dart`)
+  - 현재 역할 칩 옆 `뷰 전환` 팝업 버튼 추가
+  - 2개 이상 역할이 있는 계정은 헤더에서 관리자/부모/교사 모드를 바로 전환
+  - 기존 확장 컨텍스트(`뷰 역할` 카드)와 병행 동작
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.9+10 (2026-03-08)
 
 ### Changed

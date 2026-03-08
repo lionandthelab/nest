@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config/app_config.dart';
@@ -660,6 +662,38 @@ class _MainPanelState extends State<_MainPanel> {
     );
   }
 
+  Widget _buildRoleSwitchButton(NestController controller) {
+    final roles = controller.availableViewRoles;
+    if (roles.length <= 1) {
+      return const SizedBox.shrink();
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: '뷰 전환',
+      icon: const Icon(Icons.swap_horiz),
+      onSelected: (role) => unawaited(widget.onSelectViewRole(role)),
+      itemBuilder: (context) => roles
+          .map(
+            (role) => PopupMenuItem<String>(
+              value: role,
+              child: Row(
+                children: [
+                  Icon(
+                    controller.currentRole == role
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(_labelForRole(role)),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -736,6 +770,7 @@ class _MainPanelState extends State<_MainPanel> {
                             avatar: const Icon(Icons.verified_user, size: 14),
                             visualDensity: VisualDensity.compact,
                           ),
+                          _buildRoleSwitchButton(controller),
                           IconButton(
                             icon: const Icon(Icons.info_outline, size: 18),
                             visualDensity: VisualDensity.compact,
@@ -761,6 +796,7 @@ class _MainPanelState extends State<_MainPanel> {
                         avatar: const Icon(Icons.verified_user, size: 14),
                         visualDensity: VisualDensity.compact,
                       ),
+                      _buildRoleSwitchButton(controller),
                       IconButton(
                         icon: const Icon(Icons.info_outline, size: 18),
                         visualDensity: VisualDensity.compact,

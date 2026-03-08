@@ -62,6 +62,8 @@ class _MembersTabState extends State<MembersTab> {
 
     return ListView(
       children: [
+        _buildMyRoleSwitchCard(controller),
+        const SizedBox(height: 12),
         _buildRoleGrantCard(controller),
         const SizedBox(height: 12),
         _buildInviteCreateCard(controller),
@@ -88,6 +90,89 @@ class _MembersTabState extends State<MembersTab> {
     );
   }
 
+  Widget _buildMyRoleSwitchCard(NestController controller) {
+    final currentUser = controller.user;
+    if (currentUser == null) {
+      return const SizedBox.shrink();
+    }
+
+    final activeRoles = controller
+        .membershipsByUser(currentUser.id)
+        .where((row) => row.status == 'ACTIVE')
+        .map((row) => row.role)
+        .toSet();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('내 계정 역할 전환', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              '관리자 계정에 부모/교사 권한을 함께 부여하면, 홈 상단에서 뷰 역할을 즉시 전환할 수 있습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: NestColors.roseMist),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    currentUser.email ?? currentUser.id,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 2),
+                  SelectableText(
+                    currentUser.id,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selfSwitchRoles
+                  .map((role) {
+                    final enabled = activeRoles.contains(role);
+                    return FilterChip(
+                      selected: enabled,
+                      label: Text(_roleLabel(role)),
+                      avatar: Icon(
+                        enabled ? Icons.check_circle : Icons.add_circle_outline,
+                        size: 16,
+                      ),
+                      onSelected: controller.isBusy
+                          ? null
+                          : (selected) =>
+                                _toggleMyRole(role: role, enable: selected),
+                    );
+                  })
+                  .toList(growable: false),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '역할 추가 후 홈 헤더의 "뷰 전환" 버튼으로 관리자/부모/교사 모드를 오갈 수 있습니다.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildRoleGrantCard(NestController controller) {
     return Card(
       child: Padding(
@@ -101,7 +186,8 @@ class _MembersTabState extends State<MembersTab> {
             ),
             const SizedBox(height: 6),
             Text(
-              '기존 가입 사용자는 사용자 ID(UUID) 기준으로 권한을 부여/회수할 수 있습니다.',
+              '기존 가입 사용자는 사용자 ID(UUID) 기준으로 권한을 부여/회수합니다. '
+              '관리자 본인 다중 역할은 위 카드에서 빠르게 설정하세요.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
@@ -372,6 +458,17 @@ class _MembersTabState extends State<MembersTab> {
     };
   }
 
+  String _roleLabel(String role) {
+    return switch (role) {
+      'HOMESCHOOL_ADMIN' => '관리자',
+      'STAFF' => '스태프',
+      'TEACHER' => '교사',
+      'GUEST_TEACHER' => '외부교사',
+      'PARENT' => '부모',
+      _ => role,
+    };
+  }
+
   static const List<DropdownMenuItem<String>> _roleItems = [
     DropdownMenuItem(value: 'PARENT', child: Text('PARENT')),
     DropdownMenuItem(value: 'TEACHER', child: Text('TEACHER')),
@@ -381,6 +478,12 @@ class _MembersTabState extends State<MembersTab> {
       value: 'HOMESCHOOL_ADMIN',
       child: Text('HOMESCHOOL_ADMIN'),
     ),
+  ];
+
+  static const List<String> _selfSwitchRoles = [
+    'PARENT',
+    'TEACHER',
+    'GUEST_TEACHER',
   ];
 
   Color _statusColor(String status) {
@@ -399,6 +502,34 @@ class _MembersTabState extends State<MembersTab> {
         targetUserId: _targetUserIdController.text,
         role: _targetRole,
       );
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _toggleMyRole({
+    required String role,
+    required bool enable,
+  }) async {
+    final userId = widget.controller.user?.id;
+    if (userId == null || userId.isEmpty) {
+      _showMessage('로그인 사용자 정보를 찾지 못했습니다.');
+      return;
+    }
+
+    try {
+      if (enable) {
+        await widget.controller.grantMembershipRole(
+          targetUserId: userId,
+          role: role,
+        );
+      } else {
+        await widget.controller.revokeMembershipRole(
+          targetUserId: userId,
+          role: role,
+        );
+      }
       _showMessage(widget.controller.statusMessage);
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
