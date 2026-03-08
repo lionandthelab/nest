@@ -16,22 +16,17 @@ class FamilyAdminTab extends StatefulWidget {
 }
 
 class _FamilyAdminTabState extends State<FamilyAdminTab> {
-  final _classNameController = TextEditingController();
-  final _classCapacityController = TextEditingController(text: '12');
   final _courseNameController = TextEditingController();
   final _courseDurationController = TextEditingController(text: '50');
 
   String? _selectedFamilyId;
   String? _selectedClassGroupId;
-  String? _classFormBoundToId;
   bool _familyInitialized = false;
   bool _classInitialized = false;
   String _setupUnit = 'FAMILY';
 
   @override
   void dispose() {
-    _classNameController.dispose();
-    _classCapacityController.dispose();
     _courseNameController.dispose();
     _courseDurationController.dispose();
     super.dispose();
@@ -41,7 +36,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     _syncSelections(controller);
-    _syncClassForm(controller);
 
     if (!controller.canManageFamilies) {
       return Card(
@@ -66,11 +60,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         _buildChildManagementCard(controller),
       ],
       'TEACHER' => [_buildTeacherManagementCard(controller)],
-      'CLASS' => [
-        _buildClassCrudCard(controller),
-        const SizedBox(height: 12),
-        _buildEnrollmentCard(controller),
-      ],
+      'CLASS' => [_buildClassCrudCard(controller)],
       'COURSE' => [_buildCourseManageCard(controller)],
       _ => [_buildFamilyManagementCard(controller)],
     };
@@ -180,35 +170,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
-            if (controller.classGroups.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text('현재 반 목록', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: controller.classGroups
-                    .map(
-                      (group) => SizedBox(
-                        width: 220,
-                        child: LabeledEntityTile(
-                          title: group.name,
-                          subtitle: '정원 ${group.capacity}명',
-                          icon: Icons.groups_2_outlined,
-                          compact: true,
-                          trailing: group.id == _selectedClassGroupId
-                              ? Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: NestColors.mutedSage,
-                                )
-                              : null,
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-            ],
           ],
         ),
       ),
@@ -238,31 +199,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       _selectedClassGroupId =
           controller.selectedClassGroupId ??
           controller.classGroups.firstOrNull?.id;
-    }
-  }
-
-  void _syncClassForm(NestController controller, {bool force = false}) {
-    final classGroupId = _selectedClassGroupId;
-    if (classGroupId == null || classGroupId.isEmpty) {
-      if (force || _classFormBoundToId != null) {
-        _classNameController.clear();
-        _classCapacityController.text = '12';
-        _classFormBoundToId = null;
-      }
-      return;
-    }
-
-    final classGroup = controller.classGroups
-        .where((row) => row.id == classGroupId)
-        .firstOrNull;
-    if (classGroup == null) {
-      return;
-    }
-
-    if (force || _classFormBoundToId != classGroup.id) {
-      _classNameController.text = classGroup.name;
-      _classCapacityController.text = classGroup.capacity.toString();
-      _classFormBoundToId = classGroup.id;
     }
   }
 
@@ -930,251 +866,419 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildClassCrudCard(NestController controller) {
+    final classGroups = controller.classGroups.toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('반 관리 (CRUD)', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '반을 생성/수정/삭제하면 반별 시간표 편성 대상이 즉시 반영됩니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (controller.classGroups.isEmpty)
-              const Text('현재 학기에 등록된 반이 없습니다. 아래 정보로 새 반을 생성하세요.')
-            else
-              _buildClassSelectionCards(
-                controller: controller,
-                title: '편집 대상 반',
-                selectedClassGroupId: _selectedClassGroupId,
-                onSelect: (classGroupId) {
-                  if (controller.isBusy) {
-                    return;
-                  }
-                  setState(() {
-                    _selectedClassGroupId = classGroupId;
-                    _syncClassForm(controller, force: true);
-                  });
-                },
-              ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _classNameController,
-              decoration: const InputDecoration(labelText: '반 이름'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _classCapacityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '정원'),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            Row(
               children: [
-                ElevatedButton.icon(
-                  onPressed: controller.isBusy ? null : _createClassGroup,
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('반 생성'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: controller.isBusy || _selectedClassGroupId == null
-                      ? null
-                      : _updateClassGroup,
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('반 수정'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: controller.isBusy || _selectedClassGroupId == null
-                      ? null
-                      : _deleteClassGroup,
-                  style: FilledButton.styleFrom(
-                    foregroundColor: Colors.red.shade700,
+                Expanded(
+                  child: Text(
+                    '반 관리',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('반 삭제'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => _openClassEditorDialog(controller: controller),
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('반 추가'),
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClassSelectionCards({
-    required NestController controller,
-    required String title,
-    required String? selectedClassGroupId,
-    required ValueChanged<String> onSelect,
-  }) {
-    final classes = controller.classGroups.toList(growable: false)
-      ..sort((a, b) => a.name.compareTo(b.name));
-
-    if (classes.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: NestColors.deepWood.withValues(alpha: 0.74),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: classes
-              .map((classGroup) {
-                final selected = classGroup.id == selectedClassGroupId;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: controller.isBusy
-                      ? null
-                      : () => onSelect(classGroup.id),
-                  child: SizedBox(
-                    width: 200,
-                    child: LabeledEntityTile(
-                      title: classGroup.name,
-                      subtitle: '정원 ${classGroup.capacity}명',
-                      icon: Icons.groups_2_outlined,
-                      compact: true,
-                      trailing: Icon(
-                        selected
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        size: 18,
-                        color: selected
-                            ? NestColors.mutedSage
-                            : NestColors.deepWood.withValues(alpha: 0.46),
-                      ),
-                    ),
-                  ),
-                );
-              })
-              .toList(growable: false),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEnrollmentCard(NestController controller) {
-    final classGroupId = _selectedClassGroupId;
-    final selectedClass = controller.classGroups
-        .where((row) => row.id == classGroupId)
-        .firstOrNull;
-    final enrolledIds = classGroupId == null
-        ? const <String>[]
-        : controller.enrolledChildIdsForClassGroup(classGroupId);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('반 배정', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
-              '선택한 반에 아이를 체크로 배정/해제합니다.',
+              '반 카드를 클릭하면 반 정보 수정과 아이 복수 배정을 한 번에 처리할 수 있습니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 10),
-            if (controller.classGroups.isEmpty)
-              const Text('현재 학기에 반이 없습니다.')
+            if (classGroups.isEmpty)
+              _buildEmptyHint('현재 학기에 등록된 반이 없습니다. 반 추가로 시작하세요.')
             else
-              _buildClassSelectionCards(
-                controller: controller,
-                title: '배정 대상 반',
-                selectedClassGroupId: selectedClass?.id,
-                onSelect: (nextClassGroupId) {
-                  if (controller.isBusy) {
-                    return;
-                  }
-                  setState(() {
-                    _selectedClassGroupId = nextClassGroupId;
-                    _syncClassForm(controller, force: true);
-                  });
-                },
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: classGroups
+                    .map((classGroup) {
+                      final enrolledCount = controller
+                          .enrolledChildIdsForClassGroup(classGroup.id)
+                          .length;
+                      final selected = _selectedClassGroupId == classGroup.id;
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: controller.isBusy
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedClassGroupId = classGroup.id;
+                                });
+                                _openClassEditorDialog(
+                                  controller: controller,
+                                  initial: classGroup,
+                                );
+                              },
+                        child: SizedBox(
+                          width: 310,
+                          child: LabeledEntityTile(
+                            title: classGroup.name,
+                            subtitle:
+                                '정원 ${classGroup.capacity}명 · 아이 $enrolledCount명 배정',
+                            icon: Icons.groups_2_outlined,
+                            trailing: Icon(
+                              selected
+                                  ? Icons.check_circle
+                                  : Icons.edit_outlined,
+                              size: 18,
+                              color: selected
+                                  ? NestColors.mutedSage
+                                  : NestColors.deepWood.withValues(alpha: 0.62),
+                            ),
+                          ),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
               ),
-            const SizedBox(height: 8),
-            if (controller.children.isEmpty)
-              const Text('등록된 아이가 없습니다.')
-            else
-              ...controller.children.map((child) {
-                final checked = enrolledIds.contains(child.id);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: NestColors.roseMist),
-                      color: Colors.white,
-                    ),
-                    child: Row(
-                      children: [
-                        Checkbox(
-                          value: checked,
-                          onChanged: controller.isBusy || classGroupId == null
-                              ? null
-                              : (value) => _toggleEnrollment(
-                                  childId: child.id,
-                                  checked: value == true,
-                                  classGroupId: classGroupId,
-                                ),
-                        ),
-                        EntityAvatar(
-                          label: child.name,
-                          icon: Icons.child_care_outlined,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                child.name,
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              Text(
-                                '${child.familyName} · ${child.status}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (checked)
-                          Icon(
-                            Icons.check_circle,
-                            size: 18,
-                            color: NestColors.mutedSage,
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openClassEditorDialog({
+    required NestController controller,
+    ClassGroup? initial,
+  }) async {
+    final nameController = TextEditingController(text: initial?.name ?? '');
+    final capacityController = TextEditingController(
+      text: initial?.capacity.toString() ?? '12',
+    );
+    final queryController = TextEditingController();
+    final selectedChildIds =
+        (initial == null
+                ? <String>{}
+                : controller.enrolledChildIdsForClassGroup(initial.id).toSet())
+            .toSet();
+    var isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final query = queryController.text.trim().toLowerCase();
+              final children =
+                  controller.children
+                      .where((child) {
+                        if (query.isEmpty) {
+                          return true;
+                        }
+                        return child.name.toLowerCase().contains(query) ||
+                            child.familyName.toLowerCase().contains(query);
+                      })
+                      .toList(growable: false)
+                    ..sort((a, b) {
+                      final familyCompare = a.familyName.compareTo(
+                        b.familyName,
+                      );
+                      if (familyCompare != 0) {
+                        return familyCompare;
+                      }
+                      return a.name.compareTo(b.name);
+                    });
+
+              Future<void> saveClass() async {
+                if (isSaving) {
+                  return;
+                }
+                final trimmedName = nameController.text.trim();
+                final capacity = int.tryParse(capacityController.text.trim());
+                if (trimmedName.isEmpty) {
+                  _showMessage('반 이름을 입력하세요.');
+                  return;
+                }
+                if (capacity == null) {
+                  _showMessage('정원은 숫자로 입력하세요.');
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+
+                try {
+                  String classGroupId;
+                  if (initial == null) {
+                    await controller.createClassGroup(
+                      name: trimmedName,
+                      capacity: capacity,
+                    );
+                    classGroupId = controller.selectedClassGroupId ?? '';
+                    if (classGroupId.isEmpty) {
+                      throw StateError('생성된 반 ID를 확인할 수 없습니다.');
+                    }
+                  } else {
+                    await controller.updateClassGroup(
+                      classGroupId: initial.id,
+                      name: trimmedName,
+                      capacity: capacity,
+                    );
+                    classGroupId = initial.id;
+                  }
+
+                  await controller.syncClassEnrollments(
+                    classGroupId: classGroupId,
+                    childIds: selectedChildIds,
+                  );
+
+                  if (mounted) {
+                    setState(() {
+                      _selectedClassGroupId = classGroupId;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              Future<void> deleteClass() async {
+                final target = initial;
+                if (target == null || isSaving) {
+                  return;
+                }
+                final childCount = controller
+                    .enrolledChildIdsForClassGroup(target.id)
+                    .length;
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (confirmContext) => AlertDialog(
+                    title: const Text('반 삭제'),
+                    content: Text(
+                      '반 "${target.name}" 을(를) 삭제할까요?\n'
+                      '배정된 아이 $childCount명과 연결된 시간표/배정 데이터가 함께 정리될 수 있습니다.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(confirmContext).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(confirmContext).pop(true),
+                        child: const Text('삭제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) {
+                  return;
+                }
+
+                setDialogState(() {
+                  isSaving = true;
+                });
+                try {
+                  await controller.deleteClassGroup(classGroupId: target.id);
+                  if (mounted) {
+                    setState(() {
+                      _selectedClassGroupId = controller.selectedClassGroupId;
+                    });
+                  }
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                  if (context.mounted) {
+                    setDialogState(() {
+                      isSaving = false;
+                    });
+                  }
+                }
+              }
+
+              return AlertDialog(
+                title: Text(initial == null ? '반 추가' : '반 수정'),
+                content: SizedBox(
+                  width: 720,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: nameController,
+                                decoration: const InputDecoration(
+                                  labelText: '반 이름',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 140,
+                              child: TextField(
+                                controller: capacityController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: '정원',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '아이 배정 (복수 선택)',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        if (controller.children.isEmpty)
+                          _buildEmptyHint('등록된 아이가 없습니다. 가정 탭에서 아이를 먼저 추가하세요.')
+                        else ...[
+                          TextField(
+                            controller: queryController,
+                            decoration: const InputDecoration(
+                              labelText: '아이 검색',
+                              hintText: '아이 이름 또는 가정 이름',
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Chip(
+                                avatar: const Icon(Icons.checklist, size: 16),
+                                label: Text('선택 ${selectedChildIds.length}명'),
+                              ),
+                              TextButton.icon(
+                                onPressed: isSaving
+                                    ? null
+                                    : () {
+                                        setDialogState(() {
+                                          selectedChildIds
+                                            ..clear()
+                                            ..addAll(
+                                              controller.children.map(
+                                                (row) => row.id,
+                                              ),
+                                            );
+                                        });
+                                      },
+                                icon: const Icon(Icons.select_all, size: 16),
+                                label: const Text('전체 선택'),
+                              ),
+                              TextButton.icon(
+                                onPressed: isSaving
+                                    ? null
+                                    : () {
+                                        setDialogState(() {
+                                          selectedChildIds.clear();
+                                        });
+                                      },
+                                icon: const Icon(Icons.deselect, size: 16),
+                                label: const Text('선택 해제'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 300),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: NestColors.roseMist),
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: children.length,
+                              itemBuilder: (context, index) {
+                                final child = children[index];
+                                final checked = selectedChildIds.contains(
+                                  child.id,
+                                );
+                                return CheckboxListTile(
+                                  dense: true,
+                                  value: checked,
+                                  title: Text(child.name),
+                                  subtitle: Text(
+                                    '${child.familyName} · ${child.status}',
+                                  ),
+                                  onChanged: isSaving
+                                      ? null
+                                      : (value) {
+                                          setDialogState(() {
+                                            if (value == true) {
+                                              selectedChildIds.add(child.id);
+                                            } else {
+                                              selectedChildIds.remove(child.id);
+                                            }
+                                          });
+                                        },
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  if (initial != null)
+                    TextButton.icon(
+                      onPressed: isSaving ? null : deleteClass,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('삭제'),
+                    ),
+                  TextButton(
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('닫기'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: isSaving ? null : saveClass,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(initial == null ? '생성' : '저장'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      capacityController.dispose();
+      queryController.dispose();
+    }
   }
 
   Widget _buildTeacherManagementCard(NestController controller) {
@@ -1790,123 +1894,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         ),
       ),
     );
-  }
-
-  Future<void> _createClassGroup() async {
-    final capacity = int.tryParse(_classCapacityController.text.trim());
-    if (capacity == null) {
-      _showMessage('정원은 숫자로 입력하세요.');
-      return;
-    }
-
-    try {
-      await widget.controller.createClassGroup(
-        name: _classNameController.text,
-        capacity: capacity,
-      );
-      setState(() {
-        _selectedClassGroupId = widget.controller.selectedClassGroupId;
-        _syncClassForm(widget.controller, force: true);
-      });
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _updateClassGroup() async {
-    final classGroupId = _selectedClassGroupId;
-    if (classGroupId == null || classGroupId.isEmpty) {
-      _showMessage('수정할 반을 선택하세요.');
-      return;
-    }
-
-    final capacity = int.tryParse(_classCapacityController.text.trim());
-    if (capacity == null) {
-      _showMessage('정원은 숫자로 입력하세요.');
-      return;
-    }
-
-    try {
-      await widget.controller.updateClassGroup(
-        classGroupId: classGroupId,
-        name: _classNameController.text,
-        capacity: capacity,
-      );
-      setState(() {
-        _syncClassForm(widget.controller, force: true);
-      });
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _deleteClassGroup() async {
-    final classGroupId = _selectedClassGroupId;
-    if (classGroupId == null || classGroupId.isEmpty) {
-      _showMessage('삭제할 반을 선택하세요.');
-      return;
-    }
-
-    final className = widget.controller.findClassGroupName(classGroupId);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('반 삭제'),
-        content: Text(
-          '반 "$className" 을(를) 삭제할까요?\n연결된 시간표/배정 데이터도 함께 삭제될 수 있습니다.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    try {
-      await widget.controller.deleteClassGroup(classGroupId: classGroupId);
-      setState(() {
-        _selectedClassGroupId = widget.controller.selectedClassGroupId;
-        _syncClassForm(widget.controller, force: true);
-      });
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _toggleEnrollment({
-    required String classGroupId,
-    required String childId,
-    required bool checked,
-  }) async {
-    try {
-      if (checked) {
-        await widget.controller.assignChildToClass(
-          classGroupId: classGroupId,
-          childId: childId,
-        );
-      } else {
-        await widget.controller.unassignChildFromClass(
-          classGroupId: classGroupId,
-          childId: childId,
-        );
-      }
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
   }
 
   Future<void> _refreshFamilyDomain() async {

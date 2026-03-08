@@ -362,7 +362,10 @@ Admin dashboard onboarding:
     - family (family card management + child card management with unified edit dialogs)
     - family/child edit dialogs include delete actions with confirmation guardrails
     - teacher (teacher profile edit + account link/unlink + unavailability in one modal)
-    - class (card-based class selection, class CRUD, enrollments)
+    - class (class cards + unified class create/edit modal)
+    - class modal supports:
+      - class create/update/delete
+      - child assignment in the same modal with multi-select
     - course (course create/delete and duration)
   - setup progress bar + unit chips for direct switching
 - `parent_timetable_tab.dart`:

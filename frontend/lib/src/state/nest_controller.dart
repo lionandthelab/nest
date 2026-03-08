@@ -2298,6 +2298,67 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> syncClassEnrollments({
+    required String classGroupId,
+    required Set<String> childIds,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final normalizedClassId = _normalizeNullable(classGroupId);
+    if (normalizedClassId == null) {
+      throw StateError('반을 선택하세요.');
+    }
+
+    final validChildIds = children
+        .map((child) => child.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final desired = childIds
+        .map((id) => _normalizeNullable(id))
+        .whereType<String>()
+        .where(validChildIds.contains)
+        .toSet();
+    final current = enrolledChildIdsForClassGroup(normalizedClassId).toSet();
+
+    final toAdd = desired.difference(current);
+    final toRemove = current.difference(desired);
+
+    if (toAdd.isEmpty && toRemove.isEmpty) {
+      _setStatus('반 배정 변경사항이 없습니다.');
+      notifyListeners();
+      return;
+    }
+
+    await _runBusy('반 배정을 저장하는 중...', () async {
+      for (final childId in toAdd) {
+        await _repository.upsertClassEnrollment(
+          classGroupId: normalizedClassId,
+          childId: childId,
+        );
+      }
+      for (final childId in toRemove) {
+        await _repository.deleteClassEnrollment(
+          classGroupId: normalizedClassId,
+          childId: childId,
+        );
+      }
+      await loadClassEnrollments();
+      await _logAudit(
+        actionType: 'CLASS_ENROLLMENT_SYNC',
+        resourceType: 'class_enrollments',
+        resourceId: normalizedClassId,
+        afterJson: {
+          'added': toAdd.length,
+          'removed': toRemove.length,
+          'total': desired.length,
+        },
+      );
+      _setStatus('반 배정을 저장했습니다.');
+    });
+  }
+
   Future<void> unassignChildFromClass({
     required String classGroupId,
     required String childId,

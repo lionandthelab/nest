@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.12+13 (2026-03-08)
+
+### Changed
+
+- 반 관리 UX 재구성 (`family_admin_tab.dart`)
+  - 학기 설정 헤더 카드에서 `현재 반 목록` 제거
+  - `반 관리`를 카드형 목록 기반으로 일원화
+  - 반 카드 클릭 시 생성/수정 공용 모달로 진입
+  - 반 생성/수정 모달에서 아이 배정을 같은 화면에서 처리
+  - 아이 배정은 다중 선택(복수 체크) 기반으로 저장
+- 반 배정 동기화 API 추가 (`nest_controller.dart`)
+  - `syncClassEnrollments(classGroupId, childIds)` 추가
+  - 모달 저장 시 선택된 아이 집합 기준으로 `추가/해제` diff 반영
+  - 감사 로그 이벤트 추가: `CLASS_ENROLLMENT_SYNC`
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build web --release --base-href /nest/` 통과
+
 ## 1.0.11+12 (2026-03-08)
 
 ### Changed
