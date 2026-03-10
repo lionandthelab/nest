@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.24+25 (2026-03-10)
+
+### Changed
+
+- 모바일 출시 준비 보강
+  - Android `applicationId/namespace`를 `io.lionandthelab.nest`로 통일
+  - iOS `PRODUCT_BUNDLE_IDENTIFIER`를 `io.lionandthelab.nest`로 통일
+  - Android/iOS Supabase 인증 복귀용 딥링크 스킴 설정
+    - `io.lionandthelab.nest://login-callback/`
+  - Android 릴리즈 네트워크 접근을 위한 `INTERNET` 권한을 `main` 매니페스트에 추가
+  - Android 릴리즈 서명 설정을 `key.properties` 기반으로 지원 (없으면 로컬 검증용 debug 서명 fallback)
+- 인증 UX 보강
+  - 로그인 화면의 하드코딩된 기본 이메일/비밀번호 제거
+  - 로그인 화면에 `비밀번호를 잊으셨나요?` 흐름 추가
+  - 비밀번호 재설정 메일 발송 API/컨트롤러 연동
+- 문서 업데이트
+  - `docs/architecture.md` 모바일 배포/리다이렉트 설정 반영
+  - `docs/mobile_release.md` 신설 (스토어 업로드 전 체크리스트 및 빌드 가이드)
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 통과
+- `flutter build appbundle --release` 통과
+- `flutter build ios --release --no-codesign` 통과
+
 ## 1.0.23+24 (2026-03-08)
 
 ### Changed

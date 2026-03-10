@@ -15,8 +15,8 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'lionandthelab@gmail.com');
-  final _passwordController = TextEditingController(text: 'dmltjr12');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isSignUpMode = false;
 
@@ -51,6 +51,51 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
+    }
+  }
+
+  Future<void> _onForgotPassword() async {
+    final emailController = TextEditingController(text: _emailController.text);
+    final requestedEmail = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('비밀번호 재설정'),
+        content: TextField(
+          controller: emailController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: '이메일',
+            hintText: 'you@example.com',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(emailController.text.trim()),
+            child: const Text('메일 보내기'),
+          ),
+        ],
+      ),
+    );
+    emailController.dispose();
+
+    if (requestedEmail == null || requestedEmail.isEmpty) {
+      return;
+    }
+
+    try {
+      await widget.controller.requestPasswordReset(email: requestedEmail);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
@@ -106,6 +151,7 @@ class _LoginPageState extends State<LoginPage> {
                                 TextFormField(
                                   controller: _emailController,
                                   keyboardType: TextInputType.emailAddress,
+                                  autofillHints: const [AutofillHints.email],
                                   decoration: const InputDecoration(
                                     labelText: 'Email',
                                     hintText: 'you@nest.local',
@@ -124,6 +170,9 @@ class _LoginPageState extends State<LoginPage> {
                                 TextFormField(
                                   controller: _passwordController,
                                   obscureText: true,
+                                  autofillHints: _isSignUpMode
+                                      ? const [AutofillHints.newPassword]
+                                      : const [AutofillHints.password],
                                   decoration: const InputDecoration(
                                     labelText: 'Password',
                                   ),
@@ -162,6 +211,9 @@ class _LoginPageState extends State<LoginPage> {
                                               controller:
                                                   _confirmPasswordController,
                                               obscureText: true,
+                                              autofillHints: const [
+                                                AutofillHints.newPassword,
+                                              ],
                                               decoration: const InputDecoration(
                                                 labelText: 'Password 확인',
                                               ),
@@ -220,6 +272,16 @@ class _LoginPageState extends State<LoginPage> {
                                         : '계정이 없나요? 회원가입',
                                   ),
                                 ),
+                                if (!_isSignUpMode)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: widget.controller.isBusy
+                                          ? null
+                                          : _onForgotPassword,
+                                      child: const Text('비밀번호를 잊으셨나요?'),
+                                    ),
+                                  ),
                                 const SizedBox(height: 16),
                                 Text(
                                   widget.controller.statusMessage,

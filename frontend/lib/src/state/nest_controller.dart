@@ -320,6 +320,18 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> requestPasswordReset({required String email}) async {
+    final normalized = email.trim();
+    if (normalized.isEmpty) {
+      throw StateError('비밀번호 재설정 이메일을 입력하세요.');
+    }
+
+    await _runBusy('비밀번호 재설정 메일 발송 중...', () async {
+      await _repository.sendPasswordResetEmail(email: normalized);
+      _setStatus('비밀번호 재설정 메일을 보냈습니다. 메일함을 확인하세요.');
+    });
+  }
+
   Future<void> signOut() async {
     await _runBusy('로그아웃 중...', () async {
       await NestCache.clearAll();

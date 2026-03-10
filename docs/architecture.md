@@ -1,6 +1,6 @@
 # Nest Flutter Architecture
 
-Last updated: 2026-03-08
+Last updated: 2026-03-10
 
 ## 1. Goals
 
@@ -579,6 +579,11 @@ Required `dart-define` values:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 
+Optional auth redirect overrides:
+
+- `AUTH_EMAIL_REDIRECT_URL` (web, default: `https://lionandthelab.github.io/nest/`)
+- `AUTH_EMAIL_REDIRECT_URL_MOBILE` (android/ios, default: `io.lionandthelab.nest://login-callback/`)
+
 Example:
 
 ```bash
@@ -595,6 +600,8 @@ flutter pub get
 flutter analyze
 flutter test
 flutter build web --release --base-href /nest/
+flutter build appbundle --release
+flutter build ios --release --no-codesign
 ```
 
 - GitHub Pages workflow: `.github/workflows/flutter_web_pages.yml`
@@ -610,9 +617,29 @@ Keep Google Console redirect URI and Supabase `GOOGLE_REDIRECT_URI` aligned:
 - Local: `http://localhost:8080/oauth/google/callback.html`
 - GitHub Pages: `https://lionandthelab.github.io/nest/oauth/google/callback.html`
 
+Supabase Auth redirect URLs for app login/signup/password reset:
+
+- Web: `https://lionandthelab.github.io/nest/`
+- Mobile deep link: `io.lionandthelab.nest://login-callback/`
+
 ## 11. Operational Rules
 
 - Never expose `service_role` in frontend.
 - Keep token access restricted to admin RLS scopes.
 - Keep edge function JWT/user checks enabled.
 - Update this file whenever architecture-affecting code changes are introduced.
+
+## 12. Mobile Release Readiness
+
+- Android release network access enabled in main manifest (`INTERNET` permission).
+- Android package/application id unified to `io.lionandthelab.nest`.
+- Android deep link intent filter added for Supabase auth callback:
+  - scheme: `io.lionandthelab.nest`
+  - host: `login-callback`
+- iOS bundle id unified to `io.lionandthelab.nest`.
+- iOS URL type added for Supabase auth callback scheme `io.lionandthelab.nest`.
+- Login page now uses empty credential fields (no seeded account/password in production build).
+- Login page includes password reset email request flow.
+- Android release signing:
+  - if `android/key.properties` exists, release signing config is used
+  - otherwise build falls back to debug signing for local verification

@@ -75,6 +75,13 @@ class NestRepository {
     return response;
   }
 
+  Future<void> sendPasswordResetEmail({required String email}) {
+    return client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: AppConfig.authEmailRedirectUrl,
+    );
+  }
+
   Future<void> signOut() => client.auth.signOut();
 
   Future<List<Membership>> fetchMemberships({required String userId}) async {
