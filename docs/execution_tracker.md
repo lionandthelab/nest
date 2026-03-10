@@ -79,6 +79,7 @@ Last updated: 2026-03-08
 | 2026-03-08 | 학기 설정 정보 스캔성 강화: 관리자 `Term Setup` 헤더에 KPI 요약 카드(가정/아이/학부모/선생님/반/과목/교실) 추가, 각 관리 섹션 헤더에 총량 배지 적용으로 카드 개수 세기 없이 즉시 현황 파악 가능하도록 UI 개선 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 스케줄 탭 UX 보강: 시간표/교실 상황표 내보내기 우측 패딩 불균형 수정(좌우 대칭), 좌측 팔레트에서 과목/선생님/교실 리소스 즉시 추가·삭제 지원(교사 삭제 API + `teacher_profiles` delete RLS 포함) | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/`, `supabase db push` |
 | 2026-03-08 | 스케줄 확정 후 경고 잔여 버그 수정: `수정 확정` 성공 시 dirty 상태를 상위 탭 가드로 강제 재동기화하고, 반/선택 해제 상태에서도 dirty false를 보장하여 탭 이동 시 잘못된 `수정사항 경고` 반복 노출 제거 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
+| 2026-03-08 | 홈 레이아웃/내비게이션 한글화 및 헤더 UX 개편: 헤더 설정 영역 항상 확장(full-width), 사용자 이름+이메일 표시, 탭/타이틀 한국어 통일, 좌측 사이드바 상단 로고 클릭 홈 이동, 탭 하단 현재 화면 마이크로 캡션 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 
 ## Next Batch
 

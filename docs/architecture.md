@@ -319,6 +319,11 @@ Admin dashboard onboarding:
   - class tab onboarding draft generator removed to keep class setup focused on direct CRUD + enrollment
 - Parent child selector (`home_page.dart` header bar)
   - child switching is centralized in global header and shared across all parent tabs
+  - header context area (`홈스쿨/학기/반/뷰 역할`) is always expanded and full-width (no extra collapse open action required)
+  - user identity line shows display name + email in header for quick account recognition
+  - IA labels are Korean-first (`대시보드`, `학기 설정`, `시간표`, `시스템`, `교사 허브`, `갤러리`, `커뮤니티`)
+  - desktop left rail top logo (`assets/logo.png`) is clickable and routes to home tab
+  - each tab view includes a bottom micro-caption (`현재 탭: ...`) to clarify current workspace context
 - Shared objective:
   - reduce initial setup friction in large homeschool contexts
   - keep one-tap edit flow while preserving existing backend model

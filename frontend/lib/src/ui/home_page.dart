@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../config/app_config.dart';
 import '../models/nest_models.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
@@ -128,7 +127,7 @@ class _HomePageState extends State<HomePage> {
     if (controller.memberships.isEmpty) {
       return [
         _TabSpec(
-          label: 'Dashboard',
+          label: '대시보드',
           page: DashboardTab(
             controller: controller,
             onRequestTabChange: _navigateToTabLabel,
@@ -140,25 +139,25 @@ class _HomePageState extends State<HomePage> {
     if (controller.isAdminLike) {
       return [
         _TabSpec(
-          label: 'Dashboard',
+          label: '대시보드',
           page: DashboardTab(
             controller: controller,
             onRequestTabChange: _navigateToTabLabel,
           ),
         ),
         _TabSpec(
-          label: 'Term Setup',
+          label: '학기 설정',
           page: FamilyAdminTab(controller: controller),
         ),
         _TabSpec(
-          label: 'Schedule',
+          label: '시간표',
           page: TimetableTab(
             controller: controller,
             onDirtyChanged: _handleScheduleDirtyChanged,
           ),
         ),
         _TabSpec(
-          label: 'System',
+          label: '시스템',
           page: SystemAdminTab(controller: controller),
         ),
       ];
@@ -195,7 +194,7 @@ class _HomePageState extends State<HomePage> {
     // ── Teacher / other non-admin view ──
     final tabs = <_TabSpec>[
       _TabSpec(
-        label: 'Dashboard',
+        label: '대시보드',
         page: DashboardTab(
           controller: controller,
           onRequestTabChange: _navigateToTabLabel,
@@ -203,24 +202,24 @@ class _HomePageState extends State<HomePage> {
       ),
       if (controller.isTeacherView)
         _TabSpec(
-          label: 'Teacher Hub',
+          label: '교사 허브',
           page: TeacherHubTab(controller: controller),
         ),
       _TabSpec(
-        label: 'Timetable',
+        label: '시간표',
         page: TimetableTab(
           controller: controller,
           onDirtyChanged: _handleScheduleDirtyChanged,
         ),
       ),
       _TabSpec(
-        label: 'Gallery',
+        label: '갤러리',
         page: GalleryTab(controller: controller),
       ),
     ];
     tabs.add(
       _TabSpec(
-        label: 'Community',
+        label: '커뮤니티',
         page: CommunityFeedTab(controller: controller),
       ),
     );
@@ -325,7 +324,9 @@ class _HomePageState extends State<HomePage> {
 
   bool _isScheduleTabLabel(String label) {
     final normalized = label.trim().toLowerCase();
-    return normalized == 'schedule' || normalized == 'timetable';
+    return normalized == 'schedule' ||
+        normalized == 'timetable' ||
+        label.trim() == '시간표';
   }
 
   Future<void> _loadChildClassBundles(String childId) async {
@@ -435,7 +436,10 @@ class _HomePageState extends State<HomePage> {
 
   void _navigateToTabLabel(String label) {
     final tabs = _buildTabs(widget.controller);
-    final targetIndex = tabs.indexWhere((tab) => tab.label == label);
+    final normalizedTarget = _normalizeTabLabel(label);
+    final targetIndex = tabs.indexWhere(
+      (tab) => _normalizeTabLabel(tab.label) == normalizedTarget,
+    );
     if (targetIndex < 0 || !mounted) {
       return;
     }
@@ -447,6 +451,21 @@ class _HomePageState extends State<HomePage> {
 
   void _openParentAnnouncementsTab() {
     _navigateToTabLabel('소식');
+  }
+
+  String _normalizeTabLabel(String label) {
+    final trimmed = label.trim();
+    return switch (trimmed) {
+      'Dashboard' => '대시보드',
+      'Term Setup' => '학기 설정',
+      'Schedule' => '시간표',
+      'Timetable' => '시간표',
+      'System' => '시스템',
+      'Teacher Hub' => '교사 허브',
+      'Gallery' => '갤러리',
+      'Community' => '커뮤니티',
+      _ => trimmed,
+    };
   }
 
   void _showMessage(String message) {
@@ -513,9 +532,39 @@ class _DesktopScaffold extends StatelessWidget {
             onDestinationSelected: onSelectIndex,
             useIndicator: true,
             backgroundColor: Colors.white.withValues(alpha: 0.7),
-            leading: const Padding(
-              padding: EdgeInsets.all(10),
-              child: Icon(Icons.nest_cam_wired_stand_outlined, size: 30),
+            leading: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => onSelectIndex(0),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.asset(
+                          'assets/logo.png',
+                          width: 34,
+                          height: 34,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '홈',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
             destinations: labels
                 .map(
@@ -668,8 +717,6 @@ class _MainPanel extends StatefulWidget {
 }
 
 class _MainPanelState extends State<_MainPanel> {
-  bool _headerExpanded = false;
-
   void _showRoleInfo(BuildContext context, NestController controller) {
     final role = controller.currentRole ?? '';
     final message = controller.isParentView
@@ -803,6 +850,39 @@ class _MainPanelState extends State<_MainPanel> {
     );
   }
 
+  String _panelTitle(NestController controller) {
+    if (controller.isAdminLike) {
+      return '관리';
+    }
+    if (controller.isTeacherView) {
+      return '교사';
+    }
+    if (controller.isParentView) {
+      return '학부모';
+    }
+    return '홈';
+  }
+
+  String _displayName(NestController controller) {
+    final fromDirectory = controller.findMemberDisplayName(controller.user?.id);
+    if (fromDirectory.trim().isNotEmpty &&
+        fromDirectory != controller.user?.id) {
+      return fromDirectory;
+    }
+
+    final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
+    final metadataName = metadata['full_name'] ?? metadata['name'];
+    if (metadataName is String && metadataName.trim().isNotEmpty) {
+      return metadataName.trim();
+    }
+
+    final email = controller.user?.email ?? '';
+    if (email.contains('@')) {
+      return email.split('@').first;
+    }
+    return '사용자';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -813,6 +893,8 @@ class _MainPanelState extends State<_MainPanel> {
     final latestParentAnnouncements = controller.isParentView
         ? _latestParentAnnouncements(controller)
         : const <Announcement>[];
+    final displayName = _displayName(controller);
+    final panelTitle = _panelTitle(controller);
 
     final refreshAction = iconOnlyActions
         ? IconButton(
@@ -846,27 +928,19 @@ class _MainPanelState extends State<_MainPanel> {
               children: [
                 if (compactHeader)
                   Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
+                          const Icon(Icons.nest_cam_wired_stand, size: 22),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${AppConfig.appName} Administration',
+                              panelTitle,
                               style: theme.textTheme.titleLarge,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          IconButton(
-                            icon: AnimatedRotation(
-                              turns: _headerExpanded ? 0.5 : 0,
-                              duration: const Duration(milliseconds: 200),
-                              child: const Icon(Icons.expand_more),
-                            ),
-                            onPressed: () => setState(
-                              () => _headerExpanded = !_headerExpanded,
-                            ),
-                            tooltip: _headerExpanded ? '접기' : '펼치기',
                           ),
                         ],
                       ),
@@ -878,8 +952,18 @@ class _MainPanelState extends State<_MainPanel> {
                         runSpacing: 6,
                         children: [
                           Chip(
-                            label: Text(controller.currentRole ?? '-'),
+                            label: Text(
+                              _labelForRole(controller.currentRole ?? '-'),
+                            ),
                             avatar: const Icon(Icons.verified_user, size: 14),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          Chip(
+                            label: Text('$displayName 님'),
+                            avatar: const Icon(
+                              Icons.nest_cam_wired_stand,
+                              size: 14,
+                            ),
                             visualDensity: VisualDensity.compact,
                           ),
                           _buildParentChildSwitchButton(controller),
@@ -899,14 +983,23 @@ class _MainPanelState extends State<_MainPanel> {
                 else
                   Row(
                     children: [
-                      Text(
-                        '${AppConfig.appName} Administration',
-                        style: theme.textTheme.titleLarge,
-                      ),
+                      const Icon(Icons.nest_cam_wired_stand, size: 22),
+                      const SizedBox(width: 8),
+                      Text(panelTitle, style: theme.textTheme.titleLarge),
                       const SizedBox(width: 8),
                       Chip(
-                        label: Text(controller.currentRole ?? '-'),
+                        label: Text(
+                          _labelForRole(controller.currentRole ?? '-'),
+                        ),
                         avatar: const Icon(Icons.verified_user, size: 14),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      Chip(
+                        label: Text('$displayName 님'),
+                        avatar: const Icon(
+                          Icons.nest_cam_wired_stand,
+                          size: 14,
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                       _buildParentChildSwitchButton(controller),
@@ -918,68 +1011,42 @@ class _MainPanelState extends State<_MainPanel> {
                         onPressed: () => _showRoleInfo(context, controller),
                       ),
                       const Spacer(),
-                      IconButton(
-                        icon: AnimatedRotation(
-                          turns: _headerExpanded ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 200),
-                          child: const Icon(Icons.expand_more),
-                        ),
-                        onPressed: () =>
-                            setState(() => _headerExpanded = !_headerExpanded),
-                        tooltip: _headerExpanded ? '접기' : '펼치기',
-                      ),
-                      const SizedBox(width: 4),
                       refreshAction,
                       const SizedBox(width: 8),
                       logoutAction,
                     ],
                   ),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment.topCenter,
-                  child: _headerExpanded
-                      ? Column(
-                          children: [
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                controller.user?.email ?? '-',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: NestColors.deepWood.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            _ContextSelector(
-                              controller: controller,
-                              onSelectHomeschool: widget.onSelectHomeschool,
-                              onSelectTerm: widget.onSelectTerm,
-                              onSelectClassGroup: widget.onSelectClassGroup,
-                              onSelectViewRole: widget.onSelectViewRole,
-                            ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Chip(
-                                label: Text(controller.statusMessage),
-                                avatar: controller.isBusy
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.info_outline, size: 16),
-                              ),
-                            ),
-                          ],
-                        )
-                      : const SizedBox.shrink(),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '$displayName · ${controller.user?.email ?? '-'}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _ContextSelector(
+                  controller: controller,
+                  onSelectHomeschool: widget.onSelectHomeschool,
+                  onSelectTerm: widget.onSelectTerm,
+                  onSelectClassGroup: widget.onSelectClassGroup,
+                  onSelectViewRole: widget.onSelectViewRole,
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    label: Text(controller.statusMessage),
+                    avatar: controller.isBusy
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.info_outline, size: 16),
+                  ),
                 ),
                 if (controller.isBusy)
                   const Padding(
@@ -1024,6 +1091,24 @@ class _MainPanelState extends State<_MainPanel> {
                   child: NestBusyOverlay(visible: controller.isBusy),
                 ),
               ],
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.8),
+              border: Border(
+                top: BorderSide(
+                  color: NestColors.roseMist.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+            child: Text(
+              '현재 탭: ${widget.tabLabel} · ${_tabDescription(widget.tabLabel)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
             ),
           ),
         ],
@@ -1536,19 +1621,28 @@ class _ContextOption {
 
 Icon _iconForLabel(String label, {required bool filled}) {
   return switch (label) {
-    'Dashboard' => Icon(filled ? Icons.dashboard : Icons.dashboard_outlined),
+    '대시보드' => Icon(
+      filled ? Icons.nest_cam_wired_stand : Icons.nest_cam_wired_stand_outlined,
+    ),
+    'Dashboard' => Icon(
+      filled ? Icons.nest_cam_wired_stand : Icons.nest_cam_wired_stand_outlined,
+    ),
     '시간표' => Icon(
       filled ? Icons.calendar_view_week : Icons.calendar_view_week_outlined,
     ),
     '학습 현황' => Icon(filled ? Icons.insights : Icons.insights_outlined),
     '소식' => Icon(filled ? Icons.newspaper : Icons.newspaper_outlined),
+    '교사 허브' => Icon(filled ? Icons.school : Icons.school_outlined),
     'Teacher Hub' => Icon(filled ? Icons.school : Icons.school_outlined),
     'Timetable' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
     'Schedule' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
+    '학기 설정' => Icon(filled ? Icons.account_tree : Icons.account_tree_outlined),
     'Term Setup' => Icon(
       filled ? Icons.account_tree : Icons.account_tree_outlined,
     ),
+    '시스템' => Icon(filled ? Icons.tune : Icons.tune_outlined),
     'System' => Icon(filled ? Icons.tune : Icons.tune_outlined),
+    '커뮤니티' => Icon(filled ? Icons.forum : Icons.forum_outlined),
     'Community' => Icon(filled ? Icons.forum : Icons.forum_outlined),
     'SNS Admin' => Icon(
       filled ? Icons.admin_panel_settings : Icons.admin_panel_settings_outlined,
@@ -1556,11 +1650,27 @@ Icon _iconForLabel(String label, {required bool filled}) {
     'Members' => Icon(filled ? Icons.group : Icons.group_outlined),
     'Families' => Icon(filled ? Icons.diversity_3 : Icons.diversity_3_outlined),
     'Ops' => Icon(filled ? Icons.manage_search : Icons.manage_search_outlined),
+    '갤러리' => Icon(filled ? Icons.photo_library : Icons.photo_library_outlined),
     'Gallery' => Icon(
       filled ? Icons.photo_library : Icons.photo_library_outlined,
     ),
     'Media Setup' => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
     _ => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
+  };
+}
+
+String _tabDescription(String label) {
+  return switch (label) {
+    '대시보드' => '온보딩과 운영 현황을 확인합니다.',
+    '학기 설정' => '가정, 아이, 선생님, 반, 과목, 교실을 설정합니다.',
+    '시간표' => '주간 시간표를 배치하고 확정합니다.',
+    '시스템' => 'Drive, 커뮤니티 관리, 권한 설정을 다룹니다.',
+    '학습 현황' => '아이의 학습 상태와 기록을 확인합니다.',
+    '소식' => '공지와 소식을 모아봅니다.',
+    '교사 허브' => '담당 반 수업 운영과 활동 기록을 관리합니다.',
+    '갤러리' => '사진/영상 기록을 열람하고 공유합니다.',
+    '커뮤니티' => '학부모/교사 소통 글을 확인합니다.',
+    _ => '현재 화면 정보를 확인합니다.',
   };
 }
 
