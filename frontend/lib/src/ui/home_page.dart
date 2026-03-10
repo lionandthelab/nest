@@ -47,7 +47,9 @@ class _HomePageState extends State<HomePage> {
           _syncSelectedChild(widget.controller);
         }
 
-        final tabs = _buildTabs(widget.controller);
+        final width = MediaQuery.sizeOf(context).width;
+        final desktopLike = width >= 1080;
+        final tabs = _buildTabs(widget.controller, isMobileLike: !desktopLike);
         final labels = tabs.map((tab) => tab.label).toList(growable: false);
 
         final safeIndex = _currentIndex >= tabs.length ? 0 : _currentIndex;
@@ -62,38 +64,14 @@ class _HomePageState extends State<HomePage> {
           });
         }
 
-        final width = MediaQuery.sizeOf(context).width;
-        final desktopLike = width >= 1080;
-
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: Stack(
             children: [
               const _WarmScenery(),
-              SafeArea(
-                child: desktopLike
-                    ? _DesktopScaffold(
-                        currentIndex: safeIndex,
-                        onSelectIndex: (value) => _handleTabSelection(
-                          nextIndex: value,
-                          tabs: tabs,
-                          currentIndex: safeIndex,
-                        ),
-                        labels: labels,
-                        controller: widget.controller,
-                        tabLabel: tabs[safeIndex].label,
-                        tab: tabs[safeIndex].page,
-                        onLogout: _handleLogout,
-                        onRefresh: _handleRefresh,
-                        onSelectHomeschool: _handleHomeschoolChange,
-                        onSelectTerm: _handleTermChange,
-                        onSelectClassGroup: _handleClassGroupChange,
-                        onSelectViewRole: _handleViewRoleChange,
-                        selectedChildId: _selectedChildId,
-                        onSelectChild: _handleChildChange,
-                        onOpenParentAnnouncements: _openParentAnnouncementsTab,
-                      )
-                    : _MobileScaffold(
+              desktopLike
+                  ? SafeArea(
+                      child: _DesktopScaffold(
                         currentIndex: safeIndex,
                         onSelectIndex: (value) => _handleTabSelection(
                           nextIndex: value,
@@ -114,7 +92,28 @@ class _HomePageState extends State<HomePage> {
                         onSelectChild: _handleChildChange,
                         onOpenParentAnnouncements: _openParentAnnouncementsTab,
                       ),
-              ),
+                    )
+                  : _MobileScaffold(
+                      currentIndex: safeIndex,
+                      onSelectIndex: (value) => _handleTabSelection(
+                        nextIndex: value,
+                        tabs: tabs,
+                        currentIndex: safeIndex,
+                      ),
+                      labels: labels,
+                      controller: widget.controller,
+                      tabLabel: tabs[safeIndex].label,
+                      tab: tabs[safeIndex].page,
+                      onLogout: _handleLogout,
+                      onRefresh: _handleRefresh,
+                      onSelectHomeschool: _handleHomeschoolChange,
+                      onSelectTerm: _handleTermChange,
+                      onSelectClassGroup: _handleClassGroupChange,
+                      onSelectViewRole: _handleViewRoleChange,
+                      selectedChildId: _selectedChildId,
+                      onSelectChild: _handleChildChange,
+                      onOpenParentAnnouncements: _openParentAnnouncementsTab,
+                    ),
             ],
           ),
         );
@@ -122,7 +121,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  List<_TabSpec> _buildTabs(NestController controller) {
+  List<_TabSpec> _buildTabs(
+    NestController controller, {
+    required bool isMobileLike,
+  }) {
     // ── No membership: onboarding-only dashboard ──
     if (controller.memberships.isEmpty) {
       return [
@@ -212,15 +214,20 @@ class _HomePageState extends State<HomePage> {
           onDirtyChanged: _handleScheduleDirtyChanged,
         ),
       ),
-      _TabSpec(
-        label: '갤러리',
-        page: GalleryTab(controller: controller),
-      ),
+      if (!isMobileLike)
+        _TabSpec(
+          label: '갤러리',
+          page: GalleryTab(controller: controller),
+        ),
     ];
     tabs.add(
       _TabSpec(
-        label: '커뮤니티',
-        page: CommunityFeedTab(controller: controller),
+        label: isMobileLike ? 'SNS' : '커뮤니티',
+        page: CommunityFeedTab(
+          controller: controller,
+          showGalleryLauncher: isMobileLike,
+          title: isMobileLike ? 'Beloved SNS' : '커뮤니티',
+        ),
       ),
     );
 
@@ -435,7 +442,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _navigateToTabLabel(String label) {
-    final tabs = _buildTabs(widget.controller);
+    final tabs = _buildTabs(
+      widget.controller,
+      isMobileLike: MediaQuery.sizeOf(context).width < 1080,
+    );
     final normalizedTarget = _normalizeTabLabel(label);
     final targetIndex = tabs.indexWhere(
       (tab) => _normalizeTabLabel(tab.label) == normalizedTarget,
@@ -464,6 +474,8 @@ class _HomePageState extends State<HomePage> {
       'Teacher Hub' => '교사 허브',
       'Gallery' => '갤러리',
       'Community' => '커뮤니티',
+      'SNS' => 'SNS',
+      '커뮤니티' => 'SNS',
       _ => trimmed,
     };
   }
@@ -601,7 +613,7 @@ class _DesktopScaffold extends StatelessWidget {
   }
 }
 
-class _MobileScaffold extends StatelessWidget {
+class _MobileScaffold extends StatefulWidget {
   const _MobileScaffold({
     required this.currentIndex,
     required this.onSelectIndex,
@@ -637,36 +649,373 @@ class _MobileScaffold extends StatelessWidget {
   final VoidCallback onOpenParentAnnouncements;
 
   @override
+  State<_MobileScaffold> createState() => _MobileScaffoldState();
+}
+
+class _MobileScaffoldState extends State<_MobileScaffold> {
+  String _displayName(NestController controller) {
+    final fromDirectory = controller.findMemberDisplayName(controller.user?.id);
+    if (fromDirectory.trim().isNotEmpty &&
+        fromDirectory != controller.user?.id) {
+      return fromDirectory;
+    }
+
+    final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
+    final metadataName = metadata['full_name'] ?? metadata['name'];
+    if (metadataName is String && metadataName.trim().isNotEmpty) {
+      return metadataName.trim();
+    }
+
+    final email = controller.user?.email ?? '';
+    if (email.contains('@')) {
+      return email.split('@').first;
+    }
+    return '사용자';
+  }
+
+  String _panelTitle(NestController controller) {
+    if (controller.isAdminLike) {
+      return '관리자';
+    }
+    if (controller.isTeacherView) {
+      return '교사';
+    }
+    if (controller.isParentView) {
+      return '학부모';
+    }
+    return 'Nest School';
+  }
+
+  void _showMessage(String message) {
+    if (!mounted || message.trim().isEmpty) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _buildParentChildChip(NestController controller) {
+    if (!controller.isParentView) {
+      return const SizedBox.shrink();
+    }
+
+    final children = controller.myChildren.toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    if (children.isEmpty) {
+      return Chip(
+        label: const Text('내 아이 미연동'),
+        avatar: const Icon(Icons.child_care_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    final selected = children
+        .where((child) => child.id == widget.selectedChildId)
+        .firstOrNull;
+    final label = selected == null
+        ? '아이 선택'
+        : '${selected.name} (${selected.familyName})';
+
+    return PopupMenuButton<String>(
+      tooltip: '아이 선택',
+      onSelected: widget.onSelectChild,
+      itemBuilder: (context) => children
+          .map(
+            (child) => PopupMenuItem<String>(
+              value: child.id,
+              child: Row(
+                children: [
+                  Icon(
+                    child.id == widget.selectedChildId
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${child.name} (${child.familyName})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+      child: Chip(
+        label: Text(label, overflow: TextOverflow.ellipsis),
+        avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  Future<void> _openContextSheet() async {
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => _MobileSettingsPage(
+          controller: widget.controller,
+          selectedChildId: widget.selectedChildId,
+          onSelectChild: widget.onSelectChild,
+          onSelectHomeschool: widget.onSelectHomeschool,
+          onSelectTerm: widget.onSelectTerm,
+          onSelectClassGroup: widget.onSelectClassGroup,
+          onSelectViewRole: widget.onSelectViewRole,
+          onRefresh: widget.onRefresh,
+          onLogout: widget.onLogout,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final controller = widget.controller;
+    final displayName = _displayName(controller);
+    final panelTitle = _panelTitle(controller);
+    final parentChildChip = _buildParentChildChip(controller);
+
     return Column(
       children: [
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: _MainPanel(
-              controller: controller,
-              tabLabel: tabLabel,
-              tab: tab,
-              onLogout: onLogout,
-              onRefresh: onRefresh,
-              onSelectHomeschool: onSelectHomeschool,
-              onSelectTerm: onSelectTerm,
-              onSelectClassGroup: onSelectClassGroup,
-              onSelectViewRole: onSelectViewRole,
-              selectedChildId: selectedChildId,
-              onSelectChild: onSelectChild,
-              onOpenParentAnnouncements: onOpenParentAnnouncements,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: NestColors.roseMist),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(7),
+                            child: Image.asset(
+                              'assets/logo_square.png',
+                              width: 28,
+                              height: 28,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$panelTitle · ${widget.tabLabel}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                                Text(
+                                  '$displayName <${controller.user?.email ?? '-'}>',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: NestColors.deepWood.withValues(
+                                      alpha: 0.72,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            tooltip: '빠른 메뉴',
+                            onSelected: (action) async {
+                              if (action == 'settings') {
+                                await _openContextSheet();
+                                return;
+                              }
+                              if (action == 'info') {
+                                showDialog<void>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('역할 안내'),
+                                    content: Text(
+                                      controller.isParentView
+                                          ? '부모 뷰는 내 아이 기준 정보를 보여줍니다.'
+                                          : controller.isTeacherView
+                                          ? '교사 뷰는 담당 수업과 아이 상태 중심입니다.'
+                                          : '관리자 뷰는 전체 운영 설정을 관리합니다.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(ctx).pop(),
+                                        child: const Text('확인'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                return;
+                              }
+                              try {
+                                if (action == 'refresh') {
+                                  await widget.onRefresh();
+                                } else if (action == 'logout') {
+                                  await widget.onLogout();
+                                }
+                              } catch (_) {
+                                _showMessage(controller.statusMessage);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem<String>(
+                                value: 'settings',
+                                child: ListTile(
+                                  leading: Icon(Icons.tune),
+                                  title: Text('설정'),
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'info',
+                                child: ListTile(
+                                  leading: Icon(Icons.info_outline),
+                                  title: Text('역할 안내'),
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                              PopupMenuDivider(),
+                              PopupMenuItem<String>(
+                                value: 'refresh',
+                                child: ListTile(
+                                  leading: Icon(Icons.refresh),
+                                  title: Text('새로고침'),
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'logout',
+                                child: ListTile(
+                                  leading: Icon(Icons.logout),
+                                  title: Text('로그아웃'),
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            Chip(
+                              label: Text(
+                                _labelForRole(controller.currentRole ?? '-'),
+                              ),
+                              avatar: const Icon(
+                                Icons.shield_outlined,
+                                size: 14,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            if (parentChildChip is! SizedBox) ...[
+                              const SizedBox(width: 6),
+                              parentChildChip,
+                            ],
+                            const SizedBox(width: 6),
+                            ActionChip(
+                              label: const Text('설정'),
+                              avatar: const Icon(Icons.tune, size: 14),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: controller.isBusy
+                                  ? null
+                                  : _openContextSheet,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (controller.isBusy)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: LinearProgressIndicator(minHeight: 3),
+                        ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) =>
+                                  nestFadeSlideTransition(
+                                    child,
+                                    animation,
+                                    beginOffset: const Offset(0.02, 0),
+                                  ),
+                              child: KeyedSubtree(
+                                key: ValueKey<String>(
+                                  'mobile-tab-${widget.tabLabel}',
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: widget.tab,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: NestBusyOverlay(visible: controller.isBusy),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-          child: Card(
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.94),
+            border: Border(
+              top: BorderSide(
+                color: NestColors.roseMist.withValues(alpha: 0.9),
+              ),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
             child: NavigationBar(
-              selectedIndex: currentIndex,
-              onDestinationSelected: onSelectIndex,
-              height: 72,
-              destinations: labels
+              selectedIndex: widget.currentIndex,
+              onDestinationSelected: widget.onSelectIndex,
+              height: 68,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              destinations: widget.labels
                   .map(
                     (label) => NavigationDestination(
                       icon: _iconForLabel(label, filled: false),
@@ -679,6 +1028,245 @@ class _MobileScaffold extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MobileSettingsPage extends StatefulWidget {
+  const _MobileSettingsPage({
+    required this.controller,
+    required this.selectedChildId,
+    required this.onSelectChild,
+    required this.onSelectHomeschool,
+    required this.onSelectTerm,
+    required this.onSelectClassGroup,
+    required this.onSelectViewRole,
+    required this.onRefresh,
+    required this.onLogout,
+  });
+
+  final NestController controller;
+  final String? selectedChildId;
+  final ValueChanged<String?> onSelectChild;
+  final Future<void> Function(String? value) onSelectHomeschool;
+  final Future<void> Function(String? value) onSelectTerm;
+  final Future<void> Function(String? value) onSelectClassGroup;
+  final Future<void> Function(String? value) onSelectViewRole;
+  final Future<void> Function() onRefresh;
+  final Future<void> Function() onLogout;
+
+  @override
+  State<_MobileSettingsPage> createState() => _MobileSettingsPageState();
+}
+
+class _MobileSettingsPageState extends State<_MobileSettingsPage> {
+  void _showMessage(String message) {
+    if (!mounted || message.trim().isEmpty) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final controller = widget.controller;
+        final children = controller.myChildren.toList(growable: false)
+          ..sort((a, b) => a.name.compareTo(b.name));
+        final childValue =
+            children.any((child) => child.id == widget.selectedChildId)
+            ? widget.selectedChildId
+            : null;
+        final parentTargets = controller.parentViewCandidateUserIds;
+        final teacherTargets = controller.teacherViewCandidateProfiles;
+        final parentTargetValue =
+            parentTargets.contains(controller.activeParentViewTargetUserId)
+            ? controller.activeParentViewTargetUserId
+            : null;
+        final teacherTargetValue =
+            teacherTargets.any(
+              (row) => row.id == controller.activeTeacherViewTargetProfileId,
+            )
+            ? controller.activeTeacherViewTargetProfileId
+            : null;
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('모바일 설정')),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ContextSelector(
+                    controller: controller,
+                    onSelectHomeschool: widget.onSelectHomeschool,
+                    onSelectTerm: widget.onSelectTerm,
+                    onSelectClassGroup: widget.onSelectClassGroup,
+                    onSelectViewRole: widget.onSelectViewRole,
+                  ),
+                  const SizedBox(height: 12),
+                  if (controller.isParentView) ...[
+                    Text(
+                      '아이 선택',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    if (children.isEmpty)
+                      Text(
+                        '연동된 아이가 없습니다.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue: childValue,
+                        isExpanded: true,
+                        items: children
+                            .map(
+                              (child) => DropdownMenuItem<String>(
+                                value: child.id,
+                                child: Text(
+                                  '${child.name} (${child.familyName})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) {
+                          widget.onSelectChild(value);
+                          setState(() {});
+                        },
+                        decoration: const InputDecoration(labelText: '내 아이'),
+                      ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (controller.isParentView &&
+                      controller.hasAdminLikeMembershipInSelectedHomeschool &&
+                      parentTargets.isNotEmpty) ...[
+                    Text(
+                      '관리자 부모 대상',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: parentTargetValue,
+                      isExpanded: true,
+                      items: parentTargets
+                          .map(
+                            (userId) => DropdownMenuItem<String>(
+                              value: userId,
+                              child: Text(
+                                controller.findMemberDisplayName(userId),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        unawaited(
+                          controller
+                              .selectParentViewTargetUserId(value)
+                              .catchError((_) {
+                                _showMessage(controller.statusMessage);
+                              })
+                              .whenComplete(() => setState(() {})),
+                        );
+                      },
+                      decoration: const InputDecoration(labelText: '부모 계정 대상'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (controller.isTeacherView &&
+                      controller.hasAdminLikeMembershipInSelectedHomeschool &&
+                      teacherTargets.isNotEmpty) ...[
+                    Text(
+                      '관리자 교사 대상',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: teacherTargetValue,
+                      isExpanded: true,
+                      items: teacherTargets
+                          .map(
+                            (profile) => DropdownMenuItem<String>(
+                              value: profile.id,
+                              child: Text(
+                                profile.displayName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        unawaited(
+                          controller
+                              .selectTeacherViewTargetProfileId(value)
+                              .catchError((_) {
+                                _showMessage(controller.statusMessage);
+                              })
+                              .whenComplete(() => setState(() {})),
+                        );
+                      },
+                      decoration: const InputDecoration(labelText: '교사 프로필 대상'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () async {
+                                  try {
+                                    await widget.onRefresh();
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
+                                  } catch (_) {
+                                    _showMessage(controller.statusMessage);
+                                  }
+                                },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('새로고침'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () async {
+                                  Navigator.of(context).pop();
+                                  try {
+                                    await widget.onLogout();
+                                  } catch (_) {
+                                    _showMessage(controller.statusMessage);
+                                  }
+                                },
+                          icon: const Icon(Icons.logout),
+                          label: const Text('로그아웃'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1020,15 +1608,14 @@ class _MainPanelState extends State<_MainPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final controller = widget.controller;
+    final panelTitle = _panelTitle(controller);
+    final displayName = _displayName(controller);
     final width = MediaQuery.sizeOf(context).width;
     final compactHeader = width < 980;
     final iconOnlyActions = width < 760;
     final latestParentAnnouncements = controller.isParentView
         ? _latestParentAnnouncements(controller)
         : const <Announcement>[];
-    final displayName = _displayName(controller);
-    final panelTitle = _panelTitle(controller);
-
     final refreshAction = iconOnlyActions
         ? IconButton(
             tooltip: '새로고침',
@@ -1781,6 +2368,7 @@ Icon _iconForLabel(String label, {required bool filled}) {
     'System' => Icon(filled ? Icons.tune : Icons.tune_outlined),
     '커뮤니티' => Icon(filled ? Icons.forum : Icons.forum_outlined),
     'Community' => Icon(filled ? Icons.forum : Icons.forum_outlined),
+    'SNS' => Icon(filled ? Icons.forum : Icons.forum_outlined),
     'SNS Admin' => Icon(
       filled ? Icons.admin_panel_settings : Icons.admin_panel_settings_outlined,
     ),
@@ -1807,6 +2395,7 @@ String _tabDescription(String label) {
     '교사 허브' => '담당 반 수업 운영과 활동 기록을 관리합니다.',
     '갤러리' => '사진/영상 기록을 열람하고 공유합니다.',
     '커뮤니티' => '학부모/교사 소통 글을 확인합니다.',
+    'SNS' => '학부모/교사 소통 피드를 확인합니다.',
     _ => '현재 화면 정보를 확인합니다.',
   };
 }

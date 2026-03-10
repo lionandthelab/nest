@@ -2253,19 +2253,35 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildSetupSummaryGrid({required List<_SetupStat> stats}) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: stats
-          .map((item) => _buildSetupSummaryCard(stat: item))
-          .toList(growable: false),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columnCount = width < 760
+            ? 2
+            : width >= 1180
+            ? 4
+            : 3;
+        final itemWidth = (width - ((columnCount - 1) * 10)) / columnCount;
+
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: stats
+              .map(
+                (item) => SizedBox(
+                  width: itemWidth,
+                  child: _buildSetupSummaryCard(stat: item),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
     );
   }
 
   Widget _buildSetupSummaryCard({required _SetupStat stat}) {
     final formattedValue = NumberFormat.decimalPattern().format(stat.value);
     return Container(
-      width: 180,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),

@@ -5,11 +5,24 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/entity_visuals.dart';
+import 'gallery_tab.dart';
 
 class CommunityFeedTab extends StatefulWidget {
-  const CommunityFeedTab({super.key, required this.controller});
+  const CommunityFeedTab({
+    super.key,
+    required this.controller,
+    this.showGalleryLauncher = false,
+    this.showHeroHeader = true,
+    this.title = 'Beloved SNS',
+    this.subtitle = '반별 활동, 사진, 짧은 메모를 실제 피드처럼 빠르게 확인하고 반응합니다.',
+  });
 
   final NestController controller;
+  final bool showGalleryLauncher;
+  final bool showHeroHeader;
+  final String title;
+  final String subtitle;
 
   @override
   State<CommunityFeedTab> createState() => _CommunityFeedTabState();
@@ -34,15 +47,164 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    _syncComposerClassTarget(controller);
-    _syncCommentControllers(controller.communityPosts);
+    final posts = controller.communityPosts.toList(growable: false)
+      ..sort((a, b) {
+        if (a.isPinned != b.isPinned) {
+          return a.isPinned ? -1 : 1;
+        }
+        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
+        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
+        return right.compareTo(left);
+      });
 
-    return ListView(
-      children: [
-        _buildComposerCard(controller),
-        const SizedBox(height: 12),
-        _buildFeedCard(controller),
-      ],
+    _syncComposerClassTarget(controller);
+    _syncCommentControllers(posts);
+
+    return RefreshIndicator(
+      onRefresh: _reloadFeed,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          if (widget.showHeroHeader) ...[
+            _buildHeroCard(controller, posts),
+            const SizedBox(height: 12),
+          ],
+          _buildComposerCard(controller),
+          const SizedBox(height: 12),
+          if (posts.isEmpty)
+            _buildEmptyFeedCard()
+          else
+            ...posts.map((post) {
+              final reportCount = controller.openReportsForCommunityPost(
+                post.id,
+              );
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _CommunityPostCard(
+                  post: post,
+                  media: controller.mediaForCommunityPost(post.id),
+                  comments: controller.commentsForCommunityPost(post.id),
+                  liked: controller.isCommunityPostLiked(post.id),
+                  likeCount: controller.likesForCommunityPost(post.id),
+                  classGroupName: controller.findClassGroupName(
+                    post.classGroupId,
+                  ),
+                  reportCount: reportCount,
+                  commentController: _commentControllers[post.id]!,
+                  isBusy: controller.isBusy,
+                  onLike: () => _toggleLike(post.id),
+                  onComment: () => _submitComment(post.id),
+                  onOpenMediaLink: _openLink,
+                  onReport: () => _showReportDialog(post.id),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroCard(NestController controller, List<CommunityPost> posts) {
+    final mediaCount = posts.fold<int>(
+      0,
+      (count, post) => count + controller.mediaForCommunityPost(post.id).length,
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                NestColors.dustyRose.withValues(alpha: 0.22),
+                NestColors.creamyWhite,
+                NestColors.mutedSage.withValues(alpha: 0.12),
+              ],
+            ),
+            border: Border.all(color: NestColors.roseMist),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  EntityAvatar(
+                    label: widget.title,
+                    icon: Icons.forum_outlined,
+                    size: 46,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.subtitle,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: NestColors.deepWood.withValues(
+                                  alpha: 0.74,
+                                ),
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _FeedStatPill(
+                    icon: Icons.dynamic_feed_outlined,
+                    label: '게시글 ${posts.length}',
+                  ),
+                  _FeedStatPill(
+                    icon: Icons.photo_library_outlined,
+                    label: '첨부 $mediaCount',
+                  ),
+                  _FeedStatPill(
+                    icon: Icons.people_alt_outlined,
+                    label: '반 ${widget.controller.classGroups.length}',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: controller.isBusy ? null : _reloadFeed,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('피드 새로고침'),
+                  ),
+                  if (widget.showGalleryLauncher)
+                    ElevatedButton.icon(
+                      onPressed: _openGalleryPage,
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('갤러리 열기'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -53,8 +215,8 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
         (group) => DropdownMenuItem(value: group.id, child: Text(group.name)),
       ),
     ];
-
     final dropdownValue = _targetClassGroupId ?? '__ALL__';
+    final canWrite = controller.canWriteCommunity;
 
     return Card(
       child: Padding(
@@ -62,25 +224,48 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Community', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '부모/교사가 활동 소식과 사진, 영상을 공유하는 공간입니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                EntityAvatar(
+                  label: _composerName(controller),
+                  icon: Icons.person_outline,
+                  size: 42,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '오늘 소식을 올려보세요',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '짧은 문장, 사진, 영상 위주로 올리면 모바일에서 훨씬 읽기 좋습니다.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _postController,
-              minLines: 2,
-              maxLines: 5,
+              enabled: canWrite,
+              minLines: 3,
+              maxLines: 6,
               decoration: const InputDecoration(
-                labelText: '새 글 작성',
-                hintText: '오늘 아이들의 활동과 느낀 점을 공유해보세요.',
+                hintText: '오늘 아이들의 활동, 사진 설명, 간단한 공지를 남겨보세요.',
+                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               key: ValueKey(dropdownValue),
               initialValue: dropdownValue,
@@ -92,7 +277,10 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                         _targetClassGroupId = value == '__ALL__' ? null : value;
                       });
                     },
-              decoration: const InputDecoration(labelText: '공개 범위'),
+              decoration: const InputDecoration(
+                labelText: '공개 범위',
+                prefixIcon: Icon(Icons.public),
+              ),
             ),
             const SizedBox(height: 10),
             _SelectedCommunityFileLabel(controller: controller),
@@ -101,18 +289,19 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                ElevatedButton.icon(
-                  onPressed: controller.isBusy ? null : _pickMedia,
-                  icon: const Icon(Icons.attach_file),
-                  label: const Text('사진/영상 첨부'),
-                ),
                 FilledButton.tonalIcon(
-                  onPressed: controller.isBusy ? null : _reloadFeed,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('피드 새로고침'),
+                  onPressed: controller.isBusy || !canWrite ? null : _pickMedia,
+                  icon: const Icon(Icons.attach_file),
+                  label: const Text('사진/영상'),
                 ),
+                if (widget.showGalleryLauncher && !widget.showHeroHeader)
+                  FilledButton.tonalIcon(
+                    onPressed: _openGalleryPage,
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('갤러리'),
+                  ),
                 FilledButton.icon(
-                  onPressed: controller.isBusy || !controller.canWriteCommunity
+                  onPressed: controller.isBusy || !canWrite
                       ? null
                       : _publishPost,
                   icon: const Icon(Icons.send_rounded),
@@ -120,53 +309,62 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                 ),
               ],
             ),
+            if (!canWrite) ...[
+              const SizedBox(height: 10),
+              Text(
+                '현재 역할에서는 글 작성이 제한되어 있습니다.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.68),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFeedCard(NestController controller) {
+  Widget _buildEmptyFeedCard() {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Feed', style: Theme.of(context).textTheme.titleLarge),
+            Icon(
+              Icons.dynamic_feed_outlined,
+              size: 36,
+              color: NestColors.deepWood.withValues(alpha: 0.5),
+            ),
             const SizedBox(height: 10),
-            if (controller.communityPosts.isEmpty)
-              const Text('아직 공유된 글이 없습니다. 첫 글을 남겨보세요.')
-            else
-              ...controller.communityPosts.map((post) {
-                final reportCount = controller.openReportsForCommunityPost(
-                  post.id,
-                );
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _CommunityPostCard(
-                    post: post,
-                    media: controller.mediaForCommunityPost(post.id),
-                    comments: controller.commentsForCommunityPost(post.id),
-                    liked: controller.isCommunityPostLiked(post.id),
-                    likeCount: controller.likesForCommunityPost(post.id),
-                    classGroupName: controller.findClassGroupName(
-                      post.classGroupId,
-                    ),
-                    reportCount: reportCount,
-                    commentController: _commentControllers[post.id]!,
-                    isBusy: controller.isBusy,
-                    onLike: () => _toggleLike(post.id),
-                    onComment: () => _submitComment(post.id),
-                    onOpenMediaLink: _openLink,
-                    onReport: () => _showReportDialog(post.id),
-                  ),
-                );
-              }),
+            Text(
+              '아직 공유된 글이 없습니다.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '첫 게시글을 올리면 이 화면이 실제 SNS 피드처럼 쌓입니다.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.68),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  String _composerName(NestController controller) {
+    final displayName = controller.findMemberDisplayName(controller.user?.id);
+    if (displayName != '-' && displayName.trim().isNotEmpty) {
+      return displayName;
+    }
+    final email = controller.user?.email ?? '';
+    if (email.contains('@')) {
+      return email.split('@').first;
+    }
+    return 'Me';
   }
 
   void _syncComposerClassTarget(NestController controller) {
@@ -245,11 +443,10 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
       return;
     }
 
-    final text = commentController.text;
     try {
       await widget.controller.addCommunityComment(
         postId: postId,
-        content: text,
+        content: commentController.text,
       );
       commentController.clear();
       _showMessage(widget.controller.statusMessage);
@@ -349,11 +546,51 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
     }
   }
 
+  Future<void> _openGalleryPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => GalleryPage(controller: widget.controller),
+      ),
+    );
+  }
+
   void _showMessage(String text) {
     if (!mounted || text.isEmpty) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _FeedStatPill extends StatelessWidget {
+  const _FeedStatPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withValues(alpha: 0.88),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: NestColors.deepWood),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -370,7 +607,7 @@ class _SelectedCommunityFileLabel extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: NestColors.roseMist),
         color: file == null
             ? Colors.white
@@ -395,9 +632,7 @@ class _SelectedCommunityFileLabel extends StatelessWidget {
             IconButton(
               onPressed: controller.isBusy
                   ? null
-                  : () {
-                      controller.clearPendingCommunityFile();
-                    },
+                  : controller.clearPendingCommunityFile,
               icon: const Icon(Icons.clear),
             ),
         ],
@@ -446,94 +681,95 @@ class _CommunityPostCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: NestColors.roseMist),
         color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: NestColors.deepWood.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: NestColors.roseMist,
-                child: Text(
-                  post.authorDisplayName.isEmpty
-                      ? '?'
-                      : post.authorDisplayName.substring(0, 1),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                ),
+              EntityAvatar(
+                label: post.authorDisplayName,
+                icon: Icons.person_outline,
+                size: 40,
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(post.authorDisplayName),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          post.authorDisplayName,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        if (post.isPinned)
+                          _PostBadge(
+                            icon: Icons.push_pin_outlined,
+                            label: '고정',
+                          ),
+                        if (reportCount > 0)
+                          _PostBadge(
+                            icon: Icons.report_gmailerrorred,
+                            label: '신고 $reportCount',
+                            accent: NestColors.clay,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
                       '$createdLabel · $classGroupName',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.6),
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (reportCount > 0)
-                Chip(
-                  avatar: const Icon(Icons.report_gmailerrorred, size: 16),
-                  label: Text('신고 $reportCount'),
-                ),
             ],
           ),
-          if (post.content.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(post.content),
+          if (post.content.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              post.content.trim(),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(height: 1.45),
+            ),
           ],
           if (media.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             ...media.map(
               (item) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: NestColors.roseMist),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        item.isVideo
-                            ? Icons.videocam_rounded
-                            : Icons.photo_camera_back_rounded,
-                        color: NestColors.deepWood,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          item.title.isEmpty ? '첨부 파일' : item.title,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                      if (item.driveWebViewLink != null &&
-                          item.driveWebViewLink!.isNotEmpty)
-                        FilledButton.tonal(
-                          onPressed: () =>
-                              onOpenMediaLink(item.driveWebViewLink!),
-                          child: const Text('열기'),
-                        ),
-                    ],
-                  ),
+                child: _CommunityMediaCard(
+                  item: item,
+                  onOpenMediaLink: onOpenMediaLink,
                 ),
               ),
             ),
           ],
           const SizedBox(height: 6),
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              TextButton.icon(
+              FilledButton.tonalIcon(
                 onPressed: isBusy ? null : onLike,
                 icon: Icon(
                   liked ? Icons.favorite : Icons.favorite_border,
@@ -541,55 +777,216 @@ class _CommunityPostCard extends StatelessWidget {
                 ),
                 label: Text('좋아요 $likeCount'),
               ),
-              const SizedBox(width: 10),
-              Text('댓글 ${comments.length}'),
-              const Spacer(),
-              TextButton.icon(
+              FilledButton.tonalIcon(
                 onPressed: isBusy ? null : onReport,
                 icon: const Icon(Icons.flag_outlined),
-                label: const Text('신고'),
+                label: Text('신고 ${reportCount > 0 ? reportCount : ''}'.trim()),
+              ),
+              _PostCounter(
+                icon: Icons.chat_bubble_outline,
+                label: '댓글 ${comments.length}',
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          if (comments.isNotEmpty)
+          if (comments.isNotEmpty) ...[
+            const SizedBox(height: 12),
             ...comments.map(
               (comment) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: RichText(
-                  text: TextSpan(
-                    style: Theme.of(context).textTheme.bodySmall,
-                    children: [
-                      TextSpan(
-                        text: '${comment.authorDisplayName}: ',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      TextSpan(text: comment.content),
-                    ],
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: NestColors.creamyWhite,
+                    border: Border.all(color: NestColors.roseMist),
+                  ),
+                  child: RichText(
+                    text: TextSpan(
+                      style: Theme.of(context).textTheme.bodySmall,
+                      children: [
+                        TextSpan(
+                          text: '${comment.authorDisplayName}  ',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        TextSpan(text: comment.content),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: commentController,
-                  minLines: 1,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    hintText: '댓글을 입력하세요',
-                    isDense: true,
+          ],
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: NestColors.creamyWhite,
+              border: Border.all(color: NestColors.roseMist),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: commentController,
+                    minLines: 1,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: '댓글을 입력하세요',
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: isBusy ? null : onComment,
-                icon: const Icon(Icons.send),
-              ),
-            ],
+                IconButton(
+                  onPressed: isBusy ? null : onComment,
+                  icon: const Icon(Icons.send_rounded),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityMediaCard extends StatelessWidget {
+  const _CommunityMediaCard({
+    required this.item,
+    required this.onOpenMediaLink,
+  });
+
+  final CommunityPostMedia item;
+  final Future<void> Function(String url) onOpenMediaLink;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: item.isVideo
+              ? [NestColors.mutedSage.withValues(alpha: 0.22), Colors.white]
+              : [NestColors.roseMist.withValues(alpha: 0.36), Colors.white],
+        ),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withValues(alpha: 0.92),
+            ),
+            child: Icon(
+              item.isVideo
+                  ? Icons.videocam_rounded
+                  : Icons.photo_camera_back_rounded,
+              color: NestColors.deepWood,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title.isEmpty ? '첨부 파일' : item.title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.isVideo ? '동영상 첨부' : '사진 첨부',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.66),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (item.driveWebViewLink != null &&
+              item.driveWebViewLink!.isNotEmpty)
+            FilledButton.tonal(
+              onPressed: () => onOpenMediaLink(item.driveWebViewLink!),
+              child: const Text('열기'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PostBadge extends StatelessWidget {
+  const _PostBadge({
+    required this.icon,
+    required this.label,
+    this.accent = NestColors.dustyRose,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: accent.withValues(alpha: 0.14),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: NestColors.deepWood),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PostCounter extends StatelessWidget {
+  const _PostCounter({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: NestColors.creamyWhite,
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: NestColors.deepWood),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),

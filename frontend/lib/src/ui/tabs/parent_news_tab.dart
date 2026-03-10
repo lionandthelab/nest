@@ -44,13 +44,8 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
                       ),
                       _sectionChip(
                         id: 'community',
-                        label: '커뮤니티',
+                        label: 'SNS',
                         icon: Icons.forum_outlined,
-                      ),
-                      _sectionChip(
-                        id: 'gallery',
-                        label: '갤러리',
-                        icon: Icons.photo_library_outlined,
                       ),
                     ],
                   );
@@ -70,7 +65,7 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
                     children: [
                       Expanded(child: _buildHeader(theme)),
                       const SizedBox(width: 10),
-                      chips,
+                      Flexible(child: chips),
                     ],
                   );
                 },
@@ -93,23 +88,41 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
   }
 
   Widget _buildHeader(ThemeData theme) {
-    return Row(
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        EntityAvatar(label: '소식', icon: Icons.notifications_active_outlined),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('소식', style: theme.textTheme.titleLarge),
-              Text(
-                '공지, 커뮤니티, 갤러리를 한곳에서 확인하세요.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.72),
-                ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            EntityAvatar(
+              label: '소식',
+              icon: Icons.notifications_active_outlined,
+            ),
+            const SizedBox(width: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 280),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('소식', style: theme.textTheme.titleLarge),
+                  Text(
+                    '공지와 SNS를 먼저 보고, 갤러리는 별도 화면으로 열어 확인합니다.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
+        FilledButton.tonalIcon(
+          onPressed: _openGalleryPage,
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('갤러리 열기'),
         ),
       ],
     );
@@ -132,10 +145,20 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
   Widget _buildSection() {
     return switch (_sectionId) {
       'announcements' => _buildAnnouncementsSection(),
-      'community' => CommunityFeedTab(controller: widget.controller),
-      'gallery' => GalleryTab(controller: widget.controller),
+      'community' => CommunityFeedTab(
+        controller: widget.controller,
+        showHeroHeader: false,
+      ),
       _ => const SizedBox.shrink(),
     };
+  }
+
+  Future<void> _openGalleryPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => GalleryPage(controller: widget.controller),
+      ),
+    );
   }
 
   Widget _buildAnnouncementsSection() {

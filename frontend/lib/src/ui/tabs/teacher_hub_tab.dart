@@ -368,9 +368,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                   },
                 ),
                 const SizedBox(height: 12),
-                Text('시간표', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                ..._buildSessionCards(controller, selectedBundle),
+                _buildSessionBoard(controller, selectedBundle),
               ],
             ],
           ],
@@ -379,7 +377,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     );
   }
 
-  List<Widget> _buildSessionCards(
+  Widget _buildSessionBoard(
     NestController controller,
     _TeacherClassBundle bundle,
   ) {
@@ -398,65 +396,196 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       });
 
     if (sessions.isEmpty) {
-      return [_buildEmptyHint('등록된 수업이 없습니다.')];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('시간표', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          _buildEmptyHint('등록된 수업이 없습니다.'),
+        ],
+      );
     }
 
-    return sessions
-        .map((session) {
-          final slot = controller.findTimeSlot(session.timeSlotId);
-          final slotLabel = slot == null
-              ? session.timeSlotId
-              : '${_dayLabel(slot.dayOfWeek)} ${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}';
-          final teacherLabel = _teacherLabelForSession(
-            controller: controller,
-            sessionId: session.id,
-            assignments: bundle.assignments,
-          );
-          final room = (session.location ?? '').trim();
-          final roomLabel = room.isEmpty ? '장소 미지정' : room;
+    final sessionsByDay = <int, List<ClassSession>>{};
+    for (final session in sessions) {
+      final slot = controller.findTimeSlot(session.timeSlotId);
+      final day = slot?.dayOfWeek ?? -1;
+      sessionsByDay.putIfAbsent(day, () => <ClassSession>[]).add(session);
+    }
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: NestColors.roseMist),
-              color: Colors.white,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.menu_book_rounded,
-                      size: 17,
-                      color: NestColors.clay,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        controller.findCourseName(session.courseId),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+    final orderedDays = sessionsByDay.keys.toList(growable: false)..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('시간표', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        Text(
+          '모바일에서는 요일별로 묶어서 길게 넘치지 않도록 정리했습니다.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: NestColors.deepWood.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 720;
+            final columnCount = compact
+                ? 1
+                : constraints.maxWidth >= 1080
+                ? 3
+                : 2;
+            final itemWidth =
+                (constraints.maxWidth - ((columnCount - 1) * 10)) / columnCount;
+
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: orderedDays
+                  .map(
+                    (day) => SizedBox(
+                      width: itemWidth,
+                      child: _buildSessionDayColumn(
+                        controller: controller,
+                        bundle: bundle,
+                        day: day,
+                        sessions: sessionsByDay[day] ?? const <ClassSession>[],
                       ),
                     ),
-                  ],
+                  )
+                  .toList(growable: false),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSessionDayColumn({
+    required NestController controller,
+    required _TeacherClassBundle bundle,
+    required int day,
+    required List<ClassSession> sessions,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: NestColors.creamyWhite,
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
                 ),
-                const SizedBox(height: 6),
-                _SessionMeta(icon: Icons.schedule_outlined, text: slotLabel),
-                const SizedBox(height: 3),
-                _SessionMeta(icon: Icons.school_outlined, text: teacherLabel),
-                const SizedBox(height: 3),
-                _SessionMeta(
-                  icon: Icons.meeting_room_outlined,
-                  text: roomLabel,
+                child: const Icon(Icons.calendar_view_day_outlined, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  day < 0 ? '미분류' : _fullDayLabel(day),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
-              ],
+              ),
+              Text(
+                '${sessions.length}개',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...sessions.map(
+            (session) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _buildSessionCard(
+                controller: controller,
+                bundle: bundle,
+                session: session,
+              ),
             ),
-          );
-        })
-        .toList(growable: false);
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSessionCard({
+    required NestController controller,
+    required _TeacherClassBundle bundle,
+    required ClassSession session,
+  }) {
+    final slot = controller.findTimeSlot(session.timeSlotId);
+    final slotLabel = slot == null
+        ? session.timeSlotId
+        : '${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}';
+    final teacherLabel = _teacherLabelForSession(
+      controller: controller,
+      sessionId: session.id,
+      assignments: bundle.assignments,
+    );
+    final room = (session.location ?? '').trim();
+    final roomLabel = room.isEmpty ? '장소 미지정' : room;
+    final courseLabel = session.title.trim().isEmpty
+        ? controller.findCourseName(session.courseId)
+        : session.title.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white,
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.menu_book_rounded, size: 17, color: NestColors.clay),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  courseLabel,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _SessionInfoChip(icon: Icons.schedule_outlined, label: slotLabel),
+              _SessionInfoChip(
+                icon: Icons.school_outlined,
+                label: teacherLabel,
+              ),
+              _SessionInfoChip(
+                icon: Icons.meeting_room_outlined,
+                label: roomLabel,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildOperationsSection(
@@ -1440,6 +1569,19 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     return labels[dayOfWeek] ?? '$dayOfWeek';
   }
 
+  String _fullDayLabel(int dayOfWeek) {
+    const labels = <int, String>{
+      0: '일요일',
+      1: '월요일',
+      2: '화요일',
+      3: '수요일',
+      4: '목요일',
+      5: '금요일',
+      6: '토요일',
+    };
+    return labels[dayOfWeek] ?? '미분류';
+  }
+
   String _shortTime(String value) {
     final parsed = DateFormat('HH:mm:ss').tryParse(value);
     if (parsed == null) {
@@ -1457,32 +1599,41 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   }
 }
 
-class _SessionMeta extends StatelessWidget {
-  const _SessionMeta({required this.icon, required this.text});
+class _SessionInfoChip extends StatelessWidget {
+  const _SessionInfoChip({required this.icon, required this.label});
 
   final IconData icon;
-  final String text;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          size: 14,
-          color: NestColors.deepWood.withValues(alpha: 0.66),
-        ),
-        const SizedBox(width: 5),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.78),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: NestColors.creamyWhite,
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: NestColors.deepWood.withValues(alpha: 0.66),
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.78),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
