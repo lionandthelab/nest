@@ -1,4 +1,4 @@
-package io.lionandthelab.nest
+package com.lionandthelab.nest
 
 import io.flutter.embedding.android.FlutterActivity
 

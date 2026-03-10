@@ -7,7 +7,7 @@ Last updated: 2026-03-10
 Add these redirect URLs in Supabase Auth settings:
 
 - `https://lionandthelab.github.io/nest/`
-- `io.lionandthelab.nest://login-callback/`
+- `com.lionandthelab.nest://login-callback/`
 
 If you use custom values, pass them via `dart-define`:
 
@@ -18,9 +18,9 @@ If you use custom values, pass them via `dart-define`:
 
 Current project state:
 
-- Application ID: `io.lionandthelab.nest`
+- Application ID: `com.lionandthelab.nest`
 - Deep link callback:
-  - scheme: `io.lionandthelab.nest`
+  - scheme: `com.lionandthelab.nest`
   - host: `login-callback`
 - Internet permission: enabled in `main` manifest.
 
@@ -51,8 +51,8 @@ Output:
 
 Current project state:
 
-- Bundle ID: `io.lionandthelab.nest`
-- URL scheme for auth callback: `io.lionandthelab.nest`
+- Bundle ID: `com.lionandthelab.nest`
+- URL scheme for auth callback: `com.lionandthelab.nest`
 
 Build for validation (no signing):
 

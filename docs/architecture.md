@@ -582,7 +582,7 @@ Required `dart-define` values:
 Optional auth redirect overrides:
 
 - `AUTH_EMAIL_REDIRECT_URL` (web, default: `https://lionandthelab.github.io/nest/`)
-- `AUTH_EMAIL_REDIRECT_URL_MOBILE` (android/ios, default: `io.lionandthelab.nest://login-callback/`)
+- `AUTH_EMAIL_REDIRECT_URL_MOBILE` (android/ios, default: `com.lionandthelab.nest://login-callback/`)
 
 Example:
 
@@ -620,7 +620,7 @@ Keep Google Console redirect URI and Supabase `GOOGLE_REDIRECT_URI` aligned:
 Supabase Auth redirect URLs for app login/signup/password reset:
 
 - Web: `https://lionandthelab.github.io/nest/`
-- Mobile deep link: `io.lionandthelab.nest://login-callback/`
+- Mobile deep link: `com.lionandthelab.nest://login-callback/`
 
 ## 11. Operational Rules
 
@@ -632,12 +632,12 @@ Supabase Auth redirect URLs for app login/signup/password reset:
 ## 12. Mobile Release Readiness
 
 - Android release network access enabled in main manifest (`INTERNET` permission).
-- Android package/application id unified to `io.lionandthelab.nest`.
+- Android package/application id unified to `com.lionandthelab.nest`.
 - Android deep link intent filter added for Supabase auth callback:
-  - scheme: `io.lionandthelab.nest`
+  - scheme: `com.lionandthelab.nest`
   - host: `login-callback`
-- iOS bundle id unified to `io.lionandthelab.nest`.
-- iOS URL type added for Supabase auth callback scheme `io.lionandthelab.nest`.
+- iOS bundle id unified to `com.lionandthelab.nest`.
+- iOS URL type added for Supabase auth callback scheme `com.lionandthelab.nest`.
 - Login page now uses empty credential fields (no seeded account/password in production build).
 - Login page includes password reset email request flow.
 - Android release signing:

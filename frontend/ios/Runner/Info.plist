@@ -51,10 +51,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>io.lionandthelab.nest</string>
+			<string>com.lionandthelab.nest</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>io.lionandthelab.nest</string>
+				<string>com.lionandthelab.nest</string>
 			</array>
 		</dict>
 	</array>

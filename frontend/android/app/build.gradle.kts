@@ -15,7 +15,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "io.lionandthelab.nest"
+    namespace = "com.lionandthelab.nest"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -29,14 +29,14 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.lionandthelab.nest"
+        applicationId = "com.lionandthelab.nest"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders["appAuthRedirectScheme"] = "io.lionandthelab.nest"
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.lionandthelab.nest"
         manifestPlaceholders["appAuthRedirectHost"] = "login-callback"
     }
 

@@ -5,10 +5,10 @@
 ### Changed
 
 - 모바일 출시 준비 보강
-  - Android `applicationId/namespace`를 `io.lionandthelab.nest`로 통일
-  - iOS `PRODUCT_BUNDLE_IDENTIFIER`를 `io.lionandthelab.nest`로 통일
+  - Android `applicationId/namespace`를 `com.lionandthelab.nest`로 통일
+  - iOS `PRODUCT_BUNDLE_IDENTIFIER`를 `com.lionandthelab.nest`로 통일
   - Android/iOS Supabase 인증 복귀용 딥링크 스킴 설정
-    - `io.lionandthelab.nest://login-callback/`
+    - `com.lionandthelab.nest://login-callback/`
   - Android 릴리즈 네트워크 접근을 위한 `INTERNET` 권한을 `main` 매니페스트에 추가
   - Android 릴리즈 서명 설정을 `key.properties` 기반으로 지원 (없으면 로컬 검증용 debug 서명 fallback)
 - 인증 UX 보강
