@@ -50,6 +50,8 @@ class NestController extends ChangeNotifier {
   String? selectedHomeschoolId;
   String? currentRole;
   final Map<String, String> _viewRoleByHomeschool = <String, String>{};
+  final Map<String, String> _parentViewTargetByHomeschool = <String, String>{};
+  final Map<String, String> _teacherViewTargetByHomeschool = <String, String>{};
 
   List<Term> terms = const [];
   String? selectedTermId;
@@ -121,6 +123,106 @@ class NestController extends ChangeNotifier {
     }
 
     return roles.toList(growable: false);
+  }
+
+  bool get hasAdminLikeMembershipInSelectedHomeschool {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return false;
+    }
+
+    return memberships.any(
+      (membership) =>
+          membership.homeschoolId == homeschoolId &&
+          (membership.role == 'HOMESCHOOL_ADMIN' || membership.role == 'STAFF'),
+    );
+  }
+
+  String? get selectedParentViewTargetUserId {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return null;
+    }
+    return _parentViewTargetByHomeschool[homeschoolId];
+  }
+
+  String? get selectedTeacherViewTargetProfileId {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return null;
+    }
+    return _teacherViewTargetByHomeschool[homeschoolId];
+  }
+
+  List<String> get parentViewCandidateUserIds {
+    final ids = parentCandidateUserIds
+        .where((id) => id.trim().isNotEmpty)
+        .toSet();
+    final sorted = ids.toList(growable: false)
+      ..sort((left, right) {
+        final leftName = findMemberDisplayName(left).toLowerCase();
+        final rightName = findMemberDisplayName(right).toLowerCase();
+        final byName = leftName.compareTo(rightName);
+        if (byName != 0) {
+          return byName;
+        }
+        return left.compareTo(right);
+      });
+    return sorted;
+  }
+
+  List<TeacherProfile> get teacherViewCandidateProfiles {
+    final rows = teacherProfiles.toList(growable: false)
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    return rows;
+  }
+
+  String? get activeParentViewTargetUserId {
+    final currentUserId = user?.id;
+    if (!isParentView || !hasAdminLikeMembershipInSelectedHomeschool) {
+      return currentUserId;
+    }
+
+    final candidates = parentViewCandidateUserIds;
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    final selected = selectedParentViewTargetUserId;
+    if (selected != null && candidates.contains(selected)) {
+      return selected;
+    }
+
+    if (currentUserId != null && candidates.contains(currentUserId)) {
+      return currentUserId;
+    }
+    return candidates.first;
+  }
+
+  String? get activeTeacherViewTargetProfileId {
+    if (!isTeacherView || !hasAdminLikeMembershipInSelectedHomeschool) {
+      return null;
+    }
+
+    final candidates = teacherViewCandidateProfiles;
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    final selected = selectedTeacherViewTargetProfileId;
+    if (selected != null &&
+        candidates.any((profile) => profile.id == selected)) {
+      return selected;
+    }
+
+    final currentUserId = user?.id;
+    final myProfile = candidates
+        .where((profile) => profile.userId == currentUserId)
+        .firstOrNull;
+    if (myProfile != null) {
+      return myProfile.id;
+    }
+    return candidates.first.id;
   }
 
   bool get isAdminLike =>
@@ -237,6 +339,7 @@ class NestController extends ChangeNotifier {
   Future<void> changeHomeschool(String? homeschoolId) async {
     selectedHomeschoolId = _normalizeNullable(homeschoolId);
     currentRole = _resolveViewRole(selectedHomeschoolId);
+    _ensureRoleViewTargetSelection();
     notifyListeners();
 
     await _runBusy('학기/반 정보를 불러오는 중...', () async {
@@ -247,6 +350,7 @@ class NestController extends ChangeNotifier {
       await loadDriveIntegration();
       await loadGalleryItems();
       await loadCommunityFeed();
+      _ensureRoleViewTargetSelection();
     });
   }
 
@@ -263,6 +367,7 @@ class NestController extends ChangeNotifier {
 
     currentRole = nextRole;
     _viewRoleByHomeschool[homeschoolId] = nextRole;
+    _ensureRoleViewTargetSelection(roleOverride: nextRole);
     notifyListeners();
 
     await _runBusy('뷰 전환 중...', () async {
@@ -270,8 +375,71 @@ class NestController extends ChangeNotifier {
       await loadHomeschoolInvites();
       await _loadOperationalData();
       await loadCommunityFeed();
+      _ensureRoleViewTargetSelection(roleOverride: nextRole);
       _setStatus('현재 뷰: $nextRole');
     });
+  }
+
+  Future<void> selectParentViewTargetUserId(String? userId) async {
+    if (!hasAdminLikeMembershipInSelectedHomeschool) {
+      throw StateError('관리자/스태프만 부모 뷰 대상을 전환할 수 있습니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final normalized = _normalizeNullable(userId);
+    final candidates = parentViewCandidateUserIds;
+    if (normalized != null && !candidates.contains(normalized)) {
+      throw StateError('선택할 수 없는 부모 계정입니다.');
+    }
+
+    if (normalized == null) {
+      _parentViewTargetByHomeschool.remove(homeschoolId);
+    } else {
+      _parentViewTargetByHomeschool[homeschoolId] = normalized;
+    }
+    _ensureRoleViewTargetSelection(roleOverride: 'PARENT');
+    _setStatus(
+      '부모 뷰 대상: ${findMemberDisplayName(activeParentViewTargetUserId)}',
+    );
+    notifyListeners();
+    unawaited(_persistToCache());
+  }
+
+  Future<void> selectTeacherViewTargetProfileId(
+    String? teacherProfileId,
+  ) async {
+    if (!hasAdminLikeMembershipInSelectedHomeschool) {
+      throw StateError('관리자/스태프만 교사 뷰 대상을 전환할 수 있습니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final normalized = _normalizeNullable(teacherProfileId);
+    final candidates = teacherViewCandidateProfiles
+        .map((row) => row.id)
+        .toSet();
+    if (normalized != null && !candidates.contains(normalized)) {
+      throw StateError('선택할 수 없는 교사 프로필입니다.');
+    }
+
+    if (normalized == null) {
+      _teacherViewTargetByHomeschool.remove(homeschoolId);
+    } else {
+      _teacherViewTargetByHomeschool[homeschoolId] = normalized;
+    }
+    _ensureRoleViewTargetSelection(roleOverride: currentRole);
+    _setStatus(
+      '교사 뷰 대상: ${findTeacherName(activeTeacherViewTargetProfileId ?? '')}',
+    );
+    notifyListeners();
+    unawaited(_persistToCache());
   }
 
   Future<void> changeTerm(String? termId) async {
@@ -1121,6 +1289,8 @@ class NestController extends ChangeNotifier {
       selectedHomeschoolId = null;
       currentRole = null;
       _viewRoleByHomeschool.clear();
+      _parentViewTargetByHomeschool.clear();
+      _teacherViewTargetByHomeschool.clear();
       terms = const [];
       classGroups = const [];
       courses = const [];
@@ -1186,6 +1356,7 @@ class NestController extends ChangeNotifier {
       await syncOauthResult();
       await loadGalleryItems();
       await loadCommunityFeed();
+      _ensureRoleViewTargetSelection();
 
       _setStatus('운영 컨텍스트 로드 완료');
     } catch (_) {
@@ -3308,6 +3479,16 @@ class NestController extends ChangeNotifier {
   }
 
   List<TeacherProfile> get currentUserTeacherProfiles {
+    if (isTeacherView && hasAdminLikeMembershipInSelectedHomeschool) {
+      final targetProfileId = activeTeacherViewTargetProfileId;
+      if (targetProfileId == null || targetProfileId.isEmpty) {
+        return const [];
+      }
+      return teacherProfiles
+          .where((profile) => profile.id == targetProfileId)
+          .toList(growable: false);
+    }
+
     final currentUserId = user?.id;
     if (currentUserId == null || currentUserId.isEmpty) {
       return const [];
@@ -3425,8 +3606,8 @@ class NestController extends ChangeNotifier {
   }
 
   List<ChildProfile> get myChildren {
-    final currentUserId = user?.id;
-    if (currentUserId == null || currentUserId.isEmpty) {
+    final targetUserId = activeParentViewTargetUserId;
+    if (targetUserId == null || targetUserId.isEmpty) {
       return const [];
     }
 
@@ -3436,7 +3617,7 @@ class NestController extends ChangeNotifier {
           if (guardians == null || guardians.isEmpty) {
             return false;
           }
-          return guardians.contains(currentUserId);
+          return guardians.contains(targetUserId);
         })
         .toList(growable: false);
 
@@ -3931,6 +4112,56 @@ class NestController extends ChangeNotifier {
     }
   }
 
+  void _ensureRoleViewTargetSelection({String? roleOverride}) {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return;
+    }
+    if (!hasAdminLikeMembershipInSelectedHomeschool) {
+      _parentViewTargetByHomeschool.remove(homeschoolId);
+      _teacherViewTargetByHomeschool.remove(homeschoolId);
+      return;
+    }
+
+    final role = roleOverride ?? currentRole;
+
+    if (role == 'PARENT') {
+      final parentCandidates = parentViewCandidateUserIds;
+      if (parentCandidates.isEmpty) {
+        _parentViewTargetByHomeschool.remove(homeschoolId);
+      } else {
+        final selected = _parentViewTargetByHomeschool[homeschoolId];
+        if (selected == null || !parentCandidates.contains(selected)) {
+          final currentUserId = user?.id;
+          _parentViewTargetByHomeschool[homeschoolId] =
+              currentUserId != null && parentCandidates.contains(currentUserId)
+              ? currentUserId
+              : parentCandidates.first;
+        }
+      }
+    }
+
+    if (role == 'TEACHER' || role == 'GUEST_TEACHER') {
+      final teacherCandidates = teacherViewCandidateProfiles;
+      if (teacherCandidates.isEmpty) {
+        _teacherViewTargetByHomeschool.remove(homeschoolId);
+      } else {
+        final selected = _teacherViewTargetByHomeschool[homeschoolId];
+        final isValidSelection =
+            selected != null &&
+            teacherCandidates.any((profile) => profile.id == selected);
+        if (!isValidSelection) {
+          final currentUserId = user?.id;
+          final myProfile = teacherCandidates
+              .where((profile) => profile.userId == currentUserId)
+              .firstOrNull;
+          _teacherViewTargetByHomeschool[homeschoolId] =
+              myProfile?.id ?? teacherCandidates.first.id;
+        }
+      }
+    }
+  }
+
   String? _resolveViewRole(String? homeschoolId) {
     if (homeschoolId == null) {
       return null;
@@ -3987,6 +4218,15 @@ class NestController extends ChangeNotifier {
     selectedTermId = cachedMeta['selectedTermId'] as String?;
     selectedClassGroupId = cachedMeta['selectedClassGroupId'] as String?;
     currentRole = cachedMeta['currentRole'] as String?;
+    final cachedParentTarget = cachedMeta['parentViewTargetUserId'] as String?;
+    if (cachedParentTarget != null && cachedParentTarget.trim().isNotEmpty) {
+      _parentViewTargetByHomeschool[lastHomeschoolId] = cachedParentTarget;
+    }
+    final cachedTeacherTarget =
+        cachedMeta['teacherViewTargetProfileId'] as String?;
+    if (cachedTeacherTarget != null && cachedTeacherTarget.trim().isNotEmpty) {
+      _teacherViewTargetByHomeschool[lastHomeschoolId] = cachedTeacherTarget;
+    }
 
     memberships =
         NestCache.loadCollection(
@@ -4171,6 +4411,8 @@ class NestController extends ChangeNotifier {
       selectedTermId: selectedTermId,
       selectedClassGroupId: selectedClassGroupId,
       currentRole: currentRole,
+      parentViewTargetUserId: _parentViewTargetByHomeschool[homeschoolId],
+      teacherViewTargetProfileId: _teacherViewTargetByHomeschool[homeschoolId],
     );
 
     await Future.wait([
@@ -4327,6 +4569,8 @@ class NestController extends ChangeNotifier {
     announcements = const [];
     auditLogs = const [];
     _viewRoleByHomeschool.clear();
+    _parentViewTargetByHomeschool.clear();
+    _teacherViewTargetByHomeschool.clear();
     selectedHomeschoolId = null;
     currentRole = null;
     terms = const [];

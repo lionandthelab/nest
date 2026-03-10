@@ -850,6 +850,139 @@ class _MainPanelState extends State<_MainPanel> {
     );
   }
 
+  Widget _buildParentViewTargetSwitchButton(NestController controller) {
+    if (!controller.isParentView ||
+        !controller.hasAdminLikeMembershipInSelectedHomeschool) {
+      return const SizedBox.shrink();
+    }
+
+    final candidates = controller.parentViewCandidateUserIds;
+    if (candidates.isEmpty) {
+      return Chip(
+        label: const Text('부모 대상 없음'),
+        avatar: const Icon(Icons.family_restroom_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    final activeUserId = controller.activeParentViewTargetUserId;
+    final activeLabel = controller.findMemberDisplayName(activeUserId);
+
+    return PopupMenuButton<String>(
+      tooltip: '부모 대상 전환',
+      onSelected: (userId) async {
+        try {
+          await controller.selectParentViewTargetUserId(userId);
+        } catch (_) {
+          _showPanelMessage(controller.statusMessage);
+        }
+      },
+      itemBuilder: (context) => candidates
+          .map(
+            (userId) => PopupMenuItem<String>(
+              value: userId,
+              child: Row(
+                children: [
+                  Icon(
+                    userId == activeUserId
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      controller.findMemberDisplayName(userId),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+      child: Chip(
+        label: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 180),
+          child: Text('부모: $activeLabel', overflow: TextOverflow.ellipsis),
+        ),
+        avatar: const Icon(Icons.family_restroom_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  Widget _buildTeacherViewTargetSwitchButton(NestController controller) {
+    if (!controller.isTeacherView ||
+        !controller.hasAdminLikeMembershipInSelectedHomeschool) {
+      return const SizedBox.shrink();
+    }
+
+    final candidates = controller.teacherViewCandidateProfiles;
+    if (candidates.isEmpty) {
+      return Chip(
+        label: const Text('교사 대상 없음'),
+        avatar: const Icon(Icons.school_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      );
+    }
+
+    final activeTeacherId = controller.activeTeacherViewTargetProfileId;
+    final activeLabel = activeTeacherId == null
+        ? '선택'
+        : controller.findTeacherName(activeTeacherId);
+
+    return PopupMenuButton<String>(
+      tooltip: '교사 대상 전환',
+      onSelected: (teacherId) async {
+        try {
+          await controller.selectTeacherViewTargetProfileId(teacherId);
+        } catch (_) {
+          _showPanelMessage(controller.statusMessage);
+        }
+      },
+      itemBuilder: (context) => candidates
+          .map(
+            (teacher) => PopupMenuItem<String>(
+              value: teacher.id,
+              child: Row(
+                children: [
+                  Icon(
+                    teacher.id == activeTeacherId
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      teacher.displayName,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+      child: Chip(
+        label: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 180),
+          child: Text('교사: $activeLabel', overflow: TextOverflow.ellipsis),
+        ),
+        avatar: const Icon(Icons.school_outlined, size: 14),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  void _showPanelMessage(String text) {
+    if (!mounted || text.trim().isEmpty) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   String _panelTitle(NestController controller) {
     if (controller.isAdminLike) {
       return '관리';
@@ -967,6 +1100,8 @@ class _MainPanelState extends State<_MainPanel> {
                             visualDensity: VisualDensity.compact,
                           ),
                           _buildParentChildSwitchButton(controller),
+                          _buildParentViewTargetSwitchButton(controller),
+                          _buildTeacherViewTargetSwitchButton(controller),
                           _buildRoleSwitchButton(controller),
                           IconButton(
                             icon: const Icon(Icons.info_outline, size: 18),
@@ -1003,6 +1138,8 @@ class _MainPanelState extends State<_MainPanel> {
                         visualDensity: VisualDensity.compact,
                       ),
                       _buildParentChildSwitchButton(controller),
+                      _buildParentViewTargetSwitchButton(controller),
+                      _buildTeacherViewTargetSwitchButton(controller),
                       _buildRoleSwitchButton(controller),
                       IconButton(
                         icon: const Icon(Icons.info_outline, size: 18),

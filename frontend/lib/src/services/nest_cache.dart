@@ -35,10 +35,7 @@ class NestCache {
       'data': items.map(toMap).toList(),
     });
 
-    await prefs.setString(
-      _key(userId, homeschoolId, collection),
-      envelope,
-    );
+    await prefs.setString(_key(userId, homeschoolId, collection), envelope);
   }
 
   /// Load a cached collection. Returns null if not found or schema mismatch.
@@ -84,10 +81,7 @@ class NestCache {
       'data': data,
     });
 
-    await prefs.setString(
-      _key(userId, homeschoolId, collection),
-      envelope,
-    );
+    await prefs.setString(_key(userId, homeschoolId, collection), envelope);
   }
 
   /// Load a cached string-list map. Returns null if not found.
@@ -108,10 +102,7 @@ class NestCache {
 
       final data = envelope['data'] as Map<String, dynamic>;
       return data.map(
-        (key, value) => MapEntry(
-          key,
-          (value as List).cast<String>(),
-        ),
+        (key, value) => MapEntry(key, (value as List).cast<String>()),
       );
     } catch (_) {
       return null;
@@ -125,6 +116,8 @@ class NestCache {
     String? selectedTermId,
     String? selectedClassGroupId,
     String? currentRole,
+    String? parentViewTargetUserId,
+    String? teacherViewTargetProfileId,
   }) async {
     final prefs = _prefs;
     if (prefs == null) return;
@@ -135,6 +128,8 @@ class NestCache {
       'selectedTermId': selectedTermId,
       'selectedClassGroupId': selectedClassGroupId,
       'currentRole': currentRole,
+      'parentViewTargetUserId': parentViewTargetUserId,
+      'teacherViewTargetProfileId': teacherViewTargetProfileId,
     });
 
     await prefs.setString(_metaKey(userId, homeschoolId), meta);
