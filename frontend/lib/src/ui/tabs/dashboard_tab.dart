@@ -108,31 +108,49 @@ class _DashboardTabState extends State<DashboardTab> {
           _buildAdminSetupFlowCard(theme, controller),
           const SizedBox(height: 16),
         ],
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _SummaryCard(
-              label: '소속 홈스쿨',
-              value: '${controller.memberships.length}',
-              icon: Icons.house,
-            ),
-            _SummaryCard(
-              label: '학기',
-              value: '${controller.terms.length}',
-              icon: Icons.calendar_month,
-            ),
-            _SummaryCard(
-              label: '반',
-              value: '${controller.classGroups.length}',
-              icon: Icons.groups,
-            ),
-            _SummaryCard(
-              label: '활성 수업',
-              value: '${controller.sessions.length}',
-              icon: Icons.view_week,
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final crossAxisCount = width >= 980
+                ? 4
+                : width >= 680
+                ? 3
+                : 2;
+            final itemWidth =
+                (width - ((crossAxisCount - 1) * 12)) / crossAxisCount;
+            final childAspectRatio = itemWidth / 108;
+
+            return GridView.count(
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
+              crossAxisCount: crossAxisCount,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: childAspectRatio,
+              children: [
+                _SummaryCard(
+                  label: '소속 홈스쿨',
+                  value: '${controller.memberships.length}',
+                  icon: Icons.house,
+                ),
+                _SummaryCard(
+                  label: '학기',
+                  value: '${controller.terms.length}',
+                  icon: Icons.calendar_month,
+                ),
+                _SummaryCard(
+                  label: '반',
+                  value: '${controller.classGroups.length}',
+                  icon: Icons.groups,
+                ),
+                _SummaryCard(
+                  label: '활성 수업',
+                  value: '${controller.sessions.length}',
+                  icon: Icons.view_week,
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 16),
         Card(
@@ -1351,32 +1369,29 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return SizedBox(
-      width: 220,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: NestColors.roseMist,
-                foregroundColor: NestColors.deepWood,
-                child: Icon(icon),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: NestColors.roseMist,
+              foregroundColor: NestColors.deepWood,
+              child: Icon(icon),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 2),
+                  Text(value, style: theme.textTheme.titleLarge),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: theme.textTheme.bodySmall),
-                    const SizedBox(height: 2),
-                    Text(value, style: theme.textTheme.titleLarge),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
