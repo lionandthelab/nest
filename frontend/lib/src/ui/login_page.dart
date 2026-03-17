@@ -19,6 +19,7 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _nicknameController = TextEditingController();
   bool _isSignUpMode = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
@@ -28,6 +29,7 @@ class _LoginPageState extends State<LoginPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _nicknameController.dispose();
     super.dispose();
   }
 
@@ -43,6 +45,7 @@ class _LoginPageState extends State<LoginPage> {
         await widget.controller.signUp(
           email: _emailController.text,
           password: _passwordController.text,
+          displayName: _nicknameController.text,
         );
         if (mounted) {
           HapticFeedback.mediumImpact();
@@ -201,6 +204,51 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                   const SizedBox(height: 28),
 
+                                  // ── Nickname (sign-up only) ──
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 220),
+                                    switchInCurve: Curves.easeOutCubic,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    transitionBuilder: (child, animation) {
+                                      return FadeTransition(
+                                        opacity: animation,
+                                        child: SizeTransition(
+                                          sizeFactor: animation,
+                                          axisAlignment: -1,
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child: _isSignUpMode
+                                        ? Column(
+                                            key: const ValueKey('signup-nickname'),
+                                            children: [
+                                              TextFormField(
+                                                controller: _nicknameController,
+                                                textInputAction: TextInputAction.next,
+                                                autofillHints: const [AutofillHints.nickname],
+                                                decoration: const InputDecoration(
+                                                  labelText: '닉네임',
+                                                  hintText: '앱에서 표시될 이름',
+                                                  prefixIcon: Icon(Icons.person_outlined, size: 20),
+                                                ),
+                                                validator: (value) {
+                                                  if (!_isSignUpMode) return null;
+                                                  if (value == null || value.trim().isEmpty) {
+                                                    return '닉네임을 입력하세요.';
+                                                  }
+                                                  if (value.trim().length < 2) {
+                                                    return '닉네임은 2자 이상으로 입력하세요.';
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                              const SizedBox(height: 14),
+                                            ],
+                                          )
+                                        : const SizedBox(key: ValueKey('signin-nickname-empty')),
+                                  ),
+
                                   // ── Email ──
                                   TextFormField(
                                     controller: _emailController,
@@ -349,6 +397,7 @@ class _LoginPageState extends State<LoginPage> {
                                             setState(() {
                                               _isSignUpMode = !_isSignUpMode;
                                               _confirmPasswordController.clear();
+                                              _nicknameController.clear();
                                               _obscureConfirm = true;
                                             });
                                           },

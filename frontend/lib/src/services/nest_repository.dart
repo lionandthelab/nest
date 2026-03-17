@@ -61,11 +61,15 @@ class NestRepository {
   Future<AuthResponse> signUp({
     required String email,
     required String password,
+    String? displayName,
   }) async {
     final response = await client.auth.signUp(
       email: email,
       password: password,
       emailRedirectTo: AppConfig.authEmailRedirectUrl,
+      data: displayName != null && displayName.trim().isNotEmpty
+          ? {'full_name': displayName.trim()}
+          : null,
     );
 
     if (response.user == null) {
@@ -73,6 +77,12 @@ class NestRepository {
     }
 
     return response;
+  }
+
+  Future<void> updateDisplayName(String displayName) async {
+    await client.auth.updateUser(
+      UserAttributes(data: {'full_name': displayName.trim()}),
+    );
   }
 
   Future<void> sendPasswordResetEmail({required String email}) {

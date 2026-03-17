@@ -304,13 +304,18 @@ class NestController extends ChangeNotifier {
     }
   }
 
-  Future<void> signUp({required String email, required String password}) async {
+  Future<void> signUp({
+    required String email,
+    required String password,
+    String? displayName,
+  }) async {
     _isExplicitAuthInProgress = true;
     try {
       await _runBusy('회원가입 중...', () async {
         final response = await _repository.signUp(
           email: email.trim(),
           password: password.trim(),
+          displayName: displayName?.trim(),
         );
 
         final currentSession = _repository.currentSession;
@@ -330,6 +335,18 @@ class NestController extends ChangeNotifier {
     } finally {
       _isExplicitAuthInProgress = false;
     }
+  }
+
+  Future<void> updateDisplayName(String displayName) async {
+    final trimmed = displayName.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('닉네임을 입력하세요.');
+    }
+
+    await _runBusy('닉네임 변경 중...', () async {
+      await _repository.updateDisplayName(trimmed);
+      _setStatus('닉네임이 변경되었습니다.');
+    });
   }
 
   Future<void> requestPasswordReset({required String email}) async {

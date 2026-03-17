@@ -1099,6 +1099,60 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
     }
   }
 
+  String _displayName(NestController controller) {
+    final fromDirectory = controller.findMemberDisplayName(controller.user?.id);
+    if (fromDirectory.trim().isNotEmpty &&
+        fromDirectory != controller.user?.id) {
+      return fromDirectory;
+    }
+    final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
+    final metadataName = metadata['full_name'] ?? metadata['name'];
+    if (metadataName is String && metadataName.trim().isNotEmpty) {
+      return metadataName.trim();
+    }
+    final email = controller.user?.email ?? '';
+    if (email.contains('@')) return email.split('@').first;
+    return '사용자';
+  }
+
+  Future<void> _showNicknameEditDialog(NestController controller) async {
+    final current = _displayName(controller);
+    final textController = TextEditingController(text: current);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('닉네임 변경'),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '닉네임',
+            hintText: '앱에서 표시될 이름',
+            prefixIcon: Icon(Icons.person_outlined, size: 20),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(textController.text.trim()),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+    textController.dispose();
+    if (result == null || result.isEmpty || result == current) return;
+    try {
+      await controller.updateDisplayName(result);
+      if (mounted) _showMessage('닉네임이 변경되었습니다.');
+    } catch (_) {
+      if (mounted) _showMessage(controller.statusMessage);
+    }
+  }
+
   void _showLegalDialog(BuildContext context, {required String title, required String content}) {
     showDialog<void>(
       context: context,
@@ -1349,6 +1403,31 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                                       ),
                                     ),
                                   ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 20),
+                          Row(
+                            children: [
+                              const Icon(Icons.person_outlined, size: 20, color: NestColors.deepWood),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _displayName(controller),
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: controller.isBusy
+                                    ? null
+                                    : () => _showNicknameEditDialog(controller),
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                label: const Text('변경'),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  visualDensity: VisualDensity.compact,
                                 ),
                               ),
                             ],
