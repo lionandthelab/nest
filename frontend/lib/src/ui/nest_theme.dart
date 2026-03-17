@@ -52,17 +52,17 @@ class NestTheme {
         color: NestColors.deepWood,
       ),
       bodyLarge: GoogleFonts.notoSansKr(
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: FontWeight.w500,
         color: NestColors.deepWood,
       ),
       bodyMedium: GoogleFonts.notoSansKr(
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: FontWeight.w400,
         color: NestColors.deepWood,
       ),
       labelLarge: GoogleFonts.notoSansKr(
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: FontWeight.w700,
         color: Colors.white,
       ),
@@ -207,13 +207,31 @@ class NestTheme {
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
           TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
           TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
           TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
         },
+      ),
+      // Ensure minimum 48px touch targets for accessibility.
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
+      dialogTheme: DialogThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        titleTextStyle: textTheme.titleLarge,
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: NestColors.deepWood,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: textTheme.bodySmall?.copyWith(color: Colors.white),
       ),
     );
   }

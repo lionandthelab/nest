@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../config/app_config.dart';
 import '../models/nest_models.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
@@ -30,6 +32,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   bool _hasUnsavedScheduleChanges = false;
+  DateTime? _lastBackPress;
 
   // ── Parent child selector state (shared across parent tabs) ──
   String? _selectedChildId;
@@ -39,7 +42,33 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        // If not on the first tab, go back to the first tab.
+        if (_currentIndex > 0) {
+          setState(() => _currentIndex = 0);
+          return;
+        }
+        // Double-tap back to exit.
+        final now = DateTime.now();
+        if (_lastBackPress != null &&
+            now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+          SystemNavigator.pop();
+          return;
+        }
+        _lastBackPress = now;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('한 번 더 누르면 앱을 종료합니다'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
         // Keep child selector in sync when controller data changes.
@@ -118,6 +147,7 @@ class _HomePageState extends State<HomePage> {
           ),
         );
       },
+    ),
     );
   }
 
@@ -195,13 +225,6 @@ class _HomePageState extends State<HomePage> {
 
     // ── Teacher / other non-admin view ──
     final tabs = <_TabSpec>[
-      _TabSpec(
-        label: '대시보드',
-        page: DashboardTab(
-          controller: controller,
-          onRequestTabChange: _navigateToTabLabel,
-        ),
-      ),
       if (controller.isTeacherView)
         _TabSpec(
           label: '교사 허브',
@@ -226,7 +249,7 @@ class _HomePageState extends State<HomePage> {
         page: CommunityFeedTab(
           controller: controller,
           showGalleryLauncher: isMobileLike,
-          title: isMobileLike ? 'Beloved SNS' : '커뮤니티',
+          title: isMobileLike ? '커뮤니티' : '커뮤니티',
         ),
       ),
     );
@@ -324,6 +347,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    HapticFeedback.selectionClick();
     setState(() {
       _currentIndex = nextIndex;
     });
@@ -542,6 +566,7 @@ class _DesktopScaffold extends StatelessWidget {
           child: NavigationRail(
             selectedIndex: currentIndex,
             onDestinationSelected: onSelectIndex,
+            labelType: NavigationRailLabelType.all,
             useIndicator: true,
             backgroundColor: Colors.white.withValues(alpha: 0.7),
             leading: Padding(
@@ -554,26 +579,14 @@ class _DesktopScaffold extends StatelessWidget {
                     horizontal: 8,
                     vertical: 6,
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.asset(
-                          'assets/logo.png',
-                          width: 34,
-                          height: 34,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '홈',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 34,
+                      height: 34,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
@@ -822,7 +835,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                                   style: theme.textTheme.titleMedium,
                                 ),
                                 Text(
-                                  '$displayName <${controller.user?.email ?? '-'}>',
+                                  '$displayName 님',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1069,6 +1082,39 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _roleLabel(String? role) {
+    switch (role) {
+      case 'HOMESCHOOL_ADMIN':
+        return '홈스쿨 관리자';
+      case 'PARENT':
+        return '학부모';
+      case 'TEACHER':
+        return '교사';
+      case 'GUEST_TEACHER':
+        return '게스트 교사';
+      case 'STAFF':
+        return '스태프';
+      default:
+        return role ?? '-';
+    }
+  }
+
+  void _showLegalDialog(BuildContext context, {required String title, required String content}) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -1260,6 +1306,126 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                         ),
                       ),
                     ],
+                  ),
+                  const Divider(height: 32),
+                  // ── Account info ──
+                  Text(
+                    '계정 정보',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: NestColors.roseMist,
+                                child: Text(
+                                  (controller.user?.email ?? '?')[0].toUpperCase(),
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: NestColors.deepWood,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      controller.user?.email ?? '-',
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      _roleLabel(controller.currentRole),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: NestColors.deepWood.withValues(alpha: 0.65),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 32),
+                  // ── About & Legal ──
+                  Text(
+                    '앱 정보',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.info_outline, size: 20),
+                          title: const Text('버전'),
+                          trailing: Text(
+                            'v${AppConfig.appVersion}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        ListTile(
+                          leading: const Icon(Icons.description_outlined, size: 20),
+                          title: const Text('이용약관'),
+                          trailing: const Icon(Icons.chevron_right, size: 18),
+                          onTap: () => _showLegalDialog(
+                            context,
+                            title: '이용약관',
+                            content: '이용약관은 앱 내 또는 공식 웹사이트에서 확인하실 수 있습니다.\n\n문의: contact@lionandthelab.com',
+                          ),
+                        ),
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        ListTile(
+                          leading: const Icon(Icons.privacy_tip_outlined, size: 20),
+                          title: const Text('개인정보처리방침'),
+                          trailing: const Icon(Icons.chevron_right, size: 18),
+                          onTap: () => _showLegalDialog(
+                            context,
+                            title: '개인정보처리방침',
+                            content: '개인정보처리방침은 앱 내 또는 공식 웹사이트에서 확인하실 수 있습니다.\n\n문의: contact@lionandthelab.com',
+                          ),
+                        ),
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        ListTile(
+                          leading: const Icon(Icons.mail_outline, size: 20),
+                          title: const Text('문의하기'),
+                          subtitle: const Text('contact@lionandthelab.com'),
+                          trailing: const Icon(Icons.chevron_right, size: 18),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Center(
+                    child: Text(
+                      '${AppConfig.appName} · ${AppConfig.brandLine}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.45),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      '© 2026 Lion and the Lab',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.35),
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1744,7 +1910,7 @@ class _MainPanelState extends State<_MainPanel> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '$displayName · ${controller.user?.email ?? '-'}',
+                    '$displayName 님 · ${_labelForRole(controller.currentRole ?? '-')}',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: NestColors.deepWood.withValues(alpha: 0.72),
                     ),
@@ -2102,15 +2268,20 @@ class _ContextSelectorState extends State<_ContextSelector> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: compact
-              ? cardWidgets
-              : cardWidgets
-                    .map((widget) => SizedBox(width: 210, child: widget))
+        compact
+            ? Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: cardWidgets,
+              )
+            : Row(
+                children: cardWidgets
+                    .map((w) => Expanded(child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: w,
+                    )))
                     .toList(growable: false),
-        ),
+              ),
         const SizedBox(height: 8),
         InkWell(
           borderRadius: BorderRadius.circular(10),

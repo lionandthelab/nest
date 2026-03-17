@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/nest_empty_state.dart';
 
 class DriveTab extends StatefulWidget {
   const DriveTab({super.key, required this.controller});
@@ -186,7 +187,11 @@ class _DriveTabState extends State<DriveTab> {
                 Text('연동 상태', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 10),
                 if (controller.driveIntegration == null)
-                  const Text('연동 정보 없음')
+                  const NestEmptyState(
+                    icon: Icons.cloud_off_outlined,
+                    title: '연동 정보 없음',
+                    subtitle: 'OAuth 시작 버튼으로 Google Drive를 연결하세요.',
+                  )
                 else
                   _DriveStatusView(controller: controller),
               ],

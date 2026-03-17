@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/nest_empty_state.dart';
 
 enum _PostFilter { all, reported, hidden, pinned }
 
@@ -50,9 +51,7 @@ class _CommunityTabState extends State<CommunityTab> {
         const SizedBox(height: 12),
         _buildReportQueueCard(controller, openReports),
         const SizedBox(height: 12),
-        _buildComposerCard(controller),
-        const SizedBox(height: 12),
-        _buildPostManagerCard(controller, filteredPosts),
+        _buildPostManagerSection(controller, filteredPosts),
       ],
     );
   }
@@ -67,7 +66,7 @@ class _CommunityTabState extends State<CommunityTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Community Admin',
+                  '커뮤니티 관리',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 6),
@@ -105,7 +104,7 @@ class _CommunityTabState extends State<CommunityTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'SNS Moderation',
+              'SNS 관리',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
@@ -155,7 +154,10 @@ class _CommunityTabState extends State<CommunityTab> {
             Text('신고 큐', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
             if (openReports.isEmpty)
-              const Text('미처리 신고가 없습니다.')
+              const NestEmptyState(
+                icon: Icons.flag_outlined,
+                title: '미처리 신고가 없습니다.',
+              )
             else
               ...openReports.take(40).map((report) {
                 final post = controller.communityPosts
@@ -243,129 +245,93 @@ class _CommunityTabState extends State<CommunityTab> {
     );
   }
 
-  Widget _buildComposerCard(NestController controller) {
-    final classGroupOptions = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: '__ALL__', child: Text('전체 공개')),
-      ...controller.classGroups.map(
-        (group) => DropdownMenuItem(value: group.id, child: Text(group.name)),
-      ),
-    ];
-
-    final dropdownValue = _targetClassGroupId ?? '__ALL__';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('관리자 공지/게시', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _postController,
-              minLines: 2,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: '게시 내용',
-                hintText: '운영 공지 또는 공용 소식을 등록하세요.',
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              key: ValueKey(dropdownValue),
-              initialValue: dropdownValue,
-              items: classGroupOptions,
-              onChanged: controller.isBusy
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _targetClassGroupId = value == '__ALL__' ? null : value;
-                      });
-                    },
-              decoration: const InputDecoration(labelText: '공개 범위'),
-            ),
-            const SizedBox(height: 8),
-            _SelectedCommunityFileLabel(controller: controller),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: controller.isBusy ? null : _pickMedia,
-                  icon: const Icon(Icons.attach_file),
-                  label: const Text('첨부'),
-                ),
-                FilledButton.icon(
-                  onPressed: controller.isBusy || !controller.canWriteCommunity
-                      ? null
-                      : _publishPost,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('게시'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+  void _openComposerModal(NestController controller) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return _CommunityComposerModal(
+          controller: controller,
+          postController: _postController,
+          targetClassGroupId: _targetClassGroupId,
+          onTargetChanged: (value) {
+            setState(() {
+              _targetClassGroupId = value;
+            });
+          },
+          onPickMedia: _pickMedia,
+          onPublish: () async {
+            await _publishPost();
+            if (mounted) Navigator.of(ctx).pop();
+          },
+        );
+      },
     );
   }
 
-  Widget _buildPostManagerCard(
+  Widget _buildPostManagerSection(
     NestController controller,
     List<CommunityPost> posts,
   ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '게시글 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _buildFilterBar(controller),
-            const SizedBox(height: 10),
-            if (posts.isEmpty)
-              const Text('선택된 조건의 게시글이 없습니다.')
-            else
-              ...posts.map(
-                (post) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _PostModerationCard(
-                    post: post,
-                    classGroupName: controller.findClassGroupName(
-                      post.classGroupId,
-                    ),
-                    likeCount: controller.likesForCommunityPost(post.id),
-                    commentCount: controller
-                        .commentsForCommunityPost(post.id)
-                        .length,
-                    mediaCount: controller
-                        .mediaForCommunityPost(post.id)
-                        .length,
-                    openReportCount: controller.openReportsForCommunityPost(
-                      post.id,
-                    ),
-                    canAct: !controller.isBusy,
-                    onTogglePinned: () => _togglePinned(post),
-                    onToggleHidden: () => _toggleHidden(post),
-                    onDelete: () => _deletePost(post.id),
-                    onOpenFirstMedia: () =>
-                        _openFirstMedia(controller, post.id),
-                  ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '게시글 관리',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-          ],
-        ),
+              FilledButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _openComposerModal(controller),
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('게시글 작성'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildFilterBar(controller),
+          const SizedBox(height: 10),
+          if (posts.isEmpty)
+            const NestEmptyState(
+              icon: Icons.article_outlined,
+              title: '선택된 조건의 게시글이 없습니다.',
+            )
+          else
+            ...posts.map(
+              (post) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _PostModerationCard(
+                  post: post,
+                  classGroupName: controller.findClassGroupName(
+                    post.classGroupId,
+                  ),
+                  likeCount: controller.likesForCommunityPost(post.id),
+                  commentCount: controller
+                      .commentsForCommunityPost(post.id)
+                      .length,
+                  mediaCount: controller
+                      .mediaForCommunityPost(post.id)
+                      .length,
+                  openReportCount: controller.openReportsForCommunityPost(
+                    post.id,
+                  ),
+                  canAct: !controller.isBusy,
+                  onTogglePinned: () => _togglePinned(post),
+                  onToggleHidden: () => _toggleHidden(post),
+                  onDelete: () => _deletePost(post.id),
+                  onOpenFirstMedia: () =>
+                      _openFirstMedia(controller, post.id),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -758,6 +724,95 @@ class _PostModerationCard extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.delete_outline),
                 label: const Text('삭제'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityComposerModal extends StatelessWidget {
+  const _CommunityComposerModal({
+    required this.controller,
+    required this.postController,
+    required this.targetClassGroupId,
+    required this.onTargetChanged,
+    required this.onPickMedia,
+    required this.onPublish,
+  });
+
+  final NestController controller;
+  final TextEditingController postController;
+  final String? targetClassGroupId;
+  final ValueChanged<String?> onTargetChanged;
+  final VoidCallback onPickMedia;
+  final VoidCallback onPublish;
+
+  @override
+  Widget build(BuildContext context) {
+    final classGroupOptions = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: '__ALL__', child: Text('전체 공개')),
+      ...controller.classGroups.map(
+        (group) => DropdownMenuItem(value: group.id, child: Text(group.name)),
+      ),
+    ];
+    final dropdownValue = targetClassGroupId ?? '__ALL__';
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        24,
+        24,
+        24,
+        24 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('게시글 작성', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          TextField(
+            controller: postController,
+            minLines: 2,
+            maxLines: 5,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '게시 내용',
+              hintText: '운영 공지 또는 공용 소식을 등록하세요.',
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            key: ValueKey(dropdownValue),
+            initialValue: dropdownValue,
+            items: classGroupOptions,
+            onChanged: controller.isBusy
+                ? null
+                : (value) {
+                    onTargetChanged(value == '__ALL__' ? null : value);
+                  },
+            decoration: const InputDecoration(labelText: '공개 범위'),
+          ),
+          const SizedBox(height: 8),
+          _SelectedCommunityFileLabel(controller: controller),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: controller.isBusy ? null : onPickMedia,
+                icon: const Icon(Icons.attach_file),
+                label: const Text('첨부'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed:
+                    controller.isBusy || !controller.canWriteCommunity
+                        ? null
+                        : onPublish,
+                icon: const Icon(Icons.send_rounded),
+                label: const Text('게시'),
               ),
             ],
           ),

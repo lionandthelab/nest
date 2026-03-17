@@ -6,6 +6,8 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
+import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_skeleton.dart';
 
 class ParentTimetableTab extends StatefulWidget {
   const ParentTimetableTab({
@@ -51,9 +53,12 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        if (widget.isLoadingChildClasses) ...[
-          const LinearProgressIndicator(),
-          const SizedBox(height: 10),
+        if (widget.isLoadingChildClasses && widget.childClassBundles.isEmpty) ...[
+          const NestSkeletonCard(),
+          const SizedBox(height: 8),
+          const NestSkeletonCard(),
+          const SizedBox(height: 8),
+          const NestSkeletonCard(),
         ],
         LayoutBuilder(
           builder: (context, constraints) {
@@ -104,10 +109,20 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
         ),
         const SizedBox(height: 8),
         // Timetable cards
-        if (widget.selectedChildId == null)
-          _buildEmptyHint('아이를 먼저 선택하세요.')
-        else if (bundles.isEmpty && !widget.isLoadingChildClasses)
-          _buildEmptyHint('배정된 반 또는 시간표가 없습니다.')
+        if (widget.isLoadingChildClasses && bundles.isEmpty)
+          const SizedBox.shrink()
+        else if (widget.selectedChildId == null)
+          const NestEmptyState(
+            icon: Icons.calendar_today,
+            title: '아이를 먼저 선택하세요',
+            subtitle: '상단에서 아이를 선택하면 시간표를 확인할 수 있습니다.',
+          )
+        else if (bundles.isEmpty)
+          const NestEmptyState(
+            icon: Icons.calendar_today,
+            title: '시간표가 없습니다',
+            subtitle: '배정된 반 또는 시간표가 없습니다.',
+          )
         else ...[
           _buildWeeklyScheduleBoard(controller, bundles),
           const SizedBox(height: 14),
@@ -178,7 +193,10 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                     ),
                     const SizedBox(height: 12),
                     if (sessions.isEmpty)
-                      _buildEmptyHint('등록된 수업이 없습니다.')
+                      const NestEmptyState(
+                        icon: Icons.calendar_today,
+                        title: '등록된 수업이 없습니다',
+                      )
                     else
                       LayoutBuilder(
                         builder: (context, constraints) {
@@ -284,7 +302,10 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
   ) {
     final entries = _collectScheduleEntries(controller, bundles);
     if (entries.isEmpty) {
-      return _buildEmptyHint('시간표 데이터가 없습니다.');
+      return const NestEmptyState(
+        icon: Icons.calendar_today,
+        title: '시간표 데이터가 없습니다',
+      );
     }
 
     final slotById = {for (final slot in controller.timeSlots) slot.id: slot};
@@ -314,7 +335,10 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     }
 
     if (days.isEmpty || periodKeys.isEmpty) {
-      return _buildEmptyHint('시간표 슬롯 정보를 찾을 수 없습니다.');
+      return const NestEmptyState(
+        icon: Icons.calendar_today,
+        title: '시간표 슬롯 정보를 찾을 수 없습니다',
+      );
     }
 
     final sortedDays = days.toList(growable: false)..sort();
@@ -581,101 +605,129 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
               maxChildSize: 0.95,
               expand: false,
               builder: (context, scrollController) {
+                // Fixed header items: title row, spacer, description, spacer,
+                // fields, spacer, note field, spacer, add button, spacer,
+                // section label, spacer = 12 fixed items.
+                // Then: empty state (1) OR block rows (blocks.length).
+                const fixedCount = 12;
+                final dynamicCount = blocks.isEmpty ? 1 : blocks.length;
+
                 return Padding(
                   padding: const EdgeInsets.all(16),
-                  child: ListView(
+                  child: ListView.builder(
                     controller: scrollController,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            '내 불가 시간 설정',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '등록한 시간은 시간표 생성 시 자동으로 회피됩니다.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.72),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final compact = constraints.maxWidth < 600;
-                          final dayField = _buildDayField(
-                            controller,
-                            setSheetState,
-                          );
-                          final startField = _buildTimeField(
-                            controller: _unavailabilityStartController,
-                            label: '시작 (HH:MM)',
-                          );
-                          final endField = _buildTimeField(
-                            controller: _unavailabilityEndController,
-                            label: '종료 (HH:MM)',
-                          );
-
-                          if (compact) {
-                            return Column(
-                              children: [
-                                dayField,
-                                const SizedBox(height: 8),
-                                startField,
-                                const SizedBox(height: 8),
-                                endField,
-                              ],
-                            );
-                          }
+                    itemCount: fixedCount + dynamicCount,
+                    itemBuilder: (context, index) {
+                      switch (index) {
+                        case 0:
                           return Row(
                             children: [
-                              Expanded(flex: 3, child: dayField),
-                              const SizedBox(width: 8),
-                              Expanded(flex: 2, child: startField),
-                              const SizedBox(width: 8),
-                              Expanded(flex: 2, child: endField),
+                              Text(
+                                '내 불가 시간 설정',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                onPressed: () => Navigator.pop(context),
+                                icon: const Icon(Icons.close),
+                              ),
                             ],
                           );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _unavailabilityNoteController,
-                        decoration: const InputDecoration(
-                          labelText: '메모 (선택)',
-                          prefixIcon: Icon(Icons.edit_note),
-                        ),
-                        minLines: 1,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 10),
-                      ElevatedButton.icon(
-                        onPressed: controller.isBusy
-                            ? null
-                            : () async {
-                                await _createBlock(currentUserId);
-                                if (context.mounted) setSheetState(() {});
-                              },
-                        icon: const Icon(Icons.add),
-                        label: const Text('불가 시간 추가'),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        '등록 항목',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      if (blocks.isEmpty)
-                        _buildEmptyHint('등록된 불가 시간이 없습니다.')
-                      else
-                        ...blocks.map((block) {
+                        case 1:
+                          return const SizedBox(height: 6);
+                        case 2:
+                          return Text(
+                            '등록한 시간은 시간표 생성 시 자동으로 회피됩니다.',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: NestColors.deepWood.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                ),
+                          );
+                        case 3:
+                          return const SizedBox(height: 12);
+                        case 4:
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              final compact = constraints.maxWidth < 600;
+                              final dayField = _buildDayField(
+                                controller,
+                                setSheetState,
+                              );
+                              final startField = _buildTimeField(
+                                controller: _unavailabilityStartController,
+                                label: '시작 (HH:MM)',
+                              );
+                              final endField = _buildTimeField(
+                                controller: _unavailabilityEndController,
+                                label: '종료 (HH:MM)',
+                              );
+
+                              if (compact) {
+                                return Column(
+                                  children: [
+                                    dayField,
+                                    const SizedBox(height: 8),
+                                    startField,
+                                    const SizedBox(height: 8),
+                                    endField,
+                                  ],
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  Expanded(flex: 3, child: dayField),
+                                  const SizedBox(width: 8),
+                                  Expanded(flex: 2, child: startField),
+                                  const SizedBox(width: 8),
+                                  Expanded(flex: 2, child: endField),
+                                ],
+                              );
+                            },
+                          );
+                        case 5:
+                          return const SizedBox(height: 8);
+                        case 6:
+                          return TextField(
+                            controller: _unavailabilityNoteController,
+                            decoration: const InputDecoration(
+                              labelText: '메모 (선택)',
+                              prefixIcon: Icon(Icons.edit_note),
+                            ),
+                            minLines: 1,
+                            maxLines: 2,
+                          );
+                        case 7:
+                          return const SizedBox(height: 10);
+                        case 8:
+                          return ElevatedButton.icon(
+                            onPressed: controller.isBusy
+                                ? null
+                                : () async {
+                                    await _createBlock(currentUserId);
+                                    if (context.mounted) setSheetState(() {});
+                                  },
+                            icon: const Icon(Icons.add),
+                            label: const Text('불가 시간 추가'),
+                          );
+                        case 9:
+                          return const SizedBox(height: 14);
+                        case 10:
+                          return Text(
+                            '등록 항목',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          );
+                        case 11:
+                          return const SizedBox(height: 8);
+                        default:
+                          if (blocks.isEmpty) {
+                            return const NestEmptyState(
+                              icon: Icons.calendar_today,
+                              title: '등록된 불가 시간이 없습니다',
+                            );
+                          }
+                          final block = blocks[index - fixedCount];
                           final day = _dayLabel(block.dayOfWeek);
                           final start = _shortTime(block.startTime);
                           final end = _shortTime(block.endTime);
@@ -686,7 +738,9 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                             child: Container(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: NestColors.roseMist),
+                                border: Border.all(
+                                  color: NestColors.roseMist,
+                                ),
                               ),
                               child: ListTile(
                                 dense: true,
@@ -707,8 +761,8 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                               ),
                             ),
                           );
-                        }),
-                    ],
+                      }
+                    },
                   ),
                 );
               },
@@ -834,18 +888,6 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
       return fallback == null ? value : DateFormat('HH:mm').format(fallback);
     }
     return DateFormat('HH:mm').format(parsed);
-  }
-
-  Widget _buildEmptyHint(String message) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: NestColors.roseMist.withValues(alpha: 0.36),
-      ),
-      child: Text(message),
-    );
   }
 
   void _showMessage(String text) {

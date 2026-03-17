@@ -26,6 +26,7 @@ class NestController extends ChangeNotifier {
 
   bool _isBootstrapped = false;
   bool _isBusy = false;
+  bool _isExplicitAuthInProgress = false;
   String _statusMessage = 'Ready';
 
   User? user;
@@ -271,6 +272,7 @@ class NestController extends ChangeNotifier {
     }
 
     _authSubscription = _repository.authChanges.listen((authState) {
+      if (_isExplicitAuthInProgress) return;
       unawaited(_onAuthStateChanged(authState.session));
     });
 
@@ -290,34 +292,44 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> signIn({required String email, required String password}) async {
-    await _runBusy('로그인 중...', () async {
-      await _repository.signIn(email: email.trim(), password: password.trim());
-      await _onAuthStateChanged(_repository.currentSession);
-      _setStatus('로그인 성공');
-    });
+    _isExplicitAuthInProgress = true;
+    try {
+      await _runBusy('로그인 중...', () async {
+        await _repository.signIn(email: email.trim(), password: password.trim());
+        await _onAuthStateChanged(_repository.currentSession);
+        _setStatus('로그인 성공');
+      });
+    } finally {
+      _isExplicitAuthInProgress = false;
+    }
   }
 
   Future<void> signUp({required String email, required String password}) async {
-    await _runBusy('회원가입 중...', () async {
-      final response = await _repository.signUp(
-        email: email.trim(),
-        password: password.trim(),
-      );
+    _isExplicitAuthInProgress = true;
+    try {
+      await _runBusy('회원가입 중...', () async {
+        final response = await _repository.signUp(
+          email: email.trim(),
+          password: password.trim(),
+        );
 
-      final currentSession = _repository.currentSession;
+        final currentSession = _repository.currentSession;
 
-      if (currentSession != null) {
-        await _onAuthStateChanged(currentSession);
-        _setStatus('회원가입 및 로그인 완료');
-        return;
-      }
+        if (currentSession != null) {
+          await _onAuthStateChanged(currentSession);
+          _setStatus('회원가입 및 로그인 완료');
+          return;
+        }
 
-      _setStatus(
-        response.user != null
-            ? '회원가입 완료. 이메일 인증 설정이 켜져 있으면 인증 후 로그인하세요.'
-            : '회원가입을 완료하지 못했습니다.',
-      );
-    });
+        _setStatus(
+          response.user != null
+              ? '회원가입 완료. 이메일 인증 설정이 켜져 있으면 인증 후 로그인하세요.'
+              : '회원가입을 완료하지 못했습니다.',
+        );
+      });
+    } finally {
+      _isExplicitAuthInProgress = false;
+    }
   }
 
   Future<void> requestPasswordReset({required String email}) async {
@@ -333,12 +345,17 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    await _runBusy('로그아웃 중...', () async {
-      await NestCache.clearAll();
-      await _repository.signOut();
-      await _onAuthStateChanged(null);
-      _setStatus('로그아웃 완료');
-    });
+    _isExplicitAuthInProgress = true;
+    try {
+      await _runBusy('로그아웃 중...', () async {
+        await NestCache.clearAll();
+        await _repository.signOut();
+        await _onAuthStateChanged(null);
+        _setStatus('로그아웃 완료');
+      });
+    } finally {
+      _isExplicitAuthInProgress = false;
+    }
   }
 
   Future<void> refreshAll() async {

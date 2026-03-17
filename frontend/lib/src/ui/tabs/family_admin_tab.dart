@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
+import '../widgets/nest_empty_state.dart';
 
 class FamilyAdminTab extends StatefulWidget {
   const FamilyAdminTab({super.key, required this.controller});
@@ -2016,7 +2017,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           ),
                           const SizedBox(height: 8),
                           if (matches.isEmpty)
-                            const Text('검색 결과가 없습니다.')
+                            const NestEmptyState(
+                              icon: Icons.search_off_outlined,
+                              title: '검색 결과가 없습니다.',
+                            )
                           else
                             Container(
                               constraints: const BoxConstraints(maxHeight: 180),
@@ -2151,7 +2155,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           ),
                           const SizedBox(height: 10),
                           if (blocks.isEmpty)
-                            const Text('등록된 불가 시간이 없습니다.')
+                            const NestEmptyState(
+                              icon: Icons.event_busy_outlined,
+                              title: '등록된 불가 시간이 없습니다.',
+                            )
                           else
                             ...blocks.map((block) {
                               return Padding(
@@ -2241,14 +2248,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildEmptyHint(String message) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: NestColors.roseMist.withValues(alpha: 0.36),
-      ),
-      child: Text(message),
+    return NestEmptyState(
+      icon: Icons.family_restroom_outlined,
+      title: message,
     );
   }
 
@@ -2256,11 +2258,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final columnCount = width < 760
+        final columnCount = width < 500
             ? 2
-            : width >= 1180
-            ? 4
-            : 3;
+            : width < 760
+            ? 3
+            : width >= 980
+            ? 7
+            : 4;
         final itemWidth = (width - ((columnCount - 1) * 10)) / columnCount;
 
         return Wrap(
@@ -2282,9 +2286,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   Widget _buildSetupSummaryCard({required _SetupStat stat}) {
     final formattedValue = NumberFormat.decimalPattern().format(stat.value);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: stat.accent.withValues(alpha: 0.34)),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -2298,64 +2302,62 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
           Row(
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: stat.accent.withValues(alpha: 0.2),
                 ),
-                child: Icon(stat.icon, size: 16, color: NestColors.deepWood),
+                child: Icon(stat.icon, size: 14, color: NestColors.deepWood),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  stat.title,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: NestColors.deepWood.withValues(alpha: 0.84),
-                  ),
+              const SizedBox(width: 6),
+              Text(
+                stat.title,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood.withValues(alpha: 0.84),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                stat.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  color: NestColors.deepWood.withValues(alpha: 0.56),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(
-                child: Text(
-                  formattedValue,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    fontSize: 32,
-                    height: 1,
-                    fontWeight: FontWeight.w700,
-                    color: NestColors.deepWood,
-                  ),
+              Text(
+                formattedValue,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                  fontSize: 24,
+                  height: 1,
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 3),
               Padding(
-                padding: const EdgeInsets.only(bottom: 3),
+                padding: const EdgeInsets.only(bottom: 1),
                 child: Text(
                   stat.unit,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: NestColors.deepWood.withValues(alpha: 0.82),
                   ),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            stat.subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.66),
-            ),
           ),
         ],
       ),

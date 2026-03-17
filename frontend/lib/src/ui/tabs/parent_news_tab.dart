@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
+import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_refresh.dart';
+import '../widgets/nest_skeleton.dart';
 import 'community_feed_tab.dart';
 import 'gallery_tab.dart';
 
@@ -172,33 +175,31 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
         });
 
     if (announcements.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.campaign_outlined,
-                size: 48,
-                color: NestColors.deepWood.withValues(alpha: 0.4),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '등록된 공지사항이 없습니다.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-          ),
-        ),
+      if (widget.controller.isBusy) {
+        return ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          children: const [
+            NestSkeletonCard(),
+            SizedBox(height: 8),
+            NestSkeletonCard(),
+            SizedBox(height: 8),
+            NestSkeletonCard(),
+          ],
+        );
+      }
+      return const NestEmptyState(
+        icon: Icons.campaign_outlined,
+        title: '등록된 공지사항이 없습니다',
+        subtitle: '새로운 공지사항이 등록되면 여기서 확인할 수 있습니다.',
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      itemCount: announcements.length,
+    return NestRefreshable(
+      onRefresh: () => widget.controller.refreshAll(),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: announcements.length,
       itemBuilder: (context, index) {
         final a = announcements[index];
         final when = a.createdAt == null
@@ -267,6 +268,7 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
           ),
         );
       },
+      ),
     );
   }
 }

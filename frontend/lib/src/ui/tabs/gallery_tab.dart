@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/nest_empty_state.dart';
 
 class GalleryPage extends StatelessWidget {
   const GalleryPage({super.key, required this.controller, this.title = '갤러리'});
@@ -320,25 +321,10 @@ class _GalleryTabState extends State<GalleryTab> {
   }
 
   Widget _buildEmptyState() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: NestColors.roseMist.withValues(alpha: 0.34),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.photo_library_outlined,
-            size: 32,
-            color: NestColors.deepWood.withValues(alpha: 0.7),
-          ),
-          const SizedBox(height: 8),
-          const Text('표시할 갤러리 항목이 없습니다.'),
-        ],
-      ),
+    return const NestEmptyState(
+      icon: Icons.photo_library_outlined,
+      title: '표시할 갤러리 항목이 없습니다.',
+      subtitle: '사진과 영상을 업로드하면 여기에 표시됩니다.',
     );
   }
 

@@ -107,19 +107,20 @@ class _TimetableTabState extends State<TimetableTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
-                  child: Text(
-                    '시간표 관리',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+                Text(
+                  '시간표 관리',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 FilledButton.tonalIcon(
                   onPressed: controller.isBusy
                       ? null
                       : _openTimetableExportDialog,
-                  icon: const Icon(Icons.image_outlined),
+                  icon: const Icon(Icons.image_outlined, size: 18),
                   label: const Text('시간표 내보내기'),
                 ),
               ],
@@ -198,41 +199,98 @@ class _TimetableTabState extends State<TimetableTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '시간표 메인 보드',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed:
-                      !_isDraftDirty || controller.isBusy || _isApplyingDraft
-                      ? null
-                      : _commitDraftChanges,
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('수정 확정'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.tonalIcon(
-                  onPressed: controller.isBusy || _isApplyingDraft
-                      ? null
-                      : () => _openRoomUtilizationExportDialog(controller),
-                  icon: const Icon(Icons.meeting_room_outlined),
-                  label: const Text('교실 상황표 내보내기'),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    _paletteOpen
-                        ? Icons.view_sidebar_outlined
-                        : Icons.view_sidebar,
-                  ),
-                  tooltip: _paletteOpen ? '팔레트 접기' : '팔레트 열기',
-                  onPressed: () => setState(() => _paletteOpen = !_paletteOpen),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, headerConstraints) {
+                final compact = headerConstraints.maxWidth < 600;
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '시간표 메인 보드',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              _paletteOpen
+                                  ? Icons.view_sidebar_outlined
+                                  : Icons.view_sidebar,
+                            ),
+                            tooltip: _paletteOpen ? '팔레트 접기' : '팔레트 열기',
+                            onPressed: () =>
+                                setState(() => _paletteOpen = !_paletteOpen),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: !_isDraftDirty ||
+                                    controller.isBusy ||
+                                    _isApplyingDraft
+                                ? null
+                                : _commitDraftChanges,
+                            icon: const Icon(Icons.check_circle_outline, size: 18),
+                            label: const Text('수정 확정'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: controller.isBusy || _isApplyingDraft
+                                ? null
+                                : () => _openRoomUtilizationExportDialog(
+                                    controller),
+                            icon: const Icon(Icons.meeting_room_outlined, size: 18),
+                            label: const Text('교실 상황표 내보내기'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '시간표 메인 보드',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed:
+                          !_isDraftDirty || controller.isBusy || _isApplyingDraft
+                          ? null
+                          : _commitDraftChanges,
+                      icon: const Icon(Icons.check_circle_outline),
+                      label: const Text('수정 확정'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: controller.isBusy || _isApplyingDraft
+                          ? null
+                          : () => _openRoomUtilizationExportDialog(controller),
+                      icon: const Icon(Icons.meeting_room_outlined),
+                      label: const Text('교실 상황표 내보내기'),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: Icon(
+                        _paletteOpen
+                            ? Icons.view_sidebar_outlined
+                            : Icons.view_sidebar,
+                      ),
+                      tooltip: _paletteOpen ? '팔레트 접기' : '팔레트 열기',
+                      onPressed: () =>
+                          setState(() => _paletteOpen = !_paletteOpen),
+                    ),
+                  ],
+                );
+              },
             ),
             if (_isApplyingDraft) ...[
               const SizedBox(height: 8),
@@ -1447,7 +1505,9 @@ class _TimetableTabState extends State<TimetableTab> {
         final shouldScroll = !forExport && gridWidth > availableWidth;
         final renderWidth = forExport
             ? gridWidth + (boardPadding * 2)
-            : (shouldScroll ? gridWidth : availableWidth);
+            : (shouldScroll
+                ? gridWidth + (boardPadding * 2)
+                : availableWidth);
 
         Widget grid = Container(
           width: renderWidth,

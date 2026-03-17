@@ -6,6 +6,7 @@ import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/hub_scaffold.dart';
+import '../widgets/nest_empty_state.dart';
 import '../widgets/search_select_field.dart';
 
 class TeacherHubTab extends StatefulWidget {
@@ -69,7 +70,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     _syncDefaults(controller, selectedBundle);
 
     return HubScaffold(
-      title: 'Teacher Hub',
+      title: '교사 허브',
       subtitle: '내가 담당하는 반별로 시간표, 공지, 아동 상태를 관리합니다.',
       icon: Icons.school,
       isBusy: controller.isBusy || _isLoadingManagedClasses,
@@ -1188,14 +1189,9 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   }
 
   Widget _buildEmptyHint(String message) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: NestColors.roseMist.withValues(alpha: 0.36),
-      ),
-      child: Text(message),
+    return NestEmptyState(
+      icon: Icons.school_outlined,
+      title: message,
     );
   }
 

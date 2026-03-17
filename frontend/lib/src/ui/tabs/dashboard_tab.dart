@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_refresh.dart';
+import '../widgets/nest_skeleton.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({
@@ -98,60 +101,68 @@ class _DashboardTabState extends State<DashboardTab> {
         controller.terms.isNotEmpty &&
         controller.classGroups.isNotEmpty;
 
-    return ListView(
-      children: [
-        if (controller.pendingInvites.isNotEmpty) ...[
-          _PendingInvitesCard(controller: controller),
-          const SizedBox(height: 16),
-        ],
-        if (showSetupGuide) ...[
-          _buildAdminSetupFlowCard(theme, controller),
-          const SizedBox(height: 16),
-        ],
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final crossAxisCount = width >= 980
-                ? 4
-                : width >= 680
-                ? 3
-                : 2;
-            final itemWidth =
-                (width - ((crossAxisCount - 1) * 12)) / crossAxisCount;
-            final childAspectRatio = itemWidth / 108;
+    return NestRefreshable(
+      onRefresh: () => controller.refreshAll(),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          if (controller.pendingInvites.isNotEmpty) ...[
+            _PendingInvitesCard(controller: controller),
+            const SizedBox(height: 16),
+          ],
+          if (showSetupGuide) ...[
+            _buildAdminSetupFlowCard(theme, controller),
+            const SizedBox(height: 16),
+          ],
+        if (controller.isBusy &&
+            controller.terms.isEmpty &&
+            controller.classGroups.isEmpty)
+          const NestSkeletonMetrics(count: 4)
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 980
+                  ? 4
+                  : width >= 680
+                  ? 3
+                  : 2;
+              final itemWidth =
+                  (width - ((crossAxisCount - 1) * 12)) / crossAxisCount;
+              final childAspectRatio = itemWidth / 108;
 
-            return GridView.count(
-              physics: const NeverScrollableScrollPhysics(),
-              shrinkWrap: true,
-              crossAxisCount: crossAxisCount,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: childAspectRatio,
-              children: [
-                _SummaryCard(
-                  label: '소속 홈스쿨',
-                  value: '${controller.memberships.length}',
-                  icon: Icons.house,
-                ),
-                _SummaryCard(
-                  label: '학기',
-                  value: '${controller.terms.length}',
-                  icon: Icons.calendar_month,
-                ),
-                _SummaryCard(
-                  label: '반',
-                  value: '${controller.classGroups.length}',
-                  icon: Icons.groups,
-                ),
-                _SummaryCard(
-                  label: '활성 수업',
-                  value: '${controller.sessions.length}',
-                  icon: Icons.view_week,
-                ),
-              ],
-            );
-          },
-        ),
+              return GridView.count(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                crossAxisCount: crossAxisCount,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: childAspectRatio,
+                children: [
+                  _SummaryCard(
+                    label: '소속 홈스쿨',
+                    value: '${controller.memberships.length}',
+                    icon: Icons.house,
+                  ),
+                  _SummaryCard(
+                    label: '학기',
+                    value: '${controller.terms.length}',
+                    icon: Icons.calendar_month,
+                  ),
+                  _SummaryCard(
+                    label: '반',
+                    value: '${controller.classGroups.length}',
+                    icon: Icons.groups,
+                  ),
+                  _SummaryCard(
+                    label: '활성 수업',
+                    value: '${controller.sessions.length}',
+                    icon: Icons.view_week,
+                  ),
+                ],
+              );
+            },
+          ),
         const SizedBox(height: 16),
         Card(
           child: Padding(
@@ -175,7 +186,10 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
                 const SizedBox(height: 8),
                 if (controller.announcements.isEmpty)
-                  const Text('등록된 공지가 없습니다.')
+                  const NestEmptyState(
+                    icon: Icons.campaign_outlined,
+                    title: '등록된 공지가 없습니다.',
+                  )
                 else
                   ...controller.announcements.take(3).map((notice) {
                     final scope = notice.classGroupId == null
@@ -195,9 +209,9 @@ class _DashboardTabState extends State<DashboardTab> {
           ),
         ),
         const SizedBox(height: 16),
-        if (controller.isAdminLike)
+        if (controller.isAdminLike && !bootstrapDone)
           _buildBootstrapCard(theme, controller, bootstrapDone)
-        else
+        else if (!controller.isAdminLike)
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -207,7 +221,8 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 

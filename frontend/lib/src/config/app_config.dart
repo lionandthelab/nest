@@ -4,6 +4,7 @@ class AppConfig {
   const AppConfig._();
 
   static const String appName = 'Nest';
+  static const String appVersion = '2.0.0';
   static const String brandLine = '우리 아이가 날아오르기 전, 따뜻한 둥지';
   static const String androidApplicationId = 'com.lionandthelab.nest';
   static const String iosBundleId = 'com.lionandthelab.nest';

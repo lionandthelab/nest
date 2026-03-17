@@ -6,6 +6,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
+import '../widgets/nest_empty_state.dart';
 import 'gallery_tab.dart';
 
 class CommunityFeedTab extends StatefulWidget {
@@ -14,7 +15,7 @@ class CommunityFeedTab extends StatefulWidget {
     required this.controller,
     this.showGalleryLauncher = false,
     this.showHeroHeader = true,
-    this.title = 'Beloved SNS',
+    this.title = '커뮤니티',
     this.subtitle = '반별 활동, 사진, 짧은 메모를 실제 피드처럼 빠르게 확인하고 반응합니다.',
   });
 
@@ -60,46 +61,57 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
     _syncComposerClassTarget(controller);
     _syncCommentControllers(posts);
 
+    // Build the fixed header items list for index offset calculation.
+    // Layout: [heroCard, heroSpacer?], composerCard, composerSpacer,
+    //         [emptyState | post0, post1, ...]
+    final headerCount = widget.showHeroHeader ? 2 : 0; // hero + spacer
+    // composer + spacer = 2 fixed items after header
+    const composerCount = 2;
+    final fixedCount = headerCount + composerCount;
+
     return RefreshIndicator(
       onRefresh: _reloadFeed,
-      child: ListView(
+      child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          if (widget.showHeroHeader) ...[
-            _buildHeroCard(controller, posts),
-            const SizedBox(height: 12),
-          ],
-          _buildComposerCard(controller),
-          const SizedBox(height: 12),
-          if (posts.isEmpty)
-            _buildEmptyFeedCard()
-          else
-            ...posts.map((post) {
-              final reportCount = controller.openReportsForCommunityPost(
-                post.id,
-              );
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _CommunityPostCard(
-                  post: post,
-                  media: controller.mediaForCommunityPost(post.id),
-                  comments: controller.commentsForCommunityPost(post.id),
-                  liked: controller.isCommunityPostLiked(post.id),
-                  likeCount: controller.likesForCommunityPost(post.id),
-                  classGroupName: controller.findClassGroupName(
-                    post.classGroupId,
-                  ),
-                  reportCount: reportCount,
-                  commentController: _commentControllers[post.id]!,
-                  isBusy: controller.isBusy,
-                  onLike: () => _toggleLike(post.id),
-                  onComment: () => _submitComment(post.id),
-                  onOpenMediaLink: _openLink,
-                  onReport: () => _showReportDialog(post.id),
-                ),
-              );
-            }),
-        ],
+        itemCount: fixedCount + (posts.isEmpty ? 1 : posts.length),
+        itemBuilder: (context, index) {
+          if (widget.showHeroHeader) {
+            if (index == 0) return _buildHeroCard(controller, posts);
+            if (index == 1) return const SizedBox(height: 12);
+          }
+          final afterHeader = index - headerCount;
+          if (afterHeader == 0) return _buildComposerCard(controller);
+          if (afterHeader == 1) return const SizedBox(height: 12);
+
+          final postIndex = afterHeader - composerCount;
+          if (posts.isEmpty) {
+            return const NestEmptyState(
+              icon: Icons.forum_outlined,
+              title: '아직 공유된 글이 없습니다',
+              subtitle: '첫 게시글을 올리면 이 화면이 실제 SNS 피드처럼 쌓입니다.',
+            );
+          }
+          final post = posts[postIndex];
+          final reportCount = controller.openReportsForCommunityPost(post.id);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _CommunityPostCard(
+              post: post,
+              media: controller.mediaForCommunityPost(post.id),
+              comments: controller.commentsForCommunityPost(post.id),
+              liked: controller.isCommunityPostLiked(post.id),
+              likeCount: controller.likesForCommunityPost(post.id),
+              classGroupName: controller.findClassGroupName(post.classGroupId),
+              reportCount: reportCount,
+              commentController: _commentControllers[post.id]!,
+              isBusy: controller.isBusy,
+              onLike: () => _toggleLike(post.id),
+              onComment: () => _submitComment(post.id),
+              onOpenMediaLink: _openLink,
+              onReport: () => _showReportDialog(post.id),
+            ),
+          );
+        },
       ),
     );
   }
@@ -318,37 +330,6 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                 ),
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyFeedCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.dynamic_feed_outlined,
-              size: 36,
-              color: NestColors.deepWood.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '아직 공유된 글이 없습니다.',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '첫 게시글을 올리면 이 화면이 실제 SNS 피드처럼 쌓입니다.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.68),
-              ),
-            ),
           ],
         ),
       ),

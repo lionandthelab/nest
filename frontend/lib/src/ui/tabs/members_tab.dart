@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/nest_empty_state.dart';
 
 class MembersTab extends StatefulWidget {
   const MembersTab({super.key, required this.controller});
@@ -79,7 +80,10 @@ class _MembersTabState extends State<MembersTab> {
                 Text('현재 멤버 권한', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 10),
                 if (userIds.isEmpty)
-                  const Text('멤버십 정보가 없습니다.')
+                  const NestEmptyState(
+                    icon: Icons.people_outline,
+                    title: '멤버십 정보가 없습니다.',
+                  )
                 else
                   ...userIds.map((userId) => _buildUserRow(controller, userId)),
               ],
@@ -335,7 +339,10 @@ class _MembersTabState extends State<MembersTab> {
             Text('초대 현황', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
             if (invites.isEmpty)
-              const Text('초대 내역이 없습니다.')
+              const NestEmptyState(
+                icon: Icons.mail_outline,
+                title: '초대 내역이 없습니다.',
+              )
             else
               ...invites.map((invite) {
                 final created = invite.createdAt == null
