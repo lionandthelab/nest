@@ -261,8 +261,9 @@ class _CommunityTabState extends State<CommunityTab> {
           },
           onPickMedia: _pickMedia,
           onPublish: () async {
+            final navigator = Navigator.of(ctx);
             await _publishPost();
-            if (mounted) Navigator.of(ctx).pop();
+            if (mounted) navigator.pop();
           },
         );
       },

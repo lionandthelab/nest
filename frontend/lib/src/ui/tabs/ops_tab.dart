@@ -161,8 +161,9 @@ class _OpsTabState extends State<OpsTab> {
                         onPressed: controller.isBusy
                             ? null
                             : () async {
+                                final navigator = Navigator.of(ctx);
                                 await _createAnnouncement();
-                                if (mounted) Navigator.of(ctx).pop();
+                                if (mounted) navigator.pop();
                               },
                         icon: const Icon(Icons.campaign),
                         label: const Text('공지 게시'),
