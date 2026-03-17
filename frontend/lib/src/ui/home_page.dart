@@ -12,8 +12,7 @@ import 'tabs/community_feed_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/family_admin_tab.dart';
 import 'tabs/gallery_tab.dart';
-import 'tabs/parent_news_tab.dart';
-import 'tabs/parent_progress_tab.dart';
+import 'tabs/parent_home_tab.dart';
 import 'tabs/parent_timetable_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
@@ -195,9 +194,18 @@ class _HomePageState extends State<HomePage> {
       ];
     }
 
-    // ── Parent view: 3 focused tabs ──
+    // ── Parent view: dashboard + timetable + SNS ──
     if (controller.isParentView) {
       return [
+        _TabSpec(
+          label: '대시보드',
+          page: ParentHomeTab(
+            controller: controller,
+            selectedChildId: _selectedChildId,
+            childClassBundles: _childClassBundles,
+            isLoadingChildClasses: _isLoadingChildClasses,
+          ),
+        ),
         _TabSpec(
           label: '시간표',
           page: ParentTimetableTab(
@@ -208,17 +216,12 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         _TabSpec(
-          label: '학습 현황',
-          page: ParentProgressTab(
+          label: 'SNS',
+          page: CommunityFeedTab(
             controller: controller,
-            selectedChildId: _selectedChildId,
-            childClassBundles: _childClassBundles,
-            isLoadingChildClasses: _isLoadingChildClasses,
+            showGalleryLauncher: true,
+            title: '커뮤니티',
           ),
-        ),
-        _TabSpec(
-          label: '소식',
-          page: ParentNewsTab(controller: controller),
         ),
       ];
     }

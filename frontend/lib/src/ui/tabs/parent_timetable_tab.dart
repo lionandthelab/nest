@@ -45,10 +45,6 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final bundles = widget.childClassBundles;
-    final enrolledClassCount = bundles.length;
-    final enrolledSessionCount = bundles.values
-        .map((b) => b.sessions.length)
-        .fold<int>(0, (acc, v) => acc + v);
 
     return ListView(
       padding: const EdgeInsets.all(12),
@@ -60,37 +56,6 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           const SizedBox(height: 8),
           const NestSkeletonCard(),
         ],
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 700;
-            final cardWidth = compact
-                ? constraints.maxWidth
-                : (constraints.maxWidth - 12) / 2;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                SizedBox(
-                  width: cardWidth,
-                  child: _MetricCard(
-                    icon: Icons.groups,
-                    label: '배정 반',
-                    value: '$enrolledClassCount',
-                  ),
-                ),
-                SizedBox(
-                  width: cardWidth,
-                  child: _MetricCard(
-                    icon: Icons.view_week,
-                    label: '주간 수업',
-                    value: '$enrolledSessionCount',
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 12),
         Row(
           children: [
             Icon(
@@ -108,7 +73,6 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           ],
         ),
         const SizedBox(height: 8),
-        // Timetable cards
         if (widget.isLoadingChildClasses && bundles.isEmpty)
           const SizedBox.shrink()
         else if (widget.selectedChildId == null)
@@ -387,16 +351,17 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                     ? '${_shortTime(segments[0])} - ${_shortTime(segments[1])}'
                     : periodKey;
 
-                return Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(
-                        color: NestColors.roseMist.withValues(alpha: 0.55),
+                return IntrinsicHeight(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(
+                          color: NestColors.roseMist.withValues(alpha: 0.55),
+                        ),
                       ),
                     ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       SizedBox(
                         width: timeColWidth,
@@ -493,6 +458,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                         );
                       }),
                     ],
+                  ),
                   ),
                 );
               }),
@@ -996,55 +962,6 @@ class _ParentScheduleCell extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: NestColors.deepWood.withValues(alpha: 0.72),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: NestColors.roseMist),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          EntityAvatar(label: label, icon: icon, size: 34),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.72),
-                  ),
-                ),
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
             ),
           ),
         ],
