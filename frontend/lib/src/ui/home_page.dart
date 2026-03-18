@@ -14,6 +14,7 @@ import 'tabs/family_admin_tab.dart';
 import 'tabs/gallery_tab.dart';
 import 'tabs/parent_home_tab.dart';
 import 'tabs/parent_timetable_tab.dart';
+import 'tabs/profile_settings_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
@@ -219,9 +220,12 @@ class _HomePageState extends State<HomePage> {
           label: 'SNS',
           page: CommunityFeedTab(
             controller: controller,
-            showGalleryLauncher: true,
             title: '커뮤니티',
           ),
+        ),
+        _TabSpec(
+          label: '설정',
+          page: ProfileSettingsTab(controller: controller),
         ),
       ];
     }
@@ -251,9 +255,14 @@ class _HomePageState extends State<HomePage> {
         label: isMobileLike ? 'SNS' : '커뮤니티',
         page: CommunityFeedTab(
           controller: controller,
-          showGalleryLauncher: isMobileLike,
-          title: isMobileLike ? '커뮤니티' : '커뮤니티',
+          title: '커뮤니티',
         ),
+      ),
+    );
+    tabs.add(
+      _TabSpec(
+        label: '설정',
+        page: ProfileSettingsTab(controller: controller),
       ),
     );
 
@@ -818,15 +827,15 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                       Row(
                         children: [
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(7),
+                            borderRadius: BorderRadius.circular(10),
                             child: Image.asset(
                               'assets/logo_square.png',
-                              width: 28,
-                              height: 28,
+                              width: 42,
+                              height: 42,
                               fit: BoxFit.cover,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

@@ -18,10 +18,7 @@ class GalleryPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          child: GalleryTab(controller: controller),
-        ),
+        child: GalleryTab(controller: controller),
       ),
     );
   }
@@ -39,229 +36,17 @@ class GalleryTab extends StatefulWidget {
 class _GalleryTabState extends State<GalleryTab> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _childIdsController = TextEditingController();
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _childIdsController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final totalItems = controller.galleryItems.length;
-    final videoCount = controller.galleryItems
-        .where((item) => item.isVideo)
-        .length;
-    final photoCount = totalItems - videoCount;
-
-    return RefreshIndicator(
-      onRefresh: _reloadGallery,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          _buildHeroCard(
-            totalItems: totalItems,
-            photoCount: photoCount,
-            videoCount: videoCount,
-          ),
-          if (controller.canUploadMedia) ...[
-            const SizedBox(height: 12),
-            _buildUploadCard(controller),
-          ],
-          const SizedBox(height: 12),
-          _buildGalleryBoard(controller),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeroCard({
-    required int totalItems,
-    required int photoCount,
-    required int videoCount,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    NestColors.dustyRose.withValues(alpha: 0.22),
-                    NestColors.mutedSage.withValues(alpha: 0.14),
-                    Colors.white,
-                  ],
-                ),
-                border: Border.all(color: NestColors.roseMist),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.white.withValues(alpha: 0.82),
-                        ),
-                        child: const Icon(Icons.photo_library_outlined),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Gallery',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '반별 사진과 영상을 타임라인처럼 확인하고, 필요한 경우 바로 Drive 원본을 엽니다.',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: NestColors.deepWood.withValues(
-                                      alpha: 0.74,
-                                    ),
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _GalleryMetricChip(
-                        icon: Icons.collections_outlined,
-                        label: '전체 $totalItems개',
-                      ),
-                      _GalleryMetricChip(
-                        icon: Icons.photo_camera_back_outlined,
-                        label: '사진 $photoCount개',
-                      ),
-                      _GalleryMetricChip(
-                        icon: Icons.videocam_outlined,
-                        label: '영상 $videoCount개',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.tonalIcon(
-                        onPressed: widget.controller.isBusy
-                            ? null
-                            : _reloadGallery,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('새로고침'),
-                      ),
-                      if (widget.controller.canUploadMedia)
-                        ElevatedButton.icon(
-                          onPressed: widget.controller.isBusy
-                              ? null
-                              : _pickFile,
-                          icon: const Icon(Icons.add_photo_alternate_outlined),
-                          label: const Text('업로드 준비'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUploadCard(NestController controller) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('업로드', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '사진과 영상을 고른 뒤 제목과 설명을 붙여 바로 갤러리에 올립니다.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _SelectedFileLabel(controller: controller),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: '제목',
-                prefixIcon: Icon(Icons.title),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _descriptionController,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: '설명',
-                prefixIcon: Icon(Icons.notes_outlined),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _childIdsController,
-              decoration: const InputDecoration(
-                labelText: 'Child ID 태그',
-                hintText: 'uuid1, uuid2',
-                prefixIcon: Icon(Icons.sell_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: controller.isBusy ? null : _pickFile,
-                  icon: const Icon(Icons.attach_file),
-                  label: const Text('파일 선택'),
-                ),
-                FilledButton.icon(
-                  onPressed: controller.isBusy ? null : _upload,
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                  label: const Text('Drive 업로드'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGalleryBoard(NestController controller) {
     final items = controller.galleryItems.toList(growable: false)
       ..sort((a, b) {
         final left = a.capturedAt?.millisecondsSinceEpoch ?? 0;
@@ -269,64 +54,348 @@ class _GalleryTabState extends State<GalleryTab> {
         return right.compareTo(left);
       });
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('최근 기록', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
-            if (items.isEmpty)
-              _buildEmptyState()
-            else
-              LayoutBuilder(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      floatingActionButton: controller.canUploadMedia
+          ? FloatingActionButton(
+              onPressed: () => _openUploadModal(controller),
+              backgroundColor: NestColors.dustyRose,
+              child: const Icon(Icons.add_photo_alternate, color: Colors.white),
+            )
+          : null,
+      body: RefreshIndicator(
+        onRefresh: _reloadGallery,
+        child: items.isEmpty
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 120),
+                  NestEmptyState(
+                    icon: Icons.photo_library_outlined,
+                    title: '사진이 없습니다',
+                    subtitle: '오른쪽 아래 + 버튼으로 사진이나 영상을 올려보세요.',
+                  ),
+                ],
+              )
+            : LayoutBuilder(
                 builder: (context, constraints) {
-                  final columnCount = constraints.maxWidth >= 860
-                      ? 3
-                      : constraints.maxWidth >= 560
-                      ? 2
-                      : 1;
-                  final itemWidth =
-                      (constraints.maxWidth - ((columnCount - 1) * 10)) /
-                      columnCount;
+                  final crossAxisCount = constraints.maxWidth >= 900
+                      ? 4
+                      : constraints.maxWidth >= 600
+                          ? 3
+                          : 2;
 
-                  return Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: items
-                        .map(
-                          (item) => SizedBox(
-                            width: itemWidth,
-                            child: _GalleryTile(
-                              item: item,
-                              taggedCount: controller
-                                  .findTaggedChildren(item.id)
-                                  .length,
-                              classGroupName: controller.findClassGroupName(
-                                item.classGroupId,
-                              ),
-                              onOpenLink: _openLink,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
+                  return GridView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(2),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: 2,
+                      crossAxisSpacing: 2,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return _GooglePhotosTile(
+                        item: item,
+                        onTap: () => _showDetailDialog(item, controller),
+                      );
+                    },
                   );
                 },
               ),
-          ],
-        ),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return const NestEmptyState(
-      icon: Icons.photo_library_outlined,
-      title: '표시할 갤러리 항목이 없습니다.',
-      subtitle: '사진과 영상을 업로드하면 여기에 표시됩니다.',
+  // ── Upload Modal ──
+
+  void _openUploadModal(NestController controller) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final file = controller.pendingMediaFile;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                MediaQuery.viewInsetsOf(context).bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: NestColors.deepWood.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '새 미디어 업로드',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 16),
+                  // File picker area
+                  GestureDetector(
+                    onTap: controller.isBusy
+                        ? null
+                        : () async {
+                            await _pickFile();
+                            setModalState(() {});
+                          },
+                    child: Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: NestColors.roseMist,
+                          width: 2,
+                          strokeAlign: BorderSide.strokeAlignInside,
+                        ),
+                        color: file == null
+                            ? NestColors.creamyWhite
+                            : NestColors.mutedSage.withValues(alpha: 0.14),
+                      ),
+                      child: Center(
+                        child: file == null
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                    size: 36,
+                                    color: NestColors.deepWood
+                                        .withValues(alpha: 0.4),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '탭하여 파일 선택',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: NestColors.deepWood
+                                              .withValues(alpha: 0.5),
+                                        ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.task_alt,
+                                      color: NestColors.deepWood),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      file.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: '제목',
+                      prefixIcon: Icon(Icons.title),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _descriptionController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: '설명',
+                      prefixIcon: Icon(Icons.notes_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () async {
+                            final navigator = Navigator.of(ctx);
+                            await _upload();
+                            if (mounted) navigator.pop();
+                          },
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    label: const Text('업로드'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: NestColors.dustyRose,
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
+
+  // ── Detail Dialog ──
+
+  void _showDetailDialog(GalleryItem item, NestController controller) {
+    final dateLabel = item.capturedAt == null
+        ? '촬영일 미정'
+        : DateFormat('yyyy년 M월 d일 HH:mm').format(item.capturedAt!);
+    final title = item.title.trim().isEmpty ? '제목 없음' : item.title.trim();
+    final description = item.description.trim().isEmpty
+        ? ''
+        : item.description.trim();
+    final classGroupName = controller.findClassGroupName(item.classGroupId);
+    final taggedCount = controller.findTaggedChildren(item.id).length;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Media preview
+                Container(
+                  height: 240,
+                  decoration: BoxDecoration(
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(20)),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: item.isVideo
+                          ? [
+                              NestColors.mutedSage.withValues(alpha: 0.3),
+                              NestColors.mutedSage.withValues(alpha: 0.1),
+                            ]
+                          : [
+                              NestColors.roseMist.withValues(alpha: 0.4),
+                              NestColors.roseMist.withValues(alpha: 0.1),
+                            ],
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      item.isVideo
+                          ? Icons.play_circle_outline
+                          : Icons.photo_outlined,
+                      size: 56,
+                      color: NestColors.deepWood.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        dateLabel,
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(description,
+                            style: Theme.of(ctx).textTheme.bodyMedium),
+                      ],
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _DetailChip(
+                            icon: item.isVideo
+                                ? Icons.videocam_outlined
+                                : Icons.image_outlined,
+                            label: item.isVideo ? '영상' : '사진',
+                          ),
+                          _DetailChip(
+                            icon: Icons.groups_2_outlined,
+                            label: classGroupName,
+                          ),
+                          if (taggedCount > 0)
+                            _DetailChip(
+                              icon: Icons.sell_outlined,
+                              label: '태그 $taggedCount명',
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          if (item.driveWebViewLink != null &&
+                              item.driveWebViewLink!.isNotEmpty)
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () =>
+                                    _openLink(item.driveWebViewLink!),
+                                icon: const Icon(Icons.open_in_new, size: 18),
+                                label: const Text('Drive에서 열기'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: NestColors.dustyRose,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('닫기'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Business Logic ──
 
   Future<void> _pickFile() async {
     try {
@@ -341,12 +410,10 @@ class _GalleryTabState extends State<GalleryTab> {
       await widget.controller.uploadPendingMedia(
         title: _titleController.text,
         description: _descriptionController.text,
-        childIdsCsv: _childIdsController.text,
+        childIdsCsv: '',
       );
-
       _titleController.clear();
       _descriptionController.clear();
-      _childIdsController.clear();
       _showMessage(widget.controller.statusMessage);
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
@@ -356,7 +423,6 @@ class _GalleryTabState extends State<GalleryTab> {
   Future<void> _reloadGallery() async {
     try {
       await widget.controller.loadGalleryItems();
-      _showMessage('갤러리를 새로고침했습니다.');
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }
@@ -367,186 +433,109 @@ class _GalleryTabState extends State<GalleryTab> {
       Uri.parse(url),
       mode: LaunchMode.platformDefault,
     );
-
-    if (!launched) {
-      _showMessage('링크를 열지 못했습니다.');
-    }
+    if (!launched) _showMessage('링크를 열지 못했습니다.');
   }
 
   void _showMessage(String message) {
-    if (!mounted || message.trim().isEmpty) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    if (!mounted || message.trim().isEmpty) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
-class _GalleryMetricChip extends StatelessWidget {
-  const _GalleryMetricChip({required this.icon, required this.label});
+// ── Google Photos-style grid tile ──
 
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Colors.white.withValues(alpha: 0.88),
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: NestColors.deepWood),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GalleryTile extends StatelessWidget {
-  const _GalleryTile({
-    required this.item,
-    required this.taggedCount,
-    required this.classGroupName,
-    required this.onOpenLink,
-  });
+class _GooglePhotosTile extends StatelessWidget {
+  const _GooglePhotosTile({required this.item, required this.onTap});
 
   final GalleryItem item;
-  final int taggedCount;
-  final String classGroupName;
-  final Future<void> Function(String url) onOpenLink;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel = item.capturedAt == null
-        ? '촬영일 미정'
-        : DateFormat('yyyy-MM-dd HH:mm').format(item.capturedAt!);
-    final title = item.title.trim().isEmpty ? '제목 없음' : item.title.trim();
-    final description = item.description.trim().isEmpty
-        ? '설명이 아직 없습니다.'
-        : item.description.trim();
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white,
-        border: Border.all(color: NestColors.roseMist),
-        boxShadow: [
-          BoxShadow(
-            color: NestColors.deepWood.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: item.isVideo
+                ? [
+                    NestColors.mutedSage.withValues(alpha: 0.28),
+                    NestColors.mutedSage.withValues(alpha: 0.10),
+                  ]
+                : [
+                    NestColors.roseMist.withValues(alpha: 0.36),
+                    NestColors.dustyRose.withValues(alpha: 0.12),
+                  ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 132,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: item.isVideo
-                    ? [
-                        NestColors.mutedSage.withValues(alpha: 0.34),
-                        NestColors.mutedSage.withValues(alpha: 0.14),
-                      ]
-                    : [
-                        NestColors.dustyRose.withValues(alpha: 0.34),
-                        NestColors.roseMist.withValues(alpha: 0.24),
-                      ],
-              ),
-            ),
-            child: Center(
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(
               child: Icon(
                 item.isVideo
-                    ? Icons.videocam_rounded
-                    : Icons.photo_camera_back_rounded,
-                size: 36,
-                color: NestColors.deepWood,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _GalleryLabelChip(
-                icon: item.isVideo
                     ? Icons.play_circle_outline
-                    : Icons.image_outlined,
-                label: item.isVideo ? '영상' : '사진',
-              ),
-              _GalleryLabelChip(
-                icon: Icons.groups_2_outlined,
-                label: classGroupName,
-              ),
-              _GalleryLabelChip(
-                icon: Icons.sell_outlined,
-                label: '태그 $taggedCount명',
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.76),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            dateLabel,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.58),
-            ),
-          ),
-          if (item.driveWebViewLink != null &&
-              item.driveWebViewLink!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
-                onPressed: () => onOpenLink(item.driveWebViewLink!),
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('Drive 열기'),
+                    : Icons.photo_outlined,
+                size: 32,
+                color: NestColors.deepWood.withValues(alpha: 0.35),
               ),
             ),
+            // Video badge
+            if (item.isVideo)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.videocam, size: 14, color: Colors.white),
+                ),
+              ),
+            // Title overlay at bottom
+            if (item.title.trim().isNotEmpty)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(6, 16, 6, 4),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.4),
+                      ],
+                    ),
+                  ),
+                  child: Text(
+                    item.title.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _GalleryLabelChip extends StatelessWidget {
-  const _GalleryLabelChip({required this.icon, required this.label});
+class _DetailChip extends StatelessWidget {
+  const _DetailChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -572,51 +561,6 @@ class _GalleryLabelChip extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SelectedFileLabel extends StatelessWidget {
-  const _SelectedFileLabel({required this.controller});
-
-  final NestController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final file = controller.pendingMediaFile;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NestColors.roseMist),
-        color: file == null
-            ? Colors.white
-            : NestColors.mutedSage.withValues(alpha: 0.14),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            file == null ? Icons.file_present_outlined : Icons.task_alt,
-            color: NestColors.deepWood,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              file == null
-                  ? '선택된 파일 없음'
-                  : '${file.name} (${file.sizeBytes} bytes)',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          if (file != null)
-            IconButton(
-              onPressed: controller.isBusy ? null : controller.clearPendingFile,
-              icon: const Icon(Icons.clear),
-            ),
         ],
       ),
     );

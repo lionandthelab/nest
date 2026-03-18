@@ -85,6 +85,12 @@ class NestRepository {
     );
   }
 
+  Future<void> updatePhoneNumber(String phone) async {
+    await client.auth.updateUser(
+      UserAttributes(data: {'phone_number': phone.trim()}),
+    );
+  }
+
   Future<void> sendPasswordResetEmail({required String email}) {
     return client.auth.resetPasswordForEmail(
       email.trim(),

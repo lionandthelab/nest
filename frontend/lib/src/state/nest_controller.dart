@@ -349,6 +349,14 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> updatePhoneNumber(String phone) async {
+    final trimmed = phone.trim();
+    await _runBusy('연락처 변경 중...', () async {
+      await _repository.updatePhoneNumber(trimmed);
+      _setStatus('연락처가 변경되었습니다.');
+    });
+  }
+
   Future<void> requestPasswordReset({required String email}) async {
     final normalized = email.trim();
     if (normalized.isEmpty) {
