@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       response_type: "code",
       access_type: "offline",
       prompt: "consent",
-      scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly",
+      scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.install",
       state
     });
 
