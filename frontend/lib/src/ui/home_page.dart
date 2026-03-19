@@ -1561,38 +1561,6 @@ class _MainPanel extends StatefulWidget {
 }
 
 class _MainPanelState extends State<_MainPanel> {
-  Widget _buildRoleSwitchButton(NestController controller) {
-    final roles = controller.availableViewRoles;
-    if (roles.length <= 1) {
-      return const SizedBox.shrink();
-    }
-
-    return PopupMenuButton<String>(
-      tooltip: '뷰 전환',
-      icon: const Icon(Icons.swap_horiz),
-      onSelected: (role) => unawaited(widget.onSelectViewRole(role)),
-      itemBuilder: (context) => roles
-          .map(
-            (role) => PopupMenuItem<String>(
-              value: role,
-              child: Row(
-                children: [
-                  Icon(
-                    controller.currentRole == role
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(_labelForRole(role)),
-                ],
-              ),
-            ),
-          )
-          .toList(growable: false),
-    );
-  }
-
   Widget _buildParentChildSwitchButton(NestController controller) {
     if (!controller.isParentView) {
       return const SizedBox.shrink();
@@ -1825,88 +1793,121 @@ class _MainPanelState extends State<_MainPanel> {
     final controller = widget.controller;
     final panelTitle = _panelTitle(controller);
     final displayName = _displayName(controller);
-    final width = MediaQuery.sizeOf(context).width;
-    final iconOnlyActions = width < 760;
-    final refreshAction = iconOnlyActions
-        ? IconButton(
-            tooltip: '새로고침',
-            onPressed: controller.isBusy ? null : widget.onRefresh,
-            icon: const Icon(Icons.refresh),
-          )
-        : FilledButton.tonalIcon(
-            onPressed: controller.isBusy ? null : widget.onRefresh,
-            icon: const Icon(Icons.refresh),
-            label: const Text('새로고침'),
-          );
-    final logoutAction = iconOnlyActions
-        ? IconButton(
-            tooltip: '로그아웃',
-            onPressed: controller.isBusy ? null : widget.onLogout,
-            icon: const Icon(Icons.logout),
-          )
-        : FilledButton.tonalIcon(
-            onPressed: controller.isBusy ? null : widget.onLogout,
-            icon: const Icon(Icons.logout),
-            label: const Text('로그아웃'),
-          );
 
     return Card(
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             child: Row(
               children: [
                 const Icon(Icons.nest_cam_wired_stand, size: 20),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Text(
                   panelTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        Chip(
-                          label: Text(
-                            _labelForRole(controller.currentRole ?? '-'),
-                          ),
-                          avatar: const Icon(Icons.verified_user, size: 14),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        const SizedBox(width: 4),
-                        Chip(
-                          label: Text('$displayName 님'),
-                          avatar: const Icon(Icons.person_outline, size: 14),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        _buildParentChildSwitchButton(controller),
-                        _buildParentViewTargetSwitchButton(controller),
-                        _buildTeacherViewTargetSwitchButton(controller),
-                        _buildRoleSwitchButton(controller),
-                      ],
-                    ),
+                  child: _ContextSelector(
+                    controller: controller,
+                    onSelectHomeschool: widget.onSelectHomeschool,
+                    onSelectTerm: widget.onSelectTerm,
+                    onSelectClassGroup: widget.onSelectClassGroup,
+                    onSelectViewRole: widget.onSelectViewRole,
+                    extraChips: [
+                      _buildParentChildSwitchButton(controller),
+                      _buildParentViewTargetSwitchButton(controller),
+                      _buildTeacherViewTargetSwitchButton(controller),
+                    ],
                   ),
                 ),
-                refreshAction,
-                logoutAction,
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '새로고침',
+                  onPressed: controller.isBusy ? null : widget.onRefresh,
+                  icon: const Icon(Icons.refresh, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  padding: EdgeInsets.zero,
+                ),
+                PopupMenuButton<String>(
+                  tooltip: displayName,
+                  icon: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: NestColors.dustyRose,
+                    child: Text(
+                      displayName.characters.first,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: NestColors.deepWood,
+                      ),
+                    ),
+                  ),
+                  onSelected: (value) {
+                    if (value == 'logout') {
+                      unawaited(widget.onLogout());
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$displayName 님',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: NestColors.deepWood,
+                            ),
+                          ),
+                          Text(
+                            _labelForRole(controller.currentRole ?? '-'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: NestColors.deepWood.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    if (controller.availableViewRoles.length > 1)
+                      ...controller.availableViewRoles.map(
+                        (role) => PopupMenuItem<String>(
+                          value: 'role:$role',
+                          onTap: () => unawaited(widget.onSelectViewRole(role)),
+                          child: Row(
+                            children: [
+                              Icon(
+                                controller.currentRole == role
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(_labelForRole(role)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (controller.availableViewRoles.length > 1)
+                      const PopupMenuDivider(),
+                    const PopupMenuItem<String>(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Icons.logout, size: 16),
+                          SizedBox(width: 8),
+                          Text('로그아웃'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-            child: _ContextSelector(
-              controller: controller,
-              onSelectHomeschool: widget.onSelectHomeschool,
-              onSelectTerm: widget.onSelectTerm,
-              onSelectClassGroup: widget.onSelectClassGroup,
-              onSelectViewRole: widget.onSelectViewRole,
             ),
           ),
           if (controller.isBusy)
@@ -1954,6 +1955,7 @@ class _ContextSelector extends StatefulWidget {
     required this.onSelectTerm,
     required this.onSelectClassGroup,
     required this.onSelectViewRole,
+    this.extraChips = const [],
   });
 
   final NestController controller;
@@ -1961,6 +1963,7 @@ class _ContextSelector extends StatefulWidget {
   final Future<void> Function(String? value) onSelectTerm;
   final Future<void> Function(String? value) onSelectClassGroup;
   final Future<void> Function(String? value) onSelectViewRole;
+  final List<Widget> extraChips;
 
   @override
   State<_ContextSelector> createState() => _ContextSelectorState();
@@ -2051,34 +2054,35 @@ class _ContextSelectorState extends State<_ContextSelector> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: items
-            .map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: ActionChip(
-                  avatar: Icon(item.icon, size: 16),
-                  label: Text(
-                    '${item.label}: ${item.value ?? '-'}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onPressed: controller.isBusy || item.options.isEmpty
-                      ? null
-                      : () => _openContextPicker(
-                            title: item.label,
-                            help: item.help,
-                            options: item.options,
-                            currentId: item.options
-                                .where((row) => row.title == item.value)
-                                .map((row) => row.id)
-                                .firstOrNull,
-                            onSelect: item.onSelect,
-                          ),
+        children: [
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ActionChip(
+                avatar: Icon(item.icon, size: 16),
+                label: Text(
+                  '${item.label}: ${item.value ?? '-'}',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onPressed: controller.isBusy || item.options.isEmpty
+                    ? null
+                    : () => _openContextPicker(
+                          title: item.label,
+                          help: item.help,
+                          options: item.options,
+                          currentId: item.options
+                              .where((row) => row.title == item.value)
+                              .map((row) => row.id)
+                              .firstOrNull,
+                          onSelect: item.onSelect,
+                        ),
               ),
-            )
-            .toList(growable: false),
+            ),
+          ),
+          ...widget.extraChips,
+        ],
       ),
     );
   }
