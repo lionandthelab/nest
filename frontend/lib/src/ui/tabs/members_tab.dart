@@ -41,7 +41,7 @@ class _MembersTabState extends State<MembersTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Member Admin',
+                '멤버 관리',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 6),
@@ -185,7 +185,7 @@ class _MembersTabState extends State<MembersTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Member Role Admin',
+              '멤버 권한 관리',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
@@ -250,7 +250,7 @@ class _MembersTabState extends State<MembersTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Email Invite', style: Theme.of(context).textTheme.titleLarge),
+            Text('이메일 초대', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
               '아직 가입하지 않은 부모/교사를 이메일로 초대하고 권한을 미리 지정합니다.',
@@ -369,10 +369,10 @@ class _MembersTabState extends State<MembersTab> {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Chip(
-                              label: Text(invite.status),
+                              label: Text(_statusLabel(invite.status)),
                               backgroundColor: _statusColor(invite.status),
                             ),
-                            Chip(label: Text(invite.role)),
+                            Chip(label: Text(_roleLabel(invite.role))),
                             Chip(label: Text('만료: $expires')),
                             Text(
                               '생성: $created',
@@ -428,10 +428,19 @@ class _MembersTabState extends State<MembersTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(userId, style: Theme.of(context).textTheme.bodyLarge),
+            Text(
+              controller.findMemberDisplayName(userId),
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            Text(
+              userId,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.5),
+              ),
+            ),
             const SizedBox(height: 8),
             if (activeRows.isEmpty)
-              Text('ACTIVE 권한 없음', style: Theme.of(context).textTheme.bodySmall)
+              Text('활성 권한 없음', style: Theme.of(context).textTheme.bodySmall)
             else
               Wrap(
                 spacing: 8,
@@ -439,7 +448,7 @@ class _MembersTabState extends State<MembersTab> {
                 children: activeRows
                     .map(
                       (row) => ActionChip(
-                        label: Text(row.role),
+                        label: Text(_roleLabel(row.role)),
                         avatar: const Icon(Icons.verified_user, size: 16),
                         onPressed: controller.isBusy
                             ? null
@@ -477,13 +486,13 @@ class _MembersTabState extends State<MembersTab> {
   }
 
   static const List<DropdownMenuItem<String>> _roleItems = [
-    DropdownMenuItem(value: 'PARENT', child: Text('PARENT')),
-    DropdownMenuItem(value: 'TEACHER', child: Text('TEACHER')),
-    DropdownMenuItem(value: 'GUEST_TEACHER', child: Text('GUEST_TEACHER')),
-    DropdownMenuItem(value: 'STAFF', child: Text('STAFF')),
+    DropdownMenuItem(value: 'PARENT', child: Text('부모')),
+    DropdownMenuItem(value: 'TEACHER', child: Text('교사')),
+    DropdownMenuItem(value: 'GUEST_TEACHER', child: Text('외부교사')),
+    DropdownMenuItem(value: 'STAFF', child: Text('스태프')),
     DropdownMenuItem(
       value: 'HOMESCHOOL_ADMIN',
-      child: Text('HOMESCHOOL_ADMIN'),
+      child: Text('관리자'),
     ),
   ];
 
@@ -492,6 +501,16 @@ class _MembersTabState extends State<MembersTab> {
     'TEACHER',
     'GUEST_TEACHER',
   ];
+
+  String _statusLabel(String status) {
+    return switch (status) {
+      'PENDING' => '대기 중',
+      'ACCEPTED' => '수락됨',
+      'CANCELED' => '취소됨',
+      'EXPIRED' => '만료됨',
+      _ => status,
+    };
+  }
 
   Color _statusColor(String status) {
     return switch (status) {

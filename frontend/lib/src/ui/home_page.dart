@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
-import '../models/nest_models.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
 import 'nest_theme.dart';
@@ -595,8 +594,8 @@ class _DesktopScaffold extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                     child: Image.asset(
                       'assets/logo.png',
-                      width: 34,
-                      height: 34,
+                      width: 68,
+                      height: 68,
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -1562,31 +1561,6 @@ class _MainPanel extends StatefulWidget {
 }
 
 class _MainPanelState extends State<_MainPanel> {
-  void _showRoleInfo(BuildContext context, NestController controller) {
-    final role = controller.currentRole ?? '';
-    final message = controller.isParentView
-        ? '부모 뷰에서는 내 아이의 시간표/갤러리를 중심으로 확인합니다.'
-        : controller.isTeacherView
-        ? '교사 뷰에서는 수업 운영과 활동 기록 중심으로 확인합니다.'
-        : controller.isAdminLike
-        ? '관리자 뷰에서는 운영/권한/신고 등 전체 관리 기능을 사용합니다.'
-        : '역할을 선택하면 해당 뷰에 맞는 기능이 활성화됩니다.';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('활성 역할: $role'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildRoleSwitchButton(NestController controller) {
     final roles = controller.availableViewRoles;
     if (roles.length <= 1) {
@@ -1617,22 +1591,6 @@ class _MainPanelState extends State<_MainPanel> {
           )
           .toList(growable: false),
     );
-  }
-
-  List<Announcement> _latestParentAnnouncements(NestController controller) {
-    final rows = controller.announcements.toList(growable: false)
-      ..sort((a, b) {
-        if (a.pinned != b.pinned) {
-          return a.pinned ? -1 : 1;
-        }
-        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
-        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
-        return right.compareTo(left);
-      });
-    if (rows.length <= 3) {
-      return rows;
-    }
-    return rows.sublist(0, 3);
   }
 
   Widget _buildParentChildSwitchButton(NestController controller) {
@@ -1868,11 +1826,7 @@ class _MainPanelState extends State<_MainPanel> {
     final panelTitle = _panelTitle(controller);
     final displayName = _displayName(controller);
     final width = MediaQuery.sizeOf(context).width;
-    final compactHeader = width < 980;
     final iconOnlyActions = width < 760;
-    final latestParentAnnouncements = controller.isParentView
-        ? _latestParentAnnouncements(controller)
-        : const <Announcement>[];
     final refreshAction = iconOnlyActions
         ? IconButton(
             tooltip: '새로고침',
@@ -1900,150 +1854,63 @@ class _MainPanelState extends State<_MainPanel> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-            child: Column(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            child: Row(
               children: [
-                if (compactHeader)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.nest_cam_wired_stand, size: 22),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              panelTitle,
-                              style: theme.textTheme.titleLarge,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        alignment: WrapAlignment.start,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          Chip(
-                            label: Text(
-                              _labelForRole(controller.currentRole ?? '-'),
-                            ),
-                            avatar: const Icon(Icons.verified_user, size: 14),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          Chip(
-                            label: Text('$displayName 님'),
-                            avatar: const Icon(
-                              Icons.nest_cam_wired_stand,
-                              size: 14,
-                            ),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          _buildParentChildSwitchButton(controller),
-                          _buildParentViewTargetSwitchButton(controller),
-                          _buildTeacherViewTargetSwitchButton(controller),
-                          _buildRoleSwitchButton(controller),
-                          IconButton(
-                            icon: const Icon(Icons.info_outline, size: 18),
-                            visualDensity: VisualDensity.compact,
-                            tooltip: '역할 안내',
-                            onPressed: () => _showRoleInfo(context, controller),
-                          ),
-                          refreshAction,
-                          logoutAction,
-                        ],
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      const Icon(Icons.nest_cam_wired_stand, size: 22),
-                      const SizedBox(width: 8),
-                      Text(panelTitle, style: theme.textTheme.titleLarge),
-                      const SizedBox(width: 8),
-                      Chip(
-                        label: Text(
-                          _labelForRole(controller.currentRole ?? '-'),
-                        ),
-                        avatar: const Icon(Icons.verified_user, size: 14),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      Chip(
-                        label: Text('$displayName 님'),
-                        avatar: const Icon(
-                          Icons.nest_cam_wired_stand,
-                          size: 14,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      _buildParentChildSwitchButton(controller),
-                      _buildParentViewTargetSwitchButton(controller),
-                      _buildTeacherViewTargetSwitchButton(controller),
-                      _buildRoleSwitchButton(controller),
-                      IconButton(
-                        icon: const Icon(Icons.info_outline, size: 18),
-                        visualDensity: VisualDensity.compact,
-                        tooltip: '역할 안내',
-                        onPressed: () => _showRoleInfo(context, controller),
-                      ),
-                      const Spacer(),
-                      refreshAction,
-                      const SizedBox(width: 8),
-                      logoutAction,
-                    ],
+                const Icon(Icons.nest_cam_wired_stand, size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  panelTitle,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '$displayName 님 · ${_labelForRole(controller.currentRole ?? '-')}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: NestColors.deepWood.withValues(alpha: 0.72),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        Chip(
+                          label: Text(
+                            _labelForRole(controller.currentRole ?? '-'),
+                          ),
+                          avatar: const Icon(Icons.verified_user, size: 14),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        const SizedBox(width: 4),
+                        Chip(
+                          label: Text('$displayName 님'),
+                          avatar: const Icon(Icons.person_outline, size: 14),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        _buildParentChildSwitchButton(controller),
+                        _buildParentViewTargetSwitchButton(controller),
+                        _buildTeacherViewTargetSwitchButton(controller),
+                        _buildRoleSwitchButton(controller),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                _ContextSelector(
-                  controller: controller,
-                  onSelectHomeschool: widget.onSelectHomeschool,
-                  onSelectTerm: widget.onSelectTerm,
-                  onSelectClassGroup: widget.onSelectClassGroup,
-                  onSelectViewRole: widget.onSelectViewRole,
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Chip(
-                    label: Text(controller.statusMessage),
-                    avatar: controller.isBusy
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.info_outline, size: 16),
-                  ),
-                ),
-                if (controller.isBusy)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: LinearProgressIndicator(minHeight: 3),
-                  ),
-                if (controller.isParentView) ...[
-                  const SizedBox(height: 10),
-                  _ParentAnnouncementPreviewCard(
-                    announcements: latestParentAnnouncements,
-                    onViewAll: widget.onOpenParentAnnouncements,
-                  ),
-                ],
+                refreshAction,
+                logoutAction,
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+            child: _ContextSelector(
+              controller: controller,
+              onSelectHomeschool: widget.onSelectHomeschool,
+              onSelectTerm: widget.onSelectTerm,
+              onSelectClassGroup: widget.onSelectClassGroup,
+              onSelectViewRole: widget.onSelectViewRole,
+            ),
+          ),
+          if (controller.isBusy)
+            const LinearProgressIndicator(minHeight: 2),
           const Divider(height: 1),
           Expanded(
             child: Stack(
@@ -2074,155 +1941,6 @@ class _MainPanelState extends State<_MainPanel> {
               ],
             ),
           ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
-              border: Border(
-                top: BorderSide(
-                  color: NestColors.roseMist.withValues(alpha: 0.8),
-                ),
-              ),
-            ),
-            child: Text(
-              '현재 탭: ${widget.tabLabel} · ${_tabDescription(widget.tabLabel)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ParentAnnouncementPreviewCard extends StatelessWidget {
-  const _ParentAnnouncementPreviewCard({
-    required this.announcements,
-    required this.onViewAll,
-  });
-
-  final List<Announcement> announcements;
-  final VoidCallback onViewAll;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: NestColors.roseMist),
-        color: Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.campaign_outlined, color: NestColors.deepWood),
-              const SizedBox(width: 8),
-              Text('학부모 공지사항', style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              TextButton(onPressed: onViewAll, child: const Text('모두 보기')),
-            ],
-          ),
-          if (announcements.isEmpty)
-            Text(
-              '등록된 공지가 없습니다.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.65),
-              ),
-            )
-          else
-            ...announcements.map(
-              (notice) => Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => _showAnnouncementDetail(context, notice),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: NestColors.creamyWhite,
-                      border: Border.all(color: NestColors.roseMist),
-                    ),
-                    child: Row(
-                      children: [
-                        if (notice.pinned)
-                          Icon(
-                            Icons.push_pin,
-                            size: 14,
-                            color: NestColors.dustyRose,
-                          )
-                        else
-                          const Icon(Icons.circle, size: 7),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            notice.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  void _showAnnouncementDetail(BuildContext context, Announcement notice) {
-    final when = notice.createdAt == null
-        ? '-'
-        : '${notice.createdAt!.year.toString().padLeft(4, '0')}-'
-              '${notice.createdAt!.month.toString().padLeft(2, '0')}-'
-              '${notice.createdAt!.day.toString().padLeft(2, '0')} '
-              '${notice.createdAt!.hour.toString().padLeft(2, '0')}:'
-              '${notice.createdAt!.minute.toString().padLeft(2, '0')}';
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(notice.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              when,
-              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.6),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(notice.body.trim().isEmpty ? '(본문 없음)' : notice.body),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('닫기'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              onViewAll();
-            },
-            child: const Text('모두 보기로 이동'),
-          ),
         ],
       ),
     );
@@ -2249,20 +1967,16 @@ class _ContextSelector extends StatefulWidget {
 }
 
 class _ContextSelectorState extends State<_ContextSelector> {
-  bool _showGuide = false;
-
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final width = MediaQuery.sizeOf(context).width;
-    final compact = width < 860;
 
     final homeschoolOptions = controller.memberships
         .map(
           (membership) => _ContextOption(
             id: membership.homeschoolId,
             title: membership.homeschool.name,
-            subtitle: membership.role,
+            subtitle: _labelForRole(membership.role),
           ),
         )
         .toList(growable: false);
@@ -2271,7 +1985,7 @@ class _ContextSelectorState extends State<_ContextSelector> {
           (term) => _ContextOption(
             id: term.id,
             title: term.name,
-            subtitle: term.status,
+            subtitle: _labelForTermStatus(term.status),
           ),
         )
         .toList(growable: false);
@@ -2283,12 +1997,11 @@ class _ContextSelectorState extends State<_ContextSelector> {
           (role) => _ContextOption(
             id: role,
             title: _labelForRole(role),
-            subtitle: role,
           ),
         )
         .toList(growable: false);
 
-    final cards = [
+    final items = [
       _ContextCardData(
         icon: Icons.home_outlined,
         label: '홈스쿨',
@@ -2335,89 +2048,38 @@ class _ContextSelectorState extends State<_ContextSelector> {
       ),
     ];
 
-    final cardWidgets = cards
-        .map(
-          (card) => _ContextQuickCard(
-            icon: card.icon,
-            label: card.label,
-            value: card.value,
-            disabled: controller.isBusy || card.options.isEmpty,
-            onTap: () => _openContextPicker(
-              title: card.label,
-              help: card.help,
-              options: card.options,
-              currentId: card.options
-                  .where((row) => row.title == card.value)
-                  .map((row) => row.id)
-                  .firstOrNull,
-              onSelect: card.onSelect,
-            ),
-          ),
-        )
-        .toList(growable: false);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        compact
-            ? Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: cardWidgets,
-              )
-            : Row(
-                children: cardWidgets
-                    .map((w) => Expanded(child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      child: w,
-                    )))
-                    .toList(growable: false),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items
+            .map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ActionChip(
+                  avatar: Icon(item.icon, size: 16),
+                  label: Text(
+                    '${item.label}: ${item.value ?? '-'}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onPressed: controller.isBusy || item.options.isEmpty
+                      ? null
+                      : () => _openContextPicker(
+                            title: item.label,
+                            help: item.help,
+                            options: item.options,
+                            currentId: item.options
+                                .where((row) => row.title == item.value)
+                                .map((row) => row.id)
+                                .firstOrNull,
+                            onSelect: item.onSelect,
+                          ),
+                ),
               ),
-        const SizedBox(height: 8),
-        InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => setState(() => _showGuide = !_showGuide),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _showGuide ? Icons.expand_less : Icons.expand_more,
-                  size: 18,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '설정 도움말',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.78),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          child: _showGuide
-              ? Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: NestColors.creamyWhite,
-                    border: Border.all(color: NestColors.roseMist),
-                  ),
-                  child: const Text(
-                    '추천 순서: 1) 홈스쿨 선택 → 2) 학기 선택 → 3) 반 선택 → 4) 뷰 역할 선택\n'
-                    '각 카드를 누르면 큰 선택창이 열리며, 모바일/웹에서 동일하게 동작합니다.',
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
-      ],
+            )
+            .toList(growable: false),
+      ),
     );
   }
 
@@ -2514,67 +2176,6 @@ class _ContextSelectorState extends State<_ContextSelector> {
   }
 }
 
-class _ContextQuickCard extends StatelessWidget {
-  const _ContextQuickCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.disabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final String? value;
-  final bool disabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: disabled ? 0.55 : 1,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: disabled ? null : onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: NestColors.roseMist),
-            color: Colors.white,
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.72),
-                      ),
-                    ),
-                    Text(
-                      value ?? '선택',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.expand_more, size: 18),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ContextCardData {
   const _ContextCardData({
     required this.icon,
@@ -2646,22 +2247,6 @@ Icon _iconForLabel(String label, {required bool filled}) {
   };
 }
 
-String _tabDescription(String label) {
-  return switch (label) {
-    '대시보드' => '온보딩과 운영 현황을 확인합니다.',
-    '학기 설정' => '가정, 아이, 선생님, 반, 과목, 교실을 설정합니다.',
-    '시간표' => '주간 시간표를 배치하고 확정합니다.',
-    '시스템' => 'Drive, 커뮤니티 관리, 권한 설정을 다룹니다.',
-    '학습 현황' => '아이의 학습 상태와 기록을 확인합니다.',
-    '소식' => '공지와 소식을 모아봅니다.',
-    '교사 허브' => '담당 반 수업 운영과 활동 기록을 관리합니다.',
-    '갤러리' => '사진/영상 기록을 열람하고 공유합니다.',
-    '커뮤니티' => '학부모/교사 소통 글을 확인합니다.',
-    'SNS' => '학부모/교사 소통 피드를 확인합니다.',
-    _ => '현재 화면 정보를 확인합니다.',
-  };
-}
-
 String _labelForRole(String role) {
   return switch (role) {
     'HOMESCHOOL_ADMIN' => '관리자',
@@ -2670,6 +2255,16 @@ String _labelForRole(String role) {
     'GUEST_TEACHER' => '외부교사',
     'PARENT' => '부모',
     _ => role,
+  };
+}
+
+String _labelForTermStatus(String status) {
+  return switch (status) {
+    'ACTIVE' => '진행 중',
+    'UPCOMING' => '예정',
+    'COMPLETED' => '완료',
+    'ARCHIVED' => '보관',
+    _ => status,
   };
 }
 

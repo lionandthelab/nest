@@ -74,6 +74,15 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       subtitle: '내가 담당하는 반별로 시간표, 공지, 아동 상태를 관리합니다.',
       icon: Icons.school,
       isBusy: controller.isBusy || _isLoadingManagedClasses,
+      actions: [
+        IconButton(
+          tooltip: '내 불가 시간 설정',
+          icon: const Icon(Icons.event_busy_outlined, size: 20),
+          onPressed: controller.isBusy
+              ? null
+              : () => _openUnavailabilityDialog(controller),
+        ),
+      ],
       metrics: [
         HubMetric(
           label: '담당 반',
@@ -595,8 +604,6 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   ) {
     return Column(
       children: [
-        _buildTeacherUnavailabilityCard(controller),
-        const SizedBox(height: 12),
         _buildTeachingPlanCard(controller, selectedBundle),
         const SizedBox(height: 12),
         _buildClassAnnouncementCard(controller, selectedBundle),
@@ -1004,155 +1011,175 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     );
   }
 
-  Widget _buildTeacherUnavailabilityCard(NestController controller) {
+  Future<void> _openUnavailabilityDialog(NestController controller) async {
     final myProfiles = controller.currentUserTeacherProfiles;
-    final myProfileIds = myProfiles.map((row) => row.id).toSet();
-    final selectedProfileId = _unavailabilityTeacherProfileId;
-    final blocks =
-        controller.memberUnavailabilityBlocks
-            .where(
-              (row) =>
-                  row.ownerKind == 'TEACHER_PROFILE' &&
-                  selectedProfileId != null &&
-                  row.ownerId == selectedProfileId,
-            )
-            .toList(growable: false)
-          ..sort((a, b) {
-            final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-            if (day != 0) {
-              return day;
-            }
-            return a.startTime.compareTo(b.startTime);
-          });
+    if (myProfiles.isEmpty) {
+      _showMessage('연결된 교사 프로필이 없습니다.');
+      return;
+    }
+    _unavailabilityTeacherProfileId ??= myProfiles.firstOrNull?.id;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('내 불가 시간', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '등록한 시간은 관리자 시간표 생성 시 자동으로 회피됩니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (myProfiles.isEmpty)
-              _buildEmptyHint('연결된 교사 프로필이 없습니다.')
-            else ...[
-              SelectFieldCard(
-                label: '교사 프로필',
-                hintText: '교사 프로필을 선택하세요',
-                icon: Icons.person_outline,
-                enabled: !controller.isBusy,
-                value: myProfiles
-                    .where((profile) => profile.id == selectedProfileId)
-                    .map((profile) => profile.displayName)
-                    .firstOrNull,
-                onTap: () => _selectUnavailabilityTeacherProfile(myProfiles),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '요일 선택',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.74),
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final myProfileIds = myProfiles.map((row) => row.id).toSet();
+            final selectedProfileId = _unavailabilityTeacherProfileId;
+            final blocks =
+                controller.memberUnavailabilityBlocks
+                    .where(
+                      (row) =>
+                          row.ownerKind == 'TEACHER_PROFILE' &&
+                          selectedProfileId != null &&
+                          row.ownerId == selectedProfileId,
+                    )
+                    .toList()
+                  ..sort((a, b) {
+                    final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+                    if (day != 0) return day;
+                    return a.startTime.compareTo(b.startTime);
+                  });
+
+            return AlertDialog(
+              title: const Text('내 불가 시간'),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '등록한 시간은 관리자 시간표 생성 시 자동으로 회피됩니다.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.72),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (myProfiles.length > 1) ...[
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedProfileId,
+                          decoration: const InputDecoration(
+                            labelText: '교사 프로필',
+                          ),
+                          items: myProfiles
+                              .map(
+                                (p) => DropdownMenuItem(
+                                  value: p.id,
+                                  child: Text(p.displayName),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            _unavailabilityTeacherProfileId = value;
+                            setState(() {});
+                            setDialogState(() {});
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      Text(
+                        '요일 선택',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.74),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: List.generate(7, (day) {
+                          return ChoiceChip(
+                            label: Text(_dayLabel(day)),
+                            selected: _selectedUnavailabilityDay == day,
+                            onSelected: (_) {
+                              _selectedUnavailabilityDay = day;
+                              setDialogState(() {});
+                            },
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _unavailabilityStartController,
+                              decoration: const InputDecoration(
+                                labelText: '시작 (HH:MM)',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _unavailabilityEndController,
+                              decoration: const InputDecoration(
+                                labelText: '종료 (HH:MM)',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _unavailabilityNoteController,
+                        decoration: const InputDecoration(
+                          labelText: '메모 (선택)',
+                        ),
+                        minLines: 1,
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed: selectedProfileId == null ||
+                                !myProfileIds.contains(selectedProfileId)
+                            ? null
+                            : () async {
+                                await _createTeacherUnavailabilityBlock();
+                                if (context.mounted) setDialogState(() {});
+                              },
+                        icon: const Icon(Icons.add),
+                        label: const Text('불가 시간 추가'),
+                      ),
+                      const SizedBox(height: 12),
+                      if (blocks.isEmpty)
+                        _buildEmptyHint('등록된 불가 시간이 없습니다.')
+                      else
+                        ...blocks.map((block) {
+                          final day = _dayLabel(block.dayOfWeek);
+                          final start = _shortTime(block.startTime);
+                          final end = _shortTime(block.endTime);
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('$day $start-$end'),
+                            subtitle: Text(block.note),
+                            trailing: IconButton(
+                              onPressed: () async {
+                                await _deleteUnavailabilityBlock(block.id);
+                                if (context.mounted) setDialogState(() {});
+                              },
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: List.generate(7, (day) {
-                  return ChoiceChip(
-                    label: Text(_dayLabel(day)),
-                    selected: _selectedUnavailabilityDay == day,
-                    onSelected: controller.isBusy
-                        ? null
-                        : (_) {
-                            setState(() {
-                              _selectedUnavailabilityDay = day;
-                            });
-                          },
-                  );
-                }),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTimeField(
-                      controller: _unavailabilityStartController,
-                      label: '시작 (HH:MM)',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildTimeField(
-                      controller: _unavailabilityEndController,
-                      label: '종료 (HH:MM)',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _unavailabilityNoteController,
-                decoration: const InputDecoration(labelText: '메모 (선택)'),
-                minLines: 1,
-                maxLines: 2,
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton.icon(
-                onPressed:
-                    controller.isBusy ||
-                        selectedProfileId == null ||
-                        !myProfileIds.contains(selectedProfileId)
-                    ? null
-                    : _createTeacherUnavailabilityBlock,
-                icon: const Icon(Icons.add),
-                label: const Text('불가 시간 추가'),
-              ),
-            ],
-            const SizedBox(height: 10),
-            if (blocks.isEmpty)
-              _buildEmptyHint('등록된 불가 시간이 없습니다.')
-            else
-              ...blocks.map((block) {
-                final day = _dayLabel(block.dayOfWeek);
-                final start = _shortTime(block.startTime);
-                final end = _shortTime(block.endTime);
-                return ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('$day $start-$end'),
-                  subtitle: Text(block.note),
-                  trailing: IconButton(
-                    onPressed: controller.isBusy
-                        ? null
-                        : () => _deleteUnavailabilityBlock(block.id),
-                    icon: const Icon(Icons.delete_outline),
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeField({
-    required TextEditingController controller,
-    required String label,
-  }) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: const Icon(Icons.access_time),
-      ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('닫기'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1412,36 +1439,6 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     }
     setState(() {
       _logActivityType = selected;
-    });
-  }
-
-  Future<void> _selectUnavailabilityTeacherProfile(
-    List<TeacherProfile> profiles,
-  ) async {
-    final options = profiles
-        .map(
-          (profile) => SelectSheetOption<String>(
-            value: profile.id,
-            title: profile.displayName,
-            subtitle: profile.teacherType,
-            keywords: '${profile.displayName} ${profile.teacherType}',
-          ),
-        )
-        .toList(growable: false);
-    final selected = await showSelectSheet<String>(
-      context: context,
-      title: '교사 프로필 선택',
-      helpText: '불가 시간을 적용할 교사 프로필을 선택하세요.',
-      options: options,
-      currentValue: _unavailabilityTeacherProfileId,
-    );
-    if (!mounted ||
-        selected == null ||
-        selected == _unavailabilityTeacherProfileId) {
-      return;
-    }
-    setState(() {
-      _unavailabilityTeacherProfileId = selected;
     });
   }
 

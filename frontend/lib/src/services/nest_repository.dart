@@ -973,6 +973,46 @@ class NestRepository {
     return _asRows(data).map(TimeSlot.fromMap).toList(growable: false);
   }
 
+  Future<TimeSlot> createTimeSlot({
+    required String termId,
+    required int dayOfWeek,
+    required String startTime,
+    required String endTime,
+  }) async {
+    final data = await client.from('time_slots').insert({
+      'term_id': termId,
+      'day_of_week': dayOfWeek,
+      'start_time': startTime,
+      'end_time': endTime,
+    }).select().single();
+
+    return TimeSlot.fromMap(data);
+  }
+
+  Future<TimeSlot> updateTimeSlot({
+    required String slotId,
+    required int dayOfWeek,
+    required String startTime,
+    required String endTime,
+  }) async {
+    final data = await client
+        .from('time_slots')
+        .update({
+          'day_of_week': dayOfWeek,
+          'start_time': startTime,
+          'end_time': endTime,
+        })
+        .eq('id', slotId)
+        .select()
+        .single();
+
+    return TimeSlot.fromMap(data);
+  }
+
+  Future<void> deleteTimeSlot({required String slotId}) async {
+    await client.from('time_slots').delete().eq('id', slotId);
+  }
+
   Future<List<ClassSession>> fetchSessions({
     required String classGroupId,
   }) async {

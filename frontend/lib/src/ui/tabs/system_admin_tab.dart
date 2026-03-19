@@ -21,10 +21,10 @@ class _SystemAdminTabState extends State<SystemAdminTab>
   late final TabController _tabController;
 
   static const _tabs = [
+    Tab(text: '멤버 관리'),
     Tab(text: 'SNS 관리'),
-    Tab(text: '드라이브'),
-    Tab(text: '권한'),
-    Tab(text: '운영'),
+    Tab(text: '드라이브 관리'),
+    Tab(text: '운영 로그'),
   ];
 
   @override
@@ -84,9 +84,9 @@ class _SystemAdminTabState extends State<SystemAdminTab>
           child: TabBarView(
             controller: _tabController,
             children: [
+              MembersTab(controller: controller),
               CommunityTab(controller: controller),
               DriveTab(controller: controller),
-              MembersTab(controller: controller),
               OpsTab(controller: controller),
             ],
           ),

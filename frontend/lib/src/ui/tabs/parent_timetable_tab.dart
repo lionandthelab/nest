@@ -747,13 +747,13 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
         prefixIcon: Icon(Icons.calendar_today_outlined),
       ),
       items: const [
-        DropdownMenuItem(value: 0, child: Text('Sun')),
-        DropdownMenuItem(value: 1, child: Text('Mon')),
-        DropdownMenuItem(value: 2, child: Text('Tue')),
-        DropdownMenuItem(value: 3, child: Text('Wed')),
-        DropdownMenuItem(value: 4, child: Text('Thu')),
-        DropdownMenuItem(value: 5, child: Text('Fri')),
-        DropdownMenuItem(value: 6, child: Text('Sat')),
+        DropdownMenuItem(value: 0, child: Text('일')),
+        DropdownMenuItem(value: 1, child: Text('월')),
+        DropdownMenuItem(value: 2, child: Text('화')),
+        DropdownMenuItem(value: 3, child: Text('수')),
+        DropdownMenuItem(value: 4, child: Text('목')),
+        DropdownMenuItem(value: 5, child: Text('금')),
+        DropdownMenuItem(value: 6, child: Text('토')),
       ],
       onChanged: controller.isBusy
           ? null

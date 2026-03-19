@@ -57,7 +57,9 @@ class _TimetableTabState extends State<TimetableTab> {
     return ListView(
       children: [
         _buildClassContextCard(controller),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        _buildTimeSlotManagerBar(controller),
+        const SizedBox(height: 8),
         _buildBoardCard(controller),
       ],
     );
@@ -84,6 +86,317 @@ class _TimetableTabState extends State<TimetableTab> {
         ),
       ),
     );
+  }
+
+  Widget _buildTimeSlotManagerBar(NestController controller) {
+    final slots = controller.timeSlots.toList()
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) return day;
+        return a.startTime.compareTo(b.startTime);
+      });
+    final daySet = slots.map((s) => s.dayOfWeek).toSet();
+    final periodSet = slots.map((s) => '${s.startTime}-${s.endTime}').toSet();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              Icons.grid_on_outlined,
+              size: 20,
+              color: NestColors.clay,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '교시 설정',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Chip(
+              label: Text('${daySet.length}요일 · ${periodSet.length}교시'),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: controller.isBusy
+                  ? null
+                  : () => _openTimeSlotEditorDialog(controller),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('편집'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openTimeSlotEditorDialog(NestController controller) async {
+    final startCtrl = TextEditingController();
+    final endCtrl = TextEditingController();
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              final slots = controller.timeSlots.toList()
+                ..sort((a, b) {
+                  final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+                  if (day != 0) return day;
+                  return a.startTime.compareTo(b.startTime);
+                });
+
+              final slotsByDay = <int, List<TimeSlot>>{};
+              for (final slot in slots) {
+                (slotsByDay[slot.dayOfWeek] ??= []).add(slot);
+              }
+              final days = slotsByDay.keys.toList()..sort();
+
+              Future<void> addSlot(int dayOfWeek) async {
+                final start = startCtrl.text.trim();
+                final end = endCtrl.text.trim();
+                if (start.isEmpty || end.isEmpty) {
+                  _showMessage('시작/종료 시간을 입력하세요.');
+                  return;
+                }
+                try {
+                  await controller.createTimeSlot(
+                    dayOfWeek: dayOfWeek,
+                    startTime: start,
+                    endTime: end,
+                  );
+                  _showMessage(controller.statusMessage);
+                  if (dialogContext.mounted) {
+                    setDialogState(() {});
+                    setState(() {});
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                }
+              }
+
+              Future<void> removeSlot(String slotId) async {
+                try {
+                  await controller.deleteTimeSlot(slotId: slotId);
+                  _showMessage(controller.statusMessage);
+                  if (dialogContext.mounted) {
+                    setDialogState(() {});
+                    setState(() {});
+                  }
+                } catch (e) {
+                  _showMessage(e.toString().replaceFirst('Exception: ', ''));
+                }
+              }
+
+              Future<void> addDay(int dayOfWeek) async {
+                // Copy times from existing day or use defaults
+                final existingTimes = slots.isEmpty
+                    ? [('09:30', '10:20'), ('10:30', '11:20'), ('11:30', '12:20'), ('13:30', '14:20')]
+                    : slotsByDay.values.first
+                        .map((s) => (_shortTime(s.startTime), _shortTime(s.endTime)))
+                        .toList();
+                try {
+                  for (final time in existingTimes) {
+                    await controller.createTimeSlot(
+                      dayOfWeek: dayOfWeek,
+                      startTime: time.$1,
+                      endTime: time.$2,
+                    );
+                  }
+                  _showMessage('${_dayLabel(dayOfWeek)}요일을 추가했습니다.');
+                  if (dialogContext.mounted) {
+                    setDialogState(() {});
+                    setState(() {});
+                  }
+                } catch (_) {
+                  _showMessage(controller.statusMessage);
+                }
+              }
+
+              final missingDays = List.generate(7, (i) => i)
+                  .where((d) => !slotsByDay.containsKey(d))
+                  .toList();
+
+              return AlertDialog(
+                title: const Text('교시/요일 편집'),
+                content: SizedBox(
+                  width: 560,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '요일별 교시(시간 슬롯)를 추가/삭제할 수 있습니다.',
+                          style: Theme.of(dialogContext)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: NestColors.deepWood
+                                    .withValues(alpha: 0.72),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Existing slots by day
+                        ...days.map((day) {
+                          final daySlots = slotsByDay[day]!;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      '${_dayLabel(day)}요일',
+                                      style: Theme.of(dialogContext)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '(${daySlots.length}교시)',
+                                      style: Theme.of(dialogContext)
+                                          .textTheme
+                                          .bodySmall,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: daySlots.map((slot) {
+                                    final start = _shortTime(slot.startTime);
+                                    final end = _shortTime(slot.endTime);
+                                    return Chip(
+                                      label: Text('$start-$end'),
+                                      deleteIcon: const Icon(
+                                        Icons.close,
+                                        size: 16,
+                                      ),
+                                      onDeleted: controller.isBusy
+                                          ? null
+                                          : () => removeSlot(slot.id),
+                                      visualDensity: VisualDensity.compact,
+                                    );
+                                  }).toList(growable: false),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        const Divider(),
+                        // Add new slot
+                        Text(
+                          '교시 추가',
+                          style: Theme.of(dialogContext)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: startCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: '시작 (HH:MM)',
+                                  hintText: '09:30',
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: endCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: '종료 (HH:MM)',
+                                  hintText: '10:20',
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: days.map((day) {
+                            return FilledButton.tonal(
+                              onPressed: controller.isBusy
+                                  ? null
+                                  : () => addSlot(day),
+                              child: Text('${_dayLabel(day)} 추가'),
+                            );
+                          }).toList(growable: false),
+                        ),
+                        if (missingDays.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          const Divider(),
+                          Text(
+                            '요일 추가',
+                            style: Theme.of(dialogContext)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '기존 교시 시간을 복사하여 새 요일을 추가합니다.',
+                            style: Theme.of(dialogContext)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: NestColors.deepWood
+                                      .withValues(alpha: 0.6),
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: missingDays.map((day) {
+                              return OutlinedButton(
+                                onPressed: controller.isBusy
+                                    ? null
+                                    : () => addDay(day),
+                                child: Text('${_dayLabel(day)}요일'),
+                              );
+                            }).toList(growable: false),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('닫기'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      startCtrl.dispose();
+      endCtrl.dispose();
+    }
   }
 
   Widget _buildClassContextCard(NestController controller) {
@@ -649,6 +962,18 @@ class _TimetableTabState extends State<TimetableTab> {
                                     final locationLabel = location.isEmpty
                                         ? '교실 미지정'
                                         : location;
+                                    final assignments = controller
+                                        .teacherAssignmentsForSession(
+                                          session.id,
+                                        );
+                                    final teacherLabel = assignments.isEmpty
+                                        ? '강사 미지정'
+                                        : assignments
+                                              .map((a) => controller
+                                                  .findTeacherName(
+                                                    a.teacherProfileId,
+                                                  ))
+                                              .join(', ');
                                     return Container(
                                       width: double.infinity,
                                       margin: const EdgeInsets.only(bottom: 6),
@@ -661,7 +986,7 @@ class _TimetableTabState extends State<TimetableTab> {
                                         ),
                                       ),
                                       child: Text(
-                                        '$locationLabel · $className · $courseName',
+                                        '$courseName · $teacherLabel\n$locationLabel · $className',
                                         style: Theme.of(
                                           context,
                                         ).textTheme.bodySmall,
@@ -3087,13 +3412,13 @@ class _EditableAssignment {
 
 String _dayLabel(int dayOfWeek) {
   const labels = <int, String>{
-    0: 'Sun',
-    1: 'Mon',
-    2: 'Tue',
-    3: 'Wed',
-    4: 'Thu',
-    5: 'Fri',
-    6: 'Sat',
+    0: '일',
+    1: '월',
+    2: '화',
+    3: '수',
+    4: '목',
+    5: '금',
+    6: '토',
   };
   return labels[dayOfWeek] ?? '$dayOfWeek';
 }

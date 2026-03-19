@@ -106,7 +106,7 @@ class ChildSelectorHeader extends StatelessWidget {
                                     Icons.flag_circle_outlined,
                                     size: 14,
                                   ),
-                                  label: Text(selectedChild.status),
+                                  label: Text(_childStatusLabel(selectedChild.status)),
                                   visualDensity: VisualDensity.compact,
                                 ),
                                 Chip(
@@ -218,4 +218,13 @@ class ChildSelectorHeader extends StatelessWidget {
       child: Text(message),
     );
   }
+}
+
+String _childStatusLabel(String status) {
+  return switch (status) {
+    'ACTIVE' => '활동 중',
+    'INACTIVE' => '비활동',
+    'GRADUATED' => '졸업',
+    _ => status,
+  };
 }

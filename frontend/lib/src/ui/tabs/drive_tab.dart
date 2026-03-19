@@ -47,13 +47,47 @@ class _DriveTabState extends State<DriveTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Google Drive 연동',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Google Drive 연동',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    Tooltip(
+                      richMessage: TextSpan(
+                        children: [
+                          const TextSpan(
+                            text: 'Google Drive 연동 설정법\n\n',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const TextSpan(
+                            text: '1. Google Cloud Console에서 OAuth 2.0 클라이언트를 생성합니다.\n'
+                                '2. 승인된 리디렉션 URI에 아래 주소를 추가합니다:\n'
+                                '   (배포 주소)/oauth/google/callback.html\n'
+                                '3. Supabase Edge Function 시크릿에 다음을 설정합니다:\n'
+                                '   • GOOGLE_CLIENT_ID\n'
+                                '   • GOOGLE_CLIENT_SECRET\n'
+                                '   • GOOGLE_REDIRECT_URI\n'
+                                '4. 아래 "OAuth 연결 시작" 버튼을 누르면 Google 로그인 팝업이 열립니다.\n'
+                                '5. 권한 허용 후 "OAuth 동기화"를 눌러 연동을 완료합니다.\n\n'
+                                '루트 폴더 ID는 Google Drive에서 사용할 상위 폴더의 ID입니다.\n'
+                                '(Drive 폴더 URL의 마지막 경로 값)',
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.info_outline, size: 20),
+                        color: NestColors.clay,
+                        onPressed: () {},
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '관리자는 OAuth 연결과 폴더 정책만 설정하면 됩니다. 토큰 수동 입력은 개발자 고급 메뉴에서만 노출됩니다.',
+                  'OAuth 연결 후 폴더 정책을 설정하면 미디어 업로드가 자동으로 Drive에 저장됩니다.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: NestColors.deepWood.withValues(alpha: 0.72),
                   ),
@@ -66,7 +100,7 @@ class _DriveTabState extends State<DriveTab> {
                     ElevatedButton.icon(
                       onPressed: controller.isBusy ? null : _startOauth,
                       icon: const Icon(Icons.link),
-                      label: const Text('OAuth 시작'),
+                      label: const Text('OAuth 연결 시작'),
                     ),
                     FilledButton.tonalIcon(
                       onPressed: controller.isBusy ? null : _syncOauth,
@@ -84,21 +118,22 @@ class _DriveTabState extends State<DriveTab> {
                 TextField(
                   controller: _rootFolderController,
                   decoration: const InputDecoration(
-                    labelText: 'Google Drive Root Folder ID',
+                    labelText: '루트 폴더 ID',
+                    hintText: 'Google Drive 폴더 URL의 마지막 경로 값',
                   ),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _folderPolicy,
-                  decoration: const InputDecoration(labelText: 'Folder Policy'),
+                  decoration: const InputDecoration(labelText: '폴더 정책'),
                   items: const [
                     DropdownMenuItem(
                       value: 'TERM_CLASS_DATE',
-                      child: Text('TERM_CLASS_DATE'),
+                      child: Text('학기 > 반 > 날짜별 정리'),
                     ),
                     DropdownMenuItem(
                       value: 'CLASS_CHILD_DATE',
-                      child: Text('CLASS_CHILD_DATE'),
+                      child: Text('반 > 아이 > 날짜별 정리'),
                     ),
                   ],
                   onChanged: controller.isBusy
@@ -291,6 +326,23 @@ class _DriveTabState extends State<DriveTab> {
   }
 }
 
+String _driveStatusLabel(String status) {
+  return switch (status) {
+    'CONNECTED' => '연결됨',
+    'DISCONNECTED' => '연결 안 됨',
+    'ERROR' => '오류',
+    _ => status,
+  };
+}
+
+String _folderPolicyLabel(String? policy) {
+  return switch (policy) {
+    'TERM_CLASS_DATE' => '학기 > 반 > 날짜별 정리',
+    'CLASS_CHILD_DATE' => '반 > 아이 > 날짜별 정리',
+    _ => '-',
+  };
+}
+
 class _DriveStatusView extends StatelessWidget {
   const _DriveStatusView({required this.controller});
 
@@ -316,22 +368,22 @@ class _DriveStatusView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('상태: ${integration.status}'),
+          Text('연동 상태: ${_driveStatusLabel(integration.status)}'),
           const SizedBox(height: 4),
-          Text('Root Folder: ${integration.rootFolderId ?? '-'}'),
+          Text('루트 폴더 ID: ${integration.rootFolderId ?? '-'}'),
           const SizedBox(height: 4),
-          Text('Folder Policy: ${integration.folderPolicy ?? '-'}'),
+          Text('폴더 정책: ${_folderPolicyLabel(integration.folderPolicy)}'),
           const SizedBox(height: 4),
-          Text('Connected At: $connectedAt'),
+          Text('연결 일시: $connectedAt'),
           const SizedBox(height: 4),
-          Text('Access Token: ${integration.hasAccessToken ? '있음' : '없음'}'),
+          Text('액세스 토큰: ${integration.hasAccessToken ? '있음' : '없음'}'),
           const SizedBox(height: 4),
-          Text('Refresh Token: ${integration.hasRefreshToken ? '있음' : '없음'}'),
+          Text('리프레시 토큰: ${integration.hasRefreshToken ? '있음' : '없음'}'),
           if (integration.googleTokenExpiresAt != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Token Expires: ${integration.googleTokenExpiresAt!.toUtc().toIso8601String()}',
+                '토큰 만료: ${DateFormat('yyyy-MM-dd HH:mm').format(integration.googleTokenExpiresAt!)}',
               ),
             ),
         ],

@@ -2451,6 +2451,75 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  // ── Time Slot CRUD ──
+
+  Future<void> createTimeSlot({
+    required int dayOfWeek,
+    required String startTime,
+    required String endTime,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    await _runBusy('교시를 추가하는 중...', () async {
+      await _repository.createTimeSlot(
+        termId: termId,
+        dayOfWeek: dayOfWeek,
+        startTime: startTime,
+        endTime: endTime,
+      );
+      await _loadTimetableAssets();
+      _setStatus('교시를 추가했습니다.');
+    });
+  }
+
+  Future<void> updateTimeSlot({
+    required String slotId,
+    required int dayOfWeek,
+    required String startTime,
+    required String endTime,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('교시를 수정하는 중...', () async {
+      await _repository.updateTimeSlot(
+        slotId: slotId,
+        dayOfWeek: dayOfWeek,
+        startTime: startTime,
+        endTime: endTime,
+      );
+      await _loadTimetableAssets();
+      _setStatus('교시를 수정했습니다.');
+    });
+  }
+
+  Future<void> deleteTimeSlot({required String slotId}) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final hasSession = allTermSessions.any(
+      (session) => session.timeSlotId == slotId,
+    );
+    if (hasSession) {
+      throw StateError('이 교시에 배정된 수업이 있어 삭제할 수 없습니다.');
+    }
+
+    await _runBusy('교시를 삭제하는 중...', () async {
+      await _repository.deleteTimeSlot(slotId: slotId);
+      await _loadTimetableAssets();
+      _setStatus('교시를 삭제했습니다.');
+    });
+  }
+
   Future<Family> createFamily({
     required String familyName,
     required String note,

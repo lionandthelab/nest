@@ -47,7 +47,7 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final posts = controller.communityPosts.toList(growable: false)
+    final posts = controller.communityPosts.toList()
       ..sort((a, b) {
         if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
         final left = a.createdAt?.millisecondsSinceEpoch ?? 0;

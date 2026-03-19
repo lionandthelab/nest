@@ -39,7 +39,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Term Setup', style: Theme.of(context).textTheme.titleLarge),
+              Text('학기 설정', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
               const Text('가정/아이 배정 관리는 관리자/스태프만 사용할 수 있습니다.'),
             ],
@@ -403,58 +403,40 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     required String? selectedFamilyId,
     required ValueChanged<String> onSelect,
   }) {
-    final families = controller.families.toList(growable: false)
+    final families = controller.families.toList()
       ..sort((a, b) => a.familyName.compareTo(b.familyName));
 
     if (families.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: NestColors.deepWood.withValues(alpha: 0.74),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: families
-              .map((family) {
-                final selected = family.id == selectedFamilyId;
-                final childCount = controller
-                    .childrenForFamily(family.id)
-                    .length;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: controller.isBusy ? null : () => onSelect(family.id),
-                  child: SizedBox(
-                    width: 240,
-                    child: LabeledEntityTile(
-                      title: family.familyName,
-                      subtitle: '아이 $childCount명',
-                      icon: Icons.home_outlined,
-                      compact: true,
-                      trailing: Icon(
-                        selected
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        size: 18,
-                        color: selected
-                            ? NestColors.mutedSage
-                            : NestColors.deepWood.withValues(alpha: 0.46),
-                      ),
-                    ),
-                  ),
-                );
-              })
-              .toList(growable: false),
-        ),
-      ],
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: families.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final family = families[index];
+          final selected = family.id == selectedFamilyId;
+          final childCount =
+              controller.childrenForFamily(family.id).length;
+          return ChoiceChip(
+            label: Text(
+              '${family.familyName} ($childCount)',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            selected: selected,
+            onSelected: controller.isBusy
+                ? null
+                : (_) => onSelect(family.id),
+            avatar: const Icon(Icons.home_outlined, size: 18),
+          );
+        },
+      ),
     );
   }
 
@@ -521,7 +503,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             else ...[
               _buildFamilySelectionCards(
                 controller: controller,
-                title: '아이 조회 대상 가정',
+                title: '',
                 selectedFamilyId: selectedFamily?.id,
                 onSelect: (familyId) {
                   if (controller.isBusy) {
@@ -558,7 +540,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             width: 290,
                             child: LabeledEntityTile(
                               title: child.name,
-                              subtitle: '$birthLabel · ${child.status}',
+                              subtitle: '$birthLabel · ${_childStatusLabel(child.status)}',
                               icon: Icons.child_care_outlined,
                               trailing: const Icon(
                                 Icons.edit_outlined,
@@ -730,10 +712,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   initial == null
                         ? const <String>[]
                         : (controller.familyGuardianUserIdsByFamily[initial
-                                      .id] ??
-                                  const <String>[])
-                              .toList(growable: false)
-                    ..sort();
+                                          .id] ??
+                                      const <String>[])
+                                  .toList()
+                              ..sort();
               final linkedSet = linkedGuardianUserIds.toSet();
               final parentMatches = controller
                   .searchHomeschoolMemberDirectory(
@@ -1667,7 +1649,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                   value: checked,
                                   title: Text(child.name),
                                   subtitle: Text(
-                                    '${child.familyName} · ${child.status}',
+                                    '${child.familyName} · ${_childStatusLabel(child.status)}',
                                   ),
                                   onChanged: isSaving
                                       ? null
@@ -1851,19 +1833,20 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   editingTeacher == null
                         ? const <MemberUnavailabilityBlock>[]
                         : controller.memberUnavailabilityBlocks
-                              .where(
-                                (block) =>
-                                    block.ownerKind == 'TEACHER_PROFILE' &&
-                                    block.ownerId == editingTeacher!.id,
-                              )
-                              .toList(growable: false)
-                    ..sort((a, b) {
-                      final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-                      if (day != 0) {
-                        return day;
-                      }
-                      return a.startTime.compareTo(b.startTime);
-                    });
+                                  .where(
+                                    (block) =>
+                                        block.ownerKind == 'TEACHER_PROFILE' &&
+                                        block.ownerId == editingTeacher!.id,
+                                  )
+                                  .toList()
+                              ..sort((a, b) {
+                                final day =
+                                    a.dayOfWeek.compareTo(b.dayOfWeek);
+                                if (day != 0) {
+                                  return day;
+                                }
+                                return a.startTime.compareTo(b.startTime);
+                              });
 
               Future<void> saveTeacher() async {
                 if (nameController.text.trim().isEmpty || isSaving) {
@@ -3087,4 +3070,13 @@ class _SetupStat {
 
 extension _FirstOrNull<T> on List<T> {
   T? get firstOrNull => isEmpty ? null : first;
+}
+
+String _childStatusLabel(String status) {
+  return switch (status) {
+    'ACTIVE' => '활동 중',
+    'INACTIVE' => '비활동',
+    'GRADUATED' => '졸업',
+    _ => status,
+  };
 }
