@@ -32,57 +32,57 @@ class NestController extends ChangeNotifier {
   User? user;
   Session? session;
 
-  List<Membership> memberships = const [];
-  List<Membership> homeschoolMemberships = const [];
-  List<HomeschoolInvite> homeschoolInvites = const [];
-  List<HomeschoolMemberDirectoryEntry> homeschoolMemberDirectory = const [];
-  List<HomeschoolInvite> pendingInvites = const [];
-  List<Family> families = const [];
-  List<ChildProfile> children = const [];
-  List<ClassEnrollment> classEnrollments = const [];
+  List<Membership> memberships = [];
+  List<Membership> homeschoolMemberships = [];
+  List<HomeschoolInvite> homeschoolInvites = [];
+  List<HomeschoolMemberDirectoryEntry> homeschoolMemberDirectory = [];
+  List<HomeschoolInvite> pendingInvites = [];
+  List<Family> families = [];
+  List<ChildProfile> children = [];
+  List<ClassEnrollment> classEnrollments = [];
   Map<String, List<String>> familyGuardianUserIdsByFamily = const {};
-  List<TeacherProfile> teacherProfiles = const [];
-  List<MemberUnavailabilityBlock> memberUnavailabilityBlocks = const [];
-  List<SessionTeacherAssignment> sessionTeacherAssignments = const [];
-  List<TeachingPlan> teachingPlans = const [];
-  List<StudentActivityLog> studentActivityLogs = const [];
-  List<Announcement> announcements = const [];
-  List<AuditLog> auditLogs = const [];
+  List<TeacherProfile> teacherProfiles = [];
+  List<MemberUnavailabilityBlock> memberUnavailabilityBlocks = [];
+  List<SessionTeacherAssignment> sessionTeacherAssignments = [];
+  List<TeachingPlan> teachingPlans = [];
+  List<StudentActivityLog> studentActivityLogs = [];
+  List<Announcement> announcements = [];
+  List<AuditLog> auditLogs = [];
   String? selectedHomeschoolId;
   String? currentRole;
   final Map<String, String> _viewRoleByHomeschool = <String, String>{};
   final Map<String, String> _parentViewTargetByHomeschool = <String, String>{};
   final Map<String, String> _teacherViewTargetByHomeschool = <String, String>{};
 
-  List<Term> terms = const [];
+  List<Term> terms = [];
   String? selectedTermId;
 
-  List<ClassGroup> classGroups = const [];
+  List<ClassGroup> classGroups = [];
   String? selectedClassGroupId;
 
-  List<Course> courses = const [];
-  List<Classroom> classrooms = const [];
-  List<TimeSlot> timeSlots = const [];
-  List<ClassSession> sessions = const [];
-  List<ClassSession> allTermSessions = const [];
+  List<Course> courses = [];
+  List<Classroom> classrooms = [];
+  List<TimeSlot> timeSlots = [];
+  List<ClassSession> sessions = [];
+  List<ClassSession> allTermSessions = [];
 
-  List<Proposal> proposals = const [];
+  List<Proposal> proposals = [];
   Map<String, List<ProposalSession>> proposalSessionsById = const {};
-  List<ScheduleOptionDraft> scheduleOptionDrafts = const [];
+  List<ScheduleOptionDraft> scheduleOptionDrafts = [];
   String? selectedScheduleOptionId;
 
   DriveIntegration? driveIntegration;
 
-  List<GalleryItem> galleryItems = const [];
+  List<GalleryItem> galleryItems = [];
   Map<String, List<String>> mediaChildrenByAsset = const {};
   PendingMediaFile? pendingMediaFile;
 
-  List<CommunityPost> communityPosts = const [];
+  List<CommunityPost> communityPosts = [];
   Map<String, List<CommunityPostMedia>> communityMediaByPost = const {};
   Map<String, List<CommunityComment>> communityCommentsByPost = const {};
   Map<String, int> communityLikeCountsByPost = const {};
-  Set<String> likedCommunityPostIds = const <String>{};
-  List<CommunityReport> communityReports = const [];
+  Set<String> likedCommunityPostIds = <String>{};
+  List<CommunityReport> communityReports = [];
   PendingMediaFile? pendingCommunityMediaFile;
 
   /// Suppress intermediate UI rebuilds while a [_runBusy] operation is active.
@@ -508,7 +508,7 @@ class NestController extends ChangeNotifier {
 
   Future<void> changeTerm(String? termId) async {
     selectedTermId = _normalizeNullable(termId);
-    scheduleOptionDrafts = const [];
+    scheduleOptionDrafts = [];
     selectedScheduleOptionId = null;
     notifyListeners();
 
@@ -528,7 +528,7 @@ class NestController extends ChangeNotifier {
 
   Future<void> changeClassGroup(String? classGroupId) async {
     selectedClassGroupId = _normalizeNullable(classGroupId);
-    scheduleOptionDrafts = const [];
+    scheduleOptionDrafts = [];
     selectedScheduleOptionId = null;
     notifyListeners();
 
@@ -1355,38 +1355,38 @@ class NestController extends ChangeNotifier {
       _viewRoleByHomeschool.clear();
       _parentViewTargetByHomeschool.clear();
       _teacherViewTargetByHomeschool.clear();
-      terms = const [];
-      classGroups = const [];
-      courses = const [];
-      classrooms = const [];
-      timeSlots = const [];
-      sessions = const [];
-      proposals = const [];
+      terms = [];
+      classGroups = [];
+      courses = [];
+      classrooms = [];
+      timeSlots = [];
+      sessions = [];
+      proposals = [];
       proposalSessionsById = const {};
-      scheduleOptionDrafts = const [];
+      scheduleOptionDrafts = [];
       selectedScheduleOptionId = null;
-      galleryItems = const [];
+      galleryItems = [];
       mediaChildrenByAsset = const {};
-      communityPosts = const [];
+      communityPosts = [];
       communityMediaByPost = const {};
       communityCommentsByPost = const {};
       communityLikeCountsByPost = const {};
-      likedCommunityPostIds = const <String>{};
-      communityReports = const [];
-      homeschoolMemberships = const [];
-      homeschoolInvites = const [];
-      homeschoolMemberDirectory = const [];
-      families = const [];
-      children = const [];
-      classEnrollments = const [];
+      likedCommunityPostIds = <String>{};
+      communityReports = [];
+      homeschoolMemberships = [];
+      homeschoolInvites = [];
+      homeschoolMemberDirectory = [];
+      families = [];
+      children = [];
+      classEnrollments = [];
       familyGuardianUserIdsByFamily = const {};
-      teacherProfiles = const [];
-      memberUnavailabilityBlocks = const [];
-      sessionTeacherAssignments = const [];
-      teachingPlans = const [];
-      studentActivityLogs = const [];
-      announcements = const [];
-      auditLogs = const [];
+      teacherProfiles = [];
+      memberUnavailabilityBlocks = [];
+      sessionTeacherAssignments = [];
+      teachingPlans = [];
+      studentActivityLogs = [];
+      announcements = [];
+      auditLogs = [];
       pendingCommunityMediaFile = null;
       driveIntegration = null;
 
@@ -1448,7 +1448,7 @@ class NestController extends ChangeNotifier {
   Future<void> loadGalleryItems() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      galleryItems = const [];
+      galleryItems = [];
       mediaChildrenByAsset = const {};
       _notifyIfIdle();
       return;
@@ -1471,7 +1471,7 @@ class NestController extends ChangeNotifier {
   Future<void> loadHomeschoolMemberships() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      homeschoolMemberships = const [];
+      homeschoolMemberships = [];
       _notifyIfIdle();
       return;
     }
@@ -1484,14 +1484,14 @@ class NestController extends ChangeNotifier {
 
   Future<void> loadHomeschoolInvites() async {
     if (!canManageMemberships) {
-      homeschoolInvites = const [];
+      homeschoolInvites = [];
       _notifyIfIdle();
       return;
     }
 
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      homeschoolInvites = const [];
+      homeschoolInvites = [];
       _notifyIfIdle();
       return;
     }
@@ -1507,14 +1507,14 @@ class NestController extends ChangeNotifier {
     int limit = 120,
   }) async {
     if (!canManageTeacherAssignments) {
-      homeschoolMemberDirectory = const [];
+      homeschoolMemberDirectory = [];
       _notifyIfIdle();
       return;
     }
 
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      homeschoolMemberDirectory = const [];
+      homeschoolMemberDirectory = [];
       _notifyIfIdle();
       return;
     }
@@ -1530,14 +1530,14 @@ class NestController extends ChangeNotifier {
   Future<void> loadPendingInvites() async {
     final currentUser = user;
     if (currentUser == null) {
-      pendingInvites = const [];
+      pendingInvites = [];
       notifyListeners();
       return;
     }
 
     final email = _normalizeNullable(currentUser.email);
     if (email == null) {
-      pendingInvites = const [];
+      pendingInvites = [];
       notifyListeners();
       return;
     }
@@ -1551,7 +1551,7 @@ class NestController extends ChangeNotifier {
   Future<void> loadFamilies() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      families = const [];
+      families = [];
       familyGuardianUserIdsByFamily = const {};
       _notifyIfIdle();
       return;
@@ -1581,7 +1581,7 @@ class NestController extends ChangeNotifier {
   Future<void> loadChildren() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      children = const [];
+      children = [];
       _notifyIfIdle();
       return;
     }
@@ -1605,7 +1605,7 @@ class NestController extends ChangeNotifier {
   Future<void> loadTeacherProfiles() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      teacherProfiles = const [];
+      teacherProfiles = [];
       _notifyIfIdle();
       return;
     }
@@ -1619,7 +1619,7 @@ class NestController extends ChangeNotifier {
   Future<void> loadMemberUnavailabilityBlocks() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      memberUnavailabilityBlocks = const [];
+      memberUnavailabilityBlocks = [];
       _notifyIfIdle();
       return;
     }
@@ -1667,7 +1667,7 @@ class NestController extends ChangeNotifier {
   Future<void> loadAnnouncements() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      announcements = const [];
+      announcements = [];
       _notifyIfIdle();
       return;
     }
@@ -1692,14 +1692,14 @@ class NestController extends ChangeNotifier {
 
   Future<void> loadAuditLogs() async {
     if (!isAdminLike) {
-      auditLogs = const [];
+      auditLogs = [];
       _notifyIfIdle();
       return;
     }
 
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      auditLogs = const [];
+      auditLogs = [];
       _notifyIfIdle();
       return;
     }
@@ -1732,12 +1732,12 @@ class NestController extends ChangeNotifier {
   Future<void> loadCommunityFeed() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      communityPosts = const [];
+      communityPosts = [];
       communityMediaByPost = const {};
       communityCommentsByPost = const {};
       communityLikeCountsByPost = const {};
-      likedCommunityPostIds = const <String>{};
-      communityReports = const [];
+      likedCommunityPostIds = <String>{};
+      communityReports = [];
       pendingCommunityMediaFile = null;
       _notifyIfIdle();
       return;
@@ -1788,7 +1788,7 @@ class NestController extends ChangeNotifier {
       likedCommunityPostIds = reactionSnapshot.likedPostIds;
     } else {
       communityLikeCountsByPost = const {};
-      likedCommunityPostIds = const <String>{};
+      likedCommunityPostIds = <String>{};
     }
 
     communityReports = reportsFuture != null
@@ -4371,7 +4371,7 @@ class NestController extends ChangeNotifier {
   Future<void> _loadTerms() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
-      terms = const [];
+      terms = [];
       selectedTermId = null;
       return;
     }
@@ -4387,7 +4387,7 @@ class NestController extends ChangeNotifier {
   Future<void> _loadClassGroups() async {
     final termId = selectedTermId;
     if (termId == null || termId.isEmpty) {
-      classGroups = const [];
+      classGroups = [];
       selectedClassGroupId = null;
       return;
     }
@@ -4408,9 +4408,9 @@ class NestController extends ChangeNotifier {
     final termId = selectedTermId;
 
     if (homeschoolId == null || termId == null) {
-      courses = const [];
-      classrooms = const [];
-      timeSlots = const [];
+      courses = [];
+      classrooms = [];
+      timeSlots = [];
       return;
     }
 
@@ -4427,8 +4427,8 @@ class NestController extends ChangeNotifier {
   Future<void> _loadSessions() async {
     final classGroupId = selectedClassGroupId;
     if (classGroupId == null || classGroupId.isEmpty) {
-      sessions = const [];
-      allTermSessions = const [];
+      sessions = [];
+      allTermSessions = [];
       return;
     }
 
@@ -4448,9 +4448,9 @@ class NestController extends ChangeNotifier {
   Future<void> _loadProposals() async {
     final termId = selectedTermId;
     if (termId == null || termId.isEmpty) {
-      proposals = const [];
+      proposals = [];
       proposalSessionsById = const {};
-      scheduleOptionDrafts = const [];
+      scheduleOptionDrafts = [];
       selectedScheduleOptionId = null;
       return;
     }
@@ -4958,49 +4958,49 @@ class NestController extends ChangeNotifier {
   }
 
   void _clearDomainState() {
-    memberships = const [];
-    homeschoolMemberships = const [];
-    homeschoolInvites = const [];
-    homeschoolMemberDirectory = const [];
-    pendingInvites = const [];
-    families = const [];
-    children = const [];
-    classEnrollments = const [];
+    memberships = [];
+    homeschoolMemberships = [];
+    homeschoolInvites = [];
+    homeschoolMemberDirectory = [];
+    pendingInvites = [];
+    families = [];
+    children = [];
+    classEnrollments = [];
     familyGuardianUserIdsByFamily = const {};
-    teacherProfiles = const [];
-    memberUnavailabilityBlocks = const [];
-    sessionTeacherAssignments = const [];
-    teachingPlans = const [];
-    studentActivityLogs = const [];
-    announcements = const [];
-    auditLogs = const [];
+    teacherProfiles = [];
+    memberUnavailabilityBlocks = [];
+    sessionTeacherAssignments = [];
+    teachingPlans = [];
+    studentActivityLogs = [];
+    announcements = [];
+    auditLogs = [];
     _viewRoleByHomeschool.clear();
     _parentViewTargetByHomeschool.clear();
     _teacherViewTargetByHomeschool.clear();
     selectedHomeschoolId = null;
     currentRole = null;
-    terms = const [];
+    terms = [];
     selectedTermId = null;
-    classGroups = const [];
+    classGroups = [];
     selectedClassGroupId = null;
-    courses = const [];
-    classrooms = const [];
-    timeSlots = const [];
-    sessions = const [];
-    proposals = const [];
+    courses = [];
+    classrooms = [];
+    timeSlots = [];
+    sessions = [];
+    proposals = [];
     proposalSessionsById = const {};
-    scheduleOptionDrafts = const [];
+    scheduleOptionDrafts = [];
     selectedScheduleOptionId = null;
     driveIntegration = null;
-    galleryItems = const [];
+    galleryItems = [];
     mediaChildrenByAsset = const {};
     pendingMediaFile = null;
-    communityPosts = const [];
+    communityPosts = [];
     communityMediaByPost = const {};
     communityCommentsByPost = const {};
     communityLikeCountsByPost = const {};
-    likedCommunityPostIds = const <String>{};
-    communityReports = const [];
+    likedCommunityPostIds = <String>{};
+    communityReports = [];
     pendingCommunityMediaFile = null;
   }
 
