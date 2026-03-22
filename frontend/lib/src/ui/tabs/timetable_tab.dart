@@ -901,7 +901,7 @@ class _TimetableTabState extends State<TimetableTab> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _GridHeaderCell(width: periodWidth, title: '교시', subtitle: '시간'),
+              _GridHeaderCell(width: periodWidth, title: '시간'),
               ...dayOrder.map(
                 (day) => _GridHeaderCell(
                   width: dayWidth,
@@ -940,19 +940,9 @@ class _TimetableTabState extends State<TimetableTab> {
                       color: NestColors.creamyWhite,
                       border: Border.all(color: NestColors.roseMist),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${periodIndex + 1}교시',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          timeLabel,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                    child: Text(
+                      timeLabel,
+                      style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
                   ...dayOrder.map((day) {
@@ -1883,8 +1873,7 @@ class _TimetableTabState extends State<TimetableTab> {
                 children: [
                   _GridHeaderCell(
                     width: periodWidth,
-                    title: '교시',
-                    subtitle: '시간',
+                    title: '시간',
                   ),
                   ...dayOrder.map(
                     (day) => _GridHeaderCell(
@@ -1925,19 +1914,9 @@ class _TimetableTabState extends State<TimetableTab> {
                           color: NestColors.creamyWhite,
                           border: Border.all(color: NestColors.roseMist),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${periodIndex + 1}교시',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              timeLabel,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
+                        child: Text(
+                          timeLabel,
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
                       ),
                       ...dayOrder.map((day) {
@@ -3155,12 +3134,12 @@ class _GridHeaderCell extends StatelessWidget {
   const _GridHeaderCell({
     required this.width,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
   });
 
   final double width;
   final String title;
-  final String subtitle;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -3173,14 +3152,16 @@ class _GridHeaderCell extends StatelessWidget {
         color: NestColors.roseMist.withValues(alpha: 0.72),
         border: Border.all(color: NestColors.roseMist),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 2),
-          Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ),
+      child: subtitle != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 2),
+                Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            )
+          : Text(title, style: Theme.of(context).textTheme.titleSmall),
     );
   }
 }

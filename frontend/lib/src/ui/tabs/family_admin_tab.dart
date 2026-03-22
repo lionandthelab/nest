@@ -410,33 +410,28 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       return const SizedBox.shrink();
     }
 
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: families.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final family = families[index];
-          final selected = family.id == selectedFamilyId;
-          final childCount =
-              controller.childrenForFamily(family.id).length;
-          return ChoiceChip(
-            label: Text(
-              '${family.familyName} ($childCount)',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-              ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: families.map((family) {
+        final selected = family.id == selectedFamilyId;
+        final childCount =
+            controller.childrenForFamily(family.id).length;
+        return ChoiceChip(
+          label: Text(
+            '${family.familyName} ($childCount)',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
             ),
-            selected: selected,
-            onSelected: controller.isBusy
-                ? null
-                : (_) => onSelect(family.id),
-            avatar: const Icon(Icons.home_outlined, size: 18),
-          );
-        },
-      ),
+          ),
+          selected: selected,
+          onSelected: controller.isBusy
+              ? null
+              : (_) => onSelect(family.id),
+          avatar: const Icon(Icons.home_outlined, size: 18),
+        );
+      }).toList(growable: false),
     );
   }
 

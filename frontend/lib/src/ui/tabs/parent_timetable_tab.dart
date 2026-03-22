@@ -330,7 +330,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                 children: [
                   _ScheduleHeaderCell(
                     width: timeColWidth,
-                    label: '교시 / 시간',
+                    label: '시간',
                     align: Alignment.center,
                   ),
                   ...sortedDays.map(
@@ -344,7 +344,6 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
               ),
               const Divider(height: 1, thickness: 1),
               ...sortedPeriods.asMap().entries.map((rowEntry) {
-                final periodIndex = rowEntry.key + 1;
                 final periodKey = rowEntry.value;
                 final segments = periodKey.split('-');
                 final periodLabel = segments.length == 2
@@ -370,26 +369,11 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                             horizontal: 10,
                             vertical: 12,
                           ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                '$periodIndex교시',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                periodLabel,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: NestColors.deepWood.withValues(
-                                        alpha: 0.72,
-                                      ),
-                                    ),
-                              ),
-                            ],
+                          child: Text(
+                            periodLabel,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
                       ),
