@@ -136,8 +136,58 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Future<void> _openTimeSlotEditorDialog(NestController controller) async {
-    final startCtrl = TextEditingController();
-    final endCtrl = TextEditingController();
+    // Infer current settings from existing slots
+    final slots = controller.timeSlots.toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    final activeDays = slots.map((s) => s.dayOfWeek).toSet();
+    final uniquePeriods = <String>{};
+    for (final s in slots) {
+      uniquePeriods.add('${s.startTime}|${s.endTime}');
+    }
+
+    // Infer defaults from existing slots
+    String inferredStart = '09:00';
+    String inferredEnd = '15:00';
+    int inferredDuration = 50;
+    int inferredBreak = 10;
+
+    if (uniquePeriods.isNotEmpty) {
+      final sortedPeriods = uniquePeriods.toList()..sort();
+
+      // First period start
+      final firstStart = sortedPeriods.first.split('|')[0];
+      inferredStart = _shortTime(firstStart);
+
+      // Last period end
+      final lastEnd = sortedPeriods.last.split('|')[1];
+      inferredEnd = _shortTime(lastEnd);
+
+      // Duration from first period
+      final firstEnd = sortedPeriods.first.split('|')[1];
+      final startParts = _shortTime(firstStart).split(':');
+      final endParts = _shortTime(firstEnd).split(':');
+      inferredDuration = (int.parse(endParts[0]) * 60 + int.parse(endParts[1])) -
+          (int.parse(startParts[0]) * 60 + int.parse(startParts[1]));
+
+      // Break from gap between first and second period
+      if (sortedPeriods.length >= 2) {
+        final secondStart = sortedPeriods[1].split('|')[0];
+        final secondParts = _shortTime(secondStart).split(':');
+        inferredBreak = (int.parse(secondParts[0]) * 60 + int.parse(secondParts[1])) -
+            (int.parse(endParts[0]) * 60 + int.parse(endParts[1]));
+        if (inferredBreak < 0) inferredBreak = 10;
+      }
+    }
+
+    final dayStartCtrl = TextEditingController(text: inferredStart);
+    final dayEndCtrl = TextEditingController(text: inferredEnd);
+    final durationCtrl =
+        TextEditingController(text: inferredDuration.toString());
+    final breakCtrl = TextEditingController(text: inferredBreak.toString());
+    var selectedDays = activeDays.isNotEmpty
+        ? Set<int>.from(activeDays)
+        : <int>{1, 2, 3, 4, 5}; // Default: Mon-Fri
 
     try {
       await showDialog<void>(
@@ -145,95 +195,44 @@ class _TimetableTabState extends State<TimetableTab> {
         builder: (dialogContext) {
           return StatefulBuilder(
             builder: (dialogContext, setDialogState) {
-              final slots = controller.timeSlots.toList()
-                ..sort((a, b) {
-                  final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-                  if (day != 0) return day;
-                  return a.startTime.compareTo(b.startTime);
-                });
+              // Preview generated periods
+              final previewPeriods = <(String, String)>[];
+              final startText = dayStartCtrl.text.trim();
+              final endText = dayEndCtrl.text.trim();
+              final dur = int.tryParse(durationCtrl.text.trim()) ?? 0;
+              final brk = int.tryParse(breakCtrl.text.trim()) ?? 0;
 
-              final slotsByDay = <int, List<TimeSlot>>{};
-              for (final slot in slots) {
-                (slotsByDay[slot.dayOfWeek] ??= []).add(slot);
-              }
-              final days = slotsByDay.keys.toList()..sort();
-
-              Future<void> addSlot(int dayOfWeek) async {
-                final start = startCtrl.text.trim();
-                final end = endCtrl.text.trim();
-                if (start.isEmpty || end.isEmpty) {
-                  _showMessage('시작/종료 시간을 입력하세요.');
-                  return;
-                }
-                try {
-                  await controller.createTimeSlot(
-                    dayOfWeek: dayOfWeek,
-                    startTime: start,
-                    endTime: end,
-                  );
-                  _showMessage(controller.statusMessage);
-                  if (dialogContext.mounted) {
-                    setDialogState(() {});
-                    setState(() {});
+              if (startText.contains(':') && endText.contains(':') && dur > 0) {
+                final sParts = startText.split(':');
+                final eParts = endText.split(':');
+                if (sParts.length >= 2 && eParts.length >= 2) {
+                  var cursor = (int.tryParse(sParts[0]) ?? 0) * 60 +
+                      (int.tryParse(sParts[1]) ?? 0);
+                  final endMin = (int.tryParse(eParts[0]) ?? 0) * 60 +
+                      (int.tryParse(eParts[1]) ?? 0);
+                  while (cursor + dur <= endMin) {
+                    final slotEnd = cursor + dur;
+                    final s =
+                        '${(cursor ~/ 60).toString().padLeft(2, '0')}:${(cursor % 60).toString().padLeft(2, '0')}';
+                    final e =
+                        '${(slotEnd ~/ 60).toString().padLeft(2, '0')}:${(slotEnd % 60).toString().padLeft(2, '0')}';
+                    previewPeriods.add((s, e));
+                    cursor = slotEnd + brk;
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
                 }
               }
-
-              Future<void> removeSlot(String slotId) async {
-                try {
-                  await controller.deleteTimeSlot(slotId: slotId);
-                  _showMessage(controller.statusMessage);
-                  if (dialogContext.mounted) {
-                    setDialogState(() {});
-                    setState(() {});
-                  }
-                } catch (e) {
-                  _showMessage(e.toString().replaceFirst('Exception: ', ''));
-                }
-              }
-
-              Future<void> addDay(int dayOfWeek) async {
-                // Copy times from existing day or use defaults
-                final existingTimes = slots.isEmpty
-                    ? [('09:30', '10:20'), ('10:30', '11:20'), ('11:30', '12:20'), ('13:30', '14:20')]
-                    : slotsByDay.values.first
-                        .map((s) => (_shortTime(s.startTime), _shortTime(s.endTime)))
-                        .toList();
-                try {
-                  for (final time in existingTimes) {
-                    await controller.createTimeSlot(
-                      dayOfWeek: dayOfWeek,
-                      startTime: time.$1,
-                      endTime: time.$2,
-                    );
-                  }
-                  _showMessage('${_dayLabel(dayOfWeek)}요일을 추가했습니다.');
-                  if (dialogContext.mounted) {
-                    setDialogState(() {});
-                    setState(() {});
-                  }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
-                }
-              }
-
-              final missingDays = List.generate(7, (i) => i)
-                  .where((d) => !slotsByDay.containsKey(d))
-                  .toList();
 
               return AlertDialog(
-                title: const Text('교시/요일 편집'),
+                title: const Text('교시/요일 설정'),
                 content: SizedBox(
-                  width: 560,
+                  width: 420,
                   child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '요일별 교시(시간 슬롯)를 추가/삭제할 수 있습니다.',
+                          '시간 범위와 교시 길이를 설정하면 자동으로 교시가 생성됩니다.',
                           style: Theme.of(dialogContext)
                               .textTheme
                               .bodyMedium
@@ -242,120 +241,117 @@ class _TimetableTabState extends State<TimetableTab> {
                                     .withValues(alpha: 0.72),
                               ),
                         ),
-                        const SizedBox(height: 12),
-                        // Existing slots by day
-                        ...days.map((day) {
-                          final daySlots = slotsByDay[day]!;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      '${_dayLabel(day)}요일',
-                                      style: Theme.of(dialogContext)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '(${daySlots.length}교시)',
-                                      style: Theme.of(dialogContext)
-                                          .textTheme
-                                          .bodySmall,
-                                    ),
-                                  ],
+                        const SizedBox(height: 16),
+
+                        // Time range
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: dayStartCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: '시작 시간',
+                                  hintText: '09:00',
+                                  isDense: true,
                                 ),
-                                const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: daySlots.map((slot) {
-                                    final start = _shortTime(slot.startTime);
-                                    final end = _shortTime(slot.endTime);
-                                    return Chip(
-                                      label: Text('$start-$end'),
-                                      deleteIcon: const Icon(
-                                        Icons.close,
-                                        size: 16,
-                                      ),
-                                      onDeleted: controller.isBusy
-                                          ? null
-                                          : () => removeSlot(slot.id),
-                                      visualDensity: VisualDensity.compact,
-                                    );
-                                  }).toList(growable: false),
-                                ),
-                              ],
+                                onChanged: (_) => setDialogState(() {}),
+                              ),
                             ),
-                          );
-                        }),
-                        const Divider(),
-                        // Add new slot
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text('~'),
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: dayEndCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: '종료 시간',
+                                  hintText: '15:00',
+                                  isDense: true,
+                                ),
+                                onChanged: (_) => setDialogState(() {}),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Duration & break
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: durationCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: '교시 길이 (분)',
+                                  hintText: '50',
+                                  isDense: true,
+                                ),
+                                keyboardType: TextInputType.number,
+                                onChanged: (_) => setDialogState(() {}),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                controller: breakCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: '쉬는 시간 (분)',
+                                  hintText: '10',
+                                  isDense: true,
+                                ),
+                                keyboardType: TextInputType.number,
+                                onChanged: (_) => setDialogState(() {}),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Active days
                         Text(
-                          '교시 추가',
+                          '수업 요일',
                           style: Theme.of(dialogContext)
                               .textTheme
                               .titleSmall
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: startCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '시작 (HH:MM)',
-                                  hintText: '09:30',
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                controller: endCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '종료 (HH:MM)',
-                                  hintText: '10:20',
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
                         Wrap(
                           spacing: 6,
                           runSpacing: 6,
-                          children: days.map((day) {
-                            return FilledButton.tonal(
-                              onPressed: controller.isBusy
-                                  ? null
-                                  : () => addSlot(day),
-                              child: Text('${_dayLabel(day)} 추가'),
+                          children: [1, 2, 3, 4, 5, 6, 0].map((day) {
+                            final active = selectedDays.contains(day);
+                            return FilterChip(
+                              label: Text(_dayLabel(day)),
+                              selected: active,
+                              onSelected: (selected) {
+                                setDialogState(() {
+                                  if (selected) {
+                                    selectedDays.add(day);
+                                  } else {
+                                    selectedDays.remove(day);
+                                  }
+                                });
+                              },
                             );
                           }).toList(growable: false),
                         ),
-                        if (missingDays.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          const Divider(),
+                        const SizedBox(height: 16),
+
+                        // Preview
+                        const Divider(),
+                        Text(
+                          '미리보기 (${previewPeriods.length}교시)',
+                          style: Theme.of(dialogContext)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        if (previewPeriods.isEmpty)
                           Text(
-                            '요일 추가',
-                            style: Theme.of(dialogContext)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '기존 교시 시간을 복사하여 새 요일을 추가합니다.',
+                            '설정을 입력하면 교시가 표시됩니다.',
                             style: Theme.of(dialogContext)
                                 .textTheme
                                 .bodySmall
@@ -363,21 +359,29 @@ class _TimetableTabState extends State<TimetableTab> {
                                   color: NestColors.deepWood
                                       .withValues(alpha: 0.6),
                                 ),
-                          ),
-                          const SizedBox(height: 8),
+                          )
+                        else
                           Wrap(
                             spacing: 6,
                             runSpacing: 6,
-                            children: missingDays.map((day) {
-                              return OutlinedButton(
-                                onPressed: controller.isBusy
-                                    ? null
-                                    : () => addDay(day),
-                                child: Text('${_dayLabel(day)}요일'),
+                            children: previewPeriods
+                                .asMap()
+                                .entries
+                                .map((entry) {
+                              return Chip(
+                                avatar: CircleAvatar(
+                                  radius: 12,
+                                  child: Text(
+                                    '${entry.key + 1}',
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                                label: Text(
+                                    '${entry.value.$1} - ${entry.value.$2}'),
+                                visualDensity: VisualDensity.compact,
                               );
                             }).toList(growable: false),
                           ),
-                        ],
                       ],
                     ),
                   ),
@@ -385,7 +389,36 @@ class _TimetableTabState extends State<TimetableTab> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('닫기'),
+                    child: const Text('취소'),
+                  ),
+                  FilledButton(
+                    onPressed: controller.isBusy ||
+                            previewPeriods.isEmpty ||
+                            selectedDays.isEmpty
+                        ? null
+                        : () async {
+                            try {
+                              await controller.regenerateTimeSlots(
+                                dayStartTime: dayStartCtrl.text.trim(),
+                                dayEndTime: dayEndCtrl.text.trim(),
+                                slotDurationMinutes:
+                                    int.parse(durationCtrl.text.trim()),
+                                breakDurationMinutes:
+                                    int.parse(breakCtrl.text.trim()),
+                                activeDays: selectedDays,
+                              );
+                              _showMessage(controller.statusMessage);
+                              if (dialogContext.mounted) {
+                                Navigator.of(dialogContext).pop();
+                              }
+                              setState(() {});
+                            } catch (e) {
+                              _showMessage(e
+                                  .toString()
+                                  .replaceFirst('Exception: ', ''));
+                            }
+                          },
+                    child: const Text('적용'),
                   ),
                 ],
               );
@@ -394,8 +427,10 @@ class _TimetableTabState extends State<TimetableTab> {
         },
       );
     } finally {
-      startCtrl.dispose();
-      endCtrl.dispose();
+      dayStartCtrl.dispose();
+      dayEndCtrl.dispose();
+      durationCtrl.dispose();
+      breakCtrl.dispose();
     }
   }
 

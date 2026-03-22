@@ -2520,6 +2520,263 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  /// Delete a period (all time slots with the same start/end time) across all days.
+  Future<void> deletePeriod({
+    required String startTime,
+    required String endTime,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    final affectedSlotIds = timeSlots
+        .where((s) => s.startTime == startTime && s.endTime == endTime)
+        .map((s) => s.id)
+        .toSet();
+
+    final hasSession = allTermSessions.any(
+      (session) => affectedSlotIds.contains(session.timeSlotId),
+    );
+    if (hasSession) {
+      throw StateError('이 교시에 배정된 수업이 있어 삭제할 수 없습니다.');
+    }
+
+    await _runBusy('교시를 삭제하는 중...', () async {
+      await _repository.deleteTimeSlotsByTimeRange(
+        termId: termId,
+        startTime: startTime,
+        endTime: endTime,
+      );
+      await _loadTimetableAssets();
+      _setStatus('교시를 삭제했습니다.');
+    });
+  }
+
+  /// Remove all time slots for a specific day of week.
+  Future<void> removeDay({required int dayOfWeek}) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    final affectedSlotIds = timeSlots
+        .where((s) => s.dayOfWeek == dayOfWeek)
+        .map((s) => s.id)
+        .toSet();
+
+    final hasSession = allTermSessions.any(
+      (session) => affectedSlotIds.contains(session.timeSlotId),
+    );
+    if (hasSession) {
+      throw StateError('이 요일에 배정된 수업이 있어 삭제할 수 없습니다.');
+    }
+
+    await _runBusy('요일을 삭제하는 중...', () async {
+      await _repository.deleteTimeSlotsByDay(
+        termId: termId,
+        dayOfWeek: dayOfWeek,
+      );
+      await _loadTimetableAssets();
+      _setStatus('요일을 삭제했습니다.');
+    });
+  }
+
+  /// Update a period's time range across all days.
+  Future<void> updatePeriodTimes({
+    required String oldStartTime,
+    required String oldEndTime,
+    required String newStartTime,
+    required String newEndTime,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    await _runBusy('교시 시간을 수정하는 중...', () async {
+      await _repository.updateTimeSlotTimeRange(
+        termId: termId,
+        oldStartTime: oldStartTime,
+        oldEndTime: oldEndTime,
+        newStartTime: newStartTime,
+        newEndTime: newEndTime,
+      );
+      await _loadTimetableAssets();
+      _setStatus('교시 시간을 수정했습니다.');
+    });
+  }
+
+  /// Add all defined periods to a new day.
+  Future<void> addDayWithPeriods({
+    required int dayOfWeek,
+    required List<(String startTime, String endTime)> periods,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    await _runBusy('요일을 추가하는 중...', () async {
+      for (final period in periods) {
+        await _repository.createTimeSlot(
+          termId: termId,
+          dayOfWeek: dayOfWeek,
+          startTime: period.$1,
+          endTime: period.$2,
+        );
+      }
+      await _loadTimetableAssets();
+      _setStatus('${_dayOfWeekLabel(dayOfWeek)}요일을 추가했습니다.');
+    });
+  }
+
+  /// Add a new period to all active days.
+  Future<void> addPeriodToAllDays({
+    required String startTime,
+    required String endTime,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    final activeDays = timeSlots.map((s) => s.dayOfWeek).toSet();
+    if (activeDays.isEmpty) {
+      // No days yet, create for weekdays by default
+      activeDays.addAll([1, 2, 3, 4, 5]);
+    }
+
+    await _runBusy('교시를 추가하는 중...', () async {
+      for (final day in activeDays) {
+        await _repository.createTimeSlot(
+          termId: termId,
+          dayOfWeek: day,
+          startTime: startTime,
+          endTime: endTime,
+        );
+      }
+      await _loadTimetableAssets();
+      _setStatus('교시를 추가했습니다.');
+    });
+  }
+
+  static String _dayOfWeekLabel(int day) {
+    const labels = ['일', '월', '화', '수', '목', '금', '토'];
+    return (day >= 0 && day < labels.length) ? labels[day] : '?';
+  }
+
+  /// Regenerate all time slots from simple parameters.
+  /// Deletes existing slots and creates new ones based on start/end times,
+  /// slot duration, break duration, and active days.
+  Future<void> regenerateTimeSlots({
+    required String dayStartTime,
+    required String dayEndTime,
+    required int slotDurationMinutes,
+    required int breakDurationMinutes,
+    required Set<int> activeDays,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+
+    if (slotDurationMinutes <= 0) {
+      throw StateError('교시 길이는 1분 이상이어야 합니다.');
+    }
+
+    // Parse start/end times
+    final startParts = dayStartTime.split(':');
+    final endParts = dayEndTime.split(':');
+    if (startParts.length < 2 || endParts.length < 2) {
+      throw StateError('시간 형식이 올바르지 않습니다 (HH:MM).');
+    }
+
+    var startMinutes =
+        int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+    final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+
+    if (startMinutes >= endMinutes) {
+      throw StateError('종료 시간이 시작 시간보다 커야 합니다.');
+    }
+
+    // Generate period time ranges
+    final periods = <(String, String)>[];
+    while (startMinutes + slotDurationMinutes <= endMinutes) {
+      final slotEnd = startMinutes + slotDurationMinutes;
+      final startStr =
+          '${(startMinutes ~/ 60).toString().padLeft(2, '0')}:${(startMinutes % 60).toString().padLeft(2, '0')}';
+      final endStr =
+          '${(slotEnd ~/ 60).toString().padLeft(2, '0')}:${(slotEnd % 60).toString().padLeft(2, '0')}';
+      periods.add((startStr, endStr));
+      startMinutes = slotEnd + breakDurationMinutes;
+    }
+
+    if (periods.isEmpty) {
+      throw StateError('설정한 시간 범위에 교시를 생성할 수 없습니다.');
+    }
+
+    // Check for sessions on slots that will be deleted
+    final existingSlotIds = timeSlots.map((s) => s.id).toSet();
+    if (existingSlotIds.isNotEmpty) {
+      final hasSession = allTermSessions.any(
+        (session) => existingSlotIds.contains(session.timeSlotId),
+      );
+      if (hasSession) {
+        throw StateError(
+          '기존 교시에 배정된 수업이 있어 재설정할 수 없습니다. '
+          '수업을 먼저 삭제해주세요.',
+        );
+      }
+    }
+
+    await _runBusy('교시를 재설정하는 중...', () async {
+      // Delete all existing slots for this term
+      for (final slot in timeSlots) {
+        await _repository.deleteTimeSlot(slotId: slot.id);
+      }
+
+      // Create new slots for each active day × period
+      for (final day in activeDays) {
+        for (final period in periods) {
+          await _repository.createTimeSlot(
+            termId: termId,
+            dayOfWeek: day,
+            startTime: period.$1,
+            endTime: period.$2,
+          );
+        }
+      }
+
+      await _loadTimetableAssets();
+      _setStatus('교시를 재설정했습니다 (${periods.length}교시 × ${activeDays.length}요일).');
+    });
+  }
+
   Future<Family> createFamily({
     required String familyName,
     required String note,

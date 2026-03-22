@@ -1013,6 +1013,51 @@ class NestRepository {
     await client.from('time_slots').delete().eq('id', slotId);
   }
 
+  /// Delete all time slots matching a specific time range across all days.
+  Future<void> deleteTimeSlotsByTimeRange({
+    required String termId,
+    required String startTime,
+    required String endTime,
+  }) async {
+    await client
+        .from('time_slots')
+        .delete()
+        .eq('term_id', termId)
+        .eq('start_time', startTime)
+        .eq('end_time', endTime);
+  }
+
+  /// Delete all time slots for a specific day of the week.
+  Future<void> deleteTimeSlotsByDay({
+    required String termId,
+    required int dayOfWeek,
+  }) async {
+    await client
+        .from('time_slots')
+        .delete()
+        .eq('term_id', termId)
+        .eq('day_of_week', dayOfWeek);
+  }
+
+  /// Update start/end times for all time slots matching old times across days.
+  Future<void> updateTimeSlotTimeRange({
+    required String termId,
+    required String oldStartTime,
+    required String oldEndTime,
+    required String newStartTime,
+    required String newEndTime,
+  }) async {
+    await client
+        .from('time_slots')
+        .update({
+          'start_time': newStartTime,
+          'end_time': newEndTime,
+        })
+        .eq('term_id', termId)
+        .eq('start_time', oldStartTime)
+        .eq('end_time', oldEndTime);
+  }
+
   Future<List<ClassSession>> fetchSessions({
     required String classGroupId,
   }) async {
