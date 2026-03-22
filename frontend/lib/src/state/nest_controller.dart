@@ -85,6 +85,12 @@ class NestController extends ChangeNotifier {
   List<CommunityReport> communityReports = const [];
   PendingMediaFile? pendingCommunityMediaFile;
 
+  /// Suppress intermediate UI rebuilds while a [_runBusy] operation is active.
+  /// Standalone calls (outside _runBusy) still notify immediately.
+  void _notifyIfIdle() {
+    if (!_isBusy) notifyListeners();
+  }
+
   bool get isBusy => _isBusy;
   bool get isLoggedIn => user != null;
   bool get isBootstrapped => _isBootstrapped;
@@ -398,12 +404,14 @@ class NestController extends ChangeNotifier {
 
     await _runBusy('학기/반 정보를 불러오는 중...', () async {
       await _loadTermAndBelow();
-      await loadHomeschoolMemberships();
-      await loadHomeschoolInvites();
-      await _loadOperationalData();
-      await loadDriveIntegration();
-      await loadGalleryItems();
-      await loadCommunityFeed();
+      await Future.wait([
+        loadHomeschoolMemberships(),
+        loadHomeschoolInvites(),
+        _loadOperationalData(),
+        loadDriveIntegration(),
+        loadGalleryItems(),
+        loadCommunityFeed(),
+      ]);
       _ensureRoleViewTargetSelection();
     });
   }
@@ -425,10 +433,12 @@ class NestController extends ChangeNotifier {
     notifyListeners();
 
     await _runBusy('뷰 전환 중...', () async {
-      await loadHomeschoolMemberships();
-      await loadHomeschoolInvites();
-      await _loadOperationalData();
-      await loadCommunityFeed();
+      await Future.wait([
+        loadHomeschoolMemberships(),
+        loadHomeschoolInvites(),
+        _loadOperationalData(),
+        loadCommunityFeed(),
+      ]);
       _ensureRoleViewTargetSelection(roleOverride: nextRole);
       _setStatus('현재 뷰: $nextRole');
     });
@@ -1425,14 +1435,14 @@ class NestController extends ChangeNotifier {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       driveIntegration = null;
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     driveIntegration = await _repository.fetchDriveIntegration(
       homeschoolId: homeschoolId,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadGalleryItems() async {
@@ -1440,7 +1450,7 @@ class NestController extends ChangeNotifier {
     if (homeschoolId == null || homeschoolId.isEmpty) {
       galleryItems = const [];
       mediaChildrenByAsset = const {};
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
@@ -1455,41 +1465,41 @@ class NestController extends ChangeNotifier {
           .toList(growable: false),
     );
 
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadHomeschoolMemberships() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       homeschoolMemberships = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     homeschoolMemberships = await _repository.fetchHomeschoolMemberships(
       homeschoolId: homeschoolId,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadHomeschoolInvites() async {
     if (!canManageMemberships) {
       homeschoolInvites = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       homeschoolInvites = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     homeschoolInvites = await _repository.fetchHomeschoolInvites(
       homeschoolId: homeschoolId,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadHomeschoolMemberDirectory({
@@ -1498,14 +1508,14 @@ class NestController extends ChangeNotifier {
   }) async {
     if (!canManageTeacherAssignments) {
       homeschoolMemberDirectory = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       homeschoolMemberDirectory = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
@@ -1514,7 +1524,7 @@ class NestController extends ChangeNotifier {
       query: query,
       limit: limit,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadPendingInvites() async {
@@ -1543,18 +1553,18 @@ class NestController extends ChangeNotifier {
     if (homeschoolId == null || homeschoolId.isEmpty) {
       families = const [];
       familyGuardianUserIdsByFamily = const {};
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     families = await _repository.fetchFamilies(homeschoolId: homeschoolId);
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadFamilyGuardians() async {
     if (families.isEmpty) {
       familyGuardianUserIdsByFamily = const {};
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
@@ -1565,19 +1575,19 @@ class NestController extends ChangeNotifier {
 
     familyGuardianUserIdsByFamily = await _repository
         .fetchFamilyGuardianUserIds(familyIds: familyIds);
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadChildren() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       children = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     children = await _repository.fetchChildren(homeschoolId: homeschoolId);
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadClassEnrollments() async {
@@ -1589,34 +1599,34 @@ class NestController extends ChangeNotifier {
     classEnrollments = await _repository.fetchClassEnrollments(
       classGroupIds: classGroupIds,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadTeacherProfiles() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       teacherProfiles = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     teacherProfiles = await _repository.fetchTeacherProfiles(
       homeschoolId: homeschoolId,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadMemberUnavailabilityBlocks() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       memberUnavailabilityBlocks = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     memberUnavailabilityBlocks = await _repository
         .fetchMemberUnavailabilityBlocks(homeschoolId: homeschoolId);
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadSessionTeacherAssignments() async {
@@ -1627,7 +1637,7 @@ class NestController extends ChangeNotifier {
 
     sessionTeacherAssignments = await _repository
         .fetchSessionTeacherAssignments(classSessionIds: sessionIds);
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadTeachingPlans() async {
@@ -1639,7 +1649,7 @@ class NestController extends ChangeNotifier {
     teachingPlans = await _repository.fetchTeachingPlans(
       classSessionIds: sessionIds,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadStudentActivityLogs() async {
@@ -1651,14 +1661,14 @@ class NestController extends ChangeNotifier {
     studentActivityLogs = await _repository.fetchStudentActivityLogs(
       childIds: childIds,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadAnnouncements() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       announcements = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
@@ -1677,40 +1687,46 @@ class NestController extends ChangeNotifier {
               )
               .toList(growable: false);
 
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadAuditLogs() async {
     if (!isAdminLike) {
       auditLogs = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       auditLogs = const [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     auditLogs = await _repository.fetchAuditLogs(homeschoolId: homeschoolId);
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> _loadOperationalData() async {
-    await loadHomeschoolMemberDirectory();
-    await loadFamilies();
-    await loadFamilyGuardians();
-    await loadChildren();
-    await loadClassEnrollments();
-    await loadTeacherProfiles();
-    await loadMemberUnavailabilityBlocks();
-    await loadSessionTeacherAssignments();
-    await loadTeachingPlans();
-    await loadStudentActivityLogs();
-    await loadAnnouncements();
-    await loadAuditLogs();
+    // Phase 1 – independent loads (families & children needed by phase 2).
+    await Future.wait([
+      loadHomeschoolMemberDirectory(),
+      loadFamilies(),
+      loadChildren(),
+      loadClassEnrollments(),
+      loadTeacherProfiles(),
+      loadMemberUnavailabilityBlocks(),
+      loadSessionTeacherAssignments(),
+      loadTeachingPlans(),
+      loadAnnouncements(),
+      loadAuditLogs(),
+    ]);
+    // Phase 2 – depend on families / children loaded above.
+    await Future.wait([
+      loadFamilyGuardians(),
+      loadStudentActivityLogs(),
+    ]);
   }
 
   Future<void> loadCommunityFeed() async {
@@ -1723,7 +1739,7 @@ class NestController extends ChangeNotifier {
       likedCommunityPostIds = const <String>{};
       communityReports = const [];
       pendingCommunityMediaFile = null;
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
@@ -1747,18 +1763,27 @@ class NestController extends ChangeNotifier {
         .toList(growable: false);
 
     communityPosts = filteredPosts;
-    communityMediaByPost = await _repository.fetchCommunityMediaByPost(
-      postIds: postIds,
-    );
-    communityCommentsByPost = await _repository.fetchCommunityCommentsByPost(
-      postIds: postIds,
-    );
 
-    if (user != null) {
-      final reactionSnapshot = await _repository.fetchCommunityReactions(
-        postIds: postIds,
-        currentUserId: user!.id,
-      );
+    // Fire all independent queries in parallel.
+    final mediaFuture = _repository.fetchCommunityMediaByPost(postIds: postIds);
+    final commentsFuture = _repository.fetchCommunityCommentsByPost(
+      postIds: postIds,
+    );
+    final reactionsFuture = user != null
+        ? _repository.fetchCommunityReactions(
+            postIds: postIds,
+            currentUserId: user!.id,
+          )
+        : null;
+    final reportsFuture = canModerateCommunity
+        ? _repository.fetchCommunityReports(homeschoolId: homeschoolId)
+        : null;
+
+    communityMediaByPost = await mediaFuture;
+    communityCommentsByPost = await commentsFuture;
+
+    if (reactionsFuture != null) {
+      final reactionSnapshot = await reactionsFuture;
       communityLikeCountsByPost = reactionSnapshot.likeCountsByPostId;
       likedCommunityPostIds = reactionSnapshot.likedPostIds;
     } else {
@@ -1766,15 +1791,11 @@ class NestController extends ChangeNotifier {
       likedCommunityPostIds = const <String>{};
     }
 
-    if (canModerateCommunity) {
-      communityReports = await _repository.fetchCommunityReports(
-        homeschoolId: homeschoolId,
-      );
-    } else {
-      communityReports = const [];
-    }
+    communityReports = reportsFuture != null
+        ? await reportsFuture
+        : const [];
 
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> pickCommunityMediaFile() async {
@@ -4341,10 +4362,10 @@ class NestController extends ChangeNotifier {
 
   Future<void> _loadTermAndBelow() async {
     await _loadTerms();
-    await _loadClassGroups();
-    await _loadTimetableAssets();
-    await _loadSessions();
-    await _loadProposals();
+    // classGroups sets selectedClassGroupId needed by _loadSessions.
+    // timetableAssets only needs termId, so it can run in parallel with classGroups.
+    await Future.wait([_loadClassGroups(), _loadTimetableAssets()]);
+    await Future.wait([_loadSessions(), _loadProposals()]);
   }
 
   Future<void> _loadTerms() async {
@@ -4393,9 +4414,14 @@ class NestController extends ChangeNotifier {
       return;
     }
 
-    courses = await _repository.fetchCourses(homeschoolId: homeschoolId);
-    classrooms = await _repository.fetchClassrooms(termId: termId);
-    timeSlots = await _repository.fetchTimeSlots(termId: termId);
+    final results = await Future.wait([
+      _repository.fetchCourses(homeschoolId: homeschoolId),
+      _repository.fetchClassrooms(termId: termId),
+      _repository.fetchTimeSlots(termId: termId),
+    ]);
+    courses = results[0] as List<Course>;
+    classrooms = results[1] as List<Classroom>;
+    timeSlots = results[2] as List<TimeSlot>;
   }
 
   Future<void> _loadSessions() async {

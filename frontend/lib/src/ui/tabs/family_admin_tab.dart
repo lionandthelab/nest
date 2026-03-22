@@ -710,7 +710,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
               final linkedGuardianUserIds =
                   initial == null
-                        ? const <String>[]
+                        ? <String>[]
                         : (controller.familyGuardianUserIdsByFamily[initial
                                           .id] ??
                                       const <String>[])
