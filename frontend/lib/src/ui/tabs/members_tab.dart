@@ -52,8 +52,15 @@ class _MembersTabState extends State<MembersTab> {
       );
     }
 
+    final pendingRequests =
+        controller.joinRequests.where((r) => r.isPending).toList();
+
     return ListView(
       children: [
+        if (pendingRequests.isNotEmpty) ...[
+          _buildJoinRequestCard(controller, pendingRequests),
+          const SizedBox(height: 12),
+        ],
         _buildRoleGrantCard(controller),
         const SizedBox(height: 12),
         _buildInviteCreateCard(controller),
@@ -61,6 +68,142 @@ class _MembersTabState extends State<MembersTab> {
         _buildMemberListCard(controller),
       ],
     );
+  }
+
+  Widget _buildJoinRequestCard(
+    NestController controller,
+    List<HomeschoolJoinRequest> requests,
+  ) {
+    return Card(
+      color: NestColors.roseMist.withValues(alpha: 0.15),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.person_add, size: 20, color: NestColors.clay),
+                const SizedBox(width: 8),
+                Text(
+                  '가입 요청 (${requests.length})',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '새로운 멤버가 홈스쿨 가입을 요청했습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...requests.map((req) => _buildJoinRequestRow(controller, req)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJoinRequestRow(
+    NestController controller,
+    HomeschoolJoinRequest req,
+  ) {
+    final created = req.createdAt == null
+        ? '-'
+        : DateFormat('yyyy-MM-dd HH:mm').format(req.createdAt!);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.person_outline, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  req.requesterName ?? req.requesterEmail,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            req.requesterEmail,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (req.requestNote != null && req.requestNote!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '메모: ${req.requestNote}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          Text(
+            '요청일: $created',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _rejectRequest(req.id),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('거절'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _approveRequest(req.id, req.requesterUserId),
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('승인'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approveRequest(String requestId, String userId) async {
+    try {
+      await widget.controller.approveJoinRequest(
+        requestId: requestId,
+        requesterUserId: userId,
+      );
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _rejectRequest(String requestId) async {
+    try {
+      await widget.controller.rejectJoinRequest(requestId: requestId);
+      _showMessage(widget.controller.statusMessage);
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
   }
 
   Widget _buildRoleGrantCard(NestController controller) {

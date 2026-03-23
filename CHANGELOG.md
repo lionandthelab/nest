@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.3+4 (2026-03-23)
+
+### Added
+
+- 홈스쿨 가입 요청 승인/거절 기능 (`members_tab.dart`, `nest_controller.dart`)
+  - 관리자가 멤버 관리 탭에서 대기 중인 가입 요청을 확인하고 승인/거절 가능
+  - 승인 시 PARENT 역할로 멤버십 자동 생성
+- 아이 등록 요청 시스템 (`child_selector_header.dart`, `family_admin_tab.dart`)
+  - 부모가 "내 아이 등록 요청" 버튼으로 아이 등록 요청 제출
+  - 관리자가 가정 관리 탭에서 요청 확인 후 승인 → 가정/아이/보호자 자동 생성
+  - DB: `child_registration_requests` 테이블 + `approve_child_registration` RPC
+- 가입 요청/아이 등록 요청 데이터 모델 (`nest_models.dart`)
+  - `HomeschoolJoinRequest`, `ChildRegistrationRequest` 모델 추가
+
+### Fixed
+
+- const 리스트 sort 크래시 수정 (`dashboard_tab.dart`, `home_page.dart`, `child_selector_header.dart`)
+  - `myChildren`이 `const []` 반환 시 `.toList(growable: false)..sort()` 호출로 발생하던
+    "Cannot modify a constant list" 에러 해결
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter build appbundle --release` 통과
+
 ## 2.0.2+3 (2026-03-23)
 
 ### Fixed

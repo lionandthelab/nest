@@ -1145,7 +1145,7 @@ class _PendingInvitesCard extends StatelessWidget {
     final pending =
         controller.pendingInvites
             .where((invite) => invite.canAccept)
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) {
             final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
             final right = b.createdAt?.millisecondsSinceEpoch ?? 0;

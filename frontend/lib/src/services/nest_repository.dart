@@ -142,6 +142,31 @@ class NestRepository {
     });
   }
 
+  Future<List<HomeschoolJoinRequest>> fetchJoinRequests({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('homeschool_join_requests')
+        .select()
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false);
+    return _asRows(data)
+        .map(HomeschoolJoinRequest.fromMap)
+        .toList(growable: false);
+  }
+
+  Future<void> updateJoinRequestStatus({
+    required String requestId,
+    required String status,
+    required String reviewedByUserId,
+  }) {
+    return client.from('homeschool_join_requests').update({
+      'status': status,
+      'reviewed_by_user_id': reviewedByUserId,
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', requestId);
+  }
+
   Future<List<Membership>> fetchHomeschoolMemberships({
     required String homeschoolId,
   }) async {
@@ -417,6 +442,57 @@ class NestRepository {
     );
 
     return ChildProfile.fromMap(_asMap(data));
+  }
+
+  Future<void> createChildRegistrationRequest({
+    required String homeschoolId,
+    required String requesterUserId,
+    required String familyName,
+    required String childName,
+    String? birthDate,
+    String guardianType = 'GUARDIAN',
+  }) {
+    return client.from('child_registration_requests').insert({
+      'homeschool_id': homeschoolId,
+      'requester_user_id': requesterUserId,
+      'family_name': familyName.trim(),
+      'child_name': childName.trim(),
+      'birth_date': birthDate,
+      'guardian_type': guardianType,
+      'status': 'PENDING',
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> fetchChildRegistrationRequests({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('child_registration_requests')
+        .select()
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false);
+    return _asRows(data);
+  }
+
+  Future<Map<String, dynamic>> approveChildRegistration({
+    required String requestId,
+  }) async {
+    final data = await client.rpc(
+      'approve_child_registration',
+      params: {'p_request_id': requestId},
+    );
+    return _asMap(data);
+  }
+
+  Future<void> rejectChildRegistration({
+    required String requestId,
+    required String reviewedByUserId,
+  }) {
+    return client.from('child_registration_requests').update({
+      'status': 'REJECTED',
+      'reviewed_by_user_id': reviewedByUserId,
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', requestId);
   }
 
   Future<ChildProfile> updateChild({

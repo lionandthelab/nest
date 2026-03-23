@@ -26,7 +26,7 @@ class ChildSelectorHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final myChildren = controller.myChildren.toList(growable: false)
+    final myChildren = controller.myChildren.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
     final selectedChild = myChildren
@@ -39,9 +39,17 @@ class ChildSelectorHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (myChildren.isEmpty)
-              _buildEmptyHint('연결된 아이가 없습니다. 관리자에게 가정/아이 배정을 요청하세요.')
-            else ...[
+            if (myChildren.isEmpty) ...[
+              _buildEmptyHint('연결된 아이가 없습니다.'),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _showRegisterChildDialog(context),
+                icon: const Icon(Icons.child_care),
+                label: const Text('내 아이 등록 요청'),
+              ),
+            ] else ...[
               SelectFieldCard(
                 label: '아이 선택',
                 hintText: '아이를 선택하세요',
@@ -205,6 +213,122 @@ class ChildSelectorHeader extends StatelessWidget {
       return;
     }
     onSelectChild(selected);
+  }
+
+  Future<void> _showRegisterChildDialog(BuildContext context) async {
+    final familyNameCtrl = TextEditingController();
+    final childNameCtrl = TextEditingController();
+    DateTime? birthDate;
+
+    // Pre-fill family name from user metadata
+    final meta = controller.user?.userMetadata;
+    final fullName = meta?['full_name'];
+    if (fullName is String && fullName.trim().isNotEmpty) {
+      familyNameCtrl.text = '${fullName.trim()} 가정';
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('내 아이 등록 요청'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: familyNameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '가정 이름',
+                        hintText: '예: 홍길동 가정',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: childNameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '아이 이름',
+                        hintText: '예: 홍길순',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        birthDate == null
+                            ? '생년월일 (선택)'
+                            : DateFormat('yyyy-MM-dd').format(birthDate!),
+                      ),
+                      trailing: const Icon(Icons.calendar_today, size: 18),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime(2018, 1, 1),
+                          firstDate: DateTime(2005),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => birthDate = picked);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('취소'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('요청'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final familyName = familyNameCtrl.text.trim();
+    final childName = childNameCtrl.text.trim();
+    familyNameCtrl.dispose();
+    childNameCtrl.dispose();
+
+    if (familyName.isEmpty || childName.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('가정 이름과 아이 이름을 입력하세요.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      await controller.requestChildRegistration(
+        familyName: familyName,
+        childName: childName,
+        birthDate: birthDate == null
+            ? null
+            : DateFormat('yyyy-MM-dd').format(birthDate!),
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(controller.statusMessage)),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(controller.statusMessage)),
+        );
+      }
+    }
   }
 
   Widget _buildEmptyHint(String message) {

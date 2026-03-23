@@ -250,6 +250,83 @@ class HomeschoolInvite {
   }
 }
 
+class HomeschoolJoinRequest {
+  const HomeschoolJoinRequest({
+    required this.id,
+    required this.homeschoolId,
+    required this.requesterUserId,
+    required this.requesterEmail,
+    required this.requesterName,
+    required this.requestNote,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String requesterUserId;
+  final String requesterEmail;
+  final String? requesterName;
+  final String? requestNote;
+  final String status; // PENDING, APPROVED, REJECTED, CANCELED
+  final DateTime? createdAt;
+
+  bool get isPending => status == 'PENDING';
+
+  factory HomeschoolJoinRequest.fromMap(Map<String, dynamic> map) {
+    return HomeschoolJoinRequest(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      requesterUserId: (map['requester_user_id'] as String?) ?? '',
+      requesterEmail: (map['requester_email'] as String?) ?? '',
+      requesterName: map['requester_name'] as String?,
+      requestNote: map['request_note'] as String?,
+      status: (map['status'] as String?) ?? 'PENDING',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
+class ChildRegistrationRequest {
+  const ChildRegistrationRequest({
+    required this.id,
+    required this.homeschoolId,
+    required this.requesterUserId,
+    required this.familyName,
+    required this.childName,
+    required this.birthDate,
+    required this.guardianType,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String requesterUserId;
+  final String familyName;
+  final String childName;
+  final DateTime? birthDate;
+  final String guardianType;
+  final String status; // PENDING, APPROVED, REJECTED
+  final DateTime? createdAt;
+
+  bool get isPending => status == 'PENDING';
+
+  factory ChildRegistrationRequest.fromMap(Map<String, dynamic> map) {
+    return ChildRegistrationRequest(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      requesterUserId: (map['requester_user_id'] as String?) ?? '',
+      familyName: (map['family_name'] as String?) ?? '',
+      childName: (map['child_name'] as String?) ?? '',
+      birthDate: parseDateTime(map['birth_date']),
+      guardianType: (map['guardian_type'] as String?) ?? 'GUARDIAN',
+      status: (map['status'] as String?) ?? 'PENDING',
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
 class Family {
   const Family({
     required this.id,

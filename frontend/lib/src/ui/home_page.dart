@@ -724,7 +724,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
       return const SizedBox.shrink();
     }
 
-    final children = controller.myChildren.toList(growable: false)
+    final children = controller.myChildren.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     if (children.isEmpty) {
       return Chip(
@@ -1186,7 +1186,7 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
       animation: widget.controller,
       builder: (context, _) {
         final controller = widget.controller;
-        final children = controller.myChildren.toList(growable: false)
+        final children = controller.myChildren.toList()
           ..sort((a, b) => a.name.compareTo(b.name));
         final childValue =
             children.any((child) => child.id == widget.selectedChildId)
@@ -1566,7 +1566,7 @@ class _MainPanelState extends State<_MainPanel> {
       return const SizedBox.shrink();
     }
 
-    final children = controller.myChildren.toList(growable: false)
+    final children = controller.myChildren.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     if (children.isEmpty) {
       return Chip(

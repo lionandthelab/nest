@@ -37,6 +37,8 @@ class NestController extends ChangeNotifier {
   List<HomeschoolInvite> homeschoolInvites = [];
   List<HomeschoolMemberDirectoryEntry> homeschoolMemberDirectory = [];
   List<HomeschoolInvite> pendingInvites = [];
+  List<HomeschoolJoinRequest> joinRequests = [];
+  List<ChildRegistrationRequest> childRegistrationRequests = [];
   List<Family> families = [];
   List<ChildProfile> children = [];
   List<ClassEnrollment> classEnrollments = [];
@@ -407,6 +409,8 @@ class NestController extends ChangeNotifier {
       await Future.wait([
         loadHomeschoolMemberships(),
         loadHomeschoolInvites(),
+        loadJoinRequests(),
+        loadChildRegistrationRequests(),
         _loadOperationalData(),
         loadDriveIntegration(),
         loadGalleryItems(),
@@ -436,6 +440,7 @@ class NestController extends ChangeNotifier {
       await Future.wait([
         loadHomeschoolMemberships(),
         loadHomeschoolInvites(),
+        loadJoinRequests(),
         _loadOperationalData(),
         loadCommunityFeed(),
       ]);
@@ -1500,6 +1505,85 @@ class NestController extends ChangeNotifier {
       homeschoolId: homeschoolId,
     );
     _notifyIfIdle();
+  }
+
+  Future<void> loadJoinRequests() async {
+    if (!canManageMemberships) {
+      joinRequests = [];
+      _notifyIfIdle();
+      return;
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      joinRequests = [];
+      _notifyIfIdle();
+      return;
+    }
+
+    joinRequests = await _repository.fetchJoinRequests(
+      homeschoolId: homeschoolId,
+    );
+    _notifyIfIdle();
+  }
+
+  Future<void> approveJoinRequest({
+    required String requestId,
+    required String requesterUserId,
+    String role = 'PARENT',
+  }) async {
+    if (!canManageMemberships) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final currentUserId = user?.id;
+    if (currentUserId == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    await _runBusy('가입 요청을 승인하는 중...', () async {
+      await _repository.updateJoinRequestStatus(
+        requestId: requestId,
+        status: 'APPROVED',
+        reviewedByUserId: currentUserId,
+      );
+      await _repository.grantMembershipRole(
+        homeschoolId: homeschoolId,
+        userId: requesterUserId,
+        role: role,
+      );
+      await loadJoinRequests();
+      await loadHomeschoolMemberships();
+      _setStatus('가입 요청을 승인했습니다.');
+    });
+  }
+
+  Future<void> rejectJoinRequest({
+    required String requestId,
+  }) async {
+    if (!canManageMemberships) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+
+    final currentUserId = user?.id;
+    if (currentUserId == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    await _runBusy('가입 요청을 거절하는 중...', () async {
+      await _repository.updateJoinRequestStatus(
+        requestId: requestId,
+        status: 'REJECTED',
+        reviewedByUserId: currentUserId,
+      );
+      await loadJoinRequests();
+      _setStatus('가입 요청을 거절했습니다.');
+    });
   }
 
   Future<void> loadHomeschoolMemberDirectory({
@@ -3035,6 +3119,102 @@ class NestController extends ChangeNotifier {
       _setStatus('아이 정보를 등록했습니다.');
     });
     return created;
+  }
+
+  Future<void> requestChildRegistration({
+    required String familyName,
+    required String childName,
+    String? birthDate,
+    String guardianType = 'GUARDIAN',
+  }) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final currentUserId = user?.id;
+    if (currentUserId == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final trimmedChild = childName.trim();
+    if (trimmedChild.isEmpty) {
+      throw StateError('아이 이름을 입력하세요.');
+    }
+
+    final trimmedFamily = familyName.trim();
+    if (trimmedFamily.isEmpty) {
+      throw StateError('가정 이름을 입력하세요.');
+    }
+
+    await _runBusy('아이 등록 요청을 보내는 중...', () async {
+      await _repository.createChildRegistrationRequest(
+        homeschoolId: homeschoolId,
+        requesterUserId: currentUserId,
+        familyName: trimmedFamily,
+        childName: trimmedChild,
+        birthDate: birthDate,
+        guardianType: guardianType,
+      );
+      await loadChildRegistrationRequests();
+      _setStatus('아이 등록 요청을 보냈습니다. 관리자 승인 후 등록됩니다.');
+    });
+  }
+
+  Future<void> loadChildRegistrationRequests() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      childRegistrationRequests = [];
+      _notifyIfIdle();
+      return;
+    }
+
+    final rows = await _repository.fetchChildRegistrationRequests(
+      homeschoolId: homeschoolId,
+    );
+    childRegistrationRequests = rows
+        .map(ChildRegistrationRequest.fromMap)
+        .toList(growable: false);
+    _notifyIfIdle();
+  }
+
+  Future<void> approveChildRegistration({
+    required String requestId,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('아이 등록 요청을 승인하는 중...', () async {
+      await _repository.approveChildRegistration(requestId: requestId);
+      await loadChildRegistrationRequests();
+      await loadFamilies();
+      await loadChildren();
+      await loadFamilyGuardians();
+      _setStatus('아이 등록 요청을 승인했습니다.');
+    });
+  }
+
+  Future<void> rejectChildRegistration({
+    required String requestId,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    final currentUserId = user?.id;
+    if (currentUserId == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    await _runBusy('아이 등록 요청을 거절하는 중...', () async {
+      await _repository.rejectChildRegistration(
+        requestId: requestId,
+        reviewedByUserId: currentUserId,
+      );
+      await loadChildRegistrationRequests();
+      _setStatus('아이 등록 요청을 거절했습니다.');
+    });
   }
 
   Future<ChildProfile> updateChild({
@@ -4963,6 +5143,8 @@ class NestController extends ChangeNotifier {
     homeschoolInvites = [];
     homeschoolMemberDirectory = [];
     pendingInvites = [];
+    joinRequests = [];
+    childRegistrationRequests = [];
     families = [];
     children = [];
     classEnrollments = [];

@@ -48,8 +48,16 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       );
     }
 
+    final pendingChildReqs = controller.childRegistrationRequests
+        .where((r) => r.isPending)
+        .toList();
+
     final unitCards = switch (_setupUnit) {
       'FAMILY' => [
+        if (pendingChildReqs.isNotEmpty) ...[
+          _buildChildRegistrationRequestsCard(controller, pendingChildReqs),
+          const SizedBox(height: 12),
+        ],
         _buildFamilyManagementCard(controller),
         const SizedBox(height: 12),
         _buildChildManagementCard(controller),
@@ -288,6 +296,121 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         !classroomIds.contains(_selectedClassroomId)) {
       _selectedClassroomId = controller.classrooms.firstOrNull?.id;
     }
+  }
+
+  Widget _buildChildRegistrationRequestsCard(
+    NestController controller,
+    List<ChildRegistrationRequest> requests,
+  ) {
+    return Card(
+      color: NestColors.roseMist.withValues(alpha: 0.15),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.child_care, size: 20, color: NestColors.clay),
+                const SizedBox(width: 8),
+                Text(
+                  '아이 등록 요청 (${requests.length})',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '부모가 아이 등록을 요청했습니다. 승인하면 가정과 아이가 자동으로 생성됩니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...requests.map((req) {
+              final created = req.createdAt == null
+                  ? '-'
+                  : DateFormat('yyyy-MM-dd HH:mm').format(req.createdAt!);
+              final birth = req.birthDate == null
+                  ? '미등록'
+                  : DateFormat('yyyy-MM-dd').format(req.birthDate!);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: NestColors.roseMist),
+                  color: Colors.white,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '아이: ${req.childName}',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '가정: ${req.familyName}  ·  생일: $birth',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    Text(
+                      '요청일: $created',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () async {
+                                  try {
+                                    await controller.rejectChildRegistration(
+                                      requestId: req.id,
+                                    );
+                                    _showMessage(controller.statusMessage);
+                                  } catch (_) {
+                                    _showMessage(controller.statusMessage);
+                                  }
+                                },
+                          icon: const Icon(Icons.close, size: 18),
+                          label: const Text('거절'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: controller.isBusy
+                              ? null
+                              : () async {
+                                  try {
+                                    await controller.approveChildRegistration(
+                                      requestId: req.id,
+                                    );
+                                    _showMessage(controller.statusMessage);
+                                  } catch (_) {
+                                    _showMessage(controller.statusMessage);
+                                  }
+                                },
+                          icon: const Icon(Icons.check, size: 18),
+                          label: const Text('승인'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildFamilyManagementCard(NestController controller) {
