@@ -113,7 +113,23 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
             ),
           )
         else ...[
-          _buildWeeklyScheduleBoard(controller, bundles),
+          Builder(
+            builder: (context) {
+              try {
+                return _buildWeeklyScheduleBoard(controller, bundles);
+              } catch (e, st) {
+                debugPrint('[ParentTimetable] board error: $e\n$st');
+                return Card(
+                  color: Colors.red.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text('시간표 로딩 오류: $e',
+                        style: const TextStyle(fontSize: 12)),
+                  ),
+                );
+              }
+            },
+          ),
           const SizedBox(height: 14),
           Text('반별 상세', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -181,6 +197,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           final lessons = _mergeSessionsIntoLessons(controller, bundle);
           final sessionCount = bundle.sessions.length;
 
+          try {
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Card(
@@ -354,6 +371,17 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
               ),
             ),
           );
+          } catch (e, st) {
+            debugPrint('[ParentTimetable] card error: $e\n$st');
+            return Card(
+              color: Colors.red.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text('반 카드 오류 (${bundle.classGroup.name}): $e',
+                    style: const TextStyle(fontSize: 12)),
+              ),
+            );
+          }
         })
         .toList();
   }
