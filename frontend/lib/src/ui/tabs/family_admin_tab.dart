@@ -2298,6 +2298,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     ),
                   ),
                 ),
+                actionsAlignment: editingTeacher != null
+                    ? MainAxisAlignment.spaceBetween
+                    : MainAxisAlignment.end,
                 actions: [
                   if (editingTeacher != null)
                     TextButton.icon(
@@ -2357,17 +2360,22 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       label: const Text('삭제',
                           style: TextStyle(color: Colors.red)),
                     ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: isSaving
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    child: const Text('닫기'),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: isSaving ? null : saveTeacher,
-                    icon: const Icon(Icons.save_outlined),
-                    label: Text(editingTeacher == null ? '생성' : '저장'),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: isSaving
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('닫기'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: isSaving ? null : saveTeacher,
+                        icon: const Icon(Icons.save_outlined),
+                        label: Text(editingTeacher == null ? '생성' : '저장'),
+                      ),
+                    ],
                   ),
                 ],
               );
