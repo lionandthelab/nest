@@ -906,126 +906,136 @@ class _TimetableTabState extends State<TimetableTab> {
                 (day) => _GridHeaderCell(
                   width: dayWidth,
                   title: _dayLabel(day),
-                  subtitle: '$day요일',
+                  subtitle: '${_dayLabel(day)}요일',
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          ...List.generate(maxPeriods, (periodIndex) {
-            TimeSlot? fallbackSlot;
-            for (final day in dayOrder) {
-              final rows = slotsByDay[day] ?? const <TimeSlot>[];
-              if (periodIndex < rows.length) {
-                fallbackSlot = rows[periodIndex];
-                break;
+          ...() {
+            // Time-based alignment: collect unique periods across all days
+            final periodSet = <String>{};
+            final slotByPeriodDay = <String, Map<int, TimeSlot>>{};
+            for (final dayEntry in slotsByDay.entries) {
+              for (final slot in dayEntry.value) {
+                final key = '${slot.startTime}\t${slot.endTime}';
+                periodSet.add(key);
+                slotByPeriodDay
+                    .putIfAbsent(key, () => <int, TimeSlot>{});
+                slotByPeriodDay[key]![dayEntry.key] = slot;
               }
             }
+            final uniquePeriods = periodSet.toList(growable: false)
+              ..sort();
 
-            final timeLabel = fallbackSlot == null
-                ? '-'
-                : '${_shortTime(fallbackSlot.startTime)}-${_shortTime(fallbackSlot.endTime)}';
+            return uniquePeriods.map((periodKey) {
+              final parts = periodKey.split('\t');
+              final timeLabel =
+                  '${_shortTime(parts[0])}-${_shortTime(parts[1])}';
+              final slotsForPeriod =
+                  slotByPeriodDay[periodKey] ?? const <int, TimeSlot>{};
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: periodWidth,
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: NestColors.creamyWhite,
-                      border: Border.all(color: NestColors.roseMist),
-                    ),
-                    child: Text(
-                      timeLabel,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ),
-                  ...dayOrder.map((day) {
-                    final rows = slotsByDay[day] ?? const <TimeSlot>[];
-                    final slot = periodIndex < rows.length
-                        ? rows[periodIndex]
-                        : null;
-                    final sessions = slot == null
-                        ? const <ClassSession>[]
-                        : (sessionsBySlotId[slot.id] ?? const <ClassSession>[]);
-
-                    return Container(
-                      width: dayWidth,
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: periodWidth,
                       margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.white,
+                        color: NestColors.creamyWhite,
                         border: Border.all(color: NestColors.roseMist),
                       ),
-                      child: sessions.isEmpty
-                          ? (forExport
-                                ? const SizedBox(height: 8)
-                                : Text(
-                                    '배정 없음',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ))
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: sessions
-                                  .map((session) {
-                                    final className = controller
-                                        .findClassGroupName(
-                                          session.classGroupId,
-                                        );
-                                    final courseName = controller
-                                        .findCourseName(session.courseId);
-                                    final location = (session.location ?? '')
-                                        .trim();
-                                    final locationLabel = location.isEmpty
-                                        ? '교실 미지정'
-                                        : location;
-                                    final assignments = controller
-                                        .teacherAssignmentsForSession(
-                                          session.id,
-                                        );
-                                    final teacherLabel = assignments.isEmpty
-                                        ? '강사 미지정'
-                                        : assignments
-                                              .map((a) => controller
-                                                  .findTeacherName(
-                                                    a.teacherProfileId,
-                                                  ))
-                                              .join(', ');
-                                    return Container(
-                                      width: double.infinity,
-                                      margin: const EdgeInsets.only(bottom: 6),
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(8),
-                                        color: NestColors.creamyWhite,
-                                        border: Border.all(
-                                          color: NestColors.roseMist,
+                      child: Text(
+                        timeLabel,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    ...dayOrder.map((day) {
+                      final slot = slotsForPeriod[day];
+                      final sessions = slot == null
+                          ? const <ClassSession>[]
+                          : (sessionsBySlotId[slot.id] ??
+                              const <ClassSession>[]);
+
+                      return Container(
+                        width: dayWidth,
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.white,
+                          border: Border.all(color: NestColors.roseMist),
+                        ),
+                        child: sessions.isEmpty
+                            ? (forExport
+                                  ? const SizedBox(height: 8)
+                                  : Text(
+                                      '배정 없음',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ))
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: sessions
+                                    .map((session) {
+                                      final className = controller
+                                          .findClassGroupName(
+                                            session.classGroupId,
+                                          );
+                                      final courseName = controller
+                                          .findCourseName(session.courseId);
+                                      final location =
+                                          (session.location ?? '').trim();
+                                      final locationLabel = location.isEmpty
+                                          ? '교실 미지정'
+                                          : location;
+                                      final assignments = controller
+                                          .teacherAssignmentsForSession(
+                                            session.id,
+                                          );
+                                      final teacherLabel = assignments.isEmpty
+                                          ? '강사 미지정'
+                                          : assignments
+                                                .map((a) => controller
+                                                    .findTeacherName(
+                                                      a.teacherProfileId,
+                                                    ))
+                                                .join(', ');
+                                      return Container(
+                                        width: double.infinity,
+                                        margin:
+                                            const EdgeInsets.only(bottom: 6),
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          color: NestColors.creamyWhite,
+                                          border: Border.all(
+                                            color: NestColors.roseMist,
+                                          ),
                                         ),
-                                      ),
-                                      child: Text(
-                                        '$courseName · $teacherLabel\n$locationLabel · $className',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
-                                      ),
-                                    );
-                                  })
-                                  .toList(growable: false),
-                            ),
-                    );
-                  }),
-                ],
-              ),
-            );
-          }),
+                                        child: Text(
+                                          '$courseName · $teacherLabel\n$locationLabel · $className',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
+                                        ),
+                                      );
+                                    })
+                                    .toList(growable: false),
+                              ),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            });
+          }(),
         ],
       ),
     );
@@ -1879,83 +1889,94 @@ class _TimetableTabState extends State<TimetableTab> {
                     (day) => _GridHeaderCell(
                       width: dynamicDayWidth,
                       title: _dayLabel(day),
-                      subtitle: '$day요일',
+                      subtitle: '${_dayLabel(day)}요일',
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              ...List.generate(maxPeriods, (periodIndex) {
-                TimeSlot? fallbackSlot;
-                for (final day in dayOrder) {
-                  final rows = slotsByDay[day] ?? const <TimeSlot>[];
-                  if (periodIndex < rows.length) {
-                    fallbackSlot = rows[periodIndex];
-                    break;
+              ...() {
+                // Time-based alignment: collect unique periods across all days
+                final periodSet = <String>{};
+                final slotByPeriodDay = <String, Map<int, TimeSlot>>{};
+                for (final dayEntry in slotsByDay.entries) {
+                  for (final slot in dayEntry.value) {
+                    final key = '${slot.startTime}\t${slot.endTime}';
+                    periodSet.add(key);
+                    slotByPeriodDay
+                        .putIfAbsent(key, () => <int, TimeSlot>{});
+                    slotByPeriodDay[key]![dayEntry.key] = slot;
                   }
                 }
+                final uniquePeriods = periodSet.toList(growable: false)
+                  ..sort();
 
-                final timeLabel = fallbackSlot == null
-                    ? '-'
-                    : '${_shortTime(fallbackSlot.startTime)}-${_shortTime(fallbackSlot.endTime)}';
+                return uniquePeriods.map((periodKey) {
+                  final parts = periodKey.split('\t');
+                  final timeLabel =
+                      '${_shortTime(parts[0])}-${_shortTime(parts[1])}';
+                  final slotsForPeriod =
+                      slotByPeriodDay[periodKey] ?? const <int, TimeSlot>{};
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: periodWidth,
-                        constraints: BoxConstraints(minHeight: slotMinHeight),
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: NestColors.creamyWhite,
-                          border: Border.all(color: NestColors.roseMist),
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: periodWidth,
+                          constraints:
+                              BoxConstraints(minHeight: slotMinHeight),
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: NestColors.creamyWhite,
+                            border: Border.all(color: NestColors.roseMist),
+                          ),
+                          child: Text(
+                            timeLabel,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
                         ),
-                        child: Text(
-                          timeLabel,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ),
-                      ...dayOrder.map((day) {
-                        final rows = slotsByDay[day] ?? const <TimeSlot>[];
-                        final slot = periodIndex < rows.length
-                            ? rows[periodIndex]
-                            : null;
-                        if (slot == null) {
+                        ...dayOrder.map((day) {
+                          final slot = slotsForPeriod[day];
+                          if (slot == null) {
+                            return Container(
+                              width: dynamicDayWidth,
+                              constraints: BoxConstraints(
+                                minHeight: slotMinHeight,
+                              ),
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.grey.shade100,
+                                border:
+                                    Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '해당 슬롯 없음',
+                                  style:
+                                      Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            );
+                          }
+
                           return Container(
                             width: dynamicDayWidth,
-                            constraints: BoxConstraints(
-                              minHeight: slotMinHeight,
-                            ),
+                            constraints:
+                                BoxConstraints(minHeight: slotMinHeight),
                             margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.grey.shade100,
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '해당 슬롯 없음',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
+                            child: slotCellBuilder(slot),
                           );
-                        }
-
-                        return Container(
-                          width: dynamicDayWidth,
-                          constraints: BoxConstraints(minHeight: slotMinHeight),
-                          margin: const EdgeInsets.only(right: 6),
-                          child: slotCellBuilder(slot),
-                        );
-                      }),
-                    ],
-                  ),
-                );
-              }),
+                        }),
+                      ],
+                    ),
+                  );
+                });
+              }(),
             ],
           ),
         );

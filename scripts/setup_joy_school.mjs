@@ -119,16 +119,13 @@ async function main() {
     ["가은+경준 가족", [["가은", 2015], ["경준", 2015]]],
     ["예승 가족", [["예승", 2015]]],
     ["지애 가족", [["지애", 2015]]],
-    ["주안 가족", [["주안", 2013]]],
     ["한결 가족", [["한결", 2017]]],
     ["신우 가족", [["신우", 2017]]],
     ["라엘 가족", [["라엘", 2017]]],
-    ["동하 가족", [["동하", 2016]]],
+    ["동하+하린 가족", [["동하", 2016], ["하린", 2014]]],
     ["혜화 가족", [["혜화", 2016]]],
-    ["지후 가족", [["지후", 2015]]],
-    ["하린 가족", [["하린", 2014]]],
-    ["지완 가족", [["지완", 2013]]],
-    ["천수정애 가족", [["하나", 2012], ["예나", 2013]]],
+    ["지후+지완 가족", [["지후", 2015], ["지완", 2013]]],
+    ["천수정애 가족", [["하나", 2012], ["예나", 2013], ["주안", 2013]]],
     ["명일윤경 가족", [["노을", 2011], ["하늘", 2013]]],
     ["장관혜정 가족", [["은유", 2013]]],
     ["성함지연 가족", [["주원", 2011]]],
@@ -144,7 +141,11 @@ async function main() {
     const existingChildren = familyIds.length
       ? await svcSelect(`children?family_id=in.(${familyIds.join(",")})&select=id,name,family_id`)
       : [];
+
+    // Track which family IDs are actively used
+    const usedFamilyIds = new Set();
     const result = {};
+
     for (const [familyName, childDefs] of familyDefs) {
       let family = existingFamilies.find((f) => f.family_name === familyName);
       if (!family) {
@@ -153,9 +154,17 @@ async function main() {
         ]);
         family = rows[0];
       }
+      usedFamilyIds.add(family.id);
+
       for (const [childName, birthYear] of childDefs) {
         let child = existingChildren.find((c) => c.name === childName);
-        if (!child) {
+        if (child) {
+          // Move child to correct family if needed
+          if (child.family_id !== family.id) {
+            await svcUpdate(`children?id=eq.${child.id}`, { family_id: family.id });
+            console.log(`    ↳ moved ${childName} to ${familyName}`);
+          }
+        } else {
           const rows = await svcInsert("children", [
             { family_id: family.id, name: childName, birth_date: `${birthYear}-03-01`, profile_note: "", status: "ACTIVE" },
           ]);
@@ -164,6 +173,20 @@ async function main() {
         result[childName] = child;
       }
     }
+
+    // Rename stale families (those no longer in familyDefs)
+    const wantedNames = new Set(familyDefs.map(([name]) => name));
+    for (const fam of existingFamilies) {
+      if (!wantedNames.has(fam.family_name) && !usedFamilyIds.has(fam.id)) {
+        // Check if any children still belong to this family
+        const remaining = existingChildren.filter((c) => c.family_id === fam.id);
+        if (remaining.length === 0) {
+          await svcDelete(`families?id=eq.${fam.id}`);
+          console.log(`    ↳ deleted empty family: ${fam.family_name}`);
+        }
+      }
+    }
+
     return result;
   });
 
@@ -329,6 +352,7 @@ const SESSION_DEFS = [
   ["3학년", 3, 10, 0, 11, 0, "함께 책 읽기", null],
   ["3학년", 4, 9, 0, 10, 0, "한자", "강미령"],
   ["3학년", 4, 10, 0, 11, 0, "자기주도학습", null],
+  ["3학년", 4, 15, 0, 16, 0, "워십댄스", "양나영"],
 
   // ════════ 초등 4학년 (화,수,목,금) ════════
   ["4학년", 2, 10, 0, 12, 0, "주중예배", null],
@@ -392,6 +416,13 @@ async function svcInsert(table, rows) {
 
 async function svcSelect(queryPath) {
   return await api("GET", `/rest/v1/${queryPath}`, { headers: svcHeaders() });
+}
+
+async function svcUpdate(queryPath, data) {
+  return await api("PATCH", `/rest/v1/${queryPath}`, {
+    headers: { ...svcHeaders(), Prefer: "return=representation" },
+    body: data,
+  });
 }
 
 async function svcDelete(queryPath) {

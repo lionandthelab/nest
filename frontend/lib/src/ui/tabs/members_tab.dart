@@ -16,15 +16,15 @@ class MembersTab extends StatefulWidget {
 }
 
 class _MembersTabState extends State<MembersTab> {
-  final _targetUserIdController = TextEditingController();
+  String? _selectedUserId;
   final _inviteEmailController = TextEditingController();
   String _targetRole = 'TEACHER';
   String _inviteRole = 'PARENT';
   int _inviteExpireDays = 14;
+  bool _showCancelled = false;
 
   @override
   void dispose() {
-    _targetUserIdController.dispose();
     _inviteEmailController.dispose();
     super.dispose();
   }
@@ -52,132 +52,34 @@ class _MembersTabState extends State<MembersTab> {
       );
     }
 
-    final userIds = controller.membershipUserIds.toList(growable: false)
-      ..sort();
-    final invites = controller.homeschoolInvites.toList(growable: false)
-      ..sort((a, b) {
-        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
-        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
-        return right.compareTo(left);
-      });
-
     return ListView(
       children: [
-        _buildMyRoleSwitchCard(controller),
-        const SizedBox(height: 12),
         _buildRoleGrantCard(controller),
         const SizedBox(height: 12),
         _buildInviteCreateCard(controller),
         const SizedBox(height: 12),
-        _buildInviteListCard(controller, invites),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('현재 멤버 권한', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 10),
-                if (userIds.isEmpty)
-                  const NestEmptyState(
-                    icon: Icons.people_outline,
-                    title: '멤버십 정보가 없습니다.',
-                  )
-                else
-                  ...userIds.map((userId) => _buildUserRow(controller, userId)),
-              ],
-            ),
-          ),
-        ),
+        _buildMemberListCard(controller),
       ],
     );
   }
 
-  Widget _buildMyRoleSwitchCard(NestController controller) {
-    final currentUser = controller.user;
-    if (currentUser == null) {
-      return const SizedBox.shrink();
-    }
-
-    final activeRoles = controller
-        .membershipsByUser(currentUser.id)
-        .where((row) => row.status == 'ACTIVE')
-        .map((row) => row.role)
-        .toSet();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('내 계정 역할 전환', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '관리자 계정에 부모/교사 권한을 함께 부여하면, 홈 상단에서 뷰 역할을 즉시 전환할 수 있습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: NestColors.roseMist),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    currentUser.email ?? currentUser.id,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 2),
-                  SelectableText(
-                    currentUser.id,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _selfSwitchRoles
-                  .map((role) {
-                    final enabled = activeRoles.contains(role);
-                    return FilterChip(
-                      selected: enabled,
-                      label: Text(_roleLabel(role)),
-                      avatar: Icon(
-                        enabled ? Icons.check_circle : Icons.add_circle_outline,
-                        size: 16,
-                      ),
-                      onSelected: controller.isBusy
-                          ? null
-                          : (selected) =>
-                                _toggleMyRole(role: role, enable: selected),
-                    );
-                  })
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '역할 추가 후 홈 헤더의 "뷰 전환" 버튼으로 관리자/부모/교사 모드를 오갈 수 있습니다.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildRoleGrantCard(NestController controller) {
+    // Build member selector items from existing members
+    final userIds = controller.membershipUserIds.toList(growable: false);
+    final memberItems = <DropdownMenuItem<String>>[];
+    for (final uid in userIds) {
+      final name = controller.findMemberDisplayName(uid);
+      memberItems.add(DropdownMenuItem(
+        value: uid,
+        child: Text(name, overflow: TextOverflow.ellipsis),
+      ));
+    }
+    // Sort by display name
+    memberItems.sort((a, b) => (a.child as Text)
+        .data!
+        .toLowerCase()
+        .compareTo((b.child as Text).data!.toLowerCase()));
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -190,19 +92,24 @@ class _MembersTabState extends State<MembersTab> {
             ),
             const SizedBox(height: 6),
             Text(
-              '기존 가입 사용자는 사용자 ID(UUID) 기준으로 권한을 부여/회수합니다. '
-              '관리자 본인 다중 역할은 위 카드에서 빠르게 설정하세요.',
+              '기존 멤버를 선택하여 권한을 부여/회수합니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _targetUserIdController,
-              decoration: const InputDecoration(
-                labelText: '대상 사용자 ID (UUID)',
-                hintText: 'auth.users.id',
-              ),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedUserId,
+              decoration: const InputDecoration(labelText: '대상 멤버'),
+              isExpanded: true,
+              items: memberItems,
+              onChanged: controller.isBusy
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _selectedUserId = value;
+                      });
+                    },
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
@@ -226,7 +133,9 @@ class _MembersTabState extends State<MembersTab> {
               runSpacing: 8,
               children: [
                 ElevatedButton.icon(
-                  onPressed: controller.isBusy ? null : _grantRole,
+                  onPressed: controller.isBusy || _selectedUserId == null
+                      ? null
+                      : _grantRole,
                   icon: const Icon(Icons.add_moderator),
                   label: const Text('권한 부여'),
                 ),
@@ -244,13 +153,43 @@ class _MembersTabState extends State<MembersTab> {
   }
 
   Widget _buildInviteCreateCard(NestController controller) {
+    final invites = controller.homeschoolInvites.toList(growable: false)
+      ..sort((a, b) {
+        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
+        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
+        return right.compareTo(left);
+      });
+    final pendingCount =
+        invites.where((i) => i.status == 'PENDING').length;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('이메일 초대', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('이메일 초대',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                ActionChip(
+                  avatar: Icon(
+                    Icons.mail_outline,
+                    size: 16,
+                    color: pendingCount > 0
+                        ? NestColors.clay
+                        : NestColors.deepWood.withValues(alpha: 0.5),
+                  ),
+                  label: Text(
+                    '초대 현황${pendingCount > 0 ? ' ($pendingCount)' : ''}',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                  onPressed: () => _showInviteStatusDialog(invites),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(
               '아직 가입하지 않은 부모/교사를 이메일로 초대하고 권한을 미리 지정합니다.',
@@ -326,137 +265,221 @@ class _MembersTabState extends State<MembersTab> {
     );
   }
 
-  Widget _buildInviteListCard(
-    NestController controller,
-    List<HomeschoolInvite> invites,
-  ) {
+  void _showInviteStatusDialog(List<HomeschoolInvite> invites) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtered = _showCancelled
+                ? invites
+                : invites
+                    .where((i) => i.status != 'CANCELED')
+                    .toList(growable: false);
+
+            return AlertDialog(
+              title: Row(
+                children: [
+                  const Expanded(child: Text('초대 현황')),
+                  FilterChip(
+                    selected: _showCancelled,
+                    label: const Text('취소됨 포함'),
+                    onSelected: (v) {
+                      setState(() => _showCancelled = v);
+                      setDialogState(() {});
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: filtered.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: NestEmptyState(
+                          icon: Icons.mail_outline,
+                          title: '초대 내역이 없습니다.',
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final invite = filtered[index];
+                          return _buildInviteRow(invite);
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('닫기'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildInviteRow(HomeschoolInvite invite) {
+    final created = invite.createdAt == null
+        ? '-'
+        : DateFormat('yyyy-MM-dd HH:mm').format(invite.createdAt!);
+    final expires = invite.expiresAt == null
+        ? '-'
+        : DateFormat('yyyy-MM-dd').format(invite.expiresAt!);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Chip(
+                label: Text(_statusLabel(invite.status)),
+                backgroundColor: _statusColor(invite.status),
+              ),
+              Chip(label: Text(_roleLabel(invite.role))),
+              Chip(label: Text('만료: $expires')),
+              Text(
+                '생성: $created',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SelectableText(invite.inviteEmail),
+          const SizedBox(height: 6),
+          Text(
+            invite.homeschoolName,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (invite.status == 'PENDING')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: FilledButton.tonalIcon(
+                onPressed: widget.controller.isBusy
+                    ? null
+                    : () {
+                        _cancelInvite(invite.id);
+                        Navigator.of(context).pop();
+                      },
+                icon: const Icon(Icons.cancel_outlined),
+                label: const Text('초대 취소'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemberListCard(NestController controller) {
+    final userIds = controller.membershipUserIds.toList(growable: false);
+
+    // Build a map: role -> list of (userId, displayName)
+    final roleMap = <String, List<({String userId, String name})>>{};
+    for (final uid in userIds) {
+      final memberships = controller.membershipsByUser(uid);
+      final name = controller.findMemberDisplayName(uid);
+      for (final m in memberships) {
+        if (m.status != 'ACTIVE') continue;
+        roleMap.putIfAbsent(m.role, () => []);
+        roleMap[m.role]!.add((userId: uid, name: name));
+      }
+    }
+
+    // Sort roles by priority, members by name within each role
+    final sortedRoles = roleMap.keys.toList()
+      ..sort((a, b) => _rolePriority(a).compareTo(_rolePriority(b)));
+
+    for (final role in sortedRoles) {
+      roleMap[role]!.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('초대 현황', style: Theme.of(context).textTheme.titleLarge),
+            Text('현재 멤버 권한',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
-            if (invites.isEmpty)
+            if (sortedRoles.isEmpty)
               const NestEmptyState(
-                icon: Icons.mail_outline,
-                title: '초대 내역이 없습니다.',
+                icon: Icons.people_outline,
+                title: '멤버십 정보가 없습니다.',
               )
             else
-              ...invites.map((invite) {
-                final created = invite.createdAt == null
-                    ? '-'
-                    : DateFormat('yyyy-MM-dd HH:mm').format(invite.createdAt!);
-                final expires = invite.expiresAt == null
-                    ? '-'
-                    : DateFormat('yyyy-MM-dd').format(invite.expiresAt!);
-
+              ...sortedRoles.map((role) {
+                final members = roleMap[role]!;
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: NestColors.roseMist),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Chip(
-                              label: Text(_statusLabel(invite.status)),
-                              backgroundColor: _statusColor(invite.status),
-                            ),
-                            Chip(label: Text(_roleLabel(invite.role))),
-                            Chip(label: Text('만료: $expires')),
-                            Text(
-                              '생성: $created',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: NestColors.roseMist.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        const SizedBox(height: 6),
-                        SelectableText(invite.inviteEmail),
-                        const SizedBox(height: 6),
-                        Text(
-                          invite.homeschoolName,
-                          style: Theme.of(context).textTheme.bodySmall,
+                        child: Text(
+                          '${_roleLabel(role)} (${members.length})',
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
-                        if (invite.status == 'PENDING')
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: FilledButton.tonalIcon(
-                              onPressed: controller.isBusy
-                                  ? null
-                                  : () => _cancelInvite(invite.id),
-                              icon: const Icon(Icons.cancel_outlined),
-                              label: const Text('초대 취소'),
+                      ),
+                      const SizedBox(height: 6),
+                      ...members.map((m) => Padding(
+                            padding: const EdgeInsets.only(
+                                left: 8, bottom: 4),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.person_outline, size: 18),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    m.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium,
+                                  ),
+                                ),
+                                ActionChip(
+                                  label: const Text('회수'),
+                                  avatar: const Icon(
+                                      Icons.remove_circle_outline,
+                                      size: 16),
+                                  onPressed: controller.isBusy
+                                      ? null
+                                      : () => _revokeRole(
+                                          userId: m.userId, role: role),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ],
                             ),
-                          ),
-                      ],
-                    ),
+                          )),
+                    ],
                   ),
                 );
               }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserRow(NestController controller, String userId) {
-    final rows = controller.membershipsByUser(userId).toList(growable: false)
-      ..sort((a, b) => _rolePriority(a.role).compareTo(_rolePriority(b.role)));
-
-    final activeRows = rows
-        .where((row) => row.status == 'ACTIVE')
-        .toList(growable: false);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: NestColors.roseMist),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              controller.findMemberDisplayName(userId),
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            Text(
-              userId,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.5),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (activeRows.isEmpty)
-              Text('활성 권한 없음', style: Theme.of(context).textTheme.bodySmall)
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: activeRows
-                    .map(
-                      (row) => ActionChip(
-                        label: Text(_roleLabel(row.role)),
-                        avatar: const Icon(Icons.verified_user, size: 16),
-                        onPressed: controller.isBusy
-                            ? null
-                            : () => _revokeRole(userId: userId, role: row.role),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
           ],
         ),
       ),
@@ -496,12 +519,6 @@ class _MembersTabState extends State<MembersTab> {
     ),
   ];
 
-  static const List<String> _selfSwitchRoles = [
-    'PARENT',
-    'TEACHER',
-    'GUEST_TEACHER',
-  ];
-
   String _statusLabel(String status) {
     return switch (status) {
       'PENDING' => '대기 중',
@@ -523,39 +540,12 @@ class _MembersTabState extends State<MembersTab> {
   }
 
   Future<void> _grantRole() async {
+    if (_selectedUserId == null) return;
     try {
       await widget.controller.grantMembershipRole(
-        targetUserId: _targetUserIdController.text,
+        targetUserId: _selectedUserId!,
         role: _targetRole,
       );
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _toggleMyRole({
-    required String role,
-    required bool enable,
-  }) async {
-    final userId = widget.controller.user?.id;
-    if (userId == null || userId.isEmpty) {
-      _showMessage('로그인 사용자 정보를 찾지 못했습니다.');
-      return;
-    }
-
-    try {
-      if (enable) {
-        await widget.controller.grantMembershipRole(
-          targetUserId: userId,
-          role: role,
-        );
-      } else {
-        await widget.controller.revokeMembershipRole(
-          targetUserId: userId,
-          role: role,
-        );
-      }
       _showMessage(widget.controller.statusMessage);
     } catch (_) {
       _showMessage(widget.controller.statusMessage);

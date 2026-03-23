@@ -2176,6 +2176,65 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   ),
                 ),
                 actions: [
+                  if (editingTeacher != null)
+                    TextButton.icon(
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('선생님 삭제'),
+                                  content: Text(
+                                    '"${editingTeacher!.displayName}" 선생님을 삭제할까요?\n'
+                                    '시간표에서 사용 중이면 삭제할 수 없습니다.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(false),
+                                      child: const Text('취소'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(true),
+                                      child: const Text('삭제'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirmed != true || !context.mounted) {
+                                return;
+                              }
+                              setDialogState(() {
+                                isSaving = true;
+                              });
+                              try {
+                                await controller.deleteTeacherProfile(
+                                  teacherProfileId: editingTeacher!.id,
+                                );
+                                _showMessage('선생님을 삭제했습니다.');
+                                if (mounted) {
+                                  setState(() {});
+                                }
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              } catch (_) {
+                                _showMessage(controller.statusMessage);
+                                if (context.mounted) {
+                                  setDialogState(() {
+                                    isSaving = false;
+                                  });
+                                }
+                              }
+                            },
+                      icon: const Icon(Icons.delete_outline,
+                          color: Colors.red),
+                      label: const Text('삭제',
+                          style: TextStyle(color: Colors.red)),
+                    ),
+                  const Spacer(),
                   TextButton(
                     onPressed: isSaving
                         ? null
