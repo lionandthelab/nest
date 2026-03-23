@@ -209,7 +209,7 @@ class _MembersTabState extends State<MembersTab> {
   Widget _buildRoleGrantCard(NestController controller) {
     // Build member selector items from existing members
     final userIds = controller.membershipUserIds.toList();
-    final memberItems = <DropdownMenuItem<String>>[];
+    final memberItems = <DropdownMenuItem<String?>>[];
     for (final uid in userIds) {
       final name = controller.findMemberDisplayName(uid);
       memberItems.add(DropdownMenuItem(
@@ -241,7 +241,7 @@ class _MembersTabState extends State<MembersTab> {
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
+            DropdownButtonFormField<String?>(
               initialValue: _selectedUserId,
               decoration: const InputDecoration(labelText: '대상 멤버'),
               isExpanded: true,

@@ -411,14 +411,14 @@ class _DashboardTabState extends State<DashboardTab> {
                       (v == null || v.trim().isEmpty) ? '본문을 입력하세요.' : null,
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
+                DropdownButtonFormField<String?>(
                   initialValue: selectedClassGroupId,
                   decoration: const InputDecoration(labelText: '대상'),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('전체')),
+                    const DropdownMenuItem<String?>(value: null, child: Text('전체')),
                     ...controller.classGroups.map(
                       (cg) =>
-                          DropdownMenuItem(value: cg.id, child: Text(cg.name)),
+                          DropdownMenuItem<String?>(value: cg.id, child: Text(cg.name)),
                     ),
                   ],
                   onChanged: (v) =>

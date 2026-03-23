@@ -1058,7 +1058,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                       ),
                       const SizedBox(height: 12),
                       if (myProfiles.length > 1) ...[
-                        DropdownButtonFormField<String>(
+                        DropdownButtonFormField<String?>(
                           initialValue: selectedProfileId,
                           decoration: const InputDecoration(
                             labelText: '교사 프로필',

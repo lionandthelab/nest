@@ -1233,12 +1233,12 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                         style: Theme.of(context).textTheme.bodySmall,
                       )
                     else
-                      DropdownButtonFormField<String>(
+                      DropdownButtonFormField<String?>(
                         initialValue: childValue,
                         isExpanded: true,
                         items: children
                             .map(
-                              (child) => DropdownMenuItem<String>(
+                              (child) => DropdownMenuItem<String?>(
                                 value: child.id,
                                 child: Text(
                                   '${child.name} (${child.familyName})',
@@ -1263,12 +1263,12 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
+                    DropdownButtonFormField<String?>(
                       initialValue: parentTargetValue,
                       isExpanded: true,
                       items: parentTargets
                           .map(
-                            (userId) => DropdownMenuItem<String>(
+                            (userId) => DropdownMenuItem<String?>(
                               value: userId,
                               child: Text(
                                 controller.findMemberDisplayName(userId),
@@ -1302,12 +1302,12 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
+                    DropdownButtonFormField<String?>(
                       initialValue: teacherTargetValue,
                       isExpanded: true,
                       items: teacherTargets
                           .map(
-                            (profile) => DropdownMenuItem<String>(
+                            (profile) => DropdownMenuItem<String?>(
                               value: profile.id,
                               child: Text(
                                 profile.displayName,

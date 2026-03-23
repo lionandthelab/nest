@@ -82,10 +82,35 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
             subtitle: '상단에서 아이를 선택하면 시간표를 확인할 수 있습니다.',
           )
         else if (bundles.isEmpty)
-          const NestEmptyState(
-            icon: Icons.calendar_today,
-            title: '시간표가 없습니다',
-            subtitle: '배정된 반 또는 시간표가 없습니다.',
+          Card(
+            color: NestColors.roseMist.withValues(alpha: 0.35),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: NestColors.clay),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '반 배정 대기 중',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '아이가 아직 반에 배정되지 않았습니다. '
+                          '관리자가 반 배정을 완료하면 시간표를 확인할 수 있습니다.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           )
         else ...[
           _buildWeeklyScheduleBoard(controller, bundles),
@@ -98,6 +123,52 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     );
   }
 
+  /// Merge consecutive 30-min sessions of the same course on the same day
+  /// into a single lesson block.
+  List<_MergedLesson> _mergeSessionsIntoLessons(
+    NestController controller,
+    ChildClassBundle bundle,
+  ) {
+    final sessions = bundle.sessions.toList()
+      ..sort((a, b) {
+        final left = controller.findTimeSlot(a.timeSlotId);
+        final right = controller.findTimeSlot(b.timeSlotId);
+        if (left == null || right == null) {
+          return a.timeSlotId.compareTo(b.timeSlotId);
+        }
+        final dayCompare = left.dayOfWeek.compareTo(right.dayOfWeek);
+        if (dayCompare != 0) return dayCompare;
+        return left.startTime.compareTo(right.startTime);
+      });
+
+    final lessons = <_MergedLesson>[];
+    for (final session in sessions) {
+      final slot = controller.findTimeSlot(session.timeSlotId);
+      if (slot == null) continue;
+
+      final prev = lessons.isNotEmpty ? lessons.last : null;
+      if (prev != null &&
+          prev.courseId == session.courseId &&
+          prev.dayOfWeek == slot.dayOfWeek &&
+          prev.endTime == slot.startTime) {
+        // Extend previous lesson
+        prev.endTime = slot.endTime;
+        prev.sessions.add(session);
+      } else {
+        lessons.add(
+          _MergedLesson(
+            courseId: session.courseId,
+            dayOfWeek: slot.dayOfWeek,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            sessions: [session],
+          ),
+        );
+      }
+    }
+    return lessons;
+  }
+
   List<Widget> _buildTimetableCards(
     NestController controller,
     Map<String, ChildClassBundle> bundles,
@@ -107,17 +178,8 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
 
     return sorted
         .map((bundle) {
-          final sessions = bundle.sessions.toList()
-            ..sort((a, b) {
-              final left = controller.findTimeSlot(a.timeSlotId);
-              final right = controller.findTimeSlot(b.timeSlotId);
-              if (left == null || right == null) {
-                return a.timeSlotId.compareTo(b.timeSlotId);
-              }
-              final dayCompare = left.dayOfWeek.compareTo(right.dayOfWeek);
-              if (dayCompare != 0) return dayCompare;
-              return left.startTime.compareTo(right.startTime);
-            });
+          final lessons = _mergeSessionsIntoLessons(controller, bundle);
+          final sessionCount = bundle.sessions.length;
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -141,7 +203,6 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                         ),
-                        const Spacer(),
                         Chip(
                           avatar: const Icon(Icons.campaign_outlined, size: 14),
                           label: Text('공지 ${bundle.announcements.length}'),
@@ -150,13 +211,26 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                         const SizedBox(width: 6),
                         Chip(
                           avatar: const Icon(Icons.schedule, size: 14),
-                          label: Text('${sessions.length}수업'),
+                          label: Text('${lessons.length}수업'),
                           visualDensity: VisualDensity.compact,
                         ),
                       ],
                     ),
+                    if (sessionCount != lessons.length)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '$sessionCount개 슬롯 → ${lessons.length}수업으로 통합',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: NestColors.deepWood.withValues(
+                                  alpha: 0.55,
+                                ),
+                              ),
+                        ),
+                      ),
                     const SizedBox(height: 12),
-                    if (sessions.isEmpty)
+                    if (lessons.isEmpty)
                       const NestEmptyState(
                         icon: Icons.calendar_today,
                         title: '등록된 수업이 없습니다',
@@ -171,79 +245,103 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                           return Wrap(
                             spacing: 12,
                             runSpacing: 12,
-                            children: sessions
-                                .map((session) {
-                                  final slot = controller.findTimeSlot(
-                                    session.timeSlotId,
+                            children: lessons
+                                .map((lesson) {
+                                  final courseName = controller.findCourseName(
+                                    lesson.courseId,
                                   );
-                                  final teachers = _teacherLabelForSession(
-                                    controller: controller,
-                                    sessionId: session.id,
-                                    assignments: bundle.assignments,
-                                  );
-                                  final slotLabel = slot == null
-                                      ? session.timeSlotId
-                                      : '${_dayLabel(slot.dayOfWeek)} ${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}';
-                                  final location = (session.location ?? '')
-                                      .trim();
-                                  final roomLabel = location.isEmpty
+                                  final teachers = lesson.sessions
+                                      .map(
+                                        (s) => _teacherLabelForSession(
+                                          controller: controller,
+                                          sessionId: s.id,
+                                          assignments: bundle.assignments,
+                                        ),
+                                      )
+                                      .toSet()
+                                      .join(', ');
+                                  final slotLabel =
+                                      '${_dayLabel(lesson.dayOfWeek)} ${_shortTime(lesson.startTime)}-${_shortTime(lesson.endTime)}';
+                                  final durationMin =
+                                      _clockToMinute(lesson.endTime) -
+                                      _clockToMinute(lesson.startTime);
+                                  final locations = lesson.sessions
+                                      .map(
+                                        (s) => (s.location ?? '').trim(),
+                                      )
+                                      .where((l) => l.isNotEmpty)
+                                      .toSet();
+                                  final roomLabel = locations.isEmpty
                                       ? '장소 미지정'
-                                      : location;
+                                      : locations.join(', ');
 
-                                  return Container(
-                                    width: tileWidth,
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: NestColors.roseMist,
-                                      ),
-                                      color: Colors.white,
+                                  return GestureDetector(
+                                    onTap: () => _showLessonDetailModal(
+                                      context,
+                                      controller: controller,
+                                      lesson: lesson,
+                                      bundle: bundle,
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.menu_book_rounded,
-                                              size: 18,
-                                              color: NestColors.clay,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Expanded(
-                                              child: Text(
-                                                controller.findCourseName(
-                                                  session.courseId,
-                                                ),
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .titleMedium
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                    ),
+                                    child: Container(
+                                      width: tileWidth,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: NestColors.roseMist,
+                                        ),
+                                        color: Colors.white,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.menu_book_rounded,
+                                                size: 18,
+                                                color: NestColors.clay,
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        _InfoRow(
-                                          icon: Icons.schedule_outlined,
-                                          text: slotLabel,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        _InfoRow(
-                                          icon: Icons.school_outlined,
-                                          text: teachers,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        _InfoRow(
-                                          icon: Icons.meeting_room_outlined,
-                                          text: roomLabel,
-                                        ),
-                                      ],
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  courseName,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                ),
+                                              ),
+                                              Icon(
+                                                Icons.chevron_right,
+                                                size: 18,
+                                                color: NestColors.deepWood
+                                                    .withValues(alpha: 0.45),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          _InfoRow(
+                                            icon: Icons.schedule_outlined,
+                                            text: '$slotLabel ($durationMin분)',
+                                          ),
+                                          const SizedBox(height: 4),
+                                          _InfoRow(
+                                            icon: Icons.school_outlined,
+                                            text: teachers,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          _InfoRow(
+                                            icon: Icons.meeting_room_outlined,
+                                            text: roomLabel,
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   );
                                 })
@@ -258,6 +356,140 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           );
         })
         .toList();
+  }
+
+  void _showLessonDetailModal(
+    BuildContext context, {
+    required NestController controller,
+    required _MergedLesson lesson,
+    required ChildClassBundle bundle,
+  }) {
+    final courseName = controller.findCourseName(lesson.courseId);
+    final durationMin =
+        _clockToMinute(lesson.endTime) - _clockToMinute(lesson.startTime);
+    final slotLabel =
+        '${_dayLabel(lesson.dayOfWeek)} ${_shortTime(lesson.startTime)} - ${_shortTime(lesson.endTime)}';
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.55,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          expand: false,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.menu_book_rounded, color: NestColors.clay),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          courseName,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    bundle.classGroup.name,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _DetailRow(
+                    icon: Icons.schedule_outlined,
+                    label: '시간',
+                    value: '$slotLabel ($durationMin분)',
+                  ),
+                  const Divider(height: 24),
+                  // Teachers
+                  _DetailRow(
+                    icon: Icons.school_outlined,
+                    label: '담당 교사',
+                    value: lesson.sessions
+                        .map(
+                          (s) => _teacherLabelForSession(
+                            controller: controller,
+                            sessionId: s.id,
+                            assignments: bundle.assignments,
+                          ),
+                        )
+                        .toSet()
+                        .join('\n'),
+                  ),
+                  const Divider(height: 24),
+                  // Location
+                  _DetailRow(
+                    icon: Icons.meeting_room_outlined,
+                    label: '장소',
+                    value: () {
+                      final locs = lesson.sessions
+                          .map((s) => (s.location ?? '').trim())
+                          .where((l) => l.isNotEmpty)
+                          .toSet();
+                      return locs.isEmpty ? '장소 미지정' : locs.join(', ');
+                    }(),
+                  ),
+                  const Divider(height: 24),
+                  // Slot breakdown
+                  _DetailRow(
+                    icon: Icons.view_timeline_outlined,
+                    label: '슬롯 구성',
+                    value: '${lesson.sessions.length}개 슬롯 (각 ${durationMin ~/ lesson.sessions.length}분)',
+                  ),
+                  const SizedBox(height: 8),
+                  ...lesson.sessions.map((session) {
+                    final slot = controller.findTimeSlot(session.timeSlotId);
+                    final slotTime = slot == null
+                        ? '-'
+                        : '${_shortTime(slot.startTime)} - ${_shortTime(slot.endTime)}';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6, left: 32),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.circle,
+                            size: 6,
+                            color: NestColors.deepWood.withValues(alpha: 0.4),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            slotTime,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(width: 8),
+                          Chip(
+                            label: Text(session.status),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildWeeklyScheduleBoard(
@@ -309,22 +541,30 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     final sortedPeriods = periodKeys.toList()
       ..sort((a, b) => _comparePeriodKey(a, b));
 
-    const timeColWidth = 128.0;
-    final dayColWidth = sortedDays.length >= 5 ? 210.0 : 230.0;
-    final boardWidth = timeColWidth + dayColWidth * sortedDays.length;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        // Compute natural board width, then scale to fit if too wide.
+        const naturalTimeCol = 90.0;
+        const naturalDayCol = 180.0;
+        final naturalWidth =
+            naturalTimeCol + naturalDayCol * sortedDays.length;
+        final scale = naturalWidth > availableWidth
+            ? availableWidth / naturalWidth
+            : 1.0;
+        final timeColWidth = naturalTimeCol * scale;
+        final dayColWidth = naturalDayCol * scale;
+        final boardWidth = timeColWidth + dayColWidth * sortedDays.length;
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NestColors.roseMist),
-        color: Colors.white,
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
+        final board = Container(
           width: boardWidth,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: NestColors.roseMist),
+            color: Colors.white,
+          ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
@@ -361,95 +601,104 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        width: timeColWidth,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 12,
-                          ),
-                          child: Text(
-                            periodLabel,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                      children: [
+                        SizedBox(
+                          width: timeColWidth,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 10,
+                            ),
+                            child: Text(
+                              periodLabel,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
                           ),
                         ),
-                      ),
-                      ...sortedDays.map((day) {
-                        final cells =
-                            byPeriodDay[periodKey]?[day] ??
-                            const <_ParentScheduleEntry>[];
-                        return Container(
-                          width: dayColWidth,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: NestColors.roseMist.withValues(
-                                  alpha: 0.45,
+                        ...sortedDays.map((day) {
+                          final cells =
+                              byPeriodDay[periodKey]?[day] ??
+                              const <_ParentScheduleEntry>[];
+                          return Container(
+                            width: dayColWidth,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                left: BorderSide(
+                                  color: NestColors.roseMist.withValues(
+                                    alpha: 0.45,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          child: cells.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    '-',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          color: NestColors.deepWood.withValues(
-                                            alpha: 0.48,
+                            padding: const EdgeInsets.all(4),
+                            child: cells.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      '-',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: NestColors.deepWood
+                                                .withValues(alpha: 0.36),
                                           ),
-                                        ),
-                                  ),
-                                )
-                              : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: cells
-                                      .map(
-                                        (cell) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 8,
-                                          ),
-                                          child: _ParentScheduleCell(
-                                            courseName: controller
-                                                .findCourseName(
-                                                  cell.session.courseId,
-                                                ),
-                                            className: cell.className,
-                                            teacherLabel:
-                                                _teacherLabelForSession(
-                                                  controller: controller,
-                                                  sessionId: cell.session.id,
-                                                  assignments: cell.assignments,
-                                                ),
-                                            locationLabel:
-                                                (cell.session.location ?? '')
-                                                    .trim()
-                                                    .isEmpty
-                                                ? '장소 미지정'
-                                                : (cell.session.location ?? '')
+                                    ),
+                                  )
+                                : Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: cells
+                                        .map(
+                                          (cell) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 4,
+                                            ),
+                                            child: _ParentScheduleCell(
+                                              courseName: controller
+                                                  .findCourseName(
+                                                    cell.session.courseId,
+                                                  ),
+                                              className: cell.className,
+                                              teacherLabel:
+                                                  _teacherLabelForSession(
+                                                    controller: controller,
+                                                    sessionId: cell.session.id,
+                                                    assignments:
+                                                        cell.assignments,
+                                                  ),
+                                              locationLabel:
+                                                  (cell.session.location ?? '')
+                                                      .trim()
+                                                      .isEmpty
+                                                  ? '장소 미지정'
+                                                  : (cell.session.location ??
+                                                          '')
                                                       .trim(),
+                                            ),
                                           ),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                        );
-                      }),
-                    ],
-                  ),
+                                        )
+                                        .toList(),
+                                  ),
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                 );
               }),
             ],
           ),
-        ),
-      ),
+        );
+
+        return InteractiveViewer(
+          minScale: 1.0,
+          maxScale: 3.0,
+          constrained: false,
+          child: board,
+        );
+      },
     );
   }
 
@@ -954,6 +1203,22 @@ class _ParentScheduleCell extends StatelessWidget {
   }
 }
 
+class _MergedLesson {
+  _MergedLesson({
+    required this.courseId,
+    required this.dayOfWeek,
+    required this.startTime,
+    required this.endTime,
+    required this.sessions,
+  });
+
+  final String courseId;
+  final int dayOfWeek;
+  final String startTime;
+  String endTime;
+  final List<ClassSession> sessions;
+}
+
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.icon, required this.text});
 
@@ -977,6 +1242,44 @@ class _InfoRow extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: NestColors.deepWood.withValues(alpha: 0.8),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: NestColors.clay),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
+            ],
           ),
         ),
       ],

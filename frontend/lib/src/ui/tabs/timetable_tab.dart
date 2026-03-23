@@ -2401,16 +2401,16 @@ class _TimetableTabState extends State<TimetableTab> {
                       const SizedBox(height: 4),
                       Text(_slotLabel(session.timeSlotId)),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
+                      DropdownButtonFormField<String?>(
                         initialValue: mainTeacherId,
                         decoration: const InputDecoration(labelText: '주강사'),
                         items: [
-                          const DropdownMenuItem<String>(
+                          const DropdownMenuItem<String?>(
                             value: null,
                             child: Text('미지정'),
                           ),
                           ...controller.teacherProfiles.map(
-                            (teacher) => DropdownMenuItem<String>(
+                            (teacher) => DropdownMenuItem<String?>(
                               value: teacher.id,
                               child: Text(teacher.displayName),
                             ),
@@ -2462,16 +2462,16 @@ class _TimetableTabState extends State<TimetableTab> {
                               .toList(),
                         ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
+                      DropdownButtonFormField<String?>(
                         initialValue: selectedClassroom,
                         decoration: const InputDecoration(labelText: '교실'),
                         items: [
-                          const DropdownMenuItem<String>(
+                          const DropdownMenuItem<String?>(
                             value: null,
                             child: Text('미지정'),
                           ),
                           ...roomOptions.map(
-                            (room) => DropdownMenuItem<String>(
+                            (room) => DropdownMenuItem<String?>(
                               value: room,
                               child: Text(room),
                             ),

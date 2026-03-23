@@ -51,42 +51,85 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
             return right.compareTo(left);
           });
 
-    return HubScaffold(
-      title: '대시보드',
-      subtitle: '공지사항과 학습 현황을 한눈에 확인합니다.',
-      icon: Icons.home_outlined,
-      isBusy: controller.isBusy || widget.isLoadingChildClasses,
-      metrics: [
-        HubMetric(
-          label: '배정 반',
-          value: '$enrolledClassCount',
-          icon: Icons.groups,
-        ),
-        HubMetric(
-          label: '주간 수업',
-          value: '$enrolledSessionCount',
-          icon: Icons.view_week,
-        ),
-        HubMetric(
-          label: '활동 기록',
-          value: '${childLogs.length}',
-          icon: Icons.assignment_outlined,
-        ),
-      ],
-      selectedSectionId: _sectionId,
-      onSelectSection: (id) => setState(() => _sectionId = id),
-      sections: [
-        HubSection(
-          id: 'announcements',
-          label: '공지사항',
-          icon: Icons.campaign_outlined,
-          content: _buildAnnouncementsSection(controller),
-        ),
-        HubSection(
-          id: 'progress',
-          label: '학습 현황',
-          icon: Icons.insights_outlined,
-          content: _buildProgressSection(controller, childLogs),
+    final hasChild = widget.selectedChildId != null;
+    final noEnrollments = hasChild && bundles.isEmpty && !widget.isLoadingChildClasses;
+
+    return Column(
+      children: [
+        if (noEnrollments)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Card(
+              color: NestColors.roseMist.withValues(alpha: 0.35),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: NestColors.clay),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '반 배정 대기 중',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '아이가 아직 반에 배정되지 않았습니다. '
+                            '관리자가 반 배정을 완료하면 시간표와 학습 현황을 확인할 수 있습니다.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Expanded(
+          child: HubScaffold(
+            title: '대시보드',
+            subtitle: '공지사항과 학습 현황을 한눈에 확인합니다.',
+            icon: Icons.home_outlined,
+            isBusy: controller.isBusy || widget.isLoadingChildClasses,
+            metrics: [
+              HubMetric(
+                label: '배정 반',
+                value: '$enrolledClassCount',
+                icon: Icons.groups,
+              ),
+              HubMetric(
+                label: '주간 수업',
+                value: '$enrolledSessionCount',
+                icon: Icons.view_week,
+              ),
+              HubMetric(
+                label: '활동 기록',
+                value: '${childLogs.length}',
+                icon: Icons.assignment_outlined,
+              ),
+            ],
+            selectedSectionId: _sectionId,
+            onSelectSection: (id) => setState(() => _sectionId = id),
+            sections: [
+              HubSection(
+                id: 'announcements',
+                label: '공지사항',
+                icon: Icons.campaign_outlined,
+                content: _buildAnnouncementsSection(controller),
+              ),
+              HubSection(
+                id: 'progress',
+                label: '학습 현황',
+                icon: Icons.insights_outlined,
+                content: _buildProgressSection(controller, childLogs),
+              ),
+            ],
+          ),
         ),
       ],
     );

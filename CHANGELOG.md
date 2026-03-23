@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.4+5 (2026-03-23)
+
+### Fixed
+
+- DropdownButtonFormField 타입 캐스팅 크래시 수정 — nullable 값을 사용하는 드롭다운의 타입 파라미터를 `<String?>` / `<int?>`로 변경
+  - `timetable_tab.dart`: 주강사·교실 드롭다운 (null="미지정" 항목 포함)
+  - `dashboard_tab.dart`: 공지사항 대상 드롭다운 (null="전체" 항목 포함)
+  - `members_tab.dart`: 멤버 선택 드롭다운 (초기값 null 가능)
+  - `home_page.dart`: 아이·부모·교사 선택 드롭다운 (초기값 null 가능)
+  - `teacher_hub_tab.dart`: 교사 프로필 선택 드롭다운
+- 부모 대시보드 — 아이가 반에 미배정 시 "반 배정 대기 중" 안내 배너 추가 (`parent_home_tab.dart`)
+- 부모 시간표 — 미배정 아이 빈 화면 대신 안내 카드 표시 (`parent_timetable_tab.dart`)
+
+### Changed
+
+- 부모 시간표 뷰 전면 개선 (`parent_timetable_tab.dart`)
+  - InteractiveViewer(pinch-to-zoom) + LayoutBuilder 자동 너비 맞춤으로 모든 기기에서 시간표 전체 표시
+  - 30분 슬롯을 과목·요일 기준으로 연속 수업 블록으로 자동 병합
+  - 수업 블록 탭 시 상세 정보 모달(과목, 반, 시간, 교사, 교실, 슬롯 구성) 표시
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter build appbundle --release` 통과
+
 ## 2.0.3+4 (2026-03-23)
 
 ### Added
