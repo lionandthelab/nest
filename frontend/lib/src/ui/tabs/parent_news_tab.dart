@@ -166,7 +166,7 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
 
   Widget _buildAnnouncementsSection() {
     final announcements =
-        widget.controller.announcements.toList(growable: false)..sort((a, b) {
+        widget.controller.announcements.toList()..sort((a, b) {
           // Pinned first, then by date desc
           if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
           final left = a.createdAt?.millisecondsSinceEpoch ?? 0;

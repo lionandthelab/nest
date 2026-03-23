@@ -149,7 +149,7 @@ String _initialsFromLabel(String label) {
   final words = trimmed
       .split(RegExp(r'\s+'))
       .where((part) => part.isNotEmpty)
-      .toList(growable: false);
+      .toList();
   if (words.length == 1) {
     final value = words.first;
     return value.length <= 2

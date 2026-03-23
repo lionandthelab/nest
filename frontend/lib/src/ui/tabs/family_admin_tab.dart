@@ -414,7 +414,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildFamilyManagementCard(NestController controller) {
-    final families = controller.families.toList(growable: false)
+    final families = controller.families.toList()
       ..sort((a, b) => a.familyName.compareTo(b.familyName));
 
     return Card(
@@ -512,7 +512,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         ),
                       );
                     })
-                    .toList(growable: false),
+                    .toList(),
               ),
           ],
         ),
@@ -554,7 +554,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               : (_) => onSelect(family.id),
           avatar: const Icon(Icons.home_outlined, size: 18),
         );
-      }).toList(growable: false),
+      }).toList(),
     );
   }
 
@@ -566,7 +566,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         (selectedFamily == null
                 ? const <ChildProfile>[]
                 : controller.childrenForFamily(selectedFamily.id))
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) => a.name.compareTo(b.name));
 
     return Card(
@@ -668,7 +668,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           ),
                         );
                       })
-                      .toList(growable: false),
+                      .toList(),
                 ),
             ],
           ],
@@ -845,7 +845,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         entry.roles.contains('PARENT') &&
                         !linkedSet.contains(entry.userId),
                   )
-                  .toList(growable: false);
+                  .toList();
 
               Future<void> deleteFamily() async {
                 final target = initial;
@@ -1396,7 +1396,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildClassCrudCard(NestController controller) {
-    final classGroups = controller.classGroups.toList(growable: false)
+    final classGroups = controller.classGroups.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return Card(
@@ -1487,7 +1487,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         ),
                       );
                     })
-                    .toList(growable: false),
+                    .toList(),
               ),
           ],
         ),
@@ -1527,7 +1527,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         return child.name.toLowerCase().contains(query) ||
                             child.familyName.toLowerCase().contains(query);
                       })
-                      .toList(growable: false)
+                      .toList()
                     ..sort((a, b) {
                       final familyCompare = a.familyName.compareTo(
                         b.familyName,
@@ -1824,7 +1824,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildTeacherManagementCard(NestController controller) {
-    final teachers = controller.teacherProfiles.toList(growable: false)
+    final teachers = controller.teacherProfiles.toList()
       ..sort((a, b) => a.displayName.compareTo(b.displayName));
 
     return Card(
@@ -1908,7 +1908,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         ),
                       );
                     })
-                    .toList(growable: false),
+                    .toList(),
               ),
           ],
         ),
@@ -2437,7 +2437,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   child: _buildSetupSummaryCard(stat: item),
                 ),
               )
-              .toList(growable: false),
+              .toList(),
         );
       },
     );
@@ -2559,7 +2559,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildCourseManageCard(NestController controller) {
-    final courses = controller.courses.toList(growable: false)
+    final courses = controller.courses.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return Card(
@@ -2650,7 +2650,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         ),
                       );
                     })
-                    .toList(growable: false),
+                    .toList(),
               ),
           ],
         ),
@@ -2713,7 +2713,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                     trimmedName.toLowerCase() &&
                                 course.defaultDurationMin == duration,
                           )
-                          .toList(growable: false);
+                          .toList();
                       setState(() {
                         _selectedCourseId = matched.firstOrNull?.id;
                       });
@@ -2865,7 +2865,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildClassroomManageCard(NestController controller) {
-    final classrooms = controller.classrooms.toList(growable: false)
+    final classrooms = controller.classrooms.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return Card(
@@ -2958,7 +2958,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         ),
                       );
                     })
-                    .toList(growable: false),
+                    .toList(),
               ),
           ],
         ),
@@ -3023,7 +3023,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                     trimmedName.toLowerCase() &&
                                 classroom.capacity == capacity,
                           )
-                          .toList(growable: false);
+                          .toList();
                       setState(() {
                         _selectedClassroomId = matched.firstOrNull?.id;
                       });

@@ -109,7 +109,7 @@ class NestRepository {
         .eq('user_id', userId)
         .eq('status', 'ACTIVE');
 
-    return _asRows(data).map(Membership.fromMap).toList(growable: false);
+    return _asRows(data).map(Membership.fromMap).toList();
   }
 
   Future<List<HomeschoolDirectoryEntry>> searchHomeschoolDirectory({
@@ -122,7 +122,7 @@ class NestRepository {
     );
     return _asRows(
       data,
-    ).map(HomeschoolDirectoryEntry.fromMap).toList(growable: false);
+    ).map(HomeschoolDirectoryEntry.fromMap).toList();
   }
 
   Future<void> createHomeschoolJoinRequest({
@@ -152,7 +152,7 @@ class NestRepository {
         .order('created_at', ascending: false);
     return _asRows(data)
         .map(HomeschoolJoinRequest.fromMap)
-        .toList(growable: false);
+        .toList();
   }
 
   Future<void> updateJoinRequestStatus({
@@ -178,7 +178,7 @@ class NestRepository {
         .eq('homeschool_id', homeschoolId)
         .order('created_at', ascending: true);
 
-    return _asRows(data).map(Membership.fromMap).toList(growable: false);
+    return _asRows(data).map(Membership.fromMap).toList();
   }
 
   Future<List<HomeschoolMemberDirectoryEntry>> searchHomeschoolMembers({
@@ -198,7 +198,7 @@ class NestRepository {
 
       return _asRows(
         data,
-      ).map(HomeschoolMemberDirectoryEntry.fromMap).toList(growable: false);
+      ).map(HomeschoolMemberDirectoryEntry.fromMap).toList();
     } on PostgrestException {
       return const [];
     }
@@ -243,7 +243,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(200);
 
-    return _asRows(data).map(HomeschoolInvite.fromMap).toList(growable: false);
+    return _asRows(data).map(HomeschoolInvite.fromMap).toList();
   }
 
   Future<List<HomeschoolInvite>> fetchPendingInvitesForEmail({
@@ -265,7 +265,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(100);
 
-    return _asRows(data).map(HomeschoolInvite.fromMap).toList(growable: false);
+    return _asRows(data).map(HomeschoolInvite.fromMap).toList();
   }
 
   Future<HomeschoolInvite> createHomeschoolInvite({
@@ -320,7 +320,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(300);
 
-    return _asRows(data).map(Family.fromMap).toList(growable: false);
+    return _asRows(data).map(Family.fromMap).toList();
   }
 
   Future<Family> createFamily({
@@ -373,7 +373,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(600);
 
-    return _asRows(data).map(ChildProfile.fromMap).toList(growable: false);
+    return _asRows(data).map(ChildProfile.fromMap).toList();
   }
 
   Future<Map<String, List<String>>> fetchFamilyGuardianUserIds({
@@ -536,7 +536,7 @@ class NestRepository {
         .select('id, class_group_id, child_id, created_at')
         .inFilter('class_group_id', classGroupIds);
 
-    return _asRows(data).map(ClassEnrollment.fromMap).toList(growable: false);
+    return _asRows(data).map(ClassEnrollment.fromMap).toList();
   }
 
   Future<void> upsertClassEnrollment({
@@ -572,7 +572,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(300);
 
-    return _asRows(data).map(TeacherProfile.fromMap).toList(growable: false);
+    return _asRows(data).map(TeacherProfile.fromMap).toList();
   }
 
   Future<TeacherProfile> createTeacherProfile({
@@ -640,7 +640,7 @@ class NestRepository {
 
     return _asRows(
       data,
-    ).map(MemberUnavailabilityBlock.fromMap).toList(growable: false);
+    ).map(MemberUnavailabilityBlock.fromMap).toList();
   }
 
   Future<MemberUnavailabilityBlock> createMemberUnavailabilityBlock({
@@ -694,7 +694,7 @@ class NestRepository {
 
     return _asRows(
       data,
-    ).map(SessionTeacherAssignment.fromMap).toList(growable: false);
+    ).map(SessionTeacherAssignment.fromMap).toList();
   }
 
   Future<void> upsertSessionTeacherAssignment({
@@ -754,7 +754,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(500);
 
-    return _asRows(data).map(TeachingPlan.fromMap).toList(growable: false);
+    return _asRows(data).map(TeachingPlan.fromMap).toList();
   }
 
   Future<void> createTeachingPlan({
@@ -791,7 +791,7 @@ class NestRepository {
 
     return _asRows(
       data,
-    ).map(StudentActivityLog.fromMap).toList(growable: false);
+    ).map(StudentActivityLog.fromMap).toList();
   }
 
   Future<void> createStudentActivityLog({
@@ -823,7 +823,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(200);
 
-    return _asRows(data).map(Announcement.fromMap).toList(growable: false);
+    return _asRows(data).map(Announcement.fromMap).toList();
   }
 
   Future<void> createAnnouncement({
@@ -858,7 +858,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(safeLimit);
 
-    return _asRows(data).map(AuditLog.fromMap).toList(growable: false);
+    return _asRows(data).map(AuditLog.fromMap).toList();
   }
 
   Future<void> insertAuditLog({
@@ -888,7 +888,7 @@ class NestRepository {
         .eq('homeschool_id', homeschoolId)
         .order('start_date', ascending: false);
 
-    return _asRows(data).map(Term.fromMap).toList(growable: false);
+    return _asRows(data).map(Term.fromMap).toList();
   }
 
   Future<List<ClassGroup>> fetchClassGroups({required String termId}) async {
@@ -898,7 +898,7 @@ class NestRepository {
         .eq('term_id', termId)
         .order('name');
 
-    return _asRows(data).map(ClassGroup.fromMap).toList(growable: false);
+    return _asRows(data).map(ClassGroup.fromMap).toList();
   }
 
   Future<ClassGroup> createClassGroup({
@@ -941,7 +941,7 @@ class NestRepository {
         .eq('homeschool_id', homeschoolId)
         .order('name');
 
-    return _asRows(data).map(Course.fromMap).toList(growable: false);
+    return _asRows(data).map(Course.fromMap).toList();
   }
 
   Future<Course> createCourse({
@@ -991,7 +991,7 @@ class NestRepository {
         .eq('term_id', termId)
         .order('name');
 
-    return _asRows(data).map(Classroom.fromMap).toList(growable: false);
+    return _asRows(data).map(Classroom.fromMap).toList();
   }
 
   Future<Classroom> createClassroom({
@@ -1046,7 +1046,7 @@ class NestRepository {
         .order('day_of_week')
         .order('start_time');
 
-    return _asRows(data).map(TimeSlot.fromMap).toList(growable: false);
+    return _asRows(data).map(TimeSlot.fromMap).toList();
   }
 
   Future<TimeSlot> createTimeSlot({
@@ -1148,7 +1148,7 @@ class NestRepository {
 
       return _asRows(legacyData)
           .map((row) => ClassSession.fromMap({...row, 'location': null}))
-          .toList(growable: false);
+          .toList();
     }
 
     try {
@@ -1160,7 +1160,7 @@ class NestRepository {
           .eq('class_group_id', classGroupId)
           .neq('status', 'CANCELED');
       _classSessionLocationSupported = true;
-      return _asRows(data).map(ClassSession.fromMap).toList(growable: false);
+      return _asRows(data).map(ClassSession.fromMap).toList();
     } on PostgrestException catch (error) {
       if (_isMissingLocationColumn(error)) {
         _classSessionLocationSupported = false;
@@ -1174,7 +1174,7 @@ class NestRepository {
 
         return _asRows(legacyData)
             .map((row) => ClassSession.fromMap({...row, 'location': null}))
-            .toList(growable: false);
+            .toList();
       }
       rethrow;
     }
@@ -1188,7 +1188,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(20);
 
-    return _asRows(data).map(Proposal.fromMap).toList(growable: false);
+    return _asRows(data).map(Proposal.fromMap).toList();
   }
 
   Future<Map<String, List<ProposalSession>>> fetchProposalSessionsByProposal({
@@ -1273,7 +1273,7 @@ class NestRepository {
               'default_duration_min': 50,
             },
           )
-          .toList(growable: false);
+          .toList();
 
       await client
           .from('courses')
@@ -1356,10 +1356,10 @@ class NestRepository {
         source: (body['source'] as String?) ?? 'edge-function',
         sessions: sessions,
         hardConflicts:
-            (body['hard_conflicts'] as List?)?.toList(growable: false) ??
+            (body['hard_conflicts'] as List?)?.toList() ??
             const [],
         softWarnings:
-            (body['soft_warnings'] as List?)?.toList(growable: false) ??
+            (body['soft_warnings'] as List?)?.toList() ??
             const [],
       );
     } catch (_) {
@@ -1394,7 +1394,7 @@ class NestRepository {
     if (draft.sessions.isNotEmpty) {
       final rows = draft.sessions
           .map((session) => session.toProposalRow(proposalId))
-          .toList(growable: false);
+          .toList();
 
       await client.from('timetable_proposal_sessions').insert(rows);
     }
@@ -1548,7 +1548,7 @@ class NestRepository {
 
       return _asRows(legacyData)
           .map((row) => ClassSession.fromMap({...row, 'location': null}))
-          .toList(growable: false);
+          .toList();
     }
 
     try {
@@ -1560,7 +1560,7 @@ class NestRepository {
           .inFilter('class_group_id', classGroupIds)
           .neq('status', 'CANCELED');
       _classSessionLocationSupported = true;
-      return _asRows(data).map(ClassSession.fromMap).toList(growable: false);
+      return _asRows(data).map(ClassSession.fromMap).toList();
     } on PostgrestException catch (error) {
       if (_isMissingLocationColumn(error)) {
         _classSessionLocationSupported = false;
@@ -1574,7 +1574,7 @@ class NestRepository {
 
         return _asRows(legacyData)
             .map((row) => ClassSession.fromMap({...row, 'location': null}))
-            .toList(growable: false);
+            .toList();
       }
       rethrow;
     }
@@ -1687,7 +1687,7 @@ class NestRepository {
 
     final rows = childIds
         .map((id) => {'media_asset_id': mediaAssetId, 'child_id': id})
-        .toList(growable: false);
+        .toList();
 
     await client.from('media_asset_children').insert(rows);
   }
@@ -1724,7 +1724,7 @@ class NestRepository {
               .eq('homeschool_id', homeschoolId)
               .order('captured_at', ascending: false)
               .limit(48);
-    return _asRows(data).map(GalleryItem.fromMap).toList(growable: false);
+    return _asRows(data).map(GalleryItem.fromMap).toList();
   }
 
   Future<Map<String, List<String>>> fetchMediaChildrenByAsset({
@@ -1767,7 +1767,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(120);
 
-    return _asRows(data).map(CommunityPost.fromMap).toList(growable: false);
+    return _asRows(data).map(CommunityPost.fromMap).toList();
   }
 
   Future<List<CommunityReport>> fetchCommunityReports({
@@ -1783,7 +1783,7 @@ class NestRepository {
         .order('created_at', ascending: false)
         .limit(200);
 
-    return _asRows(data).map(CommunityReport.fromMap).toList(growable: false);
+    return _asRows(data).map(CommunityReport.fromMap).toList();
   }
 
   Future<Map<String, List<CommunityPostMedia>>> fetchCommunityMediaByPost({
@@ -2138,7 +2138,7 @@ List<Map<String, dynamic>> _asRows(dynamic data) {
     return data
         .whereType<Map>()
         .map((row) => row.map((key, value) => MapEntry('$key', value)))
-        .toList(growable: false);
+        .toList();
   }
 
   if (data is Map<String, dynamic>) {

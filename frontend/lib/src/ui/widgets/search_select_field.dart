@@ -47,7 +47,7 @@ Future<T?> showSelectSheet<T>({
                       ].join(' ').toLowerCase();
                       return haystack.contains(normalizedQuery);
                     })
-                    .toList(growable: false);
+                    .toList();
 
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),

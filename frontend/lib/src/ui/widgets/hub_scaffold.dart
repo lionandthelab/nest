@@ -97,7 +97,7 @@ class HubScaffold extends StatelessWidget {
                                   ),
                                 ),
                               )
-                              .toList(growable: false),
+                              .toList(),
                         ),
                       ),
                     ),
@@ -131,7 +131,7 @@ class HubScaffold extends StatelessWidget {
                       ),
                     ),
                   )
-                  .toList(growable: false),
+                  .toList(),
             ),
           ),
         ),

@@ -133,10 +133,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     final profileIds =
         controller.currentUserTeacherProfiles
             .map((profile) => profile.id)
-            .toList(growable: false)
+            .toList()
           ..sort();
     final classIds =
-        controller.classGroups.map((group) => group.id).toList(growable: false)
+        controller.classGroups.map((group) => group.id).toList()
           ..sort();
 
     final signature = '${profileIds.join(',')}::${classIds.join(',')}';
@@ -182,7 +182,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       final announcements = await controller.fetchAnnouncementsForHomeschool();
       final bundles = <String, _TeacherClassBundle>{};
 
-      final classGroups = controller.classGroups.toList(growable: false)
+      final classGroups = controller.classGroups.toList()
         ..sort((a, b) => a.name.compareTo(b.name));
 
       for (final classGroup in classGroups) {
@@ -196,7 +196,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         final sessionIds = sessions
             .map((session) => session.id)
             .where((id) => id.isNotEmpty)
-            .toList(growable: false);
+            .toList();
         final assignments = await controller
             .fetchSessionTeacherAssignmentsForSessions(
               classSessionIds: sessionIds,
@@ -217,7 +217,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               (row) =>
                   row.classGroupId == null || row.classGroupId == classGroup.id,
             )
-            .toList(growable: false);
+            .toList();
         final children = controller.childrenForClassGroup(classGroup.id);
 
         bundles[classGroup.id] = _TeacherClassBundle(
@@ -301,7 +301,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     NestController controller,
     _TeacherClassBundle? selectedBundle,
   ) {
-    final managedClasses = _managedClassBundles.values.toList(growable: false)
+    final managedClasses = _managedClassBundles.values.toList()
       ..sort((a, b) => a.classGroup.name.compareTo(b.classGroup.name));
 
     return Card(
@@ -391,7 +391,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     NestController controller,
     _TeacherClassBundle bundle,
   ) {
-    final sessions = bundle.sessions.toList(growable: false)
+    final sessions = bundle.sessions.toList()
       ..sort((a, b) {
         final left = controller.findTimeSlot(a.timeSlotId);
         final right = controller.findTimeSlot(b.timeSlotId);
@@ -423,7 +423,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       sessionsByDay.putIfAbsent(day, () => <ClassSession>[]).add(session);
     }
 
-    final orderedDays = sessionsByDay.keys.toList(growable: false)..sort();
+    final orderedDays = sessionsByDay.keys.toList()..sort();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,7 +463,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                       ),
                     ),
                   )
-                  .toList(growable: false),
+                  .toList(),
             );
           },
         ),
@@ -833,7 +833,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                   (log.classSessionId == null ||
                       sessionIds.contains(log.classSessionId)),
             )
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) {
             final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
             final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
@@ -1070,7 +1070,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                                   child: Text(p.displayName),
                                 ),
                               )
-                              .toList(growable: false),
+                              .toList(),
                           onChanged: (value) {
                             if (value == null) return;
                             _unavailabilityTeacherProfileId = value;
@@ -1191,7 +1191,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     final rows =
         assignments
             .where((row) => row.classSessionId == sessionId)
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) {
             final left = a.assignmentRole == 'MAIN' ? 0 : 1;
             final right = b.assignmentRole == 'MAIN' ? 0 : 1;
@@ -1241,7 +1241,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             keywords: bundle.classGroup.name,
           ),
         )
-        .toList(growable: false);
+        .toList();
     final selected = await showSelectSheet<String>(
       context: context,
       title: '담당 반 선택',
@@ -1273,7 +1273,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 '${_sessionTitle(controller, session)} ${controller.findCourseName(session.courseId)}',
           ),
         )
-        .toList(growable: false);
+        .toList();
     final selected = await showSelectSheet<String>(
       context: context,
       title: '수업 세션 선택',
@@ -1301,7 +1301,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             keywords: '${teacher.displayName} ${teacher.teacherType}',
           ),
         )
-        .toList(growable: false);
+        .toList();
     final selected = await showSelectSheet<String>(
       context: context,
       title: '작성 교사 선택',
@@ -1327,7 +1327,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             keywords: '${child.name} ${child.familyName}',
           ),
         )
-        .toList(growable: false);
+        .toList();
     final selected = await showSelectSheet<String>(
       context: context,
       title: '아이 선택',
@@ -1393,7 +1393,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             keywords: '${teacher.displayName} ${teacher.teacherType}',
           ),
         )
-        .toList(growable: false);
+        .toList();
     final selected = await showSelectSheet<String>(
       context: context,
       title: '기록 교사 선택',

@@ -248,7 +248,7 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
     final activePostIds = posts.map((post) => post.id).toSet();
     final removed = _commentControllers.keys
         .where((postId) => !activePostIds.contains(postId))
-        .toList(growable: false);
+        .toList();
     for (final postId in removed) {
       _commentControllers.remove(postId)?.dispose();
     }
@@ -565,7 +565,7 @@ class _InstagramPostCard extends StatelessWidget {
                       ),
                     ),
                   );
-                }).toList(growable: false),
+                }).toList(),
               ),
             ),
 

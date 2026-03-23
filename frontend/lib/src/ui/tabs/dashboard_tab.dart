@@ -935,7 +935,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   ? row.copyWith(hasPendingRequest: true)
                   : row,
             )
-            .toList(growable: false);
+            .toList();
       });
       ScaffoldMessenger.of(
         context,

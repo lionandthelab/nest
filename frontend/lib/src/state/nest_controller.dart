@@ -126,12 +126,12 @@ class NestController extends ChangeNotifier {
       'PARENT',
     ];
 
-    final ordered = rolePriority.where(roles.contains).toList(growable: false);
+    final ordered = rolePriority.where(roles.contains).toList();
     if (ordered.isNotEmpty) {
       return ordered;
     }
 
-    return roles.toList(growable: false);
+    return roles.toList();
   }
 
   bool get hasAdminLikeMembershipInSelectedHomeschool {
@@ -167,7 +167,7 @@ class NestController extends ChangeNotifier {
     final ids = parentCandidateUserIds
         .where((id) => id.trim().isNotEmpty)
         .toSet();
-    final sorted = ids.toList(growable: false)
+    final sorted = ids.toList()
       ..sort((left, right) {
         final leftName = findMemberDisplayName(left).toLowerCase();
         final rightName = findMemberDisplayName(right).toLowerCase();
@@ -181,7 +181,7 @@ class NestController extends ChangeNotifier {
   }
 
   List<TeacherProfile> get teacherViewCandidateProfiles {
-    final rows = teacherProfiles.toList(growable: false)
+    final rows = teacherProfiles.toList()
       ..sort((a, b) => a.displayName.compareTo(b.displayName));
     return rows;
   }
@@ -815,7 +815,7 @@ class NestController extends ChangeNotifier {
             clearTeacherMainId: clearTeacherMainId,
           );
         })
-        .toList(growable: false);
+        .toList();
 
     _replaceScheduleOptionDraft(
       draft.copyWith(
@@ -886,7 +886,7 @@ class NestController extends ChangeNotifier {
 
     final updatedSessions = draft.sessions
         .where((session) => session.localId != sessionLocalId)
-        .toList(growable: false);
+        .toList();
 
     _replaceScheduleOptionDraft(
       draft.copyWith(
@@ -945,7 +945,7 @@ class NestController extends ChangeNotifier {
 
       final occupiedSlotIds = sessions.map((row) => row.timeSlotId).toSet();
 
-      final sortedSessions = refreshedDraft.sessions.toList(growable: false)
+      final sortedSessions = refreshedDraft.sessions.toList()
         ..sort((a, b) {
           final left = findTimeSlot(a.timeSlotId);
           final right = findTimeSlot(b.timeSlotId);
@@ -1467,7 +1467,7 @@ class NestController extends ChangeNotifier {
     mediaChildrenByAsset = await _repository.fetchMediaChildrenByAsset(
       mediaAssetIds: galleryItems
           .map((item) => item.id)
-          .toList(growable: false),
+          .toList(),
     );
 
     _notifyIfIdle();
@@ -1655,7 +1655,7 @@ class NestController extends ChangeNotifier {
     final familyIds = families
         .map((family) => family.id)
         .where((id) => id.isNotEmpty)
-        .toList(growable: false);
+        .toList();
 
     familyGuardianUserIdsByFamily = await _repository
         .fetchFamilyGuardianUserIds(familyIds: familyIds);
@@ -1678,7 +1678,7 @@ class NestController extends ChangeNotifier {
     final classGroupIds = classGroups
         .map((group) => group.id)
         .where((id) => id.isNotEmpty)
-        .toList(growable: false);
+        .toList();
 
     classEnrollments = await _repository.fetchClassEnrollments(
       classGroupIds: classGroupIds,
@@ -1717,7 +1717,7 @@ class NestController extends ChangeNotifier {
     final sessionIds = sessions
         .map((session) => session.id)
         .where((id) => id.isNotEmpty)
-        .toList(growable: false);
+        .toList();
 
     sessionTeacherAssignments = await _repository
         .fetchSessionTeacherAssignments(classSessionIds: sessionIds);
@@ -1728,7 +1728,7 @@ class NestController extends ChangeNotifier {
     final sessionIds = sessions
         .map((session) => session.id)
         .where((id) => id.isNotEmpty)
-        .toList(growable: false);
+        .toList();
 
     teachingPlans = await _repository.fetchTeachingPlans(
       classSessionIds: sessionIds,
@@ -1740,7 +1740,7 @@ class NestController extends ChangeNotifier {
     final childIds = children
         .map((child) => child.id)
         .where((id) => id.isNotEmpty)
-        .toList(growable: false);
+        .toList();
 
     studentActivityLogs = await _repository.fetchStudentActivityLogs(
       childIds: childIds,
@@ -1769,7 +1769,7 @@ class NestController extends ChangeNotifier {
                     row.classGroupId == null ||
                     row.classGroupId == selectedClassId,
               )
-              .toList(growable: false);
+              .toList();
 
     _notifyIfIdle();
   }
@@ -1840,11 +1840,11 @@ class NestController extends ChangeNotifier {
                     post.classGroupId == null ||
                     post.classGroupId == selectedClassId,
               )
-              .toList(growable: false);
+              .toList();
 
     final postIds = filteredPosts
         .map((post) => post.id)
-        .toList(growable: false);
+        .toList();
 
     communityPosts = filteredPosts;
 
@@ -2532,7 +2532,7 @@ class NestController extends ChangeNotifier {
 
     final target = classrooms
         .where((room) => room.id == normalizedId)
-        .toList(growable: false)
+        .toList()
         .firstOrNull;
     if (target != null) {
       final roomName = target.name.trim();
@@ -3174,7 +3174,7 @@ class NestController extends ChangeNotifier {
     );
     childRegistrationRequests = rows
         .map(ChildRegistrationRequest.fromMap)
-        .toList(growable: false);
+        .toList();
     _notifyIfIdle();
   }
 
@@ -4020,7 +4020,7 @@ class NestController extends ChangeNotifier {
   List<ClassSession> sessionsForSlot(String slotId) {
     return sessions
         .where((session) => session.timeSlotId == slotId)
-        .toList(growable: false);
+        .toList();
   }
 
   List<CommunityPostMedia> mediaForCommunityPost(String postId) {
@@ -4042,7 +4042,7 @@ class NestController extends ChangeNotifier {
   List<CommunityReport> reportsForCommunityPost(String postId) {
     return communityReports
         .where((report) => report.postId == postId)
-        .toList(growable: false);
+        .toList();
   }
 
   int openReportsForCommunityPost(String postId) {
@@ -4067,7 +4067,7 @@ class NestController extends ChangeNotifier {
       }
       return teacherProfiles
           .where((profile) => profile.id == targetProfileId)
-          .toList(growable: false);
+          .toList();
     }
 
     final currentUserId = user?.id;
@@ -4077,7 +4077,7 @@ class NestController extends ChangeNotifier {
 
     return teacherProfiles
         .where((profile) => profile.userId == currentUserId)
-        .toList(growable: false);
+        .toList();
   }
 
   String? get defaultTeacherProfileId {
@@ -4129,7 +4129,7 @@ class NestController extends ChangeNotifier {
                 entry.userId.toLowerCase().contains(lowered);
           });
 
-    final list = rows.toList(growable: false)
+    final list = rows.toList()
       ..sort((a, b) => a.displayLabel.compareTo(b.displayLabel));
     if (list.length <= maxResults) {
       return list;
@@ -4160,13 +4160,13 @@ class NestController extends ChangeNotifier {
         .map((row) => row.userId)
         .where((value) => value.isNotEmpty)
         .toSet()
-        .toList(growable: false);
+        .toList();
   }
 
   List<Membership> membershipsByUser(String userId) {
     return homeschoolMemberships
         .where((row) => row.userId == userId)
-        .toList(growable: false);
+        .toList();
   }
 
   List<String> get parentCandidateUserIds {
@@ -4177,13 +4177,13 @@ class NestController extends ChangeNotifier {
         .expand((rows) => rows)
         .where((id) => id.isNotEmpty);
 
-    return {...fromMemberships, ...fromGuardians}.toList(growable: false);
+    return {...fromMemberships, ...fromGuardians}.toList();
   }
 
   List<ChildProfile> childrenForFamily(String familyId) {
     return children
         .where((child) => child.familyId == familyId)
-        .toList(growable: false);
+        .toList();
   }
 
   List<ChildProfile> get myChildren {
@@ -4200,7 +4200,7 @@ class NestController extends ChangeNotifier {
           }
           return guardians.contains(targetUserId);
         })
-        .toList(growable: false);
+        .toList();
 
     if (mine.isNotEmpty) {
       return mine;
@@ -4213,7 +4213,7 @@ class NestController extends ChangeNotifier {
         .where((row) => row.classGroupId == classGroupId)
         .map((row) => row.childId)
         .toSet()
-        .toList(growable: false);
+        .toList();
   }
 
   List<ClassGroup> classGroupsForChild(String childId) {
@@ -4224,7 +4224,7 @@ class NestController extends ChangeNotifier {
 
     final rows = classGroups
         .where((row) => classGroupIds.contains(row.id))
-        .toList(growable: false);
+        .toList();
     rows.sort((a, b) => a.name.compareTo(b.name));
     return rows;
   }
@@ -4236,7 +4236,7 @@ class NestController extends ChangeNotifier {
     }
     final rows = children
         .where((child) => childIds.contains(child.id))
-        .toList(growable: false);
+        .toList();
     rows.sort((a, b) => a.name.compareTo(b.name));
     return rows;
   }
@@ -4289,7 +4289,7 @@ class NestController extends ChangeNotifier {
   ) {
     final rows = sessionTeacherAssignments
         .where((row) => row.classSessionId == sessionId)
-        .toList(growable: false);
+        .toList();
 
     rows.sort((a, b) {
       final left = a.assignmentRole == 'MAIN' ? 0 : 1;
@@ -4332,13 +4332,13 @@ class NestController extends ChangeNotifier {
       }
     }
 
-    return messages.toList(growable: false);
+    return messages.toList();
   }
 
   Map<String, Set<String>> blockedSlotIdsByTeacherProfile() {
     final blocks = memberUnavailabilityBlocks
         .where((row) => row.ownerKind == 'TEACHER_PROFILE')
-        .toList(growable: false);
+        .toList();
     if (blocks.isEmpty || timeSlots.isEmpty) {
       return const {};
     }
@@ -4369,7 +4369,7 @@ class NestController extends ChangeNotifier {
           (row) =>
               row.ownerKind == 'MEMBER_USER' && parentIds.contains(row.ownerId),
         )
-        .toList(growable: false);
+        .toList();
     if (blocks.isEmpty) {
       return const {};
     }
@@ -4461,7 +4461,7 @@ class NestController extends ChangeNotifier {
       issues.add('교실 충돌: $loc ($slotLabel) - $names');
     }
 
-    return issues.toList(growable: false);
+    return issues.toList();
   }
 
   bool _doesSlotOverlapBlock({
@@ -4490,13 +4490,13 @@ class NestController extends ChangeNotifier {
   List<TeachingPlan> teachingPlansForSession(String sessionId) {
     return teachingPlans
         .where((plan) => plan.classSessionId == sessionId)
-        .toList(growable: false);
+        .toList();
   }
 
   List<StudentActivityLog> activityLogsForChild(String childId) {
     return studentActivityLogs
         .where((log) => log.childId == childId)
-        .toList(growable: false);
+        .toList();
   }
 
   String findClassGroupName(String? classGroupId) {
@@ -4615,7 +4615,7 @@ class NestController extends ChangeNotifier {
     sessions = await _repository.fetchSessions(classGroupId: classGroupId);
 
     // Load all sessions across all class groups for location conflict detection
-    final allGroupIds = classGroups.map((cg) => cg.id).toList(growable: false);
+    final allGroupIds = classGroups.map((cg) => cg.id).toList();
     if (allGroupIds.isNotEmpty) {
       allTermSessions = await _repository.fetchSessionsForClassGroups(
         classGroupIds: allGroupIds,
@@ -4639,7 +4639,7 @@ class NestController extends ChangeNotifier {
 
     final proposalIds = proposals
         .map((proposal) => proposal.id)
-        .toList(growable: false);
+        .toList();
     proposalSessionsById = await _repository.fetchProposalSessionsByProposal(
       proposalIds: proposalIds,
     );
@@ -4648,7 +4648,7 @@ class NestController extends ChangeNotifier {
   void _replaceScheduleOptionDraft(ScheduleOptionDraft updated) {
     scheduleOptionDrafts = scheduleOptionDrafts
         .map((draft) => draft.id == updated.id ? updated : draft)
-        .toList(growable: false);
+        .toList();
     selectedScheduleOptionId = updated.id;
     notifyListeners();
   }
@@ -5277,7 +5277,7 @@ List<String> _parseCommaWords(String csv) {
       .map((chunk) => chunk.trim())
       .where((chunk) => chunk.isNotEmpty)
       .toSet()
-      .toList(growable: false);
+      .toList();
 }
 
 List<String> _parseCommaIds(String csv) {
@@ -5286,7 +5286,7 @@ List<String> _parseCommaIds(String csv) {
       .map((chunk) => chunk.trim())
       .where((chunk) => chunk.isNotEmpty)
       .toSet()
-      .toList(growable: false);
+      .toList();
 }
 
 String _guessMimeType(String fileName) {

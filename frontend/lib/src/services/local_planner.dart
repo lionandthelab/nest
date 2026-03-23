@@ -14,7 +14,7 @@ GeneratedProposalDraft buildLocalProposalDraft({
   final freeSlots =
       timeSlots
           .where((slot) => !occupiedSlotIds.contains(slot.id))
-          .toList(growable: false)
+          .toList()
         ..sort((a, b) {
           final day = a.dayOfWeek.compareTo(b.dayOfWeek);
           if (day != 0) {
@@ -95,7 +95,7 @@ List<Course> pickCoursesByPrompt({
   }
 
   if (selected.isEmpty) {
-    return courses.take(4).toList(growable: false);
+    return courses.take(4).toList();
   }
 
   return selected;
@@ -184,7 +184,7 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
     ];
   }
 
-  final dayOrder = grouped.keys.toList(growable: false)..sort();
+  final dayOrder = grouped.keys.toList()..sort();
   final options = <ScheduleOptionDraft>[];
 
   for (var optionIndex = 0; optionIndex < safeOptionCount; optionIndex += 1) {
@@ -204,11 +204,11 @@ List<ScheduleOptionDraft> buildWizardScheduleOptions({
     final filteredSlotPool = keepExistingSessions
         ? slotPool
               .where((slot) => !occupiedSlotIds.contains(slot.id))
-              .toList(growable: false)
+              .toList()
         : slotPool;
     final feasibleSlotPool = filteredSlotPool
         .where((slot) => !blockedSlotIds.contains(slot.id))
-        .toList(growable: false);
+        .toList();
 
     final estimatedSessionCount = _minInt(
       feasibleSlotPool.length,
@@ -398,14 +398,14 @@ TeacherProfile? _pickTeacherForSlot({
   final selectedTeachers = preferOnlySelectedTeachers
       ? teachers
             .where((teacher) => preferredTeacherIds.contains(teacher.id))
-            .toList(growable: false)
-      : teachers.toList(growable: false);
+            .toList()
+      : teachers.toList();
 
   if (selectedTeachers.isEmpty) {
     return null;
   }
 
-  final sorted = selectedTeachers.toList(growable: false)
+  final sorted = selectedTeachers.toList()
     ..sort((a, b) {
       final leftScore = _teacherPriorityScore(
         teacher: a,
@@ -555,7 +555,7 @@ List<T> _rotateList<T>(List<T> rows, int offset) {
   }
   final safeOffset = offset % rows.length;
   if (safeOffset == 0) {
-    return rows.toList(growable: false);
+    return rows.toList();
   }
   return [...rows.skip(safeOffset), ...rows.take(safeOffset)];
 }

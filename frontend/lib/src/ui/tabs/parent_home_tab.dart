@@ -44,7 +44,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
         ? const <StudentActivityLog>[]
         : controller
               .activityLogsForChild(widget.selectedChildId!)
-              .toList(growable: false)
+              .toList()
           ..sort((a, b) {
             final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
             final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
@@ -96,7 +96,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
 
   Widget _buildAnnouncementsSection(NestController controller) {
     final announcements =
-        controller.announcements.toList(growable: false)..sort((a, b) {
+        controller.announcements.toList()..sort((a, b) {
           if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
           final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
           final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
@@ -187,7 +187,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
             ),
           ),
         );
-      }).toList(growable: false),
+      }).toList(),
     );
   }
 
@@ -228,7 +228,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
       }
     }
 
-    final displayLogs = childLogs.take(20).toList(growable: false);
+    final displayLogs = childLogs.take(20).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,7 +248,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
                   ),
                   visualDensity: VisualDensity.compact,
                 );
-              }).toList(growable: false),
+              }).toList(),
             ),
           ),
 

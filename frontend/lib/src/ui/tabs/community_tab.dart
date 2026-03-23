@@ -43,7 +43,7 @@ class _CommunityTabState extends State<CommunityTab> {
     final filteredPosts = _filteredPosts(controller);
     final openReports = controller.communityReports
         .where((report) => report.isOpen)
-        .toList(growable: false);
+        .toList();
 
     return ListView(
       children: [
@@ -386,11 +386,11 @@ class _CommunityTabState extends State<CommunityTab> {
             .where(
               (post) => controller.openReportsForCommunityPost(post.id) > 0,
             )
-            .toList(growable: false),
+            .toList(),
       _PostFilter.hidden =>
-        rows.where((post) => post.isHidden).toList(growable: false),
+        rows.where((post) => post.isHidden).toList(),
       _PostFilter.pinned =>
-        rows.where((post) => post.isPinned).toList(growable: false),
+        rows.where((post) => post.isPinned).toList(),
     };
   }
 

@@ -335,7 +335,7 @@ class _TimetableTabState extends State<TimetableTab> {
                                 });
                               },
                             );
-                          }).toList(growable: false),
+                          }).toList(),
                         ),
                         const SizedBox(height: 16),
 
@@ -380,7 +380,7 @@ class _TimetableTabState extends State<TimetableTab> {
                                     '${entry.value.$1} - ${entry.value.$2}'),
                                 visualDensity: VisualDensity.compact,
                               );
-                            }).toList(growable: false),
+                            }).toList(),
                           ),
                       ],
                     ),
@@ -435,7 +435,7 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Widget _buildClassContextCard(NestController controller) {
-    final classGroups = controller.classGroups.toList(growable: false)
+    final classGroups = controller.classGroups.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     final selectedClassId = controller.selectedClassGroupId;
     final selectedClass = classGroups
@@ -508,7 +508,7 @@ class _TimetableTabState extends State<TimetableTab> {
                             : (_) => _switchClassGroup(controller, group.id),
                       ),
                     )
-                    .toList(growable: false),
+                    .toList(),
               ),
             ],
           ],
@@ -518,7 +518,7 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Widget _buildBoardCard(NestController controller) {
-    final sortedSlots = controller.timeSlots.toList(growable: false)
+    final sortedSlots = controller.timeSlots.toList()
       ..sort((a, b) {
         final day = a.dayOfWeek.compareTo(b.dayOfWeek);
         if (day != 0) {
@@ -533,7 +533,7 @@ class _TimetableTabState extends State<TimetableTab> {
       slotsByDay[slot.dayOfWeek]!.add(slot);
     }
 
-    final dayOrder = slotsByDay.keys.toList(growable: false)..sort();
+    final dayOrder = slotsByDay.keys.toList()..sort();
     var maxPeriods = 0;
     for (final slots in slotsByDay.values) {
       if (slots.length > maxPeriods) {
@@ -699,7 +699,7 @@ class _TimetableTabState extends State<TimetableTab> {
 
   Future<void> _openTimetableExportDialog() async {
     final controller = widget.controller;
-    final sortedSlots = controller.timeSlots.toList(growable: false)
+    final sortedSlots = controller.timeSlots.toList()
       ..sort((a, b) {
         final day = a.dayOfWeek.compareTo(b.dayOfWeek);
         if (day != 0) {
@@ -712,7 +712,7 @@ class _TimetableTabState extends State<TimetableTab> {
       slotsByDay.putIfAbsent(slot.dayOfWeek, () => <TimeSlot>[]);
       slotsByDay[slot.dayOfWeek]!.add(slot);
     }
-    final dayOrder = slotsByDay.keys.toList(growable: false)..sort();
+    final dayOrder = slotsByDay.keys.toList()..sort();
     var maxPeriods = 0;
     for (final slots in slotsByDay.values) {
       if (slots.length > maxPeriods) {
@@ -814,7 +814,7 @@ class _TimetableTabState extends State<TimetableTab> {
     required NestController controller,
     required bool forExport,
   }) {
-    final sortedSlots = controller.timeSlots.toList(growable: false)
+    final sortedSlots = controller.timeSlots.toList()
       ..sort((a, b) {
         final day = a.dayOfWeek.compareTo(b.dayOfWeek);
         if (day != 0) {
@@ -840,7 +840,7 @@ class _TimetableTabState extends State<TimetableTab> {
       slotsByDay.putIfAbsent(slot.dayOfWeek, () => <TimeSlot>[]);
       slotsByDay[slot.dayOfWeek]!.add(slot);
     }
-    final dayOrder = slotsByDay.keys.toList(growable: false)..sort();
+    final dayOrder = slotsByDay.keys.toList()..sort();
     var maxPeriods = 0;
     for (final rows in slotsByDay.values) {
       if (rows.length > maxPeriods) {
@@ -925,7 +925,7 @@ class _TimetableTabState extends State<TimetableTab> {
                 slotByPeriodDay[key]![dayEntry.key] = slot;
               }
             }
-            final uniquePeriods = periodSet.toList(growable: false)
+            final uniquePeriods = periodSet.toList()
               ..sort();
 
             return uniquePeriods.map((periodKey) {
@@ -1027,7 +1027,7 @@ class _TimetableTabState extends State<TimetableTab> {
                                         ),
                                       );
                                     })
-                                    .toList(growable: false),
+                                    .toList(),
                               ),
                       );
                     }),
@@ -1123,7 +1123,7 @@ class _TimetableTabState extends State<TimetableTab> {
                     ),
                   ),
                 )
-                .toList(growable: false),
+                .toList(),
           ),
       ],
     );
@@ -1191,14 +1191,14 @@ class _TimetableTabState extends State<TimetableTab> {
                     ),
                   ),
                 )
-                .toList(growable: false),
+                .toList(),
           ),
       ],
     );
   }
 
   Widget _buildRoomPalette(NestController controller) {
-    final rooms = _roomPalette.toList(growable: false)..sort();
+    final rooms = _roomPalette.toList()..sort();
     final classroomByName = {
       for (final classroom in controller.classrooms)
         classroom.name.trim().toLowerCase(): classroom,
@@ -1265,7 +1265,7 @@ class _TimetableTabState extends State<TimetableTab> {
                     ),
                   );
                 })
-                .toList(growable: false),
+                .toList(),
           ),
         if (controller.classrooms.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -1403,7 +1403,7 @@ class _TimetableTabState extends State<TimetableTab> {
       setState(() {
         _draftSessions = _draftSessions
             .where((row) => !removedSessionIds.contains(row.id))
-            .toList(growable: false);
+            .toList();
         _draftAssignments = {
           for (final entry in _draftAssignments.entries)
             if (!removedSessionIds.contains(entry.key)) entry.key: entry.value,
@@ -1548,7 +1548,7 @@ class _TimetableTabState extends State<TimetableTab> {
     for (final entry in _draftAssignments.entries) {
       final filtered = entry.value
           .where((row) => row.teacherProfileId != teacher.id)
-          .toList(growable: false);
+          .toList();
       if (filtered.length != entry.value.length) {
         changed = true;
       }
@@ -1714,7 +1714,7 @@ class _TimetableTabState extends State<TimetableTab> {
           removedFromDraft = true;
           return row.copyWith(clearLocation: true);
         })
-        .toList(growable: false);
+        .toList();
 
     setState(() {
       _ensureRoomPaletteFromController(controller);
@@ -1751,7 +1751,7 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Widget _buildReadOnlyGrid(NestController controller) {
-    final sortedSlots = controller.timeSlots.toList(growable: false)
+    final sortedSlots = controller.timeSlots.toList()
       ..sort((a, b) {
         final day = a.dayOfWeek.compareTo(b.dayOfWeek);
         if (day != 0) {
@@ -1765,7 +1765,7 @@ class _TimetableTabState extends State<TimetableTab> {
       slotsByDay.putIfAbsent(slot.dayOfWeek, () => <TimeSlot>[]);
       slotsByDay[slot.dayOfWeek]!.add(slot);
     }
-    final dayOrder = slotsByDay.keys.toList(growable: false)..sort();
+    final dayOrder = slotsByDay.keys.toList()..sort();
     var maxPeriods = 0;
     for (final slots in slotsByDay.values) {
       if (slots.length > maxPeriods) {
@@ -1908,7 +1908,7 @@ class _TimetableTabState extends State<TimetableTab> {
                     slotByPeriodDay[key]![dayEntry.key] = slot;
                   }
                 }
-                final uniquePeriods = periodSet.toList(growable: false)
+                final uniquePeriods = periodSet.toList()
                   ..sort();
 
                 return uniquePeriods.map((periodKey) {
@@ -2006,7 +2006,7 @@ class _TimetableTabState extends State<TimetableTab> {
             keywords: group.name,
           ),
         )
-        .toList(growable: false);
+        .toList();
 
     final selected = await showSelectSheet<String>(
       context: context,
@@ -2062,18 +2062,18 @@ class _TimetableTabState extends State<TimetableTab> {
     });
 
     try {
-      final initialSessions = controller.sessions.toList(growable: false);
+      final initialSessions = controller.sessions.toList();
       final initialIds = initialSessions.map((row) => row.id).toSet();
 
       final existingDraftRows = _draftSessions
           .where((row) => !row.isNew && initialIds.contains(row.id))
-          .toList(growable: false);
+          .toList();
       final existingDraftIds = existingDraftRows.map((row) => row.id).toSet();
 
       final deleteIds = initialSessions
           .where((row) => !existingDraftIds.contains(row.id))
           .map((row) => row.id)
-          .toList(growable: false);
+          .toList();
 
       for (final sessionId in deleteIds) {
         await controller.cancelSession(sessionId);
@@ -2120,7 +2120,7 @@ class _TimetableTabState extends State<TimetableTab> {
                   row.courseId == draftRow.courseId &&
                   !createdIds.contains(row.id),
             )
-            .toList(growable: false)
+            .toList()
             .lastOrNull;
 
         if (created == null) {
@@ -2268,7 +2268,7 @@ class _TimetableTabState extends State<TimetableTab> {
                 ? row.copyWith(timeSlotId: targetSlotId)
                 : row,
           )
-          .toList(growable: false);
+          .toList();
       _setDirty(true);
     });
   }
@@ -2338,7 +2338,7 @@ class _TimetableTabState extends State<TimetableTab> {
                     onTap: () => Navigator.of(context).pop(session),
                   ),
                 )
-                .toList(growable: false),
+                .toList(),
           ),
         ),
         actions: [
@@ -2377,7 +2377,7 @@ class _TimetableTabState extends State<TimetableTab> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setLocalState) {
-            final roomOptions = _roomPalette.toList(growable: false)..sort();
+            final roomOptions = _roomPalette.toList()..sort();
             if (selectedClassroom != null &&
                 selectedClassroom!.isNotEmpty &&
                 !roomOptions.contains(selectedClassroom)) {
@@ -2459,7 +2459,7 @@ class _TimetableTabState extends State<TimetableTab> {
                                         },
                                 );
                               })
-                              .toList(growable: false),
+                              .toList(),
                         ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -2499,7 +2499,7 @@ class _TimetableTabState extends State<TimetableTab> {
                                   },
                                 ),
                               )
-                              .toList(growable: false),
+                              .toList(),
                         ),
                     ],
                   ),
@@ -2569,7 +2569,7 @@ class _TimetableTabState extends State<TimetableTab> {
               row.assignmentRole == 'ASSISTANT' &&
               row.teacherProfileId != teacherProfileId,
         )
-        .toList(growable: false);
+        .toList();
 
     final next = [
       _EditableAssignment(
@@ -2594,7 +2594,7 @@ class _TimetableTabState extends State<TimetableTab> {
                 ? row.copyWith(location: normalized.isEmpty ? null : normalized)
                 : row,
           )
-          .toList(growable: false);
+          .toList();
       if (normalized.isNotEmpty) {
         _roomPalette = {..._roomPalette, normalized};
       }
@@ -2606,7 +2606,7 @@ class _TimetableTabState extends State<TimetableTab> {
     setState(() {
       _draftSessions = _draftSessions
           .where((row) => row.id != sessionId)
-          .toList(growable: false);
+          .toList();
       _draftAssignments = {
         for (final entry in _draftAssignments.entries)
           if (entry.key != sessionId) entry.key: entry.value,
@@ -2619,7 +2619,7 @@ class _TimetableTabState extends State<TimetableTab> {
     final rows =
         _draftSessions
             .where((row) => row.timeSlotId == slotId)
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) => a.title.compareTo(b.title));
     return rows;
   }
@@ -2653,7 +2653,7 @@ class _TimetableTabState extends State<TimetableTab> {
       }
     }
 
-    return conflicts.toSet().toList(growable: false);
+    return conflicts.toSet().toList();
   }
 
   Future<void> _exportTimetableImage() async {
@@ -2764,14 +2764,14 @@ class _TimetableTabState extends State<TimetableTab> {
     final sessions =
         controller.sessions
             .where((row) => row.classGroupId == classId)
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) => a.id.compareTo(b.id));
 
     final sessionIds = sessions.map((row) => row.id).toSet();
     final assignments =
         controller.sessionTeacherAssignments
             .where((row) => sessionIds.contains(row.classSessionId))
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) {
             final bySession = a.classSessionId.compareTo(b.classSessionId);
             if (bySession != 0) {
@@ -2796,7 +2796,7 @@ class _TimetableTabState extends State<TimetableTab> {
               '${row.classSessionId}/${row.teacherProfileId}/${row.assignmentRole}',
         )
         .join('|');
-    final classroomSig = controller.classrooms.toList(growable: false)
+    final classroomSig = controller.classrooms.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     final classroomMerged = classroomSig
         .map((row) => '${row.id}/${row.name}/${row.capacity}/${row.note}')
@@ -2820,7 +2820,7 @@ class _TimetableTabState extends State<TimetableTab> {
     final sessions =
         controller.sessions
             .where((row) => row.classGroupId == classId)
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) {
             final leftSlot = controller.findTimeSlot(a.timeSlotId);
             final rightSlot = controller.findTimeSlot(b.timeSlotId);
@@ -2844,7 +2844,7 @@ class _TimetableTabState extends State<TimetableTab> {
               assignmentRole: row.assignmentRole,
             ),
           )
-          .toList(growable: false);
+          .toList();
       assignments[session.id] = rows;
     }
 
@@ -2860,7 +2860,7 @@ class _TimetableTabState extends State<TimetableTab> {
             isNew: false,
           ),
         )
-        .toList(growable: false);
+        .toList();
     _draftAssignments = assignments;
     _ensureRoomPaletteFromController(controller);
     _controllerSignature = _buildControllerSignature(controller, classId);
@@ -3020,7 +3020,7 @@ class _EditableSlotCell extends StatelessWidget {
                         (row) =>
                             '${row.assignmentRole == 'MAIN' ? '주' : '보조'} ${teacherNameById[row.teacherProfileId] ?? row.teacherProfileId}',
                       )
-                      .toList(growable: false);
+                      .toList();
                   final conflictRows = conflictMessagesForSession(session.id);
 
                   return Padding(
@@ -3297,7 +3297,7 @@ class _GridSessionTile extends StatelessWidget {
                           ),
                         ),
                       )
-                      .toList(growable: false),
+                      .toList(),
                 ),
               ],
               if (conflictMessages.isNotEmpty) ...[
@@ -3323,7 +3323,7 @@ class _GridSessionTile extends StatelessWidget {
                           ),
                         ),
                       )
-                      .toList(growable: false),
+                      .toList(),
                 ),
               ],
             ],

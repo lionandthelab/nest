@@ -170,7 +170,7 @@ class ChildSelectorHeader extends StatelessWidget {
                                 ),
                               ),
                             )
-                            .toList(growable: false),
+                            .toList(),
                       );
                     },
                   ),
@@ -201,7 +201,7 @@ class ChildSelectorHeader extends StatelessWidget {
             keywords: '${child.name} ${child.familyName}',
           ),
         )
-        .toList(growable: false);
+        .toList();
     final selected = await showSelectSheet<String>(
       context: context,
       title: '아이 선택',

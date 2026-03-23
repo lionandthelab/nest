@@ -78,7 +78,7 @@ class _HomePageState extends State<HomePage> {
         final width = MediaQuery.sizeOf(context).width;
         final desktopLike = width >= 1080;
         final tabs = _buildTabs(widget.controller, isMobileLike: !desktopLike);
-        final labels = tabs.map((tab) => tab.label).toList(growable: false);
+        final labels = tabs.map((tab) => tab.label).toList();
 
         final safeIndex = _currentIndex >= tabs.length ? 0 : _currentIndex;
         if (safeIndex != _currentIndex) {
@@ -271,7 +271,7 @@ class _HomePageState extends State<HomePage> {
   // ── Parent child selector helpers ──
 
   void _syncSelectedChild(NestController controller) {
-    final children = controller.myChildren.toList(growable: false);
+    final children = controller.myChildren.toList();
     final previous = _selectedChildId;
     final firstId = children.firstOrNull?.id;
     final stillValid =
@@ -379,7 +379,7 @@ class _HomePageState extends State<HomePage> {
 
     try {
       final classGroups =
-          controller.classGroupsForChild(childId).toList(growable: false)
+          controller.classGroupsForChild(childId).toList()
             ..sort((a, b) => a.name.compareTo(b.name));
 
       final allAnnouncements = await controller
@@ -393,7 +393,7 @@ class _HomePageState extends State<HomePage> {
         final sessionIds = sessions
             .map((s) => s.id)
             .where((id) => id.isNotEmpty)
-            .toList(growable: false);
+            .toList();
         final assignments = await controller
             .fetchSessionTeacherAssignmentsForSessions(
               classSessionIds: sessionIds,
@@ -403,7 +403,7 @@ class _HomePageState extends State<HomePage> {
               (row) =>
                   row.classGroupId == null || row.classGroupId == classGroup.id,
             )
-            .toList(growable: false);
+            .toList();
 
         bundleMap[classGroup.id] = ChildClassBundle(
           classGroup: classGroup,
@@ -610,7 +610,7 @@ class _DesktopScaffold extends StatelessWidget {
                     label: Text(label),
                   ),
                 )
-                .toList(growable: false),
+                .toList(),
           ),
         ),
         Expanded(
@@ -767,7 +767,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
               ),
             ),
           )
-          .toList(growable: false),
+          .toList(),
       child: Chip(
         label: Text(label, overflow: TextOverflow.ellipsis),
         avatar: const Icon(Icons.child_friendly_outlined, size: 14),
@@ -1047,7 +1047,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                       label: label,
                     ),
                   )
-                  .toList(growable: false),
+                  .toList(),
             ),
           ),
         ),
@@ -1246,7 +1246,7 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                                 ),
                               ),
                             )
-                            .toList(growable: false),
+                            .toList(),
                         onChanged: (value) {
                           widget.onSelectChild(value);
                           setState(() {});
@@ -1276,7 +1276,7 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                               ),
                             ),
                           )
-                          .toList(growable: false),
+                          .toList(),
                       onChanged: (value) {
                         if (value == null) {
                           return;
@@ -1315,7 +1315,7 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                               ),
                             ),
                           )
-                          .toList(growable: false),
+                          .toList(),
                       onChanged: (value) {
                         if (value == null) {
                           return;
@@ -1609,7 +1609,7 @@ class _MainPanelState extends State<_MainPanel> {
               ),
             ),
           )
-          .toList(growable: false),
+          .toList(),
       child: Chip(
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 220),
@@ -1671,7 +1671,7 @@ class _MainPanelState extends State<_MainPanel> {
               ),
             ),
           )
-          .toList(growable: false),
+          .toList(),
       child: Chip(
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 180),
@@ -1735,7 +1735,7 @@ class _MainPanelState extends State<_MainPanel> {
               ),
             ),
           )
-          .toList(growable: false),
+          .toList(),
       child: Chip(
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 180),
@@ -1982,7 +1982,7 @@ class _ContextSelectorState extends State<_ContextSelector> {
             subtitle: _labelForRole(membership.role),
           ),
         )
-        .toList(growable: false);
+        .toList();
     final termOptions = controller.terms
         .map(
           (term) => _ContextOption(
@@ -1991,10 +1991,10 @@ class _ContextSelectorState extends State<_ContextSelector> {
             subtitle: _labelForTermStatus(term.status),
           ),
         )
-        .toList(growable: false);
+        .toList();
     final classOptions = controller.classGroups
         .map((group) => _ContextOption(id: group.id, title: group.name))
-        .toList(growable: false);
+        .toList();
     final roleOptions = controller.availableViewRoles
         .map(
           (role) => _ContextOption(
@@ -2002,7 +2002,7 @@ class _ContextSelectorState extends State<_ContextSelector> {
             title: _labelForRole(role),
           ),
         )
-        .toList(growable: false);
+        .toList();
 
     final items = [
       _ContextCardData(
@@ -2118,7 +2118,7 @@ class _ContextSelectorState extends State<_ContextSelector> {
                               query.trim().toLowerCase(),
                             ),
                       )
-                      .toList(growable: false);
+                      .toList();
 
             return Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),

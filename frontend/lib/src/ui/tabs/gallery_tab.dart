@@ -47,7 +47,7 @@ class _GalleryTabState extends State<GalleryTab> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final items = controller.galleryItems.toList(growable: false)
+    final items = controller.galleryItems.toList()
       ..sort((a, b) {
         final left = a.capturedAt?.millisecondsSinceEpoch ?? 0;
         final right = b.capturedAt?.millisecondsSinceEpoch ?? 0;

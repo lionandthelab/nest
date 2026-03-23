@@ -208,7 +208,7 @@ class _MembersTabState extends State<MembersTab> {
 
   Widget _buildRoleGrantCard(NestController controller) {
     // Build member selector items from existing members
-    final userIds = controller.membershipUserIds.toList(growable: false);
+    final userIds = controller.membershipUserIds.toList();
     final memberItems = <DropdownMenuItem<String>>[];
     for (final uid in userIds) {
       final name = controller.findMemberDisplayName(uid);
@@ -296,7 +296,7 @@ class _MembersTabState extends State<MembersTab> {
   }
 
   Widget _buildInviteCreateCard(NestController controller) {
-    final invites = controller.homeschoolInvites.toList(growable: false)
+    final invites = controller.homeschoolInvites.toList()
       ..sort((a, b) {
         final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
         final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
@@ -418,7 +418,7 @@ class _MembersTabState extends State<MembersTab> {
                 ? invites
                 : invites
                     .where((i) => i.status != 'CANCELED')
-                    .toList(growable: false);
+                    .toList();
 
             return AlertDialog(
               title: Row(
@@ -529,7 +529,7 @@ class _MembersTabState extends State<MembersTab> {
   }
 
   Widget _buildMemberListCard(NestController controller) {
-    final userIds = controller.membershipUserIds.toList(growable: false);
+    final userIds = controller.membershipUserIds.toList();
 
     // Build a map: role -> list of (userId, displayName)
     final roleMap = <String, List<({String userId, String name})>>{};

@@ -31,7 +31,7 @@ class ParentProgressTab extends StatelessWidget {
               ? const <StudentActivityLog>[]
               : controller
                     .activityLogsForChild(selectedChildId!)
-                    .toList(growable: false)
+                    .toList()
           ..sort((a, b) {
             final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
             final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
@@ -51,7 +51,7 @@ class ParentProgressTab extends StatelessWidget {
       }
     }
 
-    final displayLogs = childLogs.take(40).toList(growable: false);
+    final displayLogs = childLogs.take(40).toList();
 
     // Fixed items: title row + spacer = 2
     // Then: loading skeletons (3 cards + 2 spacers = 5) OR empty state (1) OR
@@ -112,7 +112,7 @@ class ParentProgressTab extends StatelessWidget {
               runSpacing: 8,
               children: metricTiles
                   .map((tile) => SizedBox(width: itemWidth, child: tile))
-                  .toList(growable: false),
+                  .toList(),
             );
           },
         ),

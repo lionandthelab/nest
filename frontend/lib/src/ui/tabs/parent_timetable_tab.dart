@@ -102,12 +102,12 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     NestController controller,
     Map<String, ChildClassBundle> bundles,
   ) {
-    final sorted = bundles.values.toList(growable: false)
+    final sorted = bundles.values.toList()
       ..sort((a, b) => a.classGroup.name.compareTo(b.classGroup.name));
 
     return sorted
         .map((bundle) {
-          final sessions = bundle.sessions.toList(growable: false)
+          final sessions = bundle.sessions.toList()
             ..sort((a, b) {
               final left = controller.findTimeSlot(a.timeSlotId);
               final right = controller.findTimeSlot(b.timeSlotId);
@@ -247,7 +247,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                                     ),
                                   );
                                 })
-                                .toList(growable: false),
+                                .toList(),
                           );
                         },
                       ),
@@ -257,7 +257,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
             ),
           );
         })
-        .toList(growable: false);
+        .toList();
   }
 
   Widget _buildWeeklyScheduleBoard(
@@ -305,8 +305,8 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
       );
     }
 
-    final sortedDays = days.toList(growable: false)..sort();
-    final sortedPeriods = periodKeys.toList(growable: false)
+    final sortedDays = days.toList()..sort();
+    final sortedPeriods = periodKeys.toList()
       ..sort((a, b) => _comparePeriodKey(a, b));
 
     const timeColWidth = 128.0;
@@ -437,7 +437,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                                           ),
                                         ),
                                       )
-                                      .toList(growable: false),
+                                      .toList(),
                                 ),
                         );
                       }),
@@ -458,7 +458,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     Map<String, ChildClassBundle> bundles,
   ) {
     final rows = <_ParentScheduleEntry>[];
-    final sorted = bundles.values.toList(growable: false)
+    final sorted = bundles.values.toList()
       ..sort((a, b) => a.classGroup.name.compareTo(b.classGroup.name));
 
     for (final bundle in sorted) {
@@ -542,7 +542,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                           row.ownerKind == 'MEMBER_USER' &&
                           row.ownerId == currentUserId,
                     )
-                    .toList(growable: false)
+                    .toList()
                   ..sort((a, b) {
                     final day = a.dayOfWeek.compareTo(b.dayOfWeek);
                     if (day != 0) return day;
@@ -798,7 +798,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     final rows =
         assignments
             .where((row) => row.classSessionId == sessionId)
-            .toList(growable: false)
+            .toList()
           ..sort((a, b) {
             final left = a.assignmentRole == 'MAIN' ? 0 : 1;
             final right = b.assignmentRole == 'MAIN' ? 0 : 1;

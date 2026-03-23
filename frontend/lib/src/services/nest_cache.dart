@@ -59,7 +59,7 @@ class NestCache {
       return data
           .cast<Map<String, dynamic>>()
           .map(fromMap)
-          .toList(growable: false);
+          .toList();
     } catch (_) {
       return null;
     }
