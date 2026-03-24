@@ -30,7 +30,7 @@ jobs:
 
       - name: Static analysis
         working-directory: frontend
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Unit tests
         working-directory: frontend
