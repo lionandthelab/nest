@@ -49,6 +49,7 @@ class NestController extends ChangeNotifier {
   List<TeachingPlan> teachingPlans = [];
   List<StudentActivityLog> studentActivityLogs = [];
   List<Announcement> announcements = [];
+  List<AcademicEvent> academicEvents = [];
   List<AuditLog> auditLogs = [];
   String? selectedHomeschoolId;
   String? currentRole;
@@ -415,6 +416,7 @@ class NestController extends ChangeNotifier {
         loadDriveIntegration(),
         loadGalleryItems(),
         loadCommunityFeed(),
+        loadAcademicEvents(),
       ]);
       _ensureRoleViewTargetSelection();
     });
@@ -1772,6 +1774,52 @@ class NestController extends ChangeNotifier {
               .toList();
 
     _notifyIfIdle();
+  }
+
+  // ── Academic Events (학사 일정) ──
+
+  Future<void> loadAcademicEvents() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      academicEvents = [];
+      _notifyIfIdle();
+      return;
+    }
+    academicEvents = await _repository.fetchAcademicEvents(
+      homeschoolId: homeschoolId,
+      termId: selectedTermId,
+    );
+    _notifyIfIdle();
+  }
+
+  Future<void> createAcademicEvent({
+    required String title,
+    required String description,
+    required String eventDate,
+    String? endDate,
+  }) async {
+    final homeschoolId = selectedHomeschoolId;
+    final userId = user?.id;
+    if (homeschoolId == null || userId == null) {
+      throw StateError('홈스쿨/사용자 정보가 없습니다.');
+    }
+    await _repository.createAcademicEvent(
+      homeschoolId: homeschoolId,
+      termId: selectedTermId,
+      title: title,
+      description: description,
+      eventDate: eventDate,
+      endDate: endDate,
+      createdByUserId: userId,
+    );
+    _setStatus('학사 일정이 추가되었습니다.');
+    await loadAcademicEvents();
+  }
+
+  Future<void> deleteAcademicEvent({required String eventId}) async {
+    await _repository.deleteAcademicEvent(eventId: eventId);
+    _setStatus('학사 일정이 삭제되었습니다.');
+    await loadAcademicEvents();
   }
 
   Future<void> loadAuditLogs() async {

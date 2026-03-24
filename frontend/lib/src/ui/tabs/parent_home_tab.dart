@@ -5,10 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
-import '../widgets/entity_visuals.dart';
-import '../widgets/hub_scaffold.dart';
 import '../widgets/nest_empty_state.dart';
-import '../widgets/nest_skeleton.dart';
 
 class ParentHomeTab extends StatefulWidget {
   const ParentHomeTab({
@@ -29,32 +26,18 @@ class ParentHomeTab extends StatefulWidget {
 }
 
 class _ParentHomeTabState extends State<ParentHomeTab> {
-  String _sectionId = 'announcements';
+  bool _showAllAnnouncements = false;
 
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final bundles = widget.childClassBundles;
-    final enrolledClassCount = bundles.length;
-    final enrolledSessionCount = bundles.values
-        .map((b) => b.sessions.length)
-        .fold<int>(0, (acc, v) => acc + v);
-
-    final childLogs = widget.selectedChildId == null
-        ? const <StudentActivityLog>[]
-        : controller
-              .activityLogsForChild(widget.selectedChildId!)
-              .toList()
-          ..sort((a, b) {
-            final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
-            final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
-            return right.compareTo(left);
-          });
-
     final hasChild = widget.selectedChildId != null;
-    final noEnrollments = hasChild && bundles.isEmpty && !widget.isLoadingChildClasses;
+    final noEnrollments =
+        hasChild && bundles.isEmpty && !widget.isLoadingChildClasses;
 
-    return Column(
+    return ListView(
+      padding: const EdgeInsets.all(12),
       children: [
         if (noEnrollments)
           Padding(
@@ -90,286 +73,290 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
               ),
             ),
           ),
-        Expanded(
-          child: HubScaffold(
-            title: '대시보드',
-            subtitle: '공지사항과 학습 현황을 한눈에 확인합니다.',
-            icon: Icons.home_outlined,
-            isBusy: controller.isBusy || widget.isLoadingChildClasses,
-            metrics: [
-              HubMetric(
-                label: '배정 반',
-                value: '$enrolledClassCount',
-                icon: Icons.groups,
-              ),
-              HubMetric(
-                label: '주간 수업',
-                value: '$enrolledSessionCount',
-                icon: Icons.view_week,
-              ),
-              HubMetric(
-                label: '활동 기록',
-                value: '${childLogs.length}',
-                icon: Icons.assignment_outlined,
-              ),
-            ],
-            selectedSectionId: _sectionId,
-            onSelectSection: (id) => setState(() => _sectionId = id),
-            sections: [
-              HubSection(
-                id: 'announcements',
-                label: '공지사항',
-                icon: Icons.campaign_outlined,
-                content: _buildAnnouncementsSection(controller),
-              ),
-              HubSection(
-                id: 'progress',
-                label: '학습 현황',
-                icon: Icons.insights_outlined,
-                content: _buildProgressSection(controller, childLogs),
-              ),
-            ],
-          ),
-        ),
+
+        // ── Announcement banner ──
+        _buildAnnouncementBanner(controller),
+
+        const SizedBox(height: 16),
+
+        // ── Homeschool full schedule ──
+        _buildHomeschoolSchedule(controller),
       ],
     );
   }
 
-  // ── Announcements ──
+  // ── Announcement banner: latest one + 더 보기 ──
 
-  Widget _buildAnnouncementsSection(NestController controller) {
-    final announcements =
-        controller.announcements.toList()..sort((a, b) {
-          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-          final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
-          final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
-          return right.compareTo(left);
-        });
+  Widget _buildAnnouncementBanner(NestController controller) {
+    final announcements = controller.announcements.toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
+        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
+        return right.compareTo(left);
+      });
 
     if (announcements.isEmpty) {
-      if (controller.isBusy) {
-        return const Column(
-          children: [
-            NestSkeletonCard(),
-            SizedBox(height: 8),
-            NestSkeletonCard(),
-          ],
-        );
-      }
-      return const NestEmptyState(
-        icon: Icons.campaign_outlined,
-        title: '등록된 공지사항이 없습니다',
-        subtitle: '새로운 공지사항이 등록되면 여기서 확인할 수 있습니다.',
-      );
+      return const SizedBox.shrink();
     }
 
-    return Column(
-      children: announcements.map((a) {
-        final when = a.createdAt == null
-            ? '-'
-            : DateFormat('yyyy-MM-dd HH:mm').format(a.createdAt!);
-        final classGroupName = a.classGroupId == null
-            ? '전체 공지'
-            : controller.findClassGroupName(a.classGroupId!);
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    EntityAvatar(
-                      label: classGroupName,
-                      icon: a.pinned
-                          ? Icons.push_pin_outlined
-                          : Icons.campaign_outlined,
-                      size: 34,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        a.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    if (a.pinned)
-                      Icon(
-                        Icons.push_pin,
-                        size: 16,
-                        color: NestColors.dustyRose,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    Text(
-                      classGroupName,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    Text(
-                      when,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
-                if (a.body.trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(a.body),
-                ],
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // ── Progress / Activity Logs ──
-
-  Widget _buildProgressSection(
-    NestController controller,
-    List<StudentActivityLog> childLogs,
-  ) {
-    if (widget.selectedChildId == null) {
-      return const NestEmptyState(
-        icon: Icons.trending_up,
-        title: '아이를 먼저 선택하세요',
-        subtitle: '상단에서 아이를 선택하면 학습 현황을 확인할 수 있습니다.',
-      );
-    }
-
-    if (widget.isLoadingChildClasses && childLogs.isEmpty) {
-      return const Column(
+    if (_showAllAnnouncements) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          NestSkeletonCard(),
-          SizedBox(height: 8),
-          NestSkeletonCard(),
+          Row(
+            children: [
+              Icon(Icons.campaign_outlined,
+                  size: 20, color: NestColors.deepWood.withValues(alpha: 0.7)),
+              const SizedBox(width: 6),
+              Text('공지사항',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              const Spacer(),
+              TextButton(
+                onPressed: () => setState(() => _showAllAnnouncements = false),
+                child: const Text('접기'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...announcements.map((a) => _buildAnnouncementCard(a, controller)),
         ],
       );
     }
 
-    final countsByType = <String, int>{};
-    for (final log in childLogs) {
-      countsByType[log.activityType] =
-          (countsByType[log.activityType] ?? 0) + 1;
-    }
+    // Show only the latest announcement as a banner
+    final latest = announcements.first;
+    final when = latest.createdAt == null
+        ? ''
+        : DateFormat('MM/dd').format(latest.createdAt!);
+    final classGroupName = latest.classGroupId == null
+        ? '전체'
+        : controller.findClassGroupName(latest.classGroupId!);
 
-    final sessionClassNameById = <String, String>{};
-    for (final bundle in widget.childClassBundles.values) {
-      for (final session in bundle.sessions) {
-        sessionClassNameById[session.id] = bundle.classGroup.name;
-      }
-    }
+    return Card(
+      color: NestColors.roseMist.withValues(alpha: 0.3),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _showAllAnnouncements = true),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.campaign, size: 20, color: NestColors.dustyRose),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      latest.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    if (latest.body.trim().isNotEmpty)
+                      Text(
+                        latest.body,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color:
+                                  NestColors.deepWood.withValues(alpha: 0.65),
+                            ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$classGroupName · $when',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.5),
+                      fontSize: 11,
+                    ),
+              ),
+              if (announcements.length > 1) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.expand_more,
+                    size: 18,
+                    color: NestColors.deepWood.withValues(alpha: 0.5)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-    final displayLogs = childLogs.take(20).toList();
+  Widget _buildAnnouncementCard(Announcement a, NestController controller) {
+    final when = a.createdAt == null
+        ? '-'
+        : DateFormat('yyyy-MM-dd HH:mm').format(a.createdAt!);
+    final classGroupName = a.classGroupId == null
+        ? '전체 공지'
+        : controller.findClassGroupName(a.classGroupId!);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (a.pinned)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(Icons.push_pin,
+                        size: 14, color: NestColors.dustyRose),
+                  ),
+                Expanded(
+                  child: Text(
+                    a.title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$classGroupName · $when',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.5),
+                  ),
+            ),
+            if (a.body.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(a.body, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Academic schedule ──
+
+  Widget _buildHomeschoolSchedule(NestController controller) {
+    final currentTerm = controller.terms
+        .where((t) => t.id == controller.selectedTermId)
+        .firstOrNull;
+
+    final termLabel = currentTerm != null ? currentTerm.name : '학기 정보 없음';
+    final termPeriod = currentTerm != null &&
+            currentTerm.startDate != null &&
+            currentTerm.endDate != null
+        ? '${DateFormat('yyyy.MM.dd').format(currentTerm.startDate!)} ~ ${DateFormat('yyyy.MM.dd').format(currentTerm.endDate!)}'
+        : '';
+
+    final events = controller.academicEvents.toList()
+      ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Type breakdown chips
-        if (countsByType.isNotEmpty)
+        Row(
+          children: [
+            Icon(Icons.event_note_outlined,
+                size: 20, color: NestColors.deepWood.withValues(alpha: 0.7)),
+            const SizedBox(width: 6),
+            Text('학사 일정',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+          ],
+        ),
+        if (termPeriod.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: countsByType.entries.map((entry) {
-                return Chip(
-                  avatar: Icon(_activityIcon(entry.key), size: 16),
-                  label: Text(
-                    '${_activityTypeLabel(entry.key)} ${entry.value}건',
+            padding: const EdgeInsets.only(top: 2, left: 26),
+            child: Text(
+              '$termLabel · $termPeriod',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.55),
                   ),
-                  visualDensity: VisualDensity.compact,
-                );
-              }).toList(),
             ),
           ),
-
-        if (childLogs.isEmpty)
+        const SizedBox(height: 10),
+        if (events.isEmpty)
           const NestEmptyState(
-            icon: Icons.trending_up,
-            title: '등록된 활동 기록이 없습니다',
-            subtitle: '선생님이 기록을 남기면 여기서 확인할 수 있습니다.',
+            icon: Icons.event_note_outlined,
+            title: '등록된 학사 일정이 없습니다',
+            subtitle: '관리자가 일정을 등록하면 여기서 확인할 수 있습니다.',
           )
         else
-          ...displayLogs.map((log) {
-            final when = log.recordedAt == null
-                ? '-'
-                : DateFormat('yyyy-MM-dd HH:mm').format(log.recordedAt!);
-            final className = log.classSessionId == null
-                ? '세션 미지정'
-                : sessionClassNameById[log.classSessionId!] ?? '연결 반 확인 필요';
+          ...events.map((event) {
+            final dateLabel = event.endDate != null
+                ? '${DateFormat('M/d').format(event.eventDate)} ~ ${DateFormat('M/d').format(event.endDate!)}'
+                : DateFormat('M월 d일 (E)', 'ko').format(event.eventDate);
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: NestColors.roseMist),
-                  color: Colors.white,
-                ),
-                child: Column(
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        EntityAvatar(
-                          label: controller.findTeacherName(
-                            log.recordedByTeacherId,
-                          ),
-                          icon: _activityIcon(log.activityType),
-                          size: 30,
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: NestColors.roseMist.withValues(alpha: 0.4),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${event.eventDate.day}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '${_activityTypeLabel(log.activityType)} · $className',
-                            style: Theme.of(context).textTheme.titleSmall
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                        ),
-                        Text(
-                          when,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(log.content),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.school_outlined,
-                          size: 14,
-                          color: NestColors.deepWood.withValues(alpha: 0.65),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            controller.findTeacherName(
-                              log.recordedByTeacherId,
-                            ),
-                            style: Theme.of(context).textTheme.bodySmall
+                          const SizedBox(height: 2),
+                          Text(
+                            dateLabel,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
                                 ?.copyWith(
-                                  color: NestColors.deepWood.withValues(
-                                    alpha: 0.74,
-                                  ),
+                                  color: NestColors.deepWood
+                                      .withValues(alpha: 0.55),
                                 ),
                           ),
-                        ),
-                      ],
+                          if (event.description.trim().isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              event.description,
+                              style:
+                                  Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -378,22 +365,5 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
           }),
       ],
     );
-  }
-
-  static IconData _activityIcon(String type) {
-    return switch (type) {
-      'ATTENDANCE' => Icons.how_to_reg_outlined,
-      'ASSIGNMENT' => Icons.task_alt_outlined,
-      _ => Icons.visibility_outlined,
-    };
-  }
-
-  static String _activityTypeLabel(String type) {
-    return switch (type) {
-      'ATTENDANCE' => '출결',
-      'ASSIGNMENT' => '과제',
-      'OBSERVATION' => '관찰',
-      _ => type,
-    };
   }
 }

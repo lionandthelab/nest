@@ -172,6 +172,23 @@ class NestCache {
     return prefs.getString('nest.cache.$userId._lastHomeschool');
   }
 
+  /// Save the selected child ID for a parent user.
+  static Future<void> saveSelectedChildId({
+    required String userId,
+    required String childId,
+  }) async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    await prefs.setString('nest.cache.$userId._selectedChild', childId);
+  }
+
+  /// Load the selected child ID for a parent user.
+  static String? loadSelectedChildId({required String userId}) {
+    final prefs = _prefs;
+    if (prefs == null) return null;
+    return prefs.getString('nest.cache.$userId._selectedChild');
+  }
+
   /// Clear all cache (e.g. on logout).
   static Future<void> clearAll() async {
     final prefs = _prefs;

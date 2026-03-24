@@ -776,6 +776,46 @@ class Term {
   };
 }
 
+class AcademicEvent {
+  const AcademicEvent({
+    required this.id,
+    required this.homeschoolId,
+    required this.termId,
+    required this.title,
+    required this.description,
+    required this.eventDate,
+    this.endDate,
+    this.createdByUserId,
+    this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String? termId;
+  final String title;
+  final String description;
+  final DateTime eventDate;
+  final DateTime? endDate;
+  final String? createdByUserId;
+  final DateTime? createdAt;
+
+  factory AcademicEvent.fromMap(Map<String, dynamic> map) {
+    return AcademicEvent(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      termId: map['term_id'] as String?,
+      title: (map['title'] as String?) ?? '',
+      description: (map['description'] as String?) ?? '',
+      eventDate: DateTime.parse(map['event_date'] as String),
+      endDate: map['end_date'] == null
+          ? null
+          : DateTime.tryParse(map['end_date'] as String),
+      createdByUserId: map['created_by_user_id'] as String?,
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}
+
 class ClassGroup {
   const ClassGroup({
     required this.id,

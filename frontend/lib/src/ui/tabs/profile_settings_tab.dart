@@ -1,19 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../config/app_config.dart';
 import '../../state/nest_controller.dart';
+import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
+import '../widgets/nest_empty_state.dart';
 
 class ProfileSettingsTab extends StatefulWidget {
-  const ProfileSettingsTab({super.key, required this.controller});
+  const ProfileSettingsTab({
+    super.key,
+    required this.controller,
+    this.selectedChildId,
+    this.childClassBundles,
+  });
 
   final NestController controller;
+  final String? selectedChildId;
+  final Map<String, ChildClassBundle>? childClassBundles;
 
   @override
   State<ProfileSettingsTab> createState() => _ProfileSettingsTabState();
 }
 
 class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
+  final _unavailabilityStartController = TextEditingController(text: '09:00');
+  final _unavailabilityEndController = TextEditingController(text: '10:00');
+  final _unavailabilityNoteController = TextEditingController();
+  int _selectedUnavailabilityDay = 1;
+
+  @override
+  void dispose() {
+    _unavailabilityStartController.dispose();
+    _unavailabilityEndController.dispose();
+    _unavailabilityNoteController.dispose();
+    super.dispose();
+  }
+
   String _displayName(NestController controller) {
     final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
     final metadataName = metadata['full_name'] ?? metadata['name'];
@@ -55,6 +78,7 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
     final email = controller.user?.email ?? '-';
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
     final phone = _phoneNumber(controller);
+    final isParent = controller.isParentView;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -167,6 +191,12 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           onTap: null,
         ),
 
+        // ── Parent: 내 불가 시간 section ──
+        if (isParent) ...[
+          const SizedBox(height: 28),
+          _buildUnavailabilitySection(controller),
+        ],
+
         const SizedBox(height: 28),
         Text(
           '앱 정보',
@@ -189,6 +219,267 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
         ),
       ],
     );
+  }
+
+  // ── Unavailability management for parents ──
+
+  Widget _buildUnavailabilitySection(NestController controller) {
+    final currentUserId = controller.user?.id;
+    if (currentUserId == null) return const SizedBox.shrink();
+
+    final blocks = controller.memberUnavailabilityBlocks
+        .where(
+          (row) =>
+              row.ownerKind == 'MEMBER_USER' && row.ownerId == currentUserId,
+        )
+        .toList()
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) return day;
+        return a.startTime.compareTo(b.startTime);
+      });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '수업 불가 시간 설정',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '등록한 시간은 시간표 생성 시 자동으로 회피됩니다.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.6),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: controller.isBusy
+                  ? null
+                  : () => _openAddUnavailabilityModal(currentUserId),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('추가'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (blocks.isEmpty)
+          const NestEmptyState(
+            icon: Icons.calendar_today,
+            title: '등록된 불가 시간이 없습니다',
+          )
+        else
+          ...blocks.map((block) {
+            final day = _dayLabel(block.dayOfWeek);
+            final start = _shortTime(block.startTime);
+            final end = _shortTime(block.endTime);
+            final note = block.note.trim();
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: NestColors.roseMist),
+                ),
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.schedule),
+                  title: Text('$day · $start - $end'),
+                  subtitle: note.isEmpty ? null : Text(note),
+                  trailing: IconButton(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => _deleteBlock(block.id),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  void _openAddUnavailabilityModal(String userId) {
+    final controller = widget.controller;
+    // Reset fields for fresh input
+    _selectedUnavailabilityDay = 1;
+    _unavailabilityStartController.text = '09:00';
+    _unavailabilityEndController.text = '10:00';
+    _unavailabilityNoteController.clear();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                20 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        '불가 시간 추가',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: _selectedUnavailabilityDay,
+                    decoration: const InputDecoration(
+                      labelText: '요일',
+                      prefixIcon: Icon(Icons.calendar_today_outlined),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text('일')),
+                      DropdownMenuItem(value: 1, child: Text('월')),
+                      DropdownMenuItem(value: 2, child: Text('화')),
+                      DropdownMenuItem(value: 3, child: Text('수')),
+                      DropdownMenuItem(value: 4, child: Text('목')),
+                      DropdownMenuItem(value: 5, child: Text('금')),
+                      DropdownMenuItem(value: 6, child: Text('토')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _selectedUnavailabilityDay = value;
+                      setSheetState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _unavailabilityStartController,
+                          decoration: const InputDecoration(
+                            labelText: '시작 (HH:MM)',
+                            prefixIcon: Icon(Icons.access_time),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _unavailabilityEndController,
+                          decoration: const InputDecoration(
+                            labelText: '종료 (HH:MM)',
+                            prefixIcon: Icon(Icons.access_time),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _unavailabilityNoteController,
+                    decoration: const InputDecoration(
+                      labelText: '메모 (선택)',
+                      prefixIcon: Icon(Icons.edit_note),
+                      isDense: true,
+                    ),
+                    minLines: 1,
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: controller.isBusy
+                          ? null
+                          : () async {
+                              await _createBlock(userId);
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            },
+                      icon: const Icon(Icons.add),
+                      label: const Text('추가'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _createBlock(String userId) async {
+    try {
+      await widget.controller.createMemberUnavailabilityBlock(
+        ownerKind: 'MEMBER_USER',
+        ownerId: userId,
+        dayOfWeek: _selectedUnavailabilityDay,
+        startTime: _unavailabilityStartController.text,
+        endTime: _unavailabilityEndController.text,
+        note: _unavailabilityNoteController.text,
+      );
+      _unavailabilityNoteController.clear();
+      if (mounted) {
+        _showMessage(widget.controller.statusMessage);
+        setState(() {});
+      }
+    } catch (_) {
+      if (mounted) _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _deleteBlock(String blockId) async {
+    try {
+      await widget.controller.deleteMemberUnavailabilityBlock(blockId: blockId);
+      if (mounted) {
+        _showMessage(widget.controller.statusMessage);
+        setState(() {});
+      }
+    } catch (_) {
+      if (mounted) _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  String _dayLabel(int dayOfWeek) {
+    const labels = <int, String>{
+      0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
+    };
+    return labels[dayOfWeek] ?? '$dayOfWeek';
+  }
+
+  String _shortTime(String value) {
+    final parsed = DateFormat('HH:mm:ss').tryParse(value);
+    if (parsed == null) {
+      final fallback = DateFormat('HH:mm').tryParse(value);
+      return fallback == null ? value : DateFormat('HH:mm').format(fallback);
+    }
+    return DateFormat('HH:mm').format(parsed);
   }
 
   Future<void> _editField({
