@@ -2457,12 +2457,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: stat.accent.withValues(alpha: 0.34)),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [stat.accent.withValues(alpha: 0.18), Colors.white],
-        ),
+        border: Border.all(color: NestColors.roseMist),
+        color: Colors.white,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
