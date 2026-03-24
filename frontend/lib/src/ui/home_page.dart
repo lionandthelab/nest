@@ -819,84 +819,6 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     return '사용자';
   }
 
-  String _panelTitle(NestController controller) {
-    if (controller.isAdminLike) {
-      return '관리자';
-    }
-    if (controller.isTeacherView) {
-      return '교사';
-    }
-    if (controller.isParentView) {
-      return '학부모';
-    }
-    return 'Nest School';
-  }
-
-  void _showMessage(String message) {
-    if (!mounted || message.trim().isEmpty) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Widget _buildParentChildChip(NestController controller) {
-    if (!controller.isParentView) {
-      return const SizedBox.shrink();
-    }
-
-    final children = controller.myChildren.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
-    if (children.isEmpty) {
-      return Chip(
-        label: const Text('내 아이 미연동'),
-        avatar: const Icon(Icons.child_care_outlined, size: 14),
-        visualDensity: VisualDensity.compact,
-      );
-    }
-
-    final selected = children
-        .where((child) => child.id == widget.selectedChildId)
-        .firstOrNull;
-    final label = selected == null
-        ? '아이 선택'
-        : '${selected.name} (${selected.familyName})';
-
-    return PopupMenuButton<String>(
-      tooltip: '아이 선택',
-      onSelected: widget.onSelectChild,
-      itemBuilder: (context) => children
-          .map(
-            (child) => PopupMenuItem<String>(
-              value: child.id,
-              child: Row(
-                children: [
-                  Icon(
-                    child.id == widget.selectedChildId
-                        ? Icons.check_circle
-                        : Icons.circle_outlined,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${child.name} (${child.familyName})',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-          .toList(),
-      child: Chip(
-        label: Text(label, overflow: TextOverflow.ellipsis),
-        avatar: const Icon(Icons.child_friendly_outlined, size: 14),
-        visualDensity: VisualDensity.compact,
-      ),
-    );
-  }
 
   void _showHomeschoolSwitchSheet(NestController controller) {
     final memberships = controller.memberships;
@@ -1023,39 +945,11 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     );
   }
 
-  Future<void> _openContextSheet() async {
-    if (!mounted) {
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => _MobileSettingsPage(
-          controller: widget.controller,
-          selectedChildId: widget.selectedChildId,
-          onSelectChild: widget.onSelectChild,
-          onSelectHomeschool: widget.onSelectHomeschool,
-          onSelectTerm: widget.onSelectTerm,
-          onSelectClassGroup: widget.onSelectClassGroup,
-          onSelectViewRole: widget.onSelectViewRole,
-          onRefresh: widget.onRefresh,
-          onLogout: widget.onLogout,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final controller = widget.controller;
     final displayName = _displayName(controller);
-    final panelTitle = _panelTitle(controller);
-    final parentChildChip = _buildParentChildChip(controller);
-
-    // ── Compact header for parent/teacher, default for admin ──
-    final isParent = controller.isParentView;
-    final isTeacher = controller.isTeacherView;
-    final useCompactHeader = isParent || isTeacher;
 
     return Column(
       children: [
@@ -1064,10 +958,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
             bottom: false,
             child: Column(
               children: [
-                if (useCompactHeader)
-                  _buildParentCompactHeader(theme, controller, displayName)
-                else
-                  _buildDefaultHeader(theme, controller, displayName, panelTitle, parentChildChip),
+                _buildParentCompactHeader(theme, controller, displayName),
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -1391,191 +1282,6 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     );
   }
 
-  /// Default header for non-parent views (unchanged from original)
-  Widget _buildDefaultHeader(
-    ThemeData theme,
-    NestController controller,
-    String displayName,
-    String panelTitle,
-    Widget parentChildChip,
-  ) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.asset(
-                  'assets/logo_square.png',
-                  width: 42,
-                  height: 42,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$panelTitle · ${widget.tabLabel}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '$displayName 님',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: NestColors.deepWood.withValues(alpha: 0.72),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildHomeschoolBadge(controller),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                tooltip: '빠른 메뉴',
-                onSelected: (action) async {
-                  if (action == 'settings') {
-                    await _openContextSheet();
-                    return;
-                  }
-                  if (action == 'switch_homeschool') {
-                    _showHomeschoolSwitchSheet(controller);
-                    return;
-                  }
-                  if (action == 'info') {
-                    showDialog<void>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('역할 안내'),
-                        content: Text(
-                          controller.isParentView
-                              ? '부모 뷰는 내 아이 기준 정보를 보여줍니다.'
-                              : controller.isTeacherView
-                              ? '교사 뷰는 담당 수업과 아이 상태 중심입니다.'
-                              : '관리자 뷰는 전체 운영 설정을 관리합니다.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('확인'),
-                          ),
-                        ],
-                      ),
-                    );
-                    return;
-                  }
-                  try {
-                    if (action == 'refresh') {
-                      await widget.onRefresh();
-                    } else if (action == 'logout') {
-                      await widget.onLogout();
-                    }
-                  } catch (_) {
-                    _showMessage(controller.statusMessage);
-                  }
-                },
-                itemBuilder: (context) => [
-                  if (controller.memberships.length > 1)
-                    const PopupMenuItem<String>(
-                      value: 'switch_homeschool',
-                      child: ListTile(
-                        leading: Icon(Icons.swap_horiz),
-                        title: Text('홈스쿨 전환'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  const PopupMenuItem<String>(
-                    value: 'settings',
-                    child: ListTile(
-                      leading: Icon(Icons.tune),
-                      title: Text('설정'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'info',
-                    child: ListTile(
-                      leading: Icon(Icons.info_outline),
-                      title: Text('역할 안내'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem<String>(
-                    value: 'refresh',
-                    child: ListTile(
-                      leading: Icon(Icons.refresh),
-                      title: Text('새로고침'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'logout',
-                    child: ListTile(
-                      leading: Icon(Icons.logout),
-                      title: Text('로그아웃'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                Chip(
-                  label: Text(
-                    _labelForRole(controller.currentRole ?? '-'),
-                  ),
-                  avatar: const Icon(Icons.shield_outlined, size: 14),
-                  visualDensity: VisualDensity.compact,
-                ),
-                if (parentChildChip is! SizedBox) ...[
-                  const SizedBox(width: 6),
-                  parentChildChip,
-                ],
-                const SizedBox(width: 6),
-                ActionChip(
-                  label: const Text('설정'),
-                  avatar: const Icon(Icons.tune, size: 14),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: controller.isBusy ? null : _openContextSheet,
-                ),
-              ],
-            ),
-          ),
-          if (controller.isBusy)
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: LinearProgressIndicator(minHeight: 3),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _MobileSettingsPage extends StatefulWidget {

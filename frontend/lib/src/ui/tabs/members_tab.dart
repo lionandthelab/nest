@@ -712,8 +712,11 @@ class _MembersTabState extends State<MembersTab> {
 
   Future<void> _reloadMembers() async {
     try {
-      await widget.controller.loadHomeschoolMemberships();
-      await widget.controller.loadHomeschoolInvites();
+      await Future.wait([
+        widget.controller.loadHomeschoolMemberships(),
+        widget.controller.loadHomeschoolInvites(),
+        widget.controller.loadHomeschoolMemberDirectory(),
+      ]);
       _showMessage('멤버 권한 목록을 갱신했습니다.');
     } catch (_) {
       _showMessage(widget.controller.statusMessage);

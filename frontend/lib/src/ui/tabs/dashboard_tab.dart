@@ -152,21 +152,29 @@ class _DashboardTabState extends State<DashboardTab> {
                     label: '소속 홈스쿨',
                     value: '${controller.memberships.length}',
                     icon: Icons.house,
+                    color: const Color(0xFFE8D5C8),
+                    iconColor: const Color(0xFFB47B56),
                   ),
                   _SummaryCard(
                     label: '학기',
                     value: '${controller.terms.length}',
                     icon: Icons.calendar_month,
+                    color: const Color(0xFFD4E6D9),
+                    iconColor: const Color(0xFF5E8A6A),
                   ),
                   _SummaryCard(
                     label: '반',
                     value: '${controller.classGroups.length}',
                     icon: Icons.groups,
+                    color: const Color(0xFFDAE2F0),
+                    iconColor: const Color(0xFF5A7BAF),
                   ),
                   _SummaryCard(
                     label: '활성 수업',
                     value: '${controller.sessions.length}',
                     icon: Icons.view_week,
+                    color: const Color(0xFFF0DDE0),
+                    iconColor: const Color(0xFFBB6E7A),
                   ),
                 ],
               );
@@ -1577,11 +1585,15 @@ class _SummaryCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
+    required this.color,
+    required this.iconColor,
   });
 
   final String label;
   final String value;
   final IconData icon;
+  final Color color;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1594,8 +1606,8 @@ class _SummaryCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 20,
-              backgroundColor: NestColors.roseMist,
-              foregroundColor: NestColors.deepWood,
+              backgroundColor: color,
+              foregroundColor: iconColor,
               child: Icon(icon),
             ),
             const SizedBox(width: 12),

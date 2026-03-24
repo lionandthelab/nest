@@ -1400,8 +1400,11 @@ class NestController extends ChangeNotifier {
         userId: requesterUserId,
         role: role,
       );
-      await loadJoinRequests();
-      await loadHomeschoolMemberships();
+      await Future.wait([
+        loadJoinRequests(),
+        loadHomeschoolMemberships(),
+        loadHomeschoolMemberDirectory(),
+      ]);
       _setStatus('가입 요청을 승인했습니다.');
     });
   }
@@ -3804,13 +3807,17 @@ class NestController extends ChangeNotifier {
         memberships = await _repository.fetchMemberships(userId: user!.id);
         currentRole = _resolveViewRole(selectedHomeschoolId);
       }
-      await loadHomeschoolMemberships();
+      await Future.wait([
+        loadHomeschoolMemberships(),
+        loadHomeschoolMemberDirectory(),
+      ]);
       await _logAudit(
         actionType: 'MEMBERSHIP_GRANT',
         resourceType: 'homeschool_memberships',
         resourceId: '$normalizedUserId:$role',
       );
-      _setStatus('$normalizedUserId 에게 $role 권한을 부여했습니다.');
+      final displayName = findMemberDisplayName(normalizedUserId);
+      _setStatus('$displayName 에게 $role 권한을 부여했습니다.');
     });
   }
 
@@ -3855,17 +3862,21 @@ class NestController extends ChangeNotifier {
         role: role,
       );
 
+      final displayName = findMemberDisplayName(normalizedUserId);
       if (user != null) {
         memberships = await _repository.fetchMemberships(userId: user!.id);
         currentRole = _resolveViewRole(selectedHomeschoolId);
       }
-      await loadHomeschoolMemberships();
+      await Future.wait([
+        loadHomeschoolMemberships(),
+        loadHomeschoolMemberDirectory(),
+      ]);
       await _logAudit(
         actionType: 'MEMBERSHIP_REVOKE',
         resourceType: 'homeschool_memberships',
         resourceId: '$normalizedUserId:$role',
       );
-      _setStatus('$normalizedUserId 의 $role 권한을 회수했습니다.');
+      _setStatus('$displayName 의 $role 권한을 회수했습니다.');
     });
   }
 
