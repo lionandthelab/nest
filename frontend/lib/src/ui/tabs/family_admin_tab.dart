@@ -148,7 +148,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   unit: '가정',
                   subtitle: '운영 중인 가정',
                   icon: Icons.home_work_outlined,
-                  accent: NestColors.dustyRose,
+                  accent: const Color(0xFFE8A87C),
                 ),
                 _SetupStat(
                   title: '아이',
@@ -156,7 +156,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   unit: '명',
                   subtitle: '전체 아동',
                   icon: Icons.child_friendly_outlined,
-                  accent: NestColors.mutedSage,
+                  accent: const Color(0xFF7BC8A4),
                 ),
                 _SetupStat(
                   title: '학부모',
@@ -164,7 +164,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   unit: '명',
                   subtitle: '연결된 보호자',
                   icon: Icons.family_restroom_outlined,
-                  accent: NestColors.clay,
+                  accent: const Color(0xFF85B8E0),
                 ),
                 _SetupStat(
                   title: '선생님',
@@ -172,7 +172,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   unit: '명',
                   subtitle: '배정 가능한 교사',
                   icon: Icons.school_outlined,
-                  accent: NestColors.deepWood,
+                  accent: const Color(0xFFC49BD6),
                 ),
                 _SetupStat(
                   title: '반',
@@ -180,7 +180,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   unit: '반',
                   subtitle: '운영 클래스',
                   icon: Icons.groups_2_outlined,
-                  accent: NestColors.dustyRose,
+                  accent: const Color(0xFFE8C170),
                 ),
                 _SetupStat(
                   title: '과목',
@@ -188,7 +188,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   unit: '개',
                   subtitle: '등록 과목',
                   icon: Icons.menu_book_outlined,
-                  accent: NestColors.mutedSage,
+                  accent: const Color(0xFF6EC5C5),
                 ),
                 _SetupStat(
                   title: '교실',
@@ -196,7 +196,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   unit: '개',
                   subtitle: '사용 교실',
                   icon: Icons.meeting_room_outlined,
-                  accent: NestColors.clay,
+                  accent: const Color(0xFFE09090),
                 ),
               ],
             ),
@@ -2476,7 +2476,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   shape: BoxShape.circle,
                   color: stat.accent.withValues(alpha: 0.2),
                 ),
-                child: Icon(stat.icon, size: 14, color: NestColors.deepWood),
+                child: Icon(stat.icon, size: 14, color: HSLColor.fromColor(stat.accent).withLightness(0.35).toColor()),
               ),
               const SizedBox(width: 6),
               Text(
