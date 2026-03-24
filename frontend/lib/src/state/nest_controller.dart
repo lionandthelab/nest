@@ -1267,11 +1267,16 @@ class NestController extends ChangeNotifier {
 
     try {
       await _loadTermAndBelow();
-      await loadHomeschoolMemberships();
-      await loadHomeschoolInvites();
-      await _loadOperationalData();
-      await loadGalleryItems();
-      await loadCommunityFeed();
+      await Future.wait([
+        loadHomeschoolMemberships(),
+        loadHomeschoolInvites(),
+        loadJoinRequests(),
+        loadChildRegistrationRequests(),
+        _loadOperationalData(),
+        loadGalleryItems(),
+        loadCommunityFeed(),
+        loadAcademicEvents(),
+      ]);
       _ensureRoleViewTargetSelection();
 
       _setStatus('운영 컨텍스트 로드 완료');
