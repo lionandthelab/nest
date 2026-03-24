@@ -1899,8 +1899,7 @@ class _TimetableTabState extends State<TimetableTab> {
                   ...dayOrder.map(
                     (day) => _GridHeaderCell(
                       width: dynamicDayWidth,
-                      title: _dayLabel(day),
-                      subtitle: '${_dayLabel(day)}요일',
+                      title: '${_dayLabel(day)}요일',
                     ),
                   ),
                 ],

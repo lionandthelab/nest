@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
+import '../services/nest_cache.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
 import 'nest_theme.dart';
@@ -194,11 +195,11 @@ class _HomePageState extends State<HomePage> {
       ];
     }
 
-    // ── Parent view: dashboard + timetable + SNS ──
+    // ── Parent view: 홈 + 시간표 + 커뮤니티 (설정은 헤더에서 접근) ──
     if (controller.isParentView) {
       return [
         _TabSpec(
-          label: '대시보드',
+          label: '홈',
           page: ParentHomeTab(
             controller: controller,
             selectedChildId: _selectedChildId,
@@ -216,15 +217,11 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         _TabSpec(
-          label: 'SNS',
+          label: '커뮤니티',
           page: CommunityFeedTab(
             controller: controller,
             title: '커뮤니티',
           ),
-        ),
-        _TabSpec(
-          label: '설정',
-          page: ProfileSettingsTab(controller: controller),
         ),
       ];
     }
@@ -233,7 +230,7 @@ class _HomePageState extends State<HomePage> {
     final tabs = <_TabSpec>[
       if (controller.isTeacherView)
         _TabSpec(
-          label: '교사 허브',
+          label: '홈',
           page: TeacherHubTab(controller: controller),
         ),
       _TabSpec(
@@ -251,17 +248,11 @@ class _HomePageState extends State<HomePage> {
     ];
     tabs.add(
       _TabSpec(
-        label: isMobileLike ? 'SNS' : '커뮤니티',
+        label: '커뮤니티',
         page: CommunityFeedTab(
           controller: controller,
           title: '커뮤니티',
         ),
-      ),
-    );
-    tabs.add(
-      _TabSpec(
-        label: '설정',
-        page: ProfileSettingsTab(controller: controller),
       ),
     );
 
@@ -273,9 +264,21 @@ class _HomePageState extends State<HomePage> {
   void _syncSelectedChild(NestController controller) {
     final children = controller.myChildren.toList();
     final previous = _selectedChildId;
+
+    // On first load, try to restore from cache
+    if (previous == null && children.isNotEmpty) {
+      final userId = controller.user?.id;
+      if (userId != null) {
+        final saved = NestCache.loadSelectedChildId(userId: userId);
+        if (saved != null && children.any((c) => c.id == saved)) {
+          _selectedChildId = saved;
+        }
+      }
+    }
+
     final firstId = children.firstOrNull?.id;
     final stillValid =
-        previous != null && children.any((child) => child.id == previous);
+        _selectedChildId != null && children.any((child) => child.id == _selectedChildId);
 
     if (!stillValid) {
       _selectedChildId = firstId;
@@ -300,6 +303,11 @@ class _HomePageState extends State<HomePage> {
       _childClassBundles = const {};
       _lastScheduledChildLoadId = null;
     });
+    // Persist selection
+    final userId = widget.controller.user?.id;
+    if (userId != null && childId != null && childId.isNotEmpty) {
+      unawaited(NestCache.saveSelectedChildId(userId: userId, childId: childId));
+    }
   }
 
   void _handleScheduleDirtyChanged(bool dirty) {
@@ -378,6 +386,11 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isLoadingChildClasses = true);
 
     try {
+      // Ensure courses & timeSlots are loaded (may be empty after view switch)
+      if (controller.courses.isEmpty || controller.timeSlots.isEmpty) {
+        await controller.refreshAll();
+      }
+
       final classGroups =
           controller.classGroupsForChild(childId).toList()
             ..sort((a, b) => a.name.compareTo(b.name));
@@ -506,11 +519,12 @@ class _HomePageState extends State<HomePage> {
       'Schedule' => '시간표',
       'Timetable' => '시간표',
       'System' => '시스템',
-      'Teacher Hub' => '교사 허브',
+      'Teacher Hub' => '홈',
       'Gallery' => '갤러리',
       'Community' => '커뮤니티',
-      'SNS' => 'SNS',
-      '커뮤니티' => 'SNS',
+      'SNS' => '커뮤니티',
+      '커뮤니티' => '커뮤니티',
+      '홈' => '홈',
       _ => trimmed,
     };
   }
@@ -805,6 +819,11 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     final panelTitle = _panelTitle(controller);
     final parentChildChip = _buildParentChildChip(controller);
 
+    // ── Compact header for parent/teacher, default for admin ──
+    final isParent = controller.isParentView;
+    final isTeacher = controller.isTeacherView;
+    final useCompactHeader = isParent || isTeacher;
+
     return Column(
       children: [
         Expanded(
@@ -812,169 +831,10 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
             bottom: false,
             child: Column(
               children: [
-                Container(
-                  margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: NestColors.roseMist),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.asset(
-                              'assets/logo_square.png',
-                              width: 42,
-                              height: 42,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '$panelTitle · ${widget.tabLabel}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                                Text(
-                                  '$displayName 님',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: NestColors.deepWood.withValues(
-                                      alpha: 0.72,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuButton<String>(
-                            tooltip: '빠른 메뉴',
-                            onSelected: (action) async {
-                              if (action == 'settings') {
-                                await _openContextSheet();
-                                return;
-                              }
-                              if (action == 'info') {
-                                showDialog<void>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Text('역할 안내'),
-                                    content: Text(
-                                      controller.isParentView
-                                          ? '부모 뷰는 내 아이 기준 정보를 보여줍니다.'
-                                          : controller.isTeacherView
-                                          ? '교사 뷰는 담당 수업과 아이 상태 중심입니다.'
-                                          : '관리자 뷰는 전체 운영 설정을 관리합니다.',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.of(ctx).pop(),
-                                        child: const Text('확인'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                return;
-                              }
-                              try {
-                                if (action == 'refresh') {
-                                  await widget.onRefresh();
-                                } else if (action == 'logout') {
-                                  await widget.onLogout();
-                                }
-                              } catch (_) {
-                                _showMessage(controller.statusMessage);
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem<String>(
-                                value: 'settings',
-                                child: ListTile(
-                                  leading: Icon(Icons.tune),
-                                  title: Text('설정'),
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                              ),
-                              PopupMenuItem<String>(
-                                value: 'info',
-                                child: ListTile(
-                                  leading: Icon(Icons.info_outline),
-                                  title: Text('역할 안내'),
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                              ),
-                              PopupMenuDivider(),
-                              PopupMenuItem<String>(
-                                value: 'refresh',
-                                child: ListTile(
-                                  leading: Icon(Icons.refresh),
-                                  title: Text('새로고침'),
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                              ),
-                              PopupMenuItem<String>(
-                                value: 'logout',
-                                child: ListTile(
-                                  leading: Icon(Icons.logout),
-                                  title: Text('로그아웃'),
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            Chip(
-                              label: Text(
-                                _labelForRole(controller.currentRole ?? '-'),
-                              ),
-                              avatar: const Icon(
-                                Icons.shield_outlined,
-                                size: 14,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            if (parentChildChip is! SizedBox) ...[
-                              const SizedBox(width: 6),
-                              parentChildChip,
-                            ],
-                            const SizedBox(width: 6),
-                            ActionChip(
-                              label: const Text('설정'),
-                              avatar: const Icon(Icons.tune, size: 14),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: controller.isBusy
-                                  ? null
-                                  : _openContextSheet,
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (controller.isBusy)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: LinearProgressIndicator(minHeight: 3),
-                        ),
-                    ],
-                  ),
-                ),
+                if (useCompactHeader)
+                  _buildParentCompactHeader(theme, controller, displayName)
+                else
+                  _buildDefaultHeader(theme, controller, displayName, panelTitle, parentChildChip),
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -1052,6 +912,401 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
           ),
         ),
       ],
+    );
+  }
+
+  void _openParentSettingsPage(NestController controller) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('설정')),
+          body: ProfileSettingsTab(
+            controller: controller,
+            selectedChildId: widget.selectedChildId,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Compact header for parent view: name / child chip / settings icon
+  Widget _buildParentCompactHeader(
+    ThemeData theme,
+    NestController controller,
+    String displayName,
+  ) {
+    final children = controller.myChildren.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final selected = children
+        .where((child) => child.id == widget.selectedChildId)
+        .firstOrNull;
+    final childLabel = selected != null
+        ? selected.name
+        : (children.isEmpty ? '아이 미연동' : '아이 선택');
+
+    // Admin viewing as parent: show parent target switch
+    final isAdminAsParent = controller.isParentView &&
+        controller.hasAdminLikeMembershipInSelectedHomeschool;
+    final parentCandidates = isAdminAsParent
+        ? controller.parentViewCandidateUserIds
+        : const <String>[];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        children: [
+          // Parent name (or parent target switch for admin)
+          if (parentCandidates.isNotEmpty)
+            PopupMenuButton<String>(
+              tooltip: '부모 대상 전환',
+              onSelected: (userId) async {
+                try {
+                  await controller.selectParentViewTargetUserId(userId);
+                } catch (_) {}
+              },
+              itemBuilder: (context) => parentCandidates
+                  .map(
+                    (userId) => PopupMenuItem<String>(
+                      value: userId,
+                      child: Row(
+                        children: [
+                          Icon(
+                            userId == controller.activeParentViewTargetUserId
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              controller.findMemberDisplayName(userId),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              child: Chip(
+                label: Text(
+                  '$displayName 님',
+                  overflow: TextOverflow.ellipsis,
+                ),
+                avatar: const Icon(Icons.family_restroom_outlined, size: 14),
+                visualDensity: VisualDensity.compact,
+              ),
+            )
+          else
+            Text(
+              '$displayName 님',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          const SizedBox(width: 8),
+          // Child selector chip
+          if (children.length <= 1)
+            Chip(
+              label: Text(childLabel, overflow: TextOverflow.ellipsis),
+              avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+              visualDensity: VisualDensity.compact,
+            )
+          else
+            PopupMenuButton<String>(
+              tooltip: '아이 선택',
+              onSelected: widget.onSelectChild,
+              itemBuilder: (context) => children
+                  .map(
+                    (child) => PopupMenuItem<String>(
+                      value: child.id,
+                      child: Row(
+                        children: [
+                          Icon(
+                            child.id == widget.selectedChildId
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${child.name} (${child.familyName})',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              child: Chip(
+                label: Text(childLabel, overflow: TextOverflow.ellipsis),
+                avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          const SizedBox(width: 4),
+          // Profile avatar with role switch / settings / logout
+          PopupMenuButton<String>(
+            tooltip: displayName,
+            icon: CircleAvatar(
+              radius: 16,
+              backgroundColor: NestColors.dustyRose,
+              child: Text(
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood,
+                ),
+              ),
+            ),
+            onSelected: (value) async {
+              if (value == 'settings') {
+                _openParentSettingsPage(controller);
+              } else if (value == 'refresh') {
+                try { await widget.onRefresh(); } catch (_) {}
+              } else if (value == 'logout') {
+                try { await widget.onLogout(); } catch (_) {}
+              } else if (value.startsWith('role:')) {
+                final role = value.substring(5);
+                try { await widget.onSelectViewRole(role); } catch (_) {}
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                enabled: false,
+                child: Text(
+                  '$displayName 님',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: NestColors.deepWood,
+                  ),
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'settings',
+                child: ListTile(
+                  leading: Icon(Icons.settings_outlined),
+                  title: Text('설정'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'refresh',
+                child: ListTile(
+                  leading: Icon(Icons.refresh),
+                  title: Text('새로고침'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              if (controller.availableViewRoles.length > 1) ...[
+                const PopupMenuDivider(),
+                ...controller.availableViewRoles.map(
+                  (role) => PopupMenuItem<String>(
+                    value: 'role:$role',
+                    child: Row(
+                      children: [
+                        Icon(
+                          controller.currentRole == role
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_labelForRole(role)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: ListTile(
+                  leading: Icon(Icons.logout),
+                  title: Text('로그아웃'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Default header for non-parent views (unchanged from original)
+  Widget _buildDefaultHeader(
+    ThemeData theme,
+    NestController controller,
+    String displayName,
+    String panelTitle,
+    Widget parentChildChip,
+  ) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/logo_square.png',
+                  width: 42,
+                  height: 42,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$panelTitle · ${widget.tabLabel}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    Text(
+                      '$displayName 님',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.72),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '빠른 메뉴',
+                onSelected: (action) async {
+                  if (action == 'settings') {
+                    await _openContextSheet();
+                    return;
+                  }
+                  if (action == 'info') {
+                    showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('역할 안내'),
+                        content: Text(
+                          controller.isParentView
+                              ? '부모 뷰는 내 아이 기준 정보를 보여줍니다.'
+                              : controller.isTeacherView
+                              ? '교사 뷰는 담당 수업과 아이 상태 중심입니다.'
+                              : '관리자 뷰는 전체 운영 설정을 관리합니다.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('확인'),
+                          ),
+                        ],
+                      ),
+                    );
+                    return;
+                  }
+                  try {
+                    if (action == 'refresh') {
+                      await widget.onRefresh();
+                    } else if (action == 'logout') {
+                      await widget.onLogout();
+                    }
+                  } catch (_) {
+                    _showMessage(controller.statusMessage);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem<String>(
+                    value: 'settings',
+                    child: ListTile(
+                      leading: Icon(Icons.tune),
+                      title: Text('설정'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'info',
+                    child: ListTile(
+                      leading: Icon(Icons.info_outline),
+                      title: Text('역할 안내'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuDivider(),
+                  PopupMenuItem<String>(
+                    value: 'refresh',
+                    child: ListTile(
+                      leading: Icon(Icons.refresh),
+                      title: Text('새로고침'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'logout',
+                    child: ListTile(
+                      leading: Icon(Icons.logout),
+                      title: Text('로그아웃'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                Chip(
+                  label: Text(
+                    _labelForRole(controller.currentRole ?? '-'),
+                  ),
+                  avatar: const Icon(Icons.shield_outlined, size: 14),
+                  visualDensity: VisualDensity.compact,
+                ),
+                if (parentChildChip is! SizedBox) ...[
+                  const SizedBox(width: 6),
+                  parentChildChip,
+                ],
+                const SizedBox(width: 6),
+                ActionChip(
+                  label: const Text('설정'),
+                  avatar: const Icon(Icons.tune, size: 14),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: controller.isBusy ? null : _openContextSheet,
+                ),
+              ],
+            ),
+          ),
+          if (controller.isBusy)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1561,6 +1816,286 @@ class _MainPanel extends StatefulWidget {
 }
 
 class _MainPanelState extends State<_MainPanel> {
+  /// Compact desktop header for parent view
+  Widget _buildParentDesktopHeader(
+    ThemeData theme,
+    NestController controller,
+    String displayName,
+  ) {
+    final children = controller.myChildren.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final selected = children
+        .where((child) => child.id == widget.selectedChildId)
+        .firstOrNull;
+    final childLabel = selected != null
+        ? selected.name
+        : (children.isEmpty ? '아이 미연동' : '아이 선택');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        children: [
+          Text(
+            '$displayName 님',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (children.length <= 1)
+            Chip(
+              label: Text(childLabel),
+              avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+              visualDensity: VisualDensity.compact,
+            )
+          else
+            PopupMenuButton<String>(
+              tooltip: '아이 선택',
+              onSelected: widget.onSelectChild,
+              itemBuilder: (context) => children
+                  .map(
+                    (child) => PopupMenuItem<String>(
+                      value: child.id,
+                      child: Row(
+                        children: [
+                          Icon(
+                            child.id == widget.selectedChildId
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text('${child.name} (${child.familyName})'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              child: Chip(
+                label: Text(childLabel),
+                avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          const Spacer(),
+          IconButton(
+            tooltip: '새로고침',
+            onPressed: controller.isBusy ? null : widget.onRefresh,
+            icon: const Icon(Icons.refresh, size: 20),
+            visualDensity: VisualDensity.compact,
+          ),
+          IconButton(
+            tooltip: '설정',
+            onPressed: controller.isBusy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (ctx) => Scaffold(
+                          appBar: AppBar(title: const Text('설정')),
+                          body: ProfileSettingsTab(
+                            controller: controller,
+                            selectedChildId: widget.selectedChildId,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+            icon: const Icon(Icons.settings_outlined, size: 20),
+            visualDensity: VisualDensity.compact,
+          ),
+          PopupMenuButton<String>(
+            tooltip: displayName,
+            icon: CircleAvatar(
+              radius: 14,
+              backgroundColor: NestColors.dustyRose,
+              child: Text(
+                displayName.characters.first,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood,
+                ),
+              ),
+            ),
+            onSelected: (value) {
+              if (value == 'logout') {
+                unawaited(widget.onLogout());
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                enabled: false,
+                child: Text(
+                  '$displayName 님',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: NestColors.deepWood,
+                  ),
+                ),
+              ),
+              const PopupMenuDivider(),
+              if (controller.availableViewRoles.length > 1)
+                ...controller.availableViewRoles.map(
+                  (role) => PopupMenuItem<String>(
+                    value: 'role:$role',
+                    onTap: () => unawaited(widget.onSelectViewRole(role)),
+                    child: Row(
+                      children: [
+                        Icon(
+                          controller.currentRole == role
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_labelForRole(role)),
+                      ],
+                    ),
+                  ),
+                ),
+              if (controller.availableViewRoles.length > 1)
+                const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, size: 16),
+                    SizedBox(width: 8),
+                    Text('로그아웃'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Default desktop header for non-parent views
+  Widget _buildDefaultDesktopHeader(
+    ThemeData theme,
+    NestController controller,
+    String panelTitle,
+    String displayName,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.nest_cam_wired_stand, size: 20),
+          const SizedBox(width: 4),
+          Text(
+            panelTitle,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _ContextSelector(
+              controller: controller,
+              onSelectHomeschool: widget.onSelectHomeschool,
+              onSelectTerm: widget.onSelectTerm,
+              onSelectClassGroup: widget.onSelectClassGroup,
+              onSelectViewRole: widget.onSelectViewRole,
+              extraChips: [
+                _buildParentChildSwitchButton(controller),
+                _buildParentViewTargetSwitchButton(controller),
+                _buildTeacherViewTargetSwitchButton(controller),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: '새로고침',
+            onPressed: controller.isBusy ? null : widget.onRefresh,
+            icon: const Icon(Icons.refresh, size: 20),
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.zero,
+          ),
+          PopupMenuButton<String>(
+            tooltip: displayName,
+            icon: CircleAvatar(
+              radius: 14,
+              backgroundColor: NestColors.dustyRose,
+              child: Text(
+                displayName.characters.first,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood,
+                ),
+              ),
+            ),
+            onSelected: (value) {
+              if (value == 'logout') {
+                unawaited(widget.onLogout());
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$displayName 님',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: NestColors.deepWood,
+                      ),
+                    ),
+                    Text(
+                      _labelForRole(controller.currentRole ?? '-'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              if (controller.availableViewRoles.length > 1)
+                ...controller.availableViewRoles.map(
+                  (role) => PopupMenuItem<String>(
+                    value: 'role:$role',
+                    onTap: () => unawaited(widget.onSelectViewRole(role)),
+                    child: Row(
+                      children: [
+                        Icon(
+                          controller.currentRole == role
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_labelForRole(role)),
+                      ],
+                    ),
+                  ),
+                ),
+              if (controller.availableViewRoles.length > 1)
+                const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, size: 16),
+                    SizedBox(width: 8),
+                    Text('로그아웃'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildParentChildSwitchButton(NestController controller) {
     if (!controller.isParentView) {
       return const SizedBox.shrink();
@@ -1793,123 +2328,17 @@ class _MainPanelState extends State<_MainPanel> {
     final controller = widget.controller;
     final panelTitle = _panelTitle(controller);
     final displayName = _displayName(controller);
+    final isParent = controller.isParentView;
+    final isTeacher = controller.isTeacherView;
+    final useCompactHeader = isParent || isTeacher;
 
     return Card(
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child: Row(
-              children: [
-                const Icon(Icons.nest_cam_wired_stand, size: 20),
-                const SizedBox(width: 4),
-                Text(
-                  panelTitle,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _ContextSelector(
-                    controller: controller,
-                    onSelectHomeschool: widget.onSelectHomeschool,
-                    onSelectTerm: widget.onSelectTerm,
-                    onSelectClassGroup: widget.onSelectClassGroup,
-                    onSelectViewRole: widget.onSelectViewRole,
-                    extraChips: [
-                      _buildParentChildSwitchButton(controller),
-                      _buildParentViewTargetSwitchButton(controller),
-                      _buildTeacherViewTargetSwitchButton(controller),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: '새로고침',
-                  onPressed: controller.isBusy ? null : widget.onRefresh,
-                  icon: const Icon(Icons.refresh, size: 20),
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  padding: EdgeInsets.zero,
-                ),
-                PopupMenuButton<String>(
-                  tooltip: displayName,
-                  icon: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: NestColors.dustyRose,
-                    child: Text(
-                      displayName.characters.first,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: NestColors.deepWood,
-                      ),
-                    ),
-                  ),
-                  onSelected: (value) {
-                    if (value == 'logout') {
-                      unawaited(widget.onLogout());
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem<String>(
-                      enabled: false,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '$displayName 님',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: NestColors.deepWood,
-                            ),
-                          ),
-                          Text(
-                            _labelForRole(controller.currentRole ?? '-'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: NestColors.deepWood.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    if (controller.availableViewRoles.length > 1)
-                      ...controller.availableViewRoles.map(
-                        (role) => PopupMenuItem<String>(
-                          value: 'role:$role',
-                          onTap: () => unawaited(widget.onSelectViewRole(role)),
-                          child: Row(
-                            children: [
-                              Icon(
-                                controller.currentRole == role
-                                    ? Icons.check_circle
-                                    : Icons.radio_button_unchecked,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(_labelForRole(role)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (controller.availableViewRoles.length > 1)
-                      const PopupMenuDivider(),
-                    const PopupMenuItem<String>(
-                      value: 'logout',
-                      child: Row(
-                        children: [
-                          Icon(Icons.logout, size: 16),
-                          SizedBox(width: 8),
-                          Text('로그아웃'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          if (useCompactHeader)
+            _buildParentDesktopHeader(theme, controller, displayName)
+          else
+            _buildDefaultDesktopHeader(theme, controller, panelTitle, displayName),
           if (controller.isBusy)
             const LinearProgressIndicator(minHeight: 2),
           const Divider(height: 1),
@@ -2218,12 +2647,12 @@ Icon _iconForLabel(String label, {required bool filled}) {
     'Dashboard' => Icon(
       filled ? Icons.nest_cam_wired_stand : Icons.nest_cam_wired_stand_outlined,
     ),
+    '홈' => Icon(filled ? Icons.home : Icons.home_outlined),
     '시간표' => Icon(
       filled ? Icons.calendar_view_week : Icons.calendar_view_week_outlined,
     ),
     '학습 현황' => Icon(filled ? Icons.insights : Icons.insights_outlined),
     '소식' => Icon(filled ? Icons.newspaper : Icons.newspaper_outlined),
-    '교사 허브' => Icon(filled ? Icons.school : Icons.school_outlined),
     'Teacher Hub' => Icon(filled ? Icons.school : Icons.school_outlined),
     'Timetable' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
     'Schedule' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),

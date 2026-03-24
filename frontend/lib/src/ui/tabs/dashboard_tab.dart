@@ -110,6 +110,14 @@ class _DashboardTabState extends State<DashboardTab> {
             _PendingInvitesCard(controller: controller),
             const SizedBox(height: 16),
           ],
+          if (controller.canManageMemberships &&
+              controller.joinRequests.any((r) => r.isPending)) ...[
+            _PendingJoinRequestsBanner(
+              controller: controller,
+              onNavigateToSystem: () => widget.onRequestTabChange?.call('시스템'),
+            ),
+            const SizedBox(height: 16),
+          ],
           if (showSetupGuide) ...[
             _buildAdminSetupFlowCard(theme, controller),
             const SizedBox(height: 16),
@@ -163,6 +171,10 @@ class _DashboardTabState extends State<DashboardTab> {
               );
             },
           ),
+        if (controller.isAdminLike) ...[
+          const SizedBox(height: 16),
+          _AcademicEventsCard(controller: controller),
+        ],
         const SizedBox(height: 16),
         Card(
           child: Padding(
@@ -623,10 +635,16 @@ class _DashboardTabState extends State<DashboardTab> {
                     controller: _joinSearchController,
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _searchHomeschools(),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: '홈스쿨 이름 검색',
                       hintText: '예: Nest Warm Home',
-                      prefixIcon: Icon(Icons.search),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        onPressed:
+                            _joinSearching ? null : _searchHomeschools,
+                        icon: const Icon(Icons.arrow_forward),
+                        tooltip: '검색',
+                      ),
                     ),
                   ),
                 ),
@@ -1131,6 +1149,304 @@ class _DashboardTabState extends State<DashboardTab> {
       ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
       return false;
     }
+  }
+}
+
+class _AcademicEventsCard extends StatefulWidget {
+  const _AcademicEventsCard({required this.controller});
+
+  final NestController controller;
+
+  @override
+  State<_AcademicEventsCard> createState() => _AcademicEventsCardState();
+}
+
+class _AcademicEventsCardState extends State<_AcademicEventsCard> {
+  final _titleController = TextEditingController();
+  final _descController = TextEditingController();
+  final _dateController = TextEditingController();
+  final _endDateController = TextEditingController();
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    _dateController.dispose();
+    _endDateController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final events = controller.academicEvents.toList()
+      ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.event_note_outlined, size: 20, color: NestColors.clay),
+                const SizedBox(width: 6),
+                Text('학사 일정 관리',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge),
+                const Spacer(),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy ? null : _openAddDialog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('추가'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (events.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: Text(
+                    '등록된 학사 일정이 없습니다.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.5),
+                        ),
+                  ),
+                ),
+              )
+            else
+              ...events.map((event) {
+                final dateLabel = event.endDate != null
+                    ? '${DateFormat('M/d').format(event.eventDate)} ~ ${DateFormat('M/d').format(event.endDate!)}'
+                    : DateFormat('yyyy-MM-dd').format(event.eventDate);
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: NestColors.roseMist),
+                    color: Colors.white,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(event.title,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Text(dateLabel,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: NestColors.deepWood
+                                          .withValues(alpha: 0.55),
+                                    )),
+                            if (event.description.trim().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(event.description,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall),
+                              ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        onPressed: controller.isBusy
+                            ? null
+                            : () async {
+                                await controller.deleteAcademicEvent(
+                                    eventId: event.id);
+                                if (mounted) setState(() {});
+                              },
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openAddDialog() {
+    _titleController.clear();
+    _descController.clear();
+    _dateController.text = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    _endDateController.clear();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            20, 20, 20,
+            20 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text('학사 일정 추가',
+                      style: Theme.of(context).textTheme.titleLarge),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                  labelText: '일정 제목',
+                  prefixIcon: Icon(Icons.title),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _descController,
+                decoration: const InputDecoration(
+                  labelText: '설명 (선택)',
+                  prefixIcon: Icon(Icons.notes),
+                  isDense: true,
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _dateController,
+                      decoration: const InputDecoration(
+                        labelText: '날짜 (yyyy-MM-dd)',
+                        prefixIcon: Icon(Icons.calendar_today),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _endDateController,
+                      decoration: const InputDecoration(
+                        labelText: '종료일 (선택)',
+                        prefixIcon: Icon(Icons.calendar_today),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    final title = _titleController.text.trim();
+                    final date = _dateController.text.trim();
+                    if (title.isEmpty || date.isEmpty) return;
+                    try {
+                      await widget.controller.createAcademicEvent(
+                        title: title,
+                        description: _descController.text.trim(),
+                        eventDate: date,
+                        endDate: _endDateController.text.trim().isEmpty
+                            ? null
+                            : _endDateController.text.trim(),
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) setState(() {});
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$e')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('추가'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PendingJoinRequestsBanner extends StatelessWidget {
+  const _PendingJoinRequestsBanner({
+    required this.controller,
+    required this.onNavigateToSystem,
+  });
+
+  final NestController controller;
+  final VoidCallback onNavigateToSystem;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = controller.joinRequests.where((r) => r.isPending).toList();
+    if (pending.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      color: NestColors.roseMist.withValues(alpha: 0.25),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onNavigateToSystem,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.person_add, size: 22, color: NestColors.dustyRose),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '새로운 가입 요청 ${pending.length}건',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${pending.first.requesterName ?? pending.first.requesterEmail} 님${pending.length > 1 ? ' 외 ${pending.length - 1}명' : ''}이 가입을 요청했습니다.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: NestColors.deepWood.withValues(alpha: 0.65),
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  size: 20,
+                  color: NestColors.deepWood.withValues(alpha: 0.5)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

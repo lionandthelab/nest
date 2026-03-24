@@ -5,7 +5,6 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
-import '../widgets/hub_scaffold.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/search_select_field.dart';
 
@@ -25,21 +24,14 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   final _logContentController = TextEditingController();
   final _announceTitleController = TextEditingController();
   final _announceBodyController = TextEditingController();
-  final _unavailabilityStartController = TextEditingController(text: '09:00');
-  final _unavailabilityEndController = TextEditingController(text: '10:00');
-  final _unavailabilityNoteController = TextEditingController();
 
   String? _planSessionId;
   String? _planTeacherProfileId;
   String? _logChildId;
   String? _logSessionId;
   String? _logTeacherProfileId;
-  String? _unavailabilityTeacherProfileId;
   String _logActivityType = 'OBSERVATION';
   bool _announcePinned = false;
-  int _selectedUnavailabilityDay = 1;
-  String _sectionId = 'classes';
-
   String? _selectedManagedClassGroupId;
   String? _managedClassLoadSignature;
   bool _isLoadingManagedClasses = false;
@@ -53,9 +45,6 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     _logContentController.dispose();
     _announceTitleController.dispose();
     _announceBodyController.dispose();
-    _unavailabilityStartController.dispose();
-    _unavailabilityEndController.dispose();
-    _unavailabilityNoteController.dispose();
     super.dispose();
   }
 
@@ -69,63 +58,28 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         : _managedClassBundles[_selectedManagedClassGroupId!];
     _syncDefaults(controller, selectedBundle);
 
-    return HubScaffold(
-      title: '교사 허브',
-      subtitle: '내가 담당하는 반별로 시간표, 공지, 아동 상태를 관리합니다.',
-      icon: Icons.school,
-      isBusy: controller.isBusy || _isLoadingManagedClasses,
-      actions: [
-        IconButton(
-          tooltip: '내 불가 시간 설정',
-          icon: const Icon(Icons.event_busy_outlined, size: 20),
-          onPressed: controller.isBusy
-              ? null
-              : () => _openUnavailabilityDialog(controller),
-        ),
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        // Class selector
+        if (_managedClassBundles.isNotEmpty) ...[
+          _buildClassSelector(controller),
+          const SizedBox(height: 12),
+        ],
+        // Timetable
+        if (selectedBundle != null) ...[
+          _buildSessionBoard(controller, selectedBundle),
+          const SizedBox(height: 12),
+        ],
+        // Teaching plan
+        _buildTeachingPlanCard(controller, selectedBundle),
+        const SizedBox(height: 12),
+        // Class announcements
+        _buildClassAnnouncementCard(controller, selectedBundle),
+        const SizedBox(height: 12),
+        // Activity notes
+        _buildChildStatusSection(controller, selectedBundle),
       ],
-      metrics: [
-        HubMetric(
-          label: '담당 반',
-          value: '${_managedClassBundles.length}',
-          icon: Icons.groups,
-        ),
-        HubMetric(
-          label: '선택 반 수업',
-          value: '${selectedBundle?.sessions.length ?? 0}',
-          icon: Icons.view_week,
-        ),
-        HubMetric(
-          label: '선택 반 아동',
-          value: '${selectedBundle?.children.length ?? 0}',
-          icon: Icons.child_care,
-        ),
-      ],
-      sections: [
-        HubSection(
-          id: 'classes',
-          label: '반 운영보드',
-          icon: Icons.space_dashboard_outlined,
-          content: _buildClassBoardSection(controller, selectedBundle),
-        ),
-        HubSection(
-          id: 'operations',
-          label: '수업 운영',
-          icon: Icons.campaign,
-          content: _buildOperationsSection(controller, selectedBundle),
-        ),
-        HubSection(
-          id: 'children',
-          label: '아이 상태',
-          icon: Icons.monitor_heart_outlined,
-          content: _buildChildStatusSection(controller, selectedBundle),
-        ),
-      ],
-      selectedSectionId: _sectionId,
-      onSelectSection: (value) {
-        setState(() {
-          _sectionId = value;
-        });
-      },
     );
   }
 
@@ -276,7 +230,6 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     _logChildId ??= selectedBundle?.children.firstOrNull?.id;
     _planTeacherProfileId ??= teacherCandidates.firstOrNull?.id;
     _logTeacherProfileId ??= teacherCandidates.firstOrNull?.id;
-    _unavailabilityTeacherProfileId ??= myTeacherProfiles.firstOrNull?.id;
 
     if (_planSessionId != null && !sessionIds.contains(_planSessionId)) {
       _planSessionId = selectedBundle?.sessions.firstOrNull?.id;
@@ -297,93 +250,21 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     }
   }
 
-  Widget _buildClassBoardSection(
-    NestController controller,
-    _TeacherClassBundle? selectedBundle,
-  ) {
+  Widget _buildClassSelector(NestController controller) {
     final managedClasses = _managedClassBundles.values.toList()
       ..sort((a, b) => a.classGroup.name.compareTo(b.classGroup.name));
+    final selectedBundle = _selectedManagedClassGroupId == null
+        ? null
+        : _managedClassBundles[_selectedManagedClassGroupId!];
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                EntityAvatar(
-                  label: selectedBundle?.classGroup.name ?? '담당 반',
-                  icon: Icons.space_dashboard_outlined,
-                  size: 36,
-                ),
-                const SizedBox(width: 10),
-                Text('담당 반별 뷰', style: Theme.of(context).textTheme.titleLarge),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (managedClasses.isEmpty)
-              _buildEmptyHint('담당 교사로 배정된 반이 없습니다.')
-            else ...[
-              SelectFieldCard(
-                label: '담당 반 선택',
-                hintText: '반을 선택하세요',
-                icon: Icons.groups_2_outlined,
-                enabled: !controller.isBusy,
-                value: selectedBundle?.classGroup.name,
-                helpText: '검색으로 담당 반을 빠르게 전환할 수 있습니다.',
-                onTap: () => _selectManagedClass(managedClasses),
-              ),
-              const SizedBox(height: 12),
-              if (selectedBundle != null) ...[
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 860;
-                    final width = compact
-                        ? constraints.maxWidth
-                        : (constraints.maxWidth - 16) / 3;
-                    return Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        SizedBox(
-                          width: width,
-                          child: LabeledEntityTile(
-                            title: '수업 ${selectedBundle.sessions.length}',
-                            subtitle: '이번 주 운영 수업',
-                            icon: Icons.view_week_outlined,
-                            compact: true,
-                          ),
-                        ),
-                        SizedBox(
-                          width: width,
-                          child: LabeledEntityTile(
-                            title: '아동 ${selectedBundle.children.length}',
-                            subtitle: '반 소속 아동',
-                            icon: Icons.child_care_outlined,
-                            compact: true,
-                          ),
-                        ),
-                        SizedBox(
-                          width: width,
-                          child: LabeledEntityTile(
-                            title: '계획 ${selectedBundle.plans.length}',
-                            subtitle: '등록된 수업 계획',
-                            icon: Icons.menu_book_outlined,
-                            compact: true,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                _buildSessionBoard(controller, selectedBundle),
-              ],
-            ],
-          ],
-        ),
-      ),
+    return SelectFieldCard(
+      label: '담당 반 선택',
+      hintText: '반을 선택하세요',
+      icon: Icons.groups_2_outlined,
+      enabled: !controller.isBusy,
+      value: selectedBundle?.classGroup.name,
+      helpText: '검색으로 담당 반을 빠르게 전환할 수 있습니다.',
+      onTap: () => _selectManagedClass(managedClasses),
     );
   }
 
@@ -399,9 +280,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
           return a.timeSlotId.compareTo(b.timeSlotId);
         }
         final dayCompare = left.dayOfWeek.compareTo(right.dayOfWeek);
-        if (dayCompare != 0) {
-          return dayCompare;
-        }
+        if (dayCompare != 0) return dayCompare;
         return left.startTime.compareTo(right.startTime);
       });
 
@@ -416,54 +295,218 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       );
     }
 
-    final sessionsByDay = <int, List<ClassSession>>{};
+    // Build grid data
+    final slotById = {for (final slot in controller.timeSlots) slot.id: slot};
+    final days = <int>{};
+    final periodKeys = <String>{};
+    final byPeriodDay = <String, Map<int, List<ClassSession>>>{};
+
     for (final session in sessions) {
-      final slot = controller.findTimeSlot(session.timeSlotId);
-      final day = slot?.dayOfWeek ?? -1;
-      sessionsByDay.putIfAbsent(day, () => <ClassSession>[]).add(session);
+      final slot = slotById[session.timeSlotId];
+      if (slot == null) continue;
+      final periodKey = '${slot.startTime}-${slot.endTime}';
+      days.add(slot.dayOfWeek);
+      periodKeys.add(periodKey);
+      final perDay = byPeriodDay.putIfAbsent(
+        periodKey, () => <int, List<ClassSession>>{},
+      );
+      perDay.putIfAbsent(slot.dayOfWeek, () => <ClassSession>[]).add(session);
     }
 
-    final orderedDays = sessionsByDay.keys.toList()..sort();
+    if (days.isEmpty || periodKeys.isEmpty) {
+      return _buildEmptyHint('시간표 슬롯 정보를 찾을 수 없습니다');
+    }
+
+    final sortedDays = days.toList()..sort();
+    final sortedPeriods = periodKeys.toList()
+      ..sort((a, b) {
+        final la = a.split('-').first, lb = b.split('-').first;
+        return _clockToMinute(la).compareTo(_clockToMinute(lb));
+      });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('시간표', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 6),
-        Text(
-          '모바일에서는 요일별로 묶어서 길게 넘치지 않도록 정리했습니다.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: NestColors.deepWood.withValues(alpha: 0.7),
-          ),
-        ),
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 720;
-            final columnCount = compact
-                ? 1
-                : constraints.maxWidth >= 1080
-                ? 3
-                : 2;
-            final itemWidth =
-                (constraints.maxWidth - ((columnCount - 1) * 10)) / columnCount;
+            final availableWidth = constraints.maxWidth;
+            const naturalTimeCol = 60.0;
+            const naturalDayCol = 140.0;
+            final naturalWidth =
+                naturalTimeCol + naturalDayCol * sortedDays.length;
+            final scale = naturalWidth > availableWidth
+                ? availableWidth / naturalWidth
+                : 1.0;
+            final timeColWidth = naturalTimeCol * scale;
+            final dayColWidth = naturalDayCol * scale;
+            final boardWidth =
+                timeColWidth + dayColWidth * sortedDays.length;
+            final compactFont = scale < 0.85;
 
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: orderedDays
-                  .map(
-                    (day) => SizedBox(
-                      width: itemWidth,
-                      child: _buildSessionDayColumn(
-                        controller: controller,
-                        bundle: bundle,
-                        day: day,
-                        sessions: sessionsByDay[day] ?? const <ClassSession>[],
+            final board = Container(
+              width: boardWidth,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: NestColors.roseMist),
+                color: Colors.white,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: timeColWidth,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: NestColors.creamyWhite,
+                          border: Border(
+                            left: BorderSide(
+                                color: NestColors.roseMist
+                                    .withValues(alpha: 0.5)),
+                          ),
+                        ),
                       ),
-                    ),
-                  )
-                  .toList(),
+                      ...sortedDays.map(
+                        (day) => Container(
+                          width: dayColWidth,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: NestColors.creamyWhite,
+                            border: Border(
+                              left: BorderSide(
+                                  color: NestColors.roseMist
+                                      .withValues(alpha: 0.5)),
+                            ),
+                          ),
+                          child: Text(
+                            _dayLabel(day),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 1, thickness: 1),
+                  ...sortedPeriods.map((periodKey) {
+                    final segments = periodKey.split('-');
+                    final startLabel = segments.isNotEmpty
+                        ? _koreanTime(segments[0])
+                        : periodKey;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                            color:
+                                NestColors.roseMist.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: timeColWidth,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 10),
+                              child: Text(
+                                startLabel,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: compactFont ? 10 : 12,
+                                    ),
+                              ),
+                            ),
+                          ),
+                          ...sortedDays.map((day) {
+                            final cells =
+                                byPeriodDay[periodKey]?[day] ??
+                                const <ClassSession>[];
+                            return Container(
+                              width: dayColWidth,
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(
+                                    color: NestColors.roseMist
+                                        .withValues(alpha: 0.45),
+                                  ),
+                                ),
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              child: cells.isEmpty
+                                  ? const SizedBox.shrink()
+                                  : Column(
+                                      children: cells.map((session) {
+                                        final courseName = controller
+                                            .findCourseName(session.courseId);
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                              bottom: 4),
+                                          child: GestureDetector(
+                                            onTap: () =>
+                                                _showSessionDetailModal(
+                                              context,
+                                              controller: controller,
+                                              session: session,
+                                              bundle: bundle,
+                                            ),
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 10),
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                color: NestColors.roseMist
+                                                    .withValues(alpha: 0.26),
+                                                border: Border.all(
+                                                    color:
+                                                        NestColors.roseMist),
+                                              ),
+                                              child: Text(
+                                                courseName,
+                                                textAlign: TextAlign.center,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleSmall
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                            );
+                          }),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: board,
             );
           },
         ),
@@ -471,142 +514,93 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     );
   }
 
-  Widget _buildSessionDayColumn({
+  void _showSessionDetailModal(
+    BuildContext context, {
     required NestController controller,
-    required _TeacherClassBundle bundle,
-    required int day,
-    required List<ClassSession> sessions,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: NestColors.creamyWhite,
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white,
-                ),
-                child: const Icon(Icons.calendar_view_day_outlined, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  day < 0 ? '미분류' : _fullDayLabel(day),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              Text(
-                '${sessions.length}개',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.7),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...sessions.map(
-            (session) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _buildSessionCard(
-                controller: controller,
-                bundle: bundle,
-                session: session,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSessionCard({
-    required NestController controller,
-    required _TeacherClassBundle bundle,
     required ClassSession session,
+    required _TeacherClassBundle bundle,
   }) {
+    final courseName = controller.findCourseName(session.courseId);
     final slot = controller.findTimeSlot(session.timeSlotId);
-    final slotLabel = slot == null
-        ? session.timeSlotId
-        : '${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}';
+    final timeLabel = slot == null
+        ? '-'
+        : '${_dayLabel(slot.dayOfWeek)} ${_shortTime(slot.startTime)} - ${_shortTime(slot.endTime)}';
     final teacherLabel = _teacherLabelForSession(
       controller: controller,
       sessionId: session.id,
       assignments: bundle.assignments,
     );
-    final room = (session.location ?? '').trim();
-    final roomLabel = room.isEmpty ? '장소 미지정' : room;
-    final courseLabel = session.title.trim().isEmpty
-        ? controller.findCourseName(session.courseId)
-        : session.title.trim();
+    final location = (session.location ?? '').trim();
+    final locationLabel = location.isEmpty ? '장소 미지정' : location;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white,
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.menu_book_rounded, size: 17, color: NestColors.clay),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  courseLabel,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              Row(
+                children: [
+                  Icon(Icons.menu_book_rounded, color: NestColors.clay),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      courseName,
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                bundle.classGroup.name,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.7),
                 ),
               ),
+              const SizedBox(height: 16),
+              _sessionDetailRow(Icons.schedule_outlined, '시간', timeLabel),
+              const Divider(height: 24),
+              _sessionDetailRow(Icons.school_outlined, '담당 교사', teacherLabel),
+              const Divider(height: 24),
+              _sessionDetailRow(Icons.meeting_room_outlined, '장소', locationLabel),
+              const SizedBox(height: 16),
             ],
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _SessionInfoChip(icon: Icons.schedule_outlined, label: slotLabel),
-              _SessionInfoChip(
-                icon: Icons.school_outlined,
-                label: teacherLabel,
-              ),
-              _SessionInfoChip(
-                icon: Icons.meeting_room_outlined,
-                label: roomLabel,
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildOperationsSection(
-    NestController controller,
-    _TeacherClassBundle? selectedBundle,
-  ) {
-    return Column(
+  Widget _sessionDetailRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildTeachingPlanCard(controller, selectedBundle),
-        const SizedBox(height: 12),
-        _buildClassAnnouncementCard(controller, selectedBundle),
+        Icon(icon, size: 20, color: NestColors.clay),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -615,7 +609,16 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     NestController controller,
     _TeacherClassBundle? selectedBundle,
   ) {
-    final sessions = selectedBundle?.sessions ?? const <ClassSession>[];
+    final myTeacherIds = controller.currentUserTeacherProfiles
+        .map((p) => p.id)
+        .toSet();
+    final assignedSessionIds = (selectedBundle?.assignments ?? const [])
+        .where((a) => myTeacherIds.contains(a.teacherProfileId))
+        .map((a) => a.classSessionId)
+        .toSet();
+    final sessions = (selectedBundle?.sessions ?? const <ClassSession>[])
+        .where((s) => assignedSessionIds.contains(s.id))
+        .toList();
     final teacherCandidates = controller.currentUserTeacherProfiles.isNotEmpty
         ? controller.currentUserTeacherProfiles
         : controller.teacherProfiles;
@@ -632,7 +635,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('수업 계획', style: Theme.of(context).textTheme.titleLarge),
+            Text('수업 계획서', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
             if (selectedBundle == null)
               _buildEmptyHint('먼저 담당 반을 선택하세요.')
@@ -822,9 +825,14 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   ) {
     final children = selectedBundle?.children ?? const <ChildProfile>[];
     final childIds = children.map((child) => child.id).toSet();
-    final sessionIds = (selectedBundle?.sessions ?? const <ClassSession>[])
-        .map((session) => session.id)
+    final myLogTeacherIds = controller.currentUserTeacherProfiles
+        .map((p) => p.id)
         .toSet();
+    final myAssignedSessionIds = (selectedBundle?.assignments ?? const [])
+        .where((a) => myLogTeacherIds.contains(a.teacherProfileId))
+        .map((a) => a.classSessionId)
+        .toSet();
+    final sessionIds = myAssignedSessionIds;
     final logs =
         controller.studentActivityLogs
             .where(
@@ -864,7 +872,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('아이별 상태 관리', style: Theme.of(context).textTheme.titleLarge),
+            Text('수업 노트', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             if (selectedBundle == null)
               _buildEmptyHint('반을 먼저 선택하세요.')
@@ -1011,178 +1019,6 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     );
   }
 
-  Future<void> _openUnavailabilityDialog(NestController controller) async {
-    final myProfiles = controller.currentUserTeacherProfiles;
-    if (myProfiles.isEmpty) {
-      _showMessage('연결된 교사 프로필이 없습니다.');
-      return;
-    }
-    _unavailabilityTeacherProfileId ??= myProfiles.firstOrNull?.id;
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final myProfileIds = myProfiles.map((row) => row.id).toSet();
-            final selectedProfileId = _unavailabilityTeacherProfileId;
-            final blocks =
-                controller.memberUnavailabilityBlocks
-                    .where(
-                      (row) =>
-                          row.ownerKind == 'TEACHER_PROFILE' &&
-                          selectedProfileId != null &&
-                          row.ownerId == selectedProfileId,
-                    )
-                    .toList()
-                  ..sort((a, b) {
-                    final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-                    if (day != 0) return day;
-                    return a.startTime.compareTo(b.startTime);
-                  });
-
-            return AlertDialog(
-              title: const Text('내 불가 시간'),
-              content: SizedBox(
-                width: 480,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '등록한 시간은 관리자 시간표 생성 시 자동으로 회피됩니다.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.72),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (myProfiles.length > 1) ...[
-                        DropdownButtonFormField<String?>(
-                          initialValue: selectedProfileId,
-                          decoration: const InputDecoration(
-                            labelText: '교사 프로필',
-                          ),
-                          items: myProfiles
-                              .map(
-                                (p) => DropdownMenuItem(
-                                  value: p.id,
-                                  child: Text(p.displayName),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            _unavailabilityTeacherProfileId = value;
-                            setState(() {});
-                            setDialogState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Text(
-                        '요일 선택',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.74),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: List.generate(7, (day) {
-                          return ChoiceChip(
-                            label: Text(_dayLabel(day)),
-                            selected: _selectedUnavailabilityDay == day,
-                            onSelected: (_) {
-                              _selectedUnavailabilityDay = day;
-                              setDialogState(() {});
-                            },
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _unavailabilityStartController,
-                              decoration: const InputDecoration(
-                                labelText: '시작 (HH:MM)',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _unavailabilityEndController,
-                              decoration: const InputDecoration(
-                                labelText: '종료 (HH:MM)',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _unavailabilityNoteController,
-                        decoration: const InputDecoration(
-                          labelText: '메모 (선택)',
-                        ),
-                        minLines: 1,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 10),
-                      ElevatedButton.icon(
-                        onPressed: selectedProfileId == null ||
-                                !myProfileIds.contains(selectedProfileId)
-                            ? null
-                            : () async {
-                                await _createTeacherUnavailabilityBlock();
-                                if (context.mounted) setDialogState(() {});
-                              },
-                        icon: const Icon(Icons.add),
-                        label: const Text('불가 시간 추가'),
-                      ),
-                      const SizedBox(height: 12),
-                      if (blocks.isEmpty)
-                        _buildEmptyHint('등록된 불가 시간이 없습니다.')
-                      else
-                        ...blocks.map((block) {
-                          final day = _dayLabel(block.dayOfWeek);
-                          final start = _shortTime(block.startTime);
-                          final end = _shortTime(block.endTime);
-                          return ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text('$day $start-$end'),
-                            subtitle: Text(block.note),
-                            trailing: IconButton(
-                              onPressed: () async {
-                                await _deleteUnavailabilityBlock(block.id);
-                                if (context.mounted) setDialogState(() {});
-                              },
-                              icon: const Icon(Icons.delete_outline),
-                            ),
-                          );
-                        }),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('닫기'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   String _teacherLabelForSession({
     required NestController controller,
     required String sessionId,
@@ -1277,7 +1113,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     final selected = await showSelectSheet<String>(
       context: context,
       title: '수업 세션 선택',
-      helpText: '수업 계획을 작성할 세션을 선택하세요.',
+      helpText: '수업 계획서을 작성할 세션을 선택하세요.',
       options: options,
       currentValue: _planSessionId,
     );
@@ -1353,15 +1189,26 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         title: '세션 미지정',
         subtitle: '특정 수업에 연결하지 않습니다.',
       ),
-      ...(selectedBundle?.sessions ?? const <ClassSession>[]).map(
-        (session) => SelectSheetOption<String>(
-          value: session.id,
-          title: _sessionTitle(controller, session),
-          subtitle: session.id,
-          keywords:
-              '${_sessionTitle(controller, session)} ${controller.findCourseName(session.courseId)}',
-        ),
-      ),
+      ...(() {
+        final myIds = controller.currentUserTeacherProfiles
+            .map((p) => p.id)
+            .toSet();
+        final assignedIds = (selectedBundle?.assignments ?? const [])
+            .where((a) => myIds.contains(a.teacherProfileId))
+            .map((a) => a.classSessionId)
+            .toSet();
+        return (selectedBundle?.sessions ?? const <ClassSession>[])
+            .where((s) => assignedIds.contains(s.id))
+            .map(
+              (session) => SelectSheetOption<String>(
+                value: session.id,
+                title: _sessionTitle(controller, session),
+                subtitle: session.id,
+                keywords:
+                    '${_sessionTitle(controller, session)} ${controller.findCourseName(session.courseId)}',
+              ),
+            );
+      })(),
     ];
 
     final selected = await showSelectSheet<String>(
@@ -1517,62 +1364,11 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     }
   }
 
-  Future<void> _createTeacherUnavailabilityBlock() async {
-    final profileId = _unavailabilityTeacherProfileId;
-    if (profileId == null || profileId.isEmpty) {
-      _showMessage('교사 프로필을 선택하세요.');
-      return;
-    }
-
-    try {
-      await widget.controller.createMemberUnavailabilityBlock(
-        ownerKind: 'TEACHER_PROFILE',
-        ownerId: profileId,
-        dayOfWeek: _selectedUnavailabilityDay,
-        startTime: _unavailabilityStartController.text,
-        endTime: _unavailabilityEndController.text,
-        note: _unavailabilityNoteController.text,
-      );
-      _unavailabilityNoteController.clear();
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _deleteUnavailabilityBlock(String blockId) async {
-    try {
-      await widget.controller.deleteMemberUnavailabilityBlock(blockId: blockId);
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
   String _dayLabel(int dayOfWeek) {
     const labels = <int, String>{
-      0: 'Sun',
-      1: 'Mon',
-      2: 'Tue',
-      3: 'Wed',
-      4: 'Thu',
-      5: 'Fri',
-      6: 'Sat',
+      0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
     };
     return labels[dayOfWeek] ?? '$dayOfWeek';
-  }
-
-  String _fullDayLabel(int dayOfWeek) {
-    const labels = <int, String>{
-      0: '일요일',
-      1: '월요일',
-      2: '화요일',
-      3: '수요일',
-      4: '목요일',
-      5: '금요일',
-      6: '토요일',
-    };
-    return labels[dayOfWeek] ?? '미분류';
   }
 
   String _shortTime(String value) {
@@ -1584,50 +1380,29 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     return DateFormat('HH:mm').format(parsed);
   }
 
+  int _clockToMinute(String value) {
+    final source = value.trim();
+    final parts = source.split(':');
+    if (parts.length < 2) return 0;
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    return hour * 60 + minute;
+  }
+
+  String _koreanTime(String value) {
+    final minutes = _clockToMinute(value);
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (m == 0) return '$h시';
+    if (m == 30) return '$h시반';
+    return '$h:${m.toString().padLeft(2, '0')}';
+  }
+
   void _showMessage(String text) {
     if (!mounted || text.isEmpty) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-}
-
-class _SessionInfoChip extends StatelessWidget {
-  const _SessionInfoChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: NestColors.creamyWhite,
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            size: 14,
-            color: NestColors.deepWood.withValues(alpha: 0.66),
-          ),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.78),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

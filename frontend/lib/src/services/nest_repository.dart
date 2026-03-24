@@ -844,6 +844,47 @@ class NestRepository {
     });
   }
 
+  // ── Academic Events (학사 일정) ──
+
+  Future<List<AcademicEvent>> fetchAcademicEvents({
+    required String homeschoolId,
+    String? termId,
+  }) async {
+    var query = client
+        .from('academic_events')
+        .select()
+        .eq('homeschool_id', homeschoolId);
+    if (termId != null && termId.isNotEmpty) {
+      query = query.eq('term_id', termId);
+    }
+    final data = await query.order('event_date', ascending: true).limit(200);
+    return _asRows(data).map(AcademicEvent.fromMap).toList();
+  }
+
+  Future<void> createAcademicEvent({
+    required String homeschoolId,
+    required String? termId,
+    required String title,
+    required String description,
+    required String eventDate,
+    String? endDate,
+    required String createdByUserId,
+  }) {
+    return client.from('academic_events').insert({
+      'homeschool_id': homeschoolId,
+      'term_id': _normalizeNullable(termId),
+      'title': title.trim(),
+      'description': description.trim(),
+      'event_date': eventDate,
+      'end_date': _normalizeNullable(endDate),
+      'created_by_user_id': createdByUserId,
+    });
+  }
+
+  Future<void> deleteAcademicEvent({required String eventId}) {
+    return client.from('academic_events').delete().eq('id', eventId);
+  }
+
   Future<List<AuditLog>> fetchAuditLogs({
     required String homeschoolId,
     int limit = 200,

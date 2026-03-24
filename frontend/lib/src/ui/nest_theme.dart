@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class NestColors {
   const NestColors._();
@@ -15,9 +14,24 @@ class NestColors {
 class NestTheme {
   const NestTheme._();
 
+  static const _fontFamily = 'Pretendard Variable';
+
+  static TextStyle _pretendard({
+    double fontSize = 15,
+    FontWeight fontWeight = FontWeight.w400,
+    Color color = NestColors.deepWood,
+  }) =>
+      TextStyle(
+        fontFamily: _fontFamily,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+      );
+
   static ThemeData light() {
     final base = ThemeData(
       useMaterial3: true,
+      fontFamily: _fontFamily,
       colorScheme:
           ColorScheme.fromSeed(
             seedColor: NestColors.dustyRose,
@@ -30,38 +44,49 @@ class NestTheme {
           ),
     );
 
-    final textTheme = GoogleFonts.notoSansKrTextTheme(base.textTheme).copyWith(
-      displayLarge: GoogleFonts.gowunBatang(
+    final textTheme = base.textTheme.copyWith(
+      displayLarge: _pretendard(
         fontSize: 42,
         fontWeight: FontWeight.w700,
-        color: NestColors.deepWood,
       ),
-      displayMedium: GoogleFonts.gowunBatang(
+      displayMedium: _pretendard(
         fontSize: 34,
         fontWeight: FontWeight.w700,
-        color: NestColors.deepWood,
       ),
-      headlineMedium: GoogleFonts.gowunBatang(
+      displaySmall: _pretendard(
         fontSize: 28,
         fontWeight: FontWeight.w700,
-        color: NestColors.deepWood,
       ),
-      titleLarge: GoogleFonts.gowunBatang(
+      headlineMedium: _pretendard(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+      ),
+      titleLarge: _pretendard(
         fontSize: 22,
         fontWeight: FontWeight.w700,
-        color: NestColors.deepWood,
       ),
-      bodyLarge: GoogleFonts.notoSansKr(
+      titleMedium: _pretendard(
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+      ),
+      titleSmall: _pretendard(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+      bodyLarge: _pretendard(
         fontSize: 17,
         fontWeight: FontWeight.w500,
-        color: NestColors.deepWood,
       ),
-      bodyMedium: GoogleFonts.notoSansKr(
+      bodyMedium: _pretendard(
         fontSize: 15,
+        fontWeight: FontWeight.w400,
+      ),
+      bodySmall: _pretendard(
+        fontSize: 13,
         fontWeight: FontWeight.w400,
         color: NestColors.deepWood,
       ),
-      labelLarge: GoogleFonts.notoSansKr(
+      labelLarge: _pretendard(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: Colors.white,

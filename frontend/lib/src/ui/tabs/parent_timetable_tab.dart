@@ -5,9 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
-import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
-import '../widgets/nest_skeleton.dart';
 
 class ParentTimetableTab extends StatefulWidget {
   const ParentTimetableTab({
@@ -28,19 +26,6 @@ class ParentTimetableTab extends StatefulWidget {
 }
 
 class _ParentTimetableTabState extends State<ParentTimetableTab> {
-  final _unavailabilityStartController = TextEditingController(text: '09:00');
-  final _unavailabilityEndController = TextEditingController(text: '10:00');
-  final _unavailabilityNoteController = TextEditingController();
-  int _selectedUnavailabilityDay = 1;
-
-  @override
-  void dispose() {
-    _unavailabilityStartController.dispose();
-    _unavailabilityEndController.dispose();
-    _unavailabilityNoteController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
@@ -49,33 +34,10 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        if (widget.isLoadingChildClasses && widget.childClassBundles.isEmpty) ...[
-          const NestSkeletonCard(),
-          const SizedBox(height: 8),
-          const NestSkeletonCard(),
-          const SizedBox(height: 8),
-          const NestSkeletonCard(),
-        ],
-        Row(
-          children: [
-            Icon(
-              Icons.auto_stories_outlined,
-              color: NestColors.deepWood.withValues(alpha: 0.74),
-            ),
-            const SizedBox(width: 8),
-            Text('내 아이 시간표', style: Theme.of(context).textTheme.titleLarge),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () => _openUnavailabilitySheet(controller),
-              icon: const Icon(Icons.block, size: 18),
-              label: const Text('내 불가 시간'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (widget.isLoadingChildClasses && bundles.isEmpty)
-          const SizedBox.shrink()
-        else if (widget.selectedChildId == null)
+        if (widget.isLoadingChildClasses && bundles.isEmpty) ...[
+          const SizedBox(height: 24),
+          const Center(child: CircularProgressIndicator()),
+        ] else if (widget.selectedChildId == null)
           const NestEmptyState(
             icon: Icons.calendar_today,
             title: '아이를 먼저 선택하세요',
@@ -112,7 +74,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
               ),
             ),
           )
-        else ...[
+        else
           Builder(
             builder: (context) {
               try {
@@ -130,393 +92,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
               }
             },
           ),
-          const SizedBox(height: 14),
-          Text('반별 상세', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          ..._buildTimetableCards(controller, bundles),
-        ],
       ],
-    );
-  }
-
-  /// Merge consecutive 30-min sessions of the same course on the same day
-  /// into a single lesson block.
-  List<_MergedLesson> _mergeSessionsIntoLessons(
-    NestController controller,
-    ChildClassBundle bundle,
-  ) {
-    final sessions = bundle.sessions.toList()
-      ..sort((a, b) {
-        final left = controller.findTimeSlot(a.timeSlotId);
-        final right = controller.findTimeSlot(b.timeSlotId);
-        if (left == null || right == null) {
-          return a.timeSlotId.compareTo(b.timeSlotId);
-        }
-        final dayCompare = left.dayOfWeek.compareTo(right.dayOfWeek);
-        if (dayCompare != 0) return dayCompare;
-        return left.startTime.compareTo(right.startTime);
-      });
-
-    final lessons = <_MergedLesson>[];
-    for (final session in sessions) {
-      final slot = controller.findTimeSlot(session.timeSlotId);
-      if (slot == null) continue;
-
-      final prev = lessons.isNotEmpty ? lessons.last : null;
-      if (prev != null &&
-          prev.courseId == session.courseId &&
-          prev.dayOfWeek == slot.dayOfWeek &&
-          prev.endTime == slot.startTime) {
-        // Extend previous lesson
-        prev.endTime = slot.endTime;
-        prev.sessions.add(session);
-      } else {
-        lessons.add(
-          _MergedLesson(
-            courseId: session.courseId,
-            dayOfWeek: slot.dayOfWeek,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            sessions: [session],
-          ),
-        );
-      }
-    }
-    return lessons;
-  }
-
-  List<Widget> _buildTimetableCards(
-    NestController controller,
-    Map<String, ChildClassBundle> bundles,
-  ) {
-    final sorted = bundles.values.toList()
-      ..sort((a, b) => a.classGroup.name.compareTo(b.classGroup.name));
-
-    return sorted
-        .map((bundle) {
-          final lessons = _mergeSessionsIntoLessons(controller, bundle);
-          final sessionCount = bundle.sessions.length;
-
-          try {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        EntityAvatar(
-                          label: bundle.classGroup.name,
-                          icon: Icons.groups_2_outlined,
-                          size: 42,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            bundle.classGroup.name,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        Chip(
-                          avatar: const Icon(Icons.campaign_outlined, size: 14),
-                          label: Text('공지 ${bundle.announcements.length}'),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        const SizedBox(width: 6),
-                        Chip(
-                          avatar: const Icon(Icons.schedule, size: 14),
-                          label: Text('${lessons.length}수업'),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ],
-                    ),
-                    if (sessionCount != lessons.length)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '$sessionCount개 슬롯 → ${lessons.length}수업으로 통합',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: NestColors.deepWood.withValues(
-                                  alpha: 0.55,
-                                ),
-                              ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    if (lessons.isEmpty)
-                      const NestEmptyState(
-                        icon: Icons.calendar_today,
-                        title: '등록된 수업이 없습니다',
-                      )
-                    else
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final compact = constraints.maxWidth < 900;
-                          final tileWidth = compact
-                              ? constraints.maxWidth
-                              : (constraints.maxWidth - 12) / 2;
-                          return Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: lessons
-                                .map((lesson) {
-                                  final courseName = controller.findCourseName(
-                                    lesson.courseId,
-                                  );
-                                  final teachers = lesson.sessions
-                                      .map(
-                                        (s) => _teacherLabelForSession(
-                                          controller: controller,
-                                          sessionId: s.id,
-                                          assignments: bundle.assignments,
-                                        ),
-                                      )
-                                      .toSet()
-                                      .join(', ');
-                                  final slotLabel =
-                                      '${_dayLabel(lesson.dayOfWeek)} ${_shortTime(lesson.startTime)}-${_shortTime(lesson.endTime)}';
-                                  final durationMin =
-                                      _clockToMinute(lesson.endTime) -
-                                      _clockToMinute(lesson.startTime);
-                                  final locations = lesson.sessions
-                                      .map(
-                                        (s) => (s.location ?? '').trim(),
-                                      )
-                                      .where((l) => l.isNotEmpty)
-                                      .toSet();
-                                  final roomLabel = locations.isEmpty
-                                      ? '장소 미지정'
-                                      : locations.join(', ');
-
-                                  return GestureDetector(
-                                    onTap: () => _showLessonDetailModal(
-                                      context,
-                                      controller: controller,
-                                      lesson: lesson,
-                                      bundle: bundle,
-                                    ),
-                                    child: Container(
-                                      width: tileWidth,
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: NestColors.roseMist,
-                                        ),
-                                        color: Colors.white,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.menu_book_rounded,
-                                                size: 18,
-                                                color: NestColors.clay,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: Text(
-                                                  courseName,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                      ),
-                                                ),
-                                              ),
-                                              Icon(
-                                                Icons.chevron_right,
-                                                size: 18,
-                                                color: NestColors.deepWood
-                                                    .withValues(alpha: 0.45),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          _InfoRow(
-                                            icon: Icons.schedule_outlined,
-                                            text: '$slotLabel ($durationMin분)',
-                                          ),
-                                          const SizedBox(height: 4),
-                                          _InfoRow(
-                                            icon: Icons.school_outlined,
-                                            text: teachers,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          _InfoRow(
-                                            icon: Icons.meeting_room_outlined,
-                                            text: roomLabel,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                })
-                                .toList(),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-          } catch (e, st) {
-            debugPrint('[ParentTimetable] card error: $e\n$st');
-            return Card(
-              color: Colors.red.shade50,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text('반 카드 오류 (${bundle.classGroup.name}): $e',
-                    style: const TextStyle(fontSize: 12)),
-              ),
-            );
-          }
-        })
-        .toList();
-  }
-
-  void _showLessonDetailModal(
-    BuildContext context, {
-    required NestController controller,
-    required _MergedLesson lesson,
-    required ChildClassBundle bundle,
-  }) {
-    final courseName = controller.findCourseName(lesson.courseId);
-    final durationMin =
-        _clockToMinute(lesson.endTime) - _clockToMinute(lesson.startTime);
-    final slotLabel =
-        '${_dayLabel(lesson.dayOfWeek)} ${_shortTime(lesson.startTime)} - ${_shortTime(lesson.endTime)}';
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.55,
-          minChildSize: 0.3,
-          maxChildSize: 0.85,
-          expand: false,
-          builder: (context, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: ListView(
-                controller: scrollController,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.menu_book_rounded, color: NestColors.clay),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          courseName,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    bundle.classGroup.name,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: NestColors.deepWood.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _DetailRow(
-                    icon: Icons.schedule_outlined,
-                    label: '시간',
-                    value: '$slotLabel ($durationMin분)',
-                  ),
-                  const Divider(height: 24),
-                  // Teachers
-                  _DetailRow(
-                    icon: Icons.school_outlined,
-                    label: '담당 교사',
-                    value: lesson.sessions
-                        .map(
-                          (s) => _teacherLabelForSession(
-                            controller: controller,
-                            sessionId: s.id,
-                            assignments: bundle.assignments,
-                          ),
-                        )
-                        .toSet()
-                        .join('\n'),
-                  ),
-                  const Divider(height: 24),
-                  // Location
-                  _DetailRow(
-                    icon: Icons.meeting_room_outlined,
-                    label: '장소',
-                    value: () {
-                      final locs = lesson.sessions
-                          .map((s) => (s.location ?? '').trim())
-                          .where((l) => l.isNotEmpty)
-                          .toSet();
-                      return locs.isEmpty ? '장소 미지정' : locs.join(', ');
-                    }(),
-                  ),
-                  const Divider(height: 24),
-                  // Slot breakdown
-                  _DetailRow(
-                    icon: Icons.view_timeline_outlined,
-                    label: '슬롯 구성',
-                    value: '${lesson.sessions.length}개 슬롯 (각 ${durationMin ~/ lesson.sessions.length}분)',
-                  ),
-                  const SizedBox(height: 8),
-                  ...lesson.sessions.map((session) {
-                    final slot = controller.findTimeSlot(session.timeSlotId);
-                    final slotTime = slot == null
-                        ? '-'
-                        : '${_shortTime(slot.startTime)} - ${_shortTime(slot.endTime)}';
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6, left: 32),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.circle,
-                            size: 6,
-                            color: NestColors.deepWood.withValues(alpha: 0.4),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            slotTime,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(width: 8),
-                          Chip(
-                            label: Text(session.status),
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
@@ -539,9 +115,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
 
     for (final entry in entries) {
       final slot = slotById[entry.session.timeSlotId];
-      if (slot == null) {
-        continue;
-      }
+      if (slot == null) continue;
 
       final periodKey = '${slot.startTime}-${slot.endTime}';
       days.add(slot.dayOfWeek);
@@ -572,9 +146,8 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
-        // Compute natural board width, then scale to fit if too wide.
-        const naturalTimeCol = 90.0;
-        const naturalDayCol = 180.0;
+        const naturalTimeCol = 50.0;
+        const naturalDayCol = 110.0;
         final naturalWidth =
             naturalTimeCol + naturalDayCol * sortedDays.length;
         final scale = naturalWidth > availableWidth
@@ -594,12 +167,22 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Header row: empty first cell + day labels
               Row(
                 children: [
-                  _ScheduleHeaderCell(
+                  // Empty top-left cell (no "시간" label)
+                  Container(
                     width: timeColWidth,
-                    label: '시간',
-                    align: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: NestColors.creamyWhite,
+                      border: Border(
+                        left: BorderSide(
+                            color:
+                                NestColors.roseMist.withValues(alpha: 0.5)),
+                      ),
+                    ),
                   ),
                   ...sortedDays.map(
                     (day) => _ScheduleHeaderCell(
@@ -614,12 +197,12 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
               ...sortedPeriods.asMap().entries.map((rowEntry) {
                 final periodKey = rowEntry.value;
                 final segments = periodKey.split('-');
-                final periodLabel = segments.length == 2
-                    ? '${_shortTime(segments[0])} - ${_shortTime(segments[1])}'
+                final startTimeLabel = segments.isNotEmpty
+                    ? _koreanTime(segments[0])
                     : periodKey;
+                final compactFont = scale < 0.85;
 
-                return IntrinsicHeight(
-                  child: Container(
+                return Container(
                     decoration: BoxDecoration(
                       border: Border(
                         top: BorderSide(
@@ -628,20 +211,22 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                       ),
                     ),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         SizedBox(
                           width: timeColWidth,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
+                              horizontal: 4,
                               vertical: 10,
                             ),
                             child: Text(
-                              periodLabel,
+                              startTimeLabel,
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: compactFont ? 10 : 12,
+                                  ),
                             ),
                           ),
                         ),
@@ -662,18 +247,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                             ),
                             padding: const EdgeInsets.all(4),
                             child: cells.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      '-',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: NestColors.deepWood
-                                                .withValues(alpha: 0.36),
-                                          ),
-                                    ),
-                                  )
+                                ? const SizedBox.shrink()
                                 : Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -683,27 +257,18 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                                             padding: const EdgeInsets.only(
                                               bottom: 4,
                                             ),
-                                            child: _ParentScheduleCell(
+                                            child: _SubjectNameCell(
                                               courseName: controller
                                                   .findCourseName(
                                                     cell.session.courseId,
                                                   ),
-                                              className: cell.className,
-                                              teacherLabel:
-                                                  _teacherLabelForSession(
-                                                    controller: controller,
-                                                    sessionId: cell.session.id,
-                                                    assignments:
-                                                        cell.assignments,
-                                                  ),
-                                              locationLabel:
-                                                  (cell.session.location ?? '')
-                                                      .trim()
-                                                      .isEmpty
-                                                  ? '장소 미지정'
-                                                  : (cell.session.location ??
-                                                          '')
-                                                      .trim(),
+                                              compact: compactFont,
+                                              onTap: () =>
+                                                  _showCellDetailModal(
+                                                context,
+                                                controller: controller,
+                                                entry: cell,
+                                              ),
                                             ),
                                           ),
                                         )
@@ -713,18 +278,93 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                         }),
                       ],
                     ),
-                  ),
                 );
               }),
             ],
           ),
         );
 
-        return InteractiveViewer(
-          minScale: 1.0,
-          maxScale: 3.0,
-          constrained: false,
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           child: board,
+        );
+      },
+    );
+  }
+
+  /// Show detail modal when tapping a cell
+  void _showCellDetailModal(
+    BuildContext context, {
+    required NestController controller,
+    required _ParentScheduleEntry entry,
+  }) {
+    final courseName = controller.findCourseName(entry.session.courseId);
+    final slot = controller.findTimeSlot(entry.session.timeSlotId);
+    final timeLabel = slot == null
+        ? '-'
+        : '${_dayLabel(slot.dayOfWeek)} ${_shortTime(slot.startTime)} - ${_shortTime(slot.endTime)}';
+    final teacherLabel = _teacherLabelForSession(
+      controller: controller,
+      sessionId: entry.session.id,
+      assignments: entry.assignments,
+    );
+    final location = (entry.session.location ?? '').trim();
+    final locationLabel = location.isEmpty ? '장소 미지정' : location;
+
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.menu_book_rounded, color: NestColors.clay),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      courseName,
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                entry.className,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _DetailRow(
+                icon: Icons.schedule_outlined,
+                label: '시간',
+                value: timeLabel,
+              ),
+              const Divider(height: 24),
+              _DetailRow(
+                icon: Icons.school_outlined,
+                label: '담당 교사',
+                value: teacherLabel,
+              ),
+              const Divider(height: 24),
+              _DetailRow(
+                icon: Icons.meeting_room_outlined,
+                label: '장소',
+                value: locationLabel,
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         );
       },
     );
@@ -740,9 +380,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
 
     for (final bundle in sorted) {
       for (final session in bundle.sessions) {
-        if (controller.findTimeSlot(session.timeSlotId) == null) {
-          continue;
-        }
+        if (controller.findTimeSlot(session.timeSlotId) == null) continue;
         rows.add(
           _ParentScheduleEntry(
             className: bundle.classGroup.name,
@@ -760,13 +398,9 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
         return a.className.compareTo(b.className);
       }
       final dayCompare = leftSlot.dayOfWeek.compareTo(rightSlot.dayOfWeek);
-      if (dayCompare != 0) {
-        return dayCompare;
-      }
+      if (dayCompare != 0) return dayCompare;
       final startCompare = leftSlot.startTime.compareTo(rightSlot.startTime);
-      if (startCompare != 0) {
-        return startCompare;
-      }
+      if (startCompare != 0) return startCompare;
       return a.className.compareTo(b.className);
     });
     return rows;
@@ -778,12 +412,9 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     final leftStart = leftParts.firstOrNull ?? left;
     final rightStart = rightParts.firstOrNull ?? right;
 
-    final startCompare = _clockToMinute(
-      leftStart,
-    ).compareTo(_clockToMinute(rightStart));
-    if (startCompare != 0) {
-      return startCompare;
-    }
+    final startCompare =
+        _clockToMinute(leftStart).compareTo(_clockToMinute(rightStart));
+    if (startCompare != 0) return startCompare;
 
     final leftEnd = leftParts.length > 1 ? leftParts[1] : left;
     final rightEnd = rightParts.length > 1 ? rightParts[1] : right;
@@ -793,287 +424,18 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
   int _clockToMinute(String value) {
     final source = value.trim();
     final parts = source.split(':');
-    if (parts.length < 2) {
-      return 0;
-    }
+    if (parts.length < 2) return 0;
     final hour = int.tryParse(parts[0]) ?? 0;
     final minute = int.tryParse(parts[1]) ?? 0;
     return hour * 60 + minute;
   }
-
-  void _openUnavailabilitySheet(NestController controller) {
-    final currentUserId = controller.user?.id;
-    if (currentUserId == null) return;
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final blocks =
-                controller.memberUnavailabilityBlocks
-                    .where(
-                      (row) =>
-                          row.ownerKind == 'MEMBER_USER' &&
-                          row.ownerId == currentUserId,
-                    )
-                    .toList()
-                  ..sort((a, b) {
-                    final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-                    if (day != 0) return day;
-                    return a.startTime.compareTo(b.startTime);
-                  });
-
-            return DraggableScrollableSheet(
-              initialChildSize: 0.7,
-              minChildSize: 0.4,
-              maxChildSize: 0.95,
-              expand: false,
-              builder: (context, scrollController) {
-                // Fixed header items: title row, spacer, description, spacer,
-                // fields, spacer, note field, spacer, add button, spacer,
-                // section label, spacer = 12 fixed items.
-                // Then: empty state (1) OR block rows (blocks.length).
-                const fixedCount = 12;
-                final dynamicCount = blocks.isEmpty ? 1 : blocks.length;
-
-                return Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: fixedCount + dynamicCount,
-                    itemBuilder: (context, index) {
-                      switch (index) {
-                        case 0:
-                          return Row(
-                            children: [
-                              Text(
-                                '내 불가 시간 설정',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const Spacer(),
-                              IconButton(
-                                onPressed: () => Navigator.pop(context),
-                                icon: const Icon(Icons.close),
-                              ),
-                            ],
-                          );
-                        case 1:
-                          return const SizedBox(height: 6);
-                        case 2:
-                          return Text(
-                            '등록한 시간은 시간표 생성 시 자동으로 회피됩니다.',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: NestColors.deepWood.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                ),
-                          );
-                        case 3:
-                          return const SizedBox(height: 12);
-                        case 4:
-                          return LayoutBuilder(
-                            builder: (context, constraints) {
-                              final compact = constraints.maxWidth < 600;
-                              final dayField = _buildDayField(
-                                controller,
-                                setSheetState,
-                              );
-                              final startField = _buildTimeField(
-                                controller: _unavailabilityStartController,
-                                label: '시작 (HH:MM)',
-                              );
-                              final endField = _buildTimeField(
-                                controller: _unavailabilityEndController,
-                                label: '종료 (HH:MM)',
-                              );
-
-                              if (compact) {
-                                return Column(
-                                  children: [
-                                    dayField,
-                                    const SizedBox(height: 8),
-                                    startField,
-                                    const SizedBox(height: 8),
-                                    endField,
-                                  ],
-                                );
-                              }
-                              return Row(
-                                children: [
-                                  Expanded(flex: 3, child: dayField),
-                                  const SizedBox(width: 8),
-                                  Expanded(flex: 2, child: startField),
-                                  const SizedBox(width: 8),
-                                  Expanded(flex: 2, child: endField),
-                                ],
-                              );
-                            },
-                          );
-                        case 5:
-                          return const SizedBox(height: 8);
-                        case 6:
-                          return TextField(
-                            controller: _unavailabilityNoteController,
-                            decoration: const InputDecoration(
-                              labelText: '메모 (선택)',
-                              prefixIcon: Icon(Icons.edit_note),
-                            ),
-                            minLines: 1,
-                            maxLines: 2,
-                          );
-                        case 7:
-                          return const SizedBox(height: 10);
-                        case 8:
-                          return ElevatedButton.icon(
-                            onPressed: controller.isBusy
-                                ? null
-                                : () async {
-                                    await _createBlock(currentUserId);
-                                    if (context.mounted) setSheetState(() {});
-                                  },
-                            icon: const Icon(Icons.add),
-                            label: const Text('불가 시간 추가'),
-                          );
-                        case 9:
-                          return const SizedBox(height: 14);
-                        case 10:
-                          return Text(
-                            '등록 항목',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          );
-                        case 11:
-                          return const SizedBox(height: 8);
-                        default:
-                          if (blocks.isEmpty) {
-                            return const NestEmptyState(
-                              icon: Icons.calendar_today,
-                              title: '등록된 불가 시간이 없습니다',
-                            );
-                          }
-                          final block = blocks[index - fixedCount];
-                          final day = _dayLabel(block.dayOfWeek);
-                          final start = _shortTime(block.startTime);
-                          final end = _shortTime(block.endTime);
-                          final note = block.note.trim();
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: NestColors.roseMist,
-                                ),
-                              ),
-                              child: ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.schedule),
-                                title: Text('$day · $start - $end'),
-                                subtitle: note.isEmpty ? null : Text(note),
-                                trailing: IconButton(
-                                  onPressed: controller.isBusy
-                                      ? null
-                                      : () async {
-                                          await _deleteBlock(block.id);
-                                          if (context.mounted) {
-                                            setSheetState(() {});
-                                          }
-                                        },
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                              ),
-                            ),
-                          );
-                      }
-                    },
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildDayField(NestController controller, StateSetter setSheetState) {
-    return DropdownButtonFormField<int>(
-      initialValue: _selectedUnavailabilityDay,
-      decoration: const InputDecoration(
-        labelText: '요일',
-        prefixIcon: Icon(Icons.calendar_today_outlined),
-      ),
-      items: const [
-        DropdownMenuItem(value: 0, child: Text('일')),
-        DropdownMenuItem(value: 1, child: Text('월')),
-        DropdownMenuItem(value: 2, child: Text('화')),
-        DropdownMenuItem(value: 3, child: Text('수')),
-        DropdownMenuItem(value: 4, child: Text('목')),
-        DropdownMenuItem(value: 5, child: Text('금')),
-        DropdownMenuItem(value: 6, child: Text('토')),
-      ],
-      onChanged: controller.isBusy
-          ? null
-          : (value) {
-              if (value == null) return;
-              setState(() => _selectedUnavailabilityDay = value);
-              setSheetState(() {});
-            },
-    );
-  }
-
-  Widget _buildTimeField({
-    required TextEditingController controller,
-    required String label,
-  }) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: const Icon(Icons.access_time),
-      ),
-    );
-  }
-
-  Future<void> _createBlock(String userId) async {
-    try {
-      await widget.controller.createMemberUnavailabilityBlock(
-        ownerKind: 'MEMBER_USER',
-        ownerId: userId,
-        dayOfWeek: _selectedUnavailabilityDay,
-        startTime: _unavailabilityStartController.text,
-        endTime: _unavailabilityEndController.text,
-        note: _unavailabilityNoteController.text,
-      );
-      _unavailabilityNoteController.clear();
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  Future<void> _deleteBlock(String blockId) async {
-    try {
-      await widget.controller.deleteMemberUnavailabilityBlock(blockId: blockId);
-      _showMessage(widget.controller.statusMessage);
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
-    }
-  }
-
-  // ── Helpers ──
 
   String _teacherLabelForSession({
     required NestController controller,
     required String sessionId,
     required List<SessionTeacherAssignment> assignments,
   }) {
-    final rows =
-        assignments
+    final rows = assignments
             .where((row) => row.classSessionId == sessionId)
             .toList()
           ..sort((a, b) {
@@ -1097,13 +459,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
 
   String _dayLabel(int dayOfWeek) {
     const labels = <int, String>{
-      0: 'Sun',
-      1: 'Mon',
-      2: 'Tue',
-      3: 'Wed',
-      4: 'Thu',
-      5: 'Fri',
-      6: 'Sat',
+      0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
     };
     return labels[dayOfWeek] ?? '$dayOfWeek';
   }
@@ -1117,11 +473,18 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     return DateFormat('HH:mm').format(parsed);
   }
 
-  void _showMessage(String text) {
-    if (!mounted || text.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  /// Convert "HH:mm:ss" or "HH:mm" to Korean style: "9시", "9시반", "10시"
+  String _koreanTime(String value) {
+    final minutes = _clockToMinute(value);
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (m == 0) return '$h시';
+    if (m == 30) return '$h시반';
+    return '$h:${m.toString().padLeft(2, '0')}';
   }
 }
+
+// ── Private helper classes ──
 
 class _ParentScheduleEntry {
   const _ParentScheduleEntry({
@@ -1160,119 +523,51 @@ class _ScheduleHeaderCell extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(
-          context,
-        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
-class _ParentScheduleCell extends StatelessWidget {
-  const _ParentScheduleCell({
+/// Simplified cell showing only the subject name; tappable for detail.
+class _SubjectNameCell extends StatelessWidget {
+  const _SubjectNameCell({
     required this.courseName,
-    required this.className,
-    required this.teacherLabel,
-    required this.locationLabel,
+    required this.onTap,
+    this.compact = false,
   });
 
   final String courseName;
-  final String className;
-  final String teacherLabel;
-  final String locationLabel;
+  final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        color: NestColors.roseMist.withValues(alpha: 0.26),
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            courseName,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            className,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.8),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            teacherLabel,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.72),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            locationLabel,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.72),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MergedLesson {
-  _MergedLesson({
-    required this.courseId,
-    required this.dayOfWeek,
-    required this.startTime,
-    required this.endTime,
-    required this.sessions,
-  });
-
-  final String courseId;
-  final int dayOfWeek;
-  final String startTime;
-  String endTime;
-  final List<ClassSession> sessions;
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          size: 15,
-          color: NestColors.deepWood.withValues(alpha: 0.72),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 4 : 8,
+          vertical: compact ? 6 : 10,
         ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.8),
-            ),
-          ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: NestColors.roseMist.withValues(alpha: 0.26),
+          border: Border.all(color: NestColors.roseMist),
         ),
-      ],
+        child: Text(
+          courseName,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: compact ? 11 : null,
+              ),
+        ),
+      ),
     );
   }
 }
