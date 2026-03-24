@@ -720,10 +720,8 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           ),
         );
 
-        return InteractiveViewer(
-          minScale: 1.0,
-          maxScale: 3.0,
-          constrained: false,
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           child: board,
         );
       },
