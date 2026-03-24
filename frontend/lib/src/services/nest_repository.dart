@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
@@ -17,14 +15,14 @@ class BootstrapResult {
   final String classGroupId;
 }
 
-class DriveUploadResult {
-  const DriveUploadResult({
-    required this.driveFileId,
-    required this.driveWebViewLink,
+class StorageUploadResult {
+  const StorageUploadResult({
+    required this.storagePath,
+    required this.publicUrl,
   });
 
-  final String driveFileId;
-  final String? driveWebViewLink;
+  final String storagePath;
+  final String publicUrl;
 }
 
 class CommunityReactionSnapshot {
@@ -1659,41 +1657,40 @@ class NestRepository {
     return _asMap(row)['id'] as String;
   }
 
-  Future<DriveUploadResult> uploadToDrive({
+  Future<StorageUploadResult> uploadToStorage({
     required String homeschoolId,
-    required String uploadSessionId,
     required PendingMediaFile file,
   }) async {
-    final response = await client.functions.invoke(
-      'google-drive-upload',
-      body: {
-        'homeschool_id': homeschoolId,
-        'upload_session_id': uploadSessionId,
-        'file_name': file.name,
-        'mime_type': file.mimeType,
-        'file_base64': base64Encode(file.bytes),
-      },
-    );
+    final now = DateTime.now();
+    final month = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final ext = file.name.contains('.')
+        ? file.name.substring(file.name.lastIndexOf('.'))
+        : '';
+    final uniqueName =
+        '${now.millisecondsSinceEpoch}_${file.name.hashCode.abs()}$ext';
+    final storagePath = '$homeschoolId/$month/$uniqueName';
 
-    final body = _asMap(response.data);
-    final driveFileId = body['drive_file_id'] as String?;
+    await client.storage.from('media').uploadBinary(
+          storagePath,
+          file.bytes,
+          fileOptions: FileOptions(contentType: file.mimeType),
+        );
 
-    if (driveFileId == null || driveFileId.isEmpty) {
-      throw StateError('Drive 업로드 응답에 drive_file_id가 없습니다.');
-    }
+    final publicUrl =
+        client.storage.from('media').getPublicUrl(storagePath);
 
-    return DriveUploadResult(
-      driveFileId: driveFileId,
-      driveWebViewLink: body['drive_web_view_link'] as String?,
+    return StorageUploadResult(
+      storagePath: storagePath,
+      publicUrl: publicUrl,
     );
   }
 
   Future<String> insertMediaAsset({
     required String homeschoolId,
-    required String uploadSessionId,
+    required String? uploadSessionId,
     required String uploaderUserId,
     required String? classGroupId,
-    required DriveUploadResult uploadResult,
+    required StorageUploadResult uploadResult,
     required String title,
     required String description,
     required String mediaType,
@@ -1702,9 +1699,9 @@ class NestRepository {
         .from('media_assets')
         .insert({
           'homeschool_id': homeschoolId,
-          'upload_session_id': uploadSessionId,
-          'drive_file_id': uploadResult.driveFileId,
-          'drive_web_view_link': uploadResult.driveWebViewLink,
+          if (uploadSessionId != null)
+            'upload_session_id': uploadSessionId,
+          'storage_path': uploadResult.storagePath,
           'uploader_user_id': uploaderUserId,
           'class_group_id': classGroupId,
           'title': title,
@@ -1751,7 +1748,7 @@ class NestRepository {
         ? await client
               .from('media_assets')
               .select(
-                'id, title, description, media_type, drive_web_view_link, class_group_id, captured_at',
+                'id, title, description, media_type, drive_web_view_link, storage_path, class_group_id, captured_at',
               )
               .eq('homeschool_id', homeschoolId)
               .eq('class_group_id', classGroupId)
@@ -1760,7 +1757,7 @@ class NestRepository {
         : await client
               .from('media_assets')
               .select(
-                'id, title, description, media_type, drive_web_view_link, class_group_id, captured_at',
+                'id, title, description, media_type, drive_web_view_link, storage_path, class_group_id, captured_at',
               )
               .eq('homeschool_id', homeschoolId)
               .order('captured_at', ascending: false)
@@ -1837,7 +1834,7 @@ class NestRepository {
     final data = await client
         .from('community_post_media')
         .select(
-          'post_id, media_assets(id, media_type, drive_web_view_link, title, description)',
+          'post_id, media_assets(id, media_type, drive_web_view_link, storage_path, title, description)',
         )
         .inFilter('post_id', postIds);
 
@@ -1859,6 +1856,7 @@ class NestRepository {
           'media_asset_id': mediaAssetId,
           'media_type': mediaMap['media_type'],
           'drive_web_view_link': mediaMap['drive_web_view_link'],
+          'storage_path': mediaMap['storage_path'],
           'title': mediaMap['title'],
           'description': mediaMap['description'],
         }),
@@ -2063,90 +2061,9 @@ class NestRepository {
     return client.from('community_posts').delete().eq('id', postId);
   }
 
-  Future<DriveIntegration?> fetchDriveIntegration({
-    required String homeschoolId,
-  }) async {
-    try {
-      final richData = await client
-          .from('drive_integrations')
-          .select(
-            'id, status, root_folder_id, folder_policy, connected_at, '
-            'google_access_token, google_refresh_token, google_token_expires_at',
-          )
-          .eq('homeschool_id', homeschoolId)
-          .maybeSingle();
-
-      if (richData == null) {
-        return null;
-      }
-
-      return DriveIntegration.fromMap(_asMap(richData));
-    } on PostgrestException {
-      final fallback = await client
-          .from('drive_integrations')
-          .select('id, status, root_folder_id, folder_policy, connected_at')
-          .eq('homeschool_id', homeschoolId)
-          .maybeSingle();
-
-      if (fallback == null) {
-        return null;
-      }
-
-      return DriveIntegration.fromMap(_asMap(fallback));
-    }
-  }
-
-  Future<String> startGoogleDriveOauth({required String homeschoolId}) async {
-    final response = await client.functions.invoke(
-      'google-drive-connect-start',
-      body: {'homeschool_id': homeschoolId},
-    );
-
-    final body = _asMap(response.data);
-    final authUrl = body['auth_url'] as String?;
-
-    if (authUrl == null || authUrl.isEmpty) {
-      throw StateError('OAuth URL을 생성하지 못했습니다.');
-    }
-
-    return authUrl;
-  }
-
-  Future<void> upsertDriveIntegration({
-    required String homeschoolId,
-    required String userId,
-    required String rootFolderId,
-    required String folderPolicy,
-    required String? accessToken,
-    required String? refreshToken,
-    required String? tokenExpiresAtIso,
-  }) {
-    return client.from('drive_integrations').upsert({
-      'homeschool_id': homeschoolId,
-      'provider': 'GOOGLE_DRIVE',
-      'status': 'CONNECTED',
-      'root_folder_id': rootFolderId,
-      'folder_policy': folderPolicy,
-      'connected_by_user_id': userId,
-      'connected_at': DateTime.now().toUtc().toIso8601String(),
-      'google_access_token': _normalizeNullable(accessToken),
-      'google_refresh_token': _normalizeNullable(refreshToken),
-      'google_token_expires_at': _normalizeNullable(tokenExpiresAtIso),
-    }, onConflict: 'homeschool_id');
-  }
-
-  Future<void> disconnectDrive({required String homeschoolId}) {
-    return client
-        .from('drive_integrations')
-        .update({
-          'status': 'DISCONNECTED',
-          'root_folder_id': null,
-          'folder_policy': null,
-          'google_access_token': null,
-          'google_refresh_token': null,
-          'google_token_expires_at': null,
-        })
-        .eq('homeschool_id', homeschoolId);
+  /// Returns the public URL for a storage path in the 'media' bucket.
+  String mediaPublicUrl(String storagePath) {
+    return client.storage.from('media').getPublicUrl(storagePath);
   }
 
   List<Map<String, dynamic>> _defaultTimeSlots({required String termId}) {

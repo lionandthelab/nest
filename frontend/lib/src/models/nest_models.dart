@@ -1058,44 +1058,6 @@ class ProposalSession {
   };
 }
 
-class DriveIntegration {
-  const DriveIntegration({
-    required this.id,
-    required this.status,
-    required this.rootFolderId,
-    required this.folderPolicy,
-    required this.connectedAt,
-    required this.googleAccessToken,
-    required this.googleRefreshToken,
-    required this.googleTokenExpiresAt,
-  });
-
-  final String id;
-  final String status;
-  final String? rootFolderId;
-  final String? folderPolicy;
-  final DateTime? connectedAt;
-  final String? googleAccessToken;
-  final String? googleRefreshToken;
-  final DateTime? googleTokenExpiresAt;
-
-  bool get hasAccessToken => (googleAccessToken ?? '').isNotEmpty;
-  bool get hasRefreshToken => (googleRefreshToken ?? '').isNotEmpty;
-
-  factory DriveIntegration.fromMap(Map<String, dynamic> map) {
-    return DriveIntegration(
-      id: (map['id'] as String?) ?? '',
-      status: (map['status'] as String?) ?? 'DISCONNECTED',
-      rootFolderId: map['root_folder_id'] as String?,
-      folderPolicy: map['folder_policy'] as String?,
-      connectedAt: parseDateTime(map['connected_at']),
-      googleAccessToken: map['google_access_token'] as String?,
-      googleRefreshToken: map['google_refresh_token'] as String?,
-      googleTokenExpiresAt: parseDateTime(map['google_token_expires_at']),
-    );
-  }
-}
-
 class GalleryItem {
   const GalleryItem({
     required this.id,
@@ -1103,6 +1065,7 @@ class GalleryItem {
     required this.description,
     required this.mediaType,
     required this.driveWebViewLink,
+    required this.storagePath,
     required this.classGroupId,
     required this.capturedAt,
   });
@@ -1112,6 +1075,7 @@ class GalleryItem {
   final String description;
   final String mediaType;
   final String? driveWebViewLink;
+  final String? storagePath;
   final String? classGroupId;
   final DateTime? capturedAt;
 
@@ -1124,6 +1088,7 @@ class GalleryItem {
       description: (map['description'] as String?) ?? '',
       mediaType: (map['media_type'] as String?) ?? 'PHOTO',
       driveWebViewLink: map['drive_web_view_link'] as String?,
+      storagePath: map['storage_path'] as String?,
       classGroupId: map['class_group_id'] as String?,
       capturedAt: parseDateTime(map['captured_at']),
     );
@@ -1227,6 +1192,7 @@ class CommunityPostMedia {
     required this.mediaAssetId,
     required this.mediaType,
     required this.driveWebViewLink,
+    required this.storagePath,
     required this.title,
     required this.description,
   });
@@ -1235,6 +1201,7 @@ class CommunityPostMedia {
   final String mediaAssetId;
   final String mediaType;
   final String? driveWebViewLink;
+  final String? storagePath;
   final String title;
   final String description;
 
@@ -1246,6 +1213,7 @@ class CommunityPostMedia {
       mediaAssetId: (map['media_asset_id'] as String?) ?? '',
       mediaType: (map['media_type'] as String?) ?? 'PHOTO',
       driveWebViewLink: map['drive_web_view_link'] as String?,
+      storagePath: map['storage_path'] as String?,
       title: (map['title'] as String?) ?? '',
       description: (map['description'] as String?) ?? '',
     );

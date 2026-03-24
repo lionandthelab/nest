@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import 'community_tab.dart';
-import 'drive_tab.dart';
 import 'members_tab.dart';
 import 'ops_tab.dart';
 
@@ -23,7 +22,6 @@ class _SystemAdminTabState extends State<SystemAdminTab>
   static const _tabs = [
     Tab(text: '멤버 관리'),
     Tab(text: 'SNS 관리'),
-    Tab(text: '드라이브 관리'),
     Tab(text: '운영 로그'),
   ];
 
@@ -86,7 +84,6 @@ class _SystemAdminTabState extends State<SystemAdminTab>
             children: [
               MembersTab(controller: controller),
               CommunityTab(controller: controller),
-              DriveTab(controller: controller),
               OpsTab(controller: controller),
             ],
           ),

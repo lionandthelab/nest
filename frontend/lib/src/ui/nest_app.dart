@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
 import '../services/nest_repository.dart';
-import '../services/web_oauth_bridge.dart';
 import '../state/nest_controller.dart';
 import 'home_page.dart';
 import 'login_page.dart';
@@ -31,7 +30,6 @@ class _NestAppRootState extends State<NestAppRoot> {
     final repository = NestRepository(Supabase.instance.client);
     controller = NestController(
       repository: repository,
-      webOauthBridge: createWebOauthBridge(),
     );
 
     controller.initialize();

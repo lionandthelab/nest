@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/homeschool_create_dialog.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
@@ -700,129 +701,15 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Future<void> _showOnboardingCreateModal() async {
-    final controller = widget.controller;
-    await showDialog<void>(
+    final created = await showHomeschoolCreateDialog(
       context: context,
-      barrierDismissible: !controller.isBusy,
-      builder: (dialogContext) {
-        final maxWidth = MediaQuery.of(dialogContext).size.width < 700
-            ? double.infinity
-            : 680.0;
-        return Dialog(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '홈스쿨 개설',
-                      style: Theme.of(dialogContext).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '운영에 필요한 기본 틀을 한 번에 생성합니다.',
-                      style: Theme.of(dialogContext).textTheme.bodyMedium
-                          ?.copyWith(
-                            color: NestColors.deepWood.withValues(alpha: 0.72),
-                          ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _homeschoolController,
-                      decoration: const InputDecoration(labelText: '홈스쿨 이름'),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                          ? '필수값입니다.'
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _termController,
-                      decoration: const InputDecoration(labelText: '학기 이름'),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                          ? '필수값입니다.'
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _startDateController,
-                            decoration: const InputDecoration(
-                              labelText: '시작일 (YYYY-MM-DD)',
-                            ),
-                            validator: _validateDate,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _endDateController,
-                            decoration: const InputDecoration(
-                              labelText: '종료일 (YYYY-MM-DD)',
-                            ),
-                            validator: _validateDate,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _classController,
-                      decoration: const InputDecoration(labelText: '반 이름'),
-                      validator: (value) =>
-                          (value == null || value.trim().isEmpty)
-                          ? '필수값입니다.'
-                          : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _courseController,
-                      decoration: const InputDecoration(
-                        labelText: '기본 과목 (콤마 구분)',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: controller.isBusy
-                              ? null
-                              : () => Navigator.of(dialogContext).pop(),
-                          child: const Text('닫기'),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          onPressed: controller.isBusy
-                              ? null
-                              : () async {
-                                  final ok = await _submitBootstrap();
-                                  if (!ok || !dialogContext.mounted) {
-                                    return;
-                                  }
-                                  Navigator.of(dialogContext).pop();
-                                },
-                          icon: const Icon(Icons.auto_awesome),
-                          label: const Text('홈스쿨 개설하기'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      controller: widget.controller,
     );
+    if (created && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.controller.statusMessage)),
+      );
+    }
   }
 
   Future<void> _searchHomeschools() async {

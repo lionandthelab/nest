@@ -3,24 +3,17 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import '../config/app_config.dart';
 import '../models/nest_models.dart';
 import '../services/local_planner.dart';
 import '../services/nest_cache.dart';
 import '../services/nest_repository.dart';
-import '../services/web_oauth_bridge.dart';
 
 class NestController extends ChangeNotifier {
   NestController({
     required NestRepository repository,
-    required WebOauthBridge webOauthBridge,
-  }) : _repository = repository,
-       _webOauthBridge = webOauthBridge;
+  }) : _repository = repository;
 
   final NestRepository _repository;
-  final WebOauthBridge _webOauthBridge;
 
   StreamSubscription<AuthState>? _authSubscription;
 
@@ -73,8 +66,6 @@ class NestController extends ChangeNotifier {
   Map<String, List<ProposalSession>> proposalSessionsById = const {};
   List<ScheduleOptionDraft> scheduleOptionDrafts = [];
   String? selectedScheduleOptionId;
-
-  DriveIntegration? driveIntegration;
 
   List<GalleryItem> galleryItems = [];
   Map<String, List<String>> mediaChildrenByAsset = const {};
@@ -238,7 +229,6 @@ class NestController extends ChangeNotifier {
   bool get isAdminLike =>
       currentRole == 'HOMESCHOOL_ADMIN' || currentRole == 'STAFF';
 
-  bool get isDriveAdmin => currentRole == 'HOMESCHOOL_ADMIN';
   bool get canManageMemberships => currentRole == 'HOMESCHOOL_ADMIN';
   bool get isParentView => currentRole == 'PARENT';
   bool get isTeacherView =>
@@ -413,7 +403,6 @@ class NestController extends ChangeNotifier {
         loadJoinRequests(),
         loadChildRegistrationRequests(),
         _loadOperationalData(),
-        loadDriveIntegration(),
         loadGalleryItems(),
         loadCommunityFeed(),
         loadAcademicEvents(),
@@ -1158,176 +1147,35 @@ class NestController extends ChangeNotifier {
       throw StateError('업로드할 파일을 선택하세요.');
     }
 
-    await _runBusy('Google Drive로 업로드하는 중...', () async {
-      final uploadSessionId = await _repository.createUploadSession(
+    await _runBusy('업로드하는 중...', () async {
+      final uploadResult = await _repository.uploadToStorage(
         homeschoolId: homeschoolId,
-        uploaderUserId: user!.id,
-        mimeType: file.mimeType,
-        sizeBytes: file.sizeBytes,
+        file: file,
       );
 
-      try {
-        final uploadResult = await _repository.uploadToDrive(
-          homeschoolId: homeschoolId,
-          uploadSessionId: uploadSessionId,
-          file: file,
-        );
+      final mediaAssetId = await _repository.insertMediaAsset(
+        homeschoolId: homeschoolId,
+        uploadSessionId: null,
+        uploaderUserId: user!.id,
+        classGroupId: selectedClassGroupId,
+        uploadResult: uploadResult,
+        title: title.trim(),
+        description: description.trim(),
+        mediaType: file.isVideo ? 'VIDEO' : 'PHOTO',
+      );
 
-        final mediaAssetId = await _repository.insertMediaAsset(
-          homeschoolId: homeschoolId,
-          uploadSessionId: uploadSessionId,
-          uploaderUserId: user!.id,
-          classGroupId: selectedClassGroupId,
-          uploadResult: uploadResult,
-          title: title.trim(),
-          description: description.trim(),
-          mediaType: file.isVideo ? 'VIDEO' : 'PHOTO',
-        );
-
-        final childIds = _parseCommaIds(childIdsCsv);
-        await _repository.insertMediaChildren(
-          mediaAssetId: mediaAssetId,
-          childIds: childIds,
-        );
-
-        await _repository.updateUploadStatus(
-          uploadSessionId: uploadSessionId,
-          status: 'COMPLETED',
-        );
-      } catch (error) {
-        await _repository.updateUploadStatus(
-          uploadSessionId: uploadSessionId,
-          status: 'FAILED',
-        );
-        rethrow;
-      }
+      final childIds = _parseCommaIds(childIdsCsv);
+      await _repository.insertMediaChildren(
+        mediaAssetId: mediaAssetId,
+        childIds: childIds,
+      );
 
       pendingMediaFile = null;
       await loadGalleryItems();
-      _setStatus('Drive 업로드 완료');
+      _setStatus('업로드 완료');
     });
   }
 
-  Future<void> startDriveOauth({
-    required String rootFolderId,
-    required String folderPolicy,
-  }) async {
-    if (!isDriveAdmin) {
-      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
-    }
-
-    final homeschoolId = selectedHomeschoolId;
-    final currentSession = session;
-
-    if (homeschoolId == null || homeschoolId.isEmpty) {
-      throw StateError('홈스쿨을 선택하세요.');
-    }
-
-    if (currentSession?.accessToken == null) {
-      throw StateError('로그인 세션이 유효하지 않습니다. 다시 로그인하세요.');
-    }
-
-    await _runBusy('Google OAuth URL 준비 중...', () async {
-      final authUrl = await _repository.startGoogleDriveOauth(
-        homeschoolId: homeschoolId,
-      );
-
-      if (_webOauthBridge.supported) {
-        await _webOauthBridge.stashContext(
-          homeschoolId: homeschoolId,
-          rootFolderId: rootFolderId.trim(),
-          folderPolicy: folderPolicy,
-          supabaseUrl: AppConfig.supabaseUrl,
-          supabaseAnonKey: AppConfig.supabaseAnonKey,
-          accessToken: currentSession!.accessToken,
-        );
-
-        await _webOauthBridge.openPopup(authUrl);
-        _setStatus('OAuth 팝업을 열었습니다. 인증 후 동기화 버튼을 누르세요.');
-        return;
-      }
-
-      final launchOk = await launchUrl(
-        Uri.parse(authUrl),
-        mode: LaunchMode.externalApplication,
-      );
-
-      if (!launchOk) {
-        throw StateError('브라우저에서 OAuth URL을 열지 못했습니다.');
-      }
-
-      _setStatus('외부 브라우저에서 OAuth를 진행하세요.');
-    });
-  }
-
-  Future<void> syncOauthResult() async {
-    if (!_webOauthBridge.supported) {
-      return;
-    }
-
-    final result = await _webOauthBridge.consumeResult();
-    if (result == null) {
-      _setStatus('동기화할 OAuth 결과가 없습니다.');
-      return;
-    }
-
-    final success = result['success'] == true;
-    if (!success) {
-      _setStatus('OAuth 실패: ${result['error'] ?? 'unknown'}');
-      return;
-    }
-
-    await loadDriveIntegration();
-    _setStatus('Google Drive OAuth 연결 완료');
-  }
-
-  Future<void> saveDriveSettings({
-    required String rootFolderId,
-    required String folderPolicy,
-    required String accessToken,
-    required String refreshToken,
-    required String tokenExpiresAt,
-  }) async {
-    if (!isDriveAdmin || user == null) {
-      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
-    }
-
-    final homeschoolId = selectedHomeschoolId;
-    if (homeschoolId == null || homeschoolId.isEmpty) {
-      throw StateError('홈스쿨을 선택하세요.');
-    }
-
-    await _runBusy('Drive 설정 저장 중...', () async {
-      await _repository.upsertDriveIntegration(
-        homeschoolId: homeschoolId,
-        userId: user!.id,
-        rootFolderId: rootFolderId.trim(),
-        folderPolicy: folderPolicy,
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        tokenExpiresAtIso: tokenExpiresAt,
-      );
-      await loadDriveIntegration();
-      _setStatus('Drive 설정 저장 완료');
-    });
-  }
-
-  Future<void> disconnectDrive() async {
-    if (!isDriveAdmin) {
-      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
-    }
-
-    final homeschoolId = selectedHomeschoolId;
-    if (homeschoolId == null || homeschoolId.isEmpty) {
-      throw StateError('홈스쿨을 선택하세요.');
-    }
-
-    await _runBusy('Drive 연동 해제 중...', () async {
-      await _repository.disconnectDrive(homeschoolId: homeschoolId);
-      await loadDriveIntegration();
-      _setStatus('Drive 연동 해제 완료');
-    });
-  }
 
   Future<void> loadHomeschoolContext() async {
     if (user == null) {
@@ -1395,7 +1243,6 @@ class NestController extends ChangeNotifier {
       announcements = [];
       auditLogs = [];
       pendingCommunityMediaFile = null;
-      driveIntegration = null;
 
       if (pendingInvites.isNotEmpty) {
         _setStatus(
@@ -1423,8 +1270,6 @@ class NestController extends ChangeNotifier {
       await loadHomeschoolMemberships();
       await loadHomeschoolInvites();
       await _loadOperationalData();
-      await loadDriveIntegration();
-      await syncOauthResult();
       await loadGalleryItems();
       await loadCommunityFeed();
       _ensureRoleViewTargetSelection();
@@ -1438,18 +1283,9 @@ class NestController extends ChangeNotifier {
     unawaited(_persistToCache());
   }
 
-  Future<void> loadDriveIntegration() async {
-    final homeschoolId = selectedHomeschoolId;
-    if (homeschoolId == null || homeschoolId.isEmpty) {
-      driveIntegration = null;
-      _notifyIfIdle();
-      return;
-    }
-
-    driveIntegration = await _repository.fetchDriveIntegration(
-      homeschoolId: homeschoolId,
-    );
-    _notifyIfIdle();
+  String? mediaPublicUrl(String? storagePath) {
+    if (storagePath == null || storagePath.isEmpty) return null;
+    return _repository.mediaPublicUrl(storagePath);
   }
 
   Future<void> loadGalleryItems() async {
@@ -1995,47 +1831,26 @@ class NestController extends ChangeNotifier {
       );
 
       if (pendingFile != null) {
-        final uploadSessionId = await _repository.createUploadSession(
+        final uploadResult = await _repository.uploadToStorage(
           homeschoolId: homeschoolId,
-          uploaderUserId: user!.id,
-          mimeType: pendingFile.mimeType,
-          sizeBytes: pendingFile.sizeBytes,
+          file: pendingFile,
         );
 
-        try {
-          final uploadResult = await _repository.uploadToDrive(
-            homeschoolId: homeschoolId,
-            uploadSessionId: uploadSessionId,
-            file: pendingFile,
-          );
+        final mediaAssetId = await _repository.insertMediaAsset(
+          homeschoolId: homeschoolId,
+          uploadSessionId: null,
+          uploaderUserId: user!.id,
+          classGroupId: targetClassGroupId,
+          uploadResult: uploadResult,
+          title: pendingFile.name,
+          description: trimmedContent,
+          mediaType: pendingFile.isVideo ? 'VIDEO' : 'PHOTO',
+        );
 
-          final mediaAssetId = await _repository.insertMediaAsset(
-            homeschoolId: homeschoolId,
-            uploadSessionId: uploadSessionId,
-            uploaderUserId: user!.id,
-            classGroupId: targetClassGroupId,
-            uploadResult: uploadResult,
-            title: pendingFile.name,
-            description: trimmedContent,
-            mediaType: pendingFile.isVideo ? 'VIDEO' : 'PHOTO',
-          );
-
-          await _repository.linkCommunityPostMedia(
-            postId: postId,
-            mediaAssetId: mediaAssetId,
-          );
-
-          await _repository.updateUploadStatus(
-            uploadSessionId: uploadSessionId,
-            status: 'COMPLETED',
-          );
-        } catch (_) {
-          await _repository.updateUploadStatus(
-            uploadSessionId: uploadSessionId,
-            status: 'FAILED',
-          );
-          rethrow;
-        }
+        await _repository.linkCommunityPostMedia(
+          postId: postId,
+          mediaAssetId: mediaAssetId,
+        );
       }
 
       pendingCommunityMediaFile = null;
@@ -4049,6 +3864,71 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  Future<void> leaveHomeschool() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final userId = user?.id;
+    if (userId == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+
+    final myRoles = memberships
+        .where((m) => m.homeschoolId == homeschoolId && m.userId == userId)
+        .toList();
+
+    if (myRoles.isEmpty) {
+      throw StateError('이미 이 홈스쿨에 소속되어 있지 않습니다.');
+    }
+
+    final isOnlyAdmin = myRoles.any((m) => m.role == 'HOMESCHOOL_ADMIN') &&
+        homeschoolMemberships
+                .where((m) =>
+                    m.role == 'HOMESCHOOL_ADMIN' &&
+                    m.status == 'ACTIVE' &&
+                    m.homeschoolId == homeschoolId)
+                .length <=
+            1;
+
+    if (isOnlyAdmin) {
+      throw StateError(
+        '유일한 관리자는 탈퇴할 수 없습니다. 다른 구성원에게 관리자 역할을 부여한 뒤 탈퇴하세요.',
+      );
+    }
+
+    await _runBusy('홈스쿨 탈퇴 처리 중...', () async {
+      for (final m in myRoles) {
+        await _repository.revokeMembershipRole(
+          homeschoolId: homeschoolId,
+          userId: userId,
+          role: m.role,
+        );
+      }
+
+      memberships = await _repository.fetchMemberships(userId: userId);
+
+      if (memberships.isNotEmpty) {
+        selectedHomeschoolId = memberships.first.homeschoolId;
+        currentRole = _resolveViewRole(selectedHomeschoolId);
+        await loadHomeschoolMemberships();
+        await _loadOperationalData();
+      } else {
+        selectedHomeschoolId = null;
+        currentRole = null;
+        homeschoolMemberships = [];
+      }
+
+      await _logAudit(
+        actionType: 'MEMBERSHIP_LEAVE',
+        resourceType: 'homeschool_memberships',
+        resourceId: '$userId:$homeschoolId',
+      );
+      _setStatus('홈스쿨에서 탈퇴했습니다.');
+    });
+  }
+
   String findCourseName(String courseId) {
     return courses
             .where((course) => course.id == courseId)
@@ -5221,7 +5101,6 @@ class NestController extends ChangeNotifier {
     proposalSessionsById = const {};
     scheduleOptionDrafts = [];
     selectedScheduleOptionId = null;
-    driveIntegration = null;
     galleryItems = [];
     mediaChildrenByAsset = const {};
     pendingMediaFile = null;

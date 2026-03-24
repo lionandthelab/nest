@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
@@ -98,6 +97,7 @@ class _GalleryTabState extends State<GalleryTab> {
                       final item = items[index];
                       return _GooglePhotosTile(
                         item: item,
+                        imageUrl: controller.mediaPublicUrl(item.storagePath),
                         onTap: () => _showDetailDialog(item, controller),
                       );
                     },
@@ -286,33 +286,13 @@ class _GalleryTabState extends State<GalleryTab> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Media preview
-                Container(
-                  height: 240,
-                  decoration: BoxDecoration(
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(20)),
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: item.isVideo
-                          ? [
-                              NestColors.mutedSage.withValues(alpha: 0.3),
-                              NestColors.mutedSage.withValues(alpha: 0.1),
-                            ]
-                          : [
-                              NestColors.roseMist.withValues(alpha: 0.4),
-                              NestColors.roseMist.withValues(alpha: 0.1),
-                            ],
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      item.isVideo
-                          ? Icons.play_circle_outline
-                          : Icons.photo_outlined,
-                      size: 56,
-                      color: NestColors.deepWood.withValues(alpha: 0.4),
-                    ),
+                ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: Container(
+                    height: 280,
+                    color: NestColors.creamyWhite,
+                    child: _buildPreview(item, controller),
                   ),
                 ),
                 Padding(
@@ -362,27 +342,12 @@ class _GalleryTabState extends State<GalleryTab> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          if (item.driveWebViewLink != null &&
-                              item.driveWebViewLink!.isNotEmpty)
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: () =>
-                                    _openLink(item.driveWebViewLink!),
-                                icon: const Icon(Icons.open_in_new, size: 18),
-                                label: const Text('Drive에서 열기'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: NestColors.dustyRose,
-                                ),
-                              ),
-                            ),
-                          const SizedBox(width: 8),
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('닫기'),
-                          ),
-                        ],
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('닫기'),
+                        ),
                       ),
                     ],
                   ),
@@ -428,12 +393,26 @@ class _GalleryTabState extends State<GalleryTab> {
     }
   }
 
-  Future<void> _openLink(String url) async {
-    final launched = await launchUrl(
-      Uri.parse(url),
-      mode: LaunchMode.platformDefault,
+  Widget _buildPreview(GalleryItem item, NestController controller) {
+    final url = controller.mediaPublicUrl(item.storagePath);
+    if (url != null && !item.isVideo) {
+      return Image.network(
+        url,
+        fit: BoxFit.contain,
+        width: double.infinity,
+        errorBuilder: (_, __, ___) => Center(
+          child: Icon(Icons.broken_image_outlined, size: 48,
+              color: NestColors.deepWood.withValues(alpha: 0.3)),
+        ),
+      );
+    }
+    return Center(
+      child: Icon(
+        item.isVideo ? Icons.play_circle_outline : Icons.photo_outlined,
+        size: 56,
+        color: NestColors.deepWood.withValues(alpha: 0.4),
+      ),
     );
-    if (!launched) _showMessage('링크를 열지 못했습니다.');
   }
 
   void _showMessage(String message) {
@@ -446,88 +425,103 @@ class _GalleryTabState extends State<GalleryTab> {
 // ── Google Photos-style grid tile ──
 
 class _GooglePhotosTile extends StatelessWidget {
-  const _GooglePhotosTile({required this.item, required this.onTap});
+  const _GooglePhotosTile({
+    required this.item,
+    required this.imageUrl,
+    required this.onTap,
+  });
 
   final GalleryItem item;
+  final String? imageUrl;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: item.isVideo
-                ? [
-                    NestColors.mutedSage.withValues(alpha: 0.28),
-                    NestColors.mutedSage.withValues(alpha: 0.10),
-                  ]
-                : [
-                    NestColors.roseMist.withValues(alpha: 0.36),
-                    NestColors.dustyRose.withValues(alpha: 0.12),
-                  ],
-          ),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Center(
-              child: Icon(
-                item.isVideo
-                    ? Icons.play_circle_outline
-                    : Icons.photo_outlined,
-                size: 32,
-                color: NestColors.deepWood.withValues(alpha: 0.35),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Image or placeholder
+          if (imageUrl != null)
+            Image.network(
+              imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _placeholder(),
+            )
+          else
+            _placeholder(),
+          // Video badge
+          if (item.isVideo)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Icon(Icons.videocam, size: 14, color: Colors.white),
               ),
             ),
-            // Video badge
-            if (item.isVideo)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(4),
+          // Title overlay at bottom
+          if (item.title.trim().isNotEmpty)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(6, 16, 6, 4),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.4),
+                    ],
                   ),
-                  child: const Icon(Icons.videocam, size: 14, color: Colors.white),
                 ),
-              ),
-            // Title overlay at bottom
-            if (item.title.trim().isNotEmpty)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(6, 16, 6, 4),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.4),
-                      ],
-                    ),
-                  ),
-                  child: Text(
-                    item.title.trim(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
+                child: Text(
+                  item.title.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-          ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: item.isVideo
+              ? [
+                  NestColors.mutedSage.withValues(alpha: 0.28),
+                  NestColors.mutedSage.withValues(alpha: 0.10),
+                ]
+              : [
+                  NestColors.roseMist.withValues(alpha: 0.36),
+                  NestColors.dustyRose.withValues(alpha: 0.12),
+                ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          item.isVideo ? Icons.play_circle_outline : Icons.photo_outlined,
+          size: 32,
+          color: NestColors.deepWood.withValues(alpha: 0.35),
         ),
       ),
     );

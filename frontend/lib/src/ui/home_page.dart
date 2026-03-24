@@ -18,6 +18,7 @@ import 'tabs/profile_settings_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
+import 'widgets/homeschool_create_dialog.dart';
 import 'widgets/nest_motion.dart';
 
 class HomePage extends StatefulWidget {
@@ -33,6 +34,7 @@ class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   bool _hasUnsavedScheduleChanges = false;
   DateTime? _lastBackPress;
+  bool _hasShownHomeschoolPicker = false;
 
   // ── Parent child selector state (shared across parent tabs) ──
   String? _selectedChildId;
@@ -74,6 +76,17 @@ class _HomePageState extends State<HomePage> {
         // Keep child selector in sync when controller data changes.
         if (widget.controller.isParentView) {
           _syncSelectedChild(widget.controller);
+        }
+
+        // Show homeschool picker once after login for multi-homeschool users
+        if (!_hasShownHomeschoolPicker &&
+            widget.controller.isBootstrapped &&
+            widget.controller.memberships.length >= 2) {
+          _hasShownHomeschoolPicker = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _showHomeschoolPickerSheet();
+          });
         }
 
         final width = MediaQuery.sizeOf(context).width;
@@ -459,6 +472,101 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _showHomeschoolPickerSheet() {
+    final controller = widget.controller;
+    final memberships = controller.memberships;
+    if (memberships.length < 2) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        String? selectedId = controller.selectedHomeschoolId;
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '홈스쿨을 선택하세요',
+                      style: Theme.of(ctx).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '여러 홈스쿨에 소속되어 있습니다.',
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...memberships.map((m) {
+                      final isSelected = m.homeschoolId == selectedId;
+                      return ListTile(
+                        leading: Icon(
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.circle_outlined,
+                          color: isSelected ? NestColors.dustyRose : null,
+                        ),
+                        title: Text(
+                          m.homeschool.name,
+                          style: isSelected
+                              ? const TextStyle(fontWeight: FontWeight.w700)
+                              : null,
+                        ),
+                        subtitle: Text(_labelForRole(m.role)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        onTap: () {
+                          setSheetState(() => selectedId = m.homeschoolId);
+                        },
+                      );
+                    }),
+                    const Divider(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              showHomeschoolCreateDialog(
+                                context: context,
+                                controller: controller,
+                              );
+                            },
+                            icon: const Icon(Icons.add_home_outlined, size: 18),
+                            label: const Text('새 홈스쿨 개설'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              if (selectedId != controller.selectedHomeschoolId) {
+                                _handleHomeschoolChange(selectedId);
+                              }
+                            },
+                            child: const Text('확인'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _handleTermChange(String? value) async {
     try {
       await widget.controller.changeTerm(value);
@@ -790,6 +898,131 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     );
   }
 
+  void _showHomeschoolSwitchSheet(NestController controller) {
+    final memberships = controller.memberships;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '홈스쿨 전환',
+                      style: Theme.of(ctx).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...memberships.map((m) {
+                  final isSelected =
+                      m.homeschoolId == controller.selectedHomeschoolId;
+                  return ListTile(
+                    leading: Icon(
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
+                      color: isSelected ? NestColors.dustyRose : null,
+                    ),
+                    title: Text(
+                      m.homeschool.name,
+                      style: isSelected
+                          ? const TextStyle(fontWeight: FontWeight.w700)
+                          : null,
+                    ),
+                    subtitle: Text(_labelForRole(m.role)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      if (!isSelected) {
+                        widget.onSelectHomeschool(m.homeschoolId);
+                      }
+                    },
+                  );
+                }),
+                const Divider(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      showHomeschoolCreateDialog(
+                        context: context,
+                        controller: controller,
+                      );
+                    },
+                    icon: const Icon(Icons.add_home_outlined, size: 18),
+                    label: const Text('새 홈스쿨 개설'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHomeschoolBadge(NestController controller) {
+    final membership = controller.memberships
+        .where((m) => m.homeschoolId == controller.selectedHomeschoolId)
+        .firstOrNull;
+    if (membership == null) return const SizedBox.shrink();
+
+    final name = membership.homeschool.name;
+    final canSwitch = controller.memberships.length > 1;
+
+    return GestureDetector(
+      onTap: canSwitch && !controller.isBusy
+          ? () => _showHomeschoolSwitchSheet(controller)
+          : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: NestColors.roseMist.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.home_outlined, size: 14, color: NestColors.clay),
+            const SizedBox(width: 4),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: Text(
+                name,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: NestColors.deepWood,
+                ),
+              ),
+            ),
+            if (canSwitch) ...[
+              const SizedBox(width: 2),
+              Icon(Icons.swap_horiz, size: 14, color: NestColors.clay),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _openContextSheet() async {
     if (!mounted) {
       return;
@@ -961,6 +1194,8 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
       ),
       child: Row(
         children: [
+          _buildHomeschoolBadge(controller),
+          const SizedBox(width: 6),
           // Parent name (or parent target switch for admin)
           if (parentCandidates.isNotEmpty)
             PopupMenuButton<String>(
@@ -1076,6 +1311,8 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 try { await widget.onRefresh(); } catch (_) {}
               } else if (value == 'logout') {
                 try { await widget.onLogout(); } catch (_) {}
+              } else if (value == 'switch_homeschool') {
+                _showHomeschoolSwitchSheet(controller);
               } else if (value.startsWith('role:')) {
                 final role = value.substring(5);
                 try { await widget.onSelectViewRole(role); } catch (_) {}
@@ -1093,6 +1330,15 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 ),
               ),
               const PopupMenuDivider(),
+              if (controller.memberships.length > 1)
+                const PopupMenuItem<String>(
+                  value: 'switch_homeschool',
+                  child: ListTile(
+                    leading: Icon(Icons.swap_horiz),
+                    title: Text('홈스쿨 전환'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
               const PopupMenuItem<String>(
                 value: 'settings',
                 child: ListTile(
@@ -1186,13 +1432,21 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium,
                     ),
-                    Text(
-                      '$displayName 님',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.72),
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '$displayName 님',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: NestColors.deepWood.withValues(alpha: 0.72),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildHomeschoolBadge(controller),
+                      ],
                     ),
                   ],
                 ),
@@ -1202,6 +1456,10 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 onSelected: (action) async {
                   if (action == 'settings') {
                     await _openContextSheet();
+                    return;
+                  }
+                  if (action == 'switch_homeschool') {
+                    _showHomeschoolSwitchSheet(controller);
                     return;
                   }
                   if (action == 'info') {
@@ -1236,8 +1494,17 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                     _showMessage(controller.statusMessage);
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem<String>(
+                itemBuilder: (context) => [
+                  if (controller.memberships.length > 1)
+                    const PopupMenuItem<String>(
+                      value: 'switch_homeschool',
+                      child: ListTile(
+                        leading: Icon(Icons.swap_horiz),
+                        title: Text('홈스쿨 전환'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  const PopupMenuItem<String>(
                     value: 'settings',
                     child: ListTile(
                       leading: Icon(Icons.tune),
@@ -1245,7 +1512,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),
-                  PopupMenuItem<String>(
+                  const PopupMenuItem<String>(
                     value: 'info',
                     child: ListTile(
                       leading: Icon(Icons.info_outline),
@@ -1253,8 +1520,8 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),
-                  PopupMenuDivider(),
-                  PopupMenuItem<String>(
+                  const PopupMenuDivider(),
+                  const PopupMenuItem<String>(
                     value: 'refresh',
                     child: ListTile(
                       leading: Icon(Icons.refresh),
@@ -1262,7 +1529,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),
-                  PopupMenuItem<String>(
+                  const PopupMenuItem<String>(
                     value: 'logout',
                     child: ListTile(
                       leading: Icon(Icons.logout),
@@ -2484,31 +2751,43 @@ class _ContextSelectorState extends State<_ContextSelector> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: ActionChip(
-                avatar: Icon(item.icon, size: 16),
-                label: Text(
-                  '${item.label}: ${item.value ?? '-'}',
-                  style: Theme.of(context).textTheme.bodySmall,
+          ...items.indexed.map(
+            (entry) {
+              final (index, item) = entry;
+              final isHomeschool = index == 0;
+              return Padding(
+                padding: EdgeInsets.only(right: isHomeschool ? 12 : 6),
+                child: ActionChip(
+                  avatar: Icon(item.icon, size: 16),
+                  label: Text(
+                    '${item.label}: ${item.value ?? '-'}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: isHomeschool ? FontWeight.w700 : null,
+                    ),
+                  ),
+                  backgroundColor: isHomeschool
+                      ? NestColors.dustyRose.withValues(alpha: 0.18)
+                      : null,
+                  side: isHomeschool
+                      ? BorderSide(color: NestColors.dustyRose.withValues(alpha: 0.5))
+                      : null,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onPressed: controller.isBusy || item.options.isEmpty
+                      ? null
+                      : () => _openContextPicker(
+                            title: item.label,
+                            help: item.help,
+                            options: item.options,
+                            currentId: item.options
+                                .where((row) => row.title == item.value)
+                                .map((row) => row.id)
+                                .firstOrNull,
+                            onSelect: item.onSelect,
+                          ),
                 ),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                onPressed: controller.isBusy || item.options.isEmpty
-                    ? null
-                    : () => _openContextPicker(
-                          title: item.label,
-                          help: item.help,
-                          options: item.options,
-                          currentId: item.options
-                              .where((row) => row.title == item.value)
-                              .map((row) => row.id)
-                              .firstOrNull,
-                          onSelect: item.onSelect,
-                        ),
-              ),
-            ),
+              );
+            },
           ),
           ...widget.extraChips,
         ],

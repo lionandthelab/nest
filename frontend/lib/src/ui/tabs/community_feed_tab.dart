@@ -101,6 +101,7 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                     onLike: () => _toggleLike(post.id),
                     onComment: () => _submitComment(post.id),
                     onOpenMediaLink: _openLink,
+                    mediaUrlResolver: controller.mediaPublicUrl,
                     onReport: () => _showReportDialog(post.id),
                   );
                 },
@@ -413,6 +414,7 @@ class _InstagramPostCard extends StatelessWidget {
     required this.onLike,
     required this.onComment,
     required this.onOpenMediaLink,
+    required this.mediaUrlResolver,
     required this.onReport,
   });
 
@@ -427,6 +429,7 @@ class _InstagramPostCard extends StatelessWidget {
   final VoidCallback onLike;
   final VoidCallback onComment;
   final Future<void> Function(String url) onOpenMediaLink;
+  final String? Function(String? storagePath) mediaUrlResolver;
   final VoidCallback onReport;
 
   @override
@@ -493,6 +496,7 @@ class _InstagramPostCard extends StatelessWidget {
             const SizedBox(height: 10),
             ...media.map((item) => _InstagramMediaTile(
                   item: item,
+                  imageUrl: mediaUrlResolver(item.storagePath),
                   onOpenMediaLink: onOpenMediaLink,
                 )),
           ],
@@ -634,64 +638,64 @@ class _InstagramPostCard extends StatelessWidget {
 class _InstagramMediaTile extends StatelessWidget {
   const _InstagramMediaTile({
     required this.item,
+    required this.imageUrl,
     required this.onOpenMediaLink,
   });
 
   final CommunityPostMedia item;
+  final String? imageUrl;
   final Future<void> Function(String url) onOpenMediaLink;
 
   @override
   Widget build(BuildContext context) {
+    // Show actual image if available
+    if (imageUrl != null && !item.isVideo) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          imageUrl!,
+          width: double.infinity,
+          height: 280,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _placeholder(context),
+        ),
+      );
+    }
+
+    // Fallback: video or legacy Drive item
     return GestureDetector(
       onTap: item.driveWebViewLink != null && item.driveWebViewLink!.isNotEmpty
           ? () => onOpenMediaLink(item.driveWebViewLink!)
           : null,
-      child: Container(
-        width: double.infinity,
-        height: 280,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: item.isVideo
-                ? [
-                    NestColors.mutedSage.withValues(alpha: 0.22),
-                    NestColors.mutedSage.withValues(alpha: 0.08),
-                  ]
-                : [
-                    NestColors.roseMist.withValues(alpha: 0.32),
-                    NestColors.roseMist.withValues(alpha: 0.10),
-                  ],
-          ),
+      child: _placeholder(context),
+    );
+  }
+
+  Widget _placeholder(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 280,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: item.isVideo
+              ? [
+                  NestColors.mutedSage.withValues(alpha: 0.22),
+                  NestColors.mutedSage.withValues(alpha: 0.08),
+                ]
+              : [
+                  NestColors.roseMist.withValues(alpha: 0.32),
+                  NestColors.roseMist.withValues(alpha: 0.10),
+                ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              item.isVideo ? Icons.play_circle_outline : Icons.photo_outlined,
-              size: 48,
-              color: NestColors.deepWood.withValues(alpha: 0.4),
-            ),
-            if (item.title.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                item.title,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-            if (item.driveWebViewLink != null &&
-                item.driveWebViewLink!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                '탭하여 열기',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: NestColors.dustyRose,
-                ),
-              ),
-            ],
-          ],
+      ),
+      child: Center(
+        child: Icon(
+          item.isVideo ? Icons.play_circle_outline : Icons.photo_outlined,
+          size: 48,
+          color: NestColors.deepWood.withValues(alpha: 0.4),
         ),
       ),
     );

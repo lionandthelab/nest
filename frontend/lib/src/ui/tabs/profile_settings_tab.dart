@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../config/app_config.dart';
+import '../../services/pwa_install_helper.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
@@ -28,6 +29,7 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
   final _unavailabilityEndController = TextEditingController(text: '10:00');
   final _unavailabilityNoteController = TextEditingController();
   int _selectedUnavailabilityDay = 1;
+  final _pwaHelper = createPwaInstallHelper();
 
   @override
   void dispose() {
@@ -217,6 +219,97 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           value: controller.selectedHomeschoolId ?? '-',
           onTap: null,
         ),
+
+        // ── PWA Install ──
+        if (!_pwaHelper.isRunningAsPwa &&
+            (_pwaHelper.isInstallable || _pwaHelper.isIos)) ...[
+          const SizedBox(height: 28),
+          Text(
+            '앱 설치',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: NestColors.roseMist.withValues(alpha: 0.35),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.install_mobile,
+                        size: 24, color: NestColors.clay),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '홈 화면에 Nest 추가',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _pwaHelper.isIos && !_pwaHelper.isInstallable
+                      ? '하단 공유 버튼(□↑)을 누른 뒤 "홈 화면에 추가"를 선택하세요.'
+                      : '앱처럼 빠르게 접근할 수 있습니다.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.7),
+                  ),
+                ),
+                if (_pwaHelper.isInstallable) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        final installed = await _pwaHelper.promptInstall();
+                        if (installed && mounted) setState(() {});
+                      },
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text('설치하기'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+
+        if (controller.memberships.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text(
+            '홈스쿨 관리',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red.shade700,
+                side: BorderSide(color: Colors.red.shade200),
+              ),
+              onPressed: controller.isBusy ? null : _confirmLeaveHomeschool,
+              icon: const Icon(Icons.exit_to_app),
+              label: Text(
+                '${controller.memberships.firstWhere(
+                      (m) => m.homeschoolId == controller.selectedHomeschoolId,
+                      orElse: () => controller.memberships.first,
+                    ).homeschool.name} 탈퇴',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -521,6 +614,51 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
       setState(() {});
     } catch (_) {
       if (mounted) _showMessage(widget.controller.statusMessage);
+    }
+  }
+
+  Future<void> _confirmLeaveHomeschool() async {
+    final controller = widget.controller;
+    final homeschoolName = controller.memberships
+        .firstWhere(
+          (m) => m.homeschoolId == controller.selectedHomeschoolId,
+          orElse: () => controller.memberships.first,
+        )
+        .homeschool
+        .name;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('홈스쿨 탈퇴'),
+        content: Text(
+          '$homeschoolName에서 탈퇴하시겠습니까?\n\n'
+          '탈퇴하면 이 홈스쿨의 모든 데이터에 접근할 수 없게 됩니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('탈퇴'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await controller.leaveHomeschool();
+      if (mounted) _showMessage('홈스쿨에서 탈퇴했습니다.');
+      setState(() {});
+    } catch (e) {
+      if (mounted) _showMessage(e.toString().replaceFirst('StateError: ', ''));
     }
   }
 
