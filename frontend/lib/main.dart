@@ -29,6 +29,7 @@ Future<void> main() async {
     };
 
     await Future.wait([
+      AppConfig.init(),
       Supabase.initialize(
         url: AppConfig.supabaseUrl,
         anonKey: AppConfig.supabaseAnonKey,
