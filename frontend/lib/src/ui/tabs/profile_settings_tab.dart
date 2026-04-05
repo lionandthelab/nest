@@ -446,7 +446,7 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: _selectedUnavailabilityDay,
+                    initialValue: _selectedUnavailabilityDay,
                     decoration: const InputDecoration(
                       labelText: '요일',
                       prefixIcon: Icon(Icons.calendar_today_outlined),

@@ -400,7 +400,7 @@ class _GalleryTabState extends State<GalleryTab> {
         url,
         fit: BoxFit.contain,
         width: double.infinity,
-        errorBuilder: (_, __, ___) => Center(
+        errorBuilder: (_, _, _) => Center(
           child: Icon(Icons.broken_image_outlined, size: 48,
               color: NestColors.deepWood.withValues(alpha: 0.3)),
         ),
@@ -447,7 +447,7 @@ class _GooglePhotosTile extends StatelessWidget {
             Image.network(
               imageUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _placeholder(),
+              errorBuilder: (_, _, _) => _placeholder(),
             )
           else
             _placeholder(),

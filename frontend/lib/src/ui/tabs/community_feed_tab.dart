@@ -657,7 +657,7 @@ class _InstagramMediaTile extends StatelessWidget {
           width: double.infinity,
           height: 280,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholder(context),
+          errorBuilder: (_, _, _) => _placeholder(context),
         ),
       );
     }
