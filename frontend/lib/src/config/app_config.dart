@@ -1,10 +1,27 @@
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class AppConfig {
   const AppConfig._();
 
   static const String appName = 'Nest';
-  static const String appVersion = '2.0.0';
+
+  /// pubspec.yaml의 version 값이 자동으로 설정된다.
+  /// 읽기에 실패한 경우에만 'unknown'으로 표시된다.
+  static String appVersion = 'unknown';
+
+  /// 앱 시작 시 호출하여 pubspec.yaml에서 버전을 읽어온다.
+  static Future<void> init() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (info.version.isNotEmpty) {
+        appVersion = info.version;
+      }
+      debugPrint('[AppConfig] version loaded: $appVersion');
+    } catch (e) {
+      debugPrint('[AppConfig] version load failed: $e');
+    }
+  }
   static const String brandLine = '우리 아이가 날아오르기 전, 따뜻한 둥지';
   static const String androidApplicationId = 'com.lionandthelab.nest';
   static const String iosBundleId = 'com.lionandthelab.nest';

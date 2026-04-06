@@ -1699,8 +1699,7 @@ class NestRepository {
         .from('media_assets')
         .insert({
           'homeschool_id': homeschoolId,
-          if (uploadSessionId != null)
-            'upload_session_id': uploadSessionId,
+          'upload_session_id': ?uploadSessionId,
           'storage_path': uploadResult.storagePath,
           'uploader_user_id': uploaderUserId,
           'class_group_id': classGroupId,
