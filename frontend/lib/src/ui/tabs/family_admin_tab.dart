@@ -1007,7 +1007,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                 size: 16,
                               ),
                               label: Text(
-                                selectedGuardianAccount!.displayLabel,
+                                selectedGuardianAccount!.displayLabelWithEmail,
                               ),
                               onDeleted: isSaving
                                   ? null
@@ -2179,7 +2179,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           if (selectedAccount != null)
                             Chip(
                               avatar: const Icon(Icons.link, size: 16),
-                              label: Text(selectedAccount!.displayLabel),
+                              label: Text(selectedAccount!.displayLabelWithEmail),
                               onDeleted: isSaving
                                   ? null
                                   : () {

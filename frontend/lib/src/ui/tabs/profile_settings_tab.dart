@@ -49,8 +49,6 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
     if (fromDirectory.trim().isNotEmpty && fromDirectory != controller.user?.id) {
       return fromDirectory;
     }
-    final email = controller.user?.email ?? '';
-    if (email.contains('@')) return email.split('@').first;
     return '사용자';
   }
 

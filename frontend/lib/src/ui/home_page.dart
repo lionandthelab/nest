@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
+import '../models/nest_models.dart';
 import '../services/nest_cache.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
@@ -799,6 +800,12 @@ class _MobileScaffold extends StatefulWidget {
 }
 
 class _MobileScaffoldState extends State<_MobileScaffold> {
+  static const _adminRoleColor = Color(0xFF2e7d32);
+  static const _teacherRoleColor = Color(0xFF1565c0);
+  static const _warningColor = Color(0xFFDC2626);
+  static const _warningBgColor = Color(0xFFFFF5F5);
+  static const _warningBorderColor = Color(0xFFFECACA);
+
   String _displayName(NestController controller) {
     final fromDirectory = controller.findMemberDisplayName(controller.user?.id);
     if (fromDirectory.trim().isNotEmpty &&
@@ -812,10 +819,6 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
       return metadataName.trim();
     }
 
-    final email = controller.user?.email ?? '';
-    if (email.contains('@')) {
-      return email.split('@').first;
-    }
     return '사용자';
   }
 
@@ -898,6 +901,132 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     );
   }
 
+  void _showTermSwitchSheet(NestController controller) {
+    final terms = controller.terms;
+    if (terms.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '학기 전환',
+                      style: Theme.of(ctx).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...terms.map((term) {
+                  final isSelected = term.id == controller.selectedTermId;
+                  return ListTile(
+                    leading: Icon(
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
+                      color: isSelected ? NestColors.dustyRose : null,
+                    ),
+                    title: Text(
+                      term.name,
+                      style: isSelected
+                          ? const TextStyle(fontWeight: FontWeight.w700)
+                          : null,
+                    ),
+                    subtitle: Text(_labelForTermStatus(term.status)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      if (!isSelected) {
+                        widget.onSelectTerm(term.id);
+                      }
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showClassGroupSwitchSheet(NestController controller) {
+    final classGroups = controller.classGroups;
+    if (classGroups.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '반 전환',
+                      style: Theme.of(ctx).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...classGroups.map((group) {
+                  final isSelected =
+                      group.id == controller.selectedClassGroupId;
+                  return ListTile(
+                    leading: Icon(
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
+                      color: isSelected ? NestColors.dustyRose : null,
+                    ),
+                    title: Text(
+                      group.name,
+                      style: isSelected
+                          ? const TextStyle(fontWeight: FontWeight.w700)
+                          : null,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      if (!isSelected) {
+                        widget.onSelectClassGroup(group.id);
+                      }
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildHomeschoolBadge(NestController controller) {
     final membership = controller.memberships
         .where((m) => m.homeschoolId == controller.selectedHomeschoolId)
@@ -941,6 +1070,136 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// 현재 역할에 따른 배지 위젯. PARENT는 표시하지 않는다.
+  Widget _buildRoleBadge(String? role) {
+    final (label, color) = switch (role) {
+      'HOMESCHOOL_ADMIN' => ('관리자', _adminRoleColor),
+      'TEACHER' => ('교사', _teacherRoleColor),
+      _ => (null, null),
+    };
+    if (label == null || color == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  /// 2줄 헤더의 아이 선택 필드.
+  /// 아이가 없으면 빨간색 경고 스타일, 있으면 기본 스타일.
+  Widget _buildChildSelectorField({
+    required List<ChildProfile> children,
+    required String childLabel,
+    required bool hasChildren,
+  }) {
+    final isWarning = !hasChildren;
+    final bgColor = isWarning ? _warningBgColor : NestColors.roseMist.withValues(alpha: 0.35);
+    final borderColor = isWarning ? _warningBorderColor : NestColors.roseMist;
+    final textColor = isWarning ? _warningColor : NestColors.deepWood;
+    final iconColor = isWarning ? _warningColor : NestColors.clay;
+
+    final field = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.person_outline, size: 16, color: iconColor),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              childLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+          ),
+          if (children.length > 1)
+            Icon(Icons.arrow_drop_down, size: 18, color: iconColor),
+        ],
+      ),
+    );
+
+    // 아이가 2명 이상이면 탭하여 선택 가능
+    if (children.length > 1) {
+      return PopupMenuButton<String>(
+        tooltip: '아이 선택',
+        onSelected: widget.onSelectChild,
+        itemBuilder: (context) => children
+            .map(
+              (child) => PopupMenuItem<String>(
+                value: child.id,
+                child: Row(
+                  children: [
+                    Icon(
+                      child.id == widget.selectedChildId
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${child.name} (${child.familyName})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+        child: field,
+      );
+    }
+
+    return field;
+  }
+
+  /// 2줄 헤더의 새로고침/설정 아이콘 버튼.
+  /// NavigationBar와 통일된 outlined 스타일.
+  Widget _buildActionIconButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          backgroundColor: NestColors.roseMist.withValues(alpha: 0.35),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: NestColors.roseMist),
+          ),
+        ),
+        icon: Icon(icon, size: 18, color: NestColors.clay),
       ),
     );
   }
@@ -1053,7 +1312,9 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     );
   }
 
-  /// Compact header for parent view: name / child chip / settings icon
+  /// Compact header for parent view: 2-row layout
+  /// Row 1: homeschool badge | name | role badge | avatar menu
+  /// Row 2: child selector (flex) | refresh | settings
   Widget _buildParentCompactHeader(
     ThemeData theme,
     NestController controller,
@@ -1064,9 +1325,10 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     final selected = children
         .where((child) => child.id == widget.selectedChildId)
         .firstOrNull;
+    final hasChildren = children.isNotEmpty;
     final childLabel = selected != null
         ? selected.name
-        : (children.isEmpty ? '아이 미연동' : '아이 선택');
+        : (hasChildren ? '아이 선택' : '아이 미연동');
 
     // Admin viewing as parent: show parent target switch
     final isAdminAsParent = controller.isParentView &&
@@ -1083,197 +1345,197 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: NestColors.roseMist),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHomeschoolBadge(controller),
-          const SizedBox(width: 6),
-          // Parent name (or parent target switch for admin)
-          if (parentCandidates.isNotEmpty)
-            PopupMenuButton<String>(
-              tooltip: '부모 대상 전환',
-              onSelected: (userId) async {
-                try {
-                  await controller.selectParentViewTargetUserId(userId);
-                } catch (_) {}
-              },
-              itemBuilder: (context) => parentCandidates
-                  .map(
-                    (userId) => PopupMenuItem<String>(
-                      value: userId,
-                      child: Row(
-                        children: [
-                          Icon(
-                            userId == controller.activeParentViewTargetUserId
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                            size: 16,
+          // ── Row 1: Context ──
+          Row(
+            children: [
+              _buildHomeschoolBadge(controller),
+              const SizedBox(width: 6),
+              // Admin viewing as parent: parent target switch
+              if (parentCandidates.isNotEmpty)
+                PopupMenuButton<String>(
+                  tooltip: '부모 대상 전환',
+                  onSelected: (userId) async {
+                    try {
+                      await controller.selectParentViewTargetUserId(userId);
+                    } catch (_) {}
+                  },
+                  itemBuilder: (context) => parentCandidates
+                      .map(
+                        (userId) => PopupMenuItem<String>(
+                          value: userId,
+                          child: Row(
+                            children: [
+                              Icon(
+                                userId ==
+                                        controller
+                                            .activeParentViewTargetUserId
+                                    ? Icons.check_circle
+                                    : Icons.circle_outlined,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  controller.findMemberDisplayName(userId),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              controller.findMemberDisplayName(userId),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-              child: Chip(
-                label: Text(
-                  '$displayName 님',
-                  overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                      .toList(),
+                  child: const Icon(
+                    Icons.family_restroom_outlined,
+                    size: 18,
+                  ),
                 ),
-                avatar: const Icon(Icons.family_restroom_outlined, size: 14),
-                visualDensity: VisualDensity.compact,
-              ),
-            )
-          else
-            Text(
-              '$displayName 님',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          const SizedBox(width: 8),
-          // Child selector chip
-          if (children.length <= 1)
-            Chip(
-              label: Text(childLabel, overflow: TextOverflow.ellipsis),
-              avatar: const Icon(Icons.child_friendly_outlined, size: 14),
-              visualDensity: VisualDensity.compact,
-            )
-          else
-            PopupMenuButton<String>(
-              tooltip: '아이 선택',
-              onSelected: widget.onSelectChild,
-              itemBuilder: (context) => children
-                  .map(
-                    (child) => PopupMenuItem<String>(
-                      value: child.id,
-                      child: Row(
-                        children: [
-                          Icon(
-                            child.id == widget.selectedChildId
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${child.name} (${child.familyName})',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-              child: Chip(
-                label: Text(childLabel, overflow: TextOverflow.ellipsis),
-                avatar: const Icon(Icons.child_friendly_outlined, size: 14),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          const SizedBox(width: 4),
-          // Profile avatar with role switch / settings / logout
-          PopupMenuButton<String>(
-            tooltip: displayName,
-            icon: CircleAvatar(
-              radius: 16,
-              backgroundColor: NestColors.dustyRose,
-              child: Text(
-                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood,
-                ),
-              ),
-            ),
-            onSelected: (value) async {
-              if (value == 'settings') {
-                _openParentSettingsPage(controller);
-              } else if (value == 'refresh') {
-                try { await widget.onRefresh(); } catch (_) {}
-              } else if (value == 'logout') {
-                try { await widget.onLogout(); } catch (_) {}
-              } else if (value == 'switch_homeschool') {
-                _showHomeschoolSwitchSheet(controller);
-              } else if (value.startsWith('role:')) {
-                final role = value.substring(5);
-                try { await widget.onSelectViewRole(role); } catch (_) {}
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem<String>(
-                enabled: false,
-                child: Text(
-                  '$displayName 님',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+              const Spacer(),
+              _buildRoleBadge(controller.currentRole),
+              const SizedBox(width: 6),
+              // Avatar with simplified popup menu
+              PopupMenuButton<String>(
+                tooltip: displayName,
+                icon: CircleAvatar(
+                  radius: 15,
+                  backgroundColor: NestColors.dustyRose,
+                  child: Icon(
+                    Icons.person,
+                    size: 18,
                     color: NestColors.deepWood,
                   ),
                 ),
-              ),
-              const PopupMenuDivider(),
-              if (controller.memberships.length > 1)
-                const PopupMenuItem<String>(
-                  value: 'switch_homeschool',
-                  child: ListTile(
-                    leading: Icon(Icons.swap_horiz),
-                    title: Text('홈스쿨 전환'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              const PopupMenuItem<String>(
-                value: 'settings',
-                child: ListTile(
-                  leading: Icon(Icons.settings_outlined),
-                  title: Text('설정'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'refresh',
-                child: ListTile(
-                  leading: Icon(Icons.refresh),
-                  title: Text('새로고침'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              if (controller.availableViewRoles.length > 1) ...[
-                const PopupMenuDivider(),
-                ...controller.availableViewRoles.map(
-                  (role) => PopupMenuItem<String>(
-                    value: 'role:$role',
-                    child: Row(
-                      children: [
-                        Icon(
-                          controller.currentRole == role
-                              ? Icons.check_circle
-                              : Icons.radio_button_unchecked,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(_labelForRole(role)),
-                      ],
+                onSelected: (value) async {
+                  if (value == 'logout') {
+                    try {
+                      await widget.onLogout();
+                    } catch (_) {}
+                  } else if (value == 'switch_homeschool') {
+                    _showHomeschoolSwitchSheet(controller);
+                  } else if (value == 'switch_term') {
+                    _showTermSwitchSheet(controller);
+                  } else if (value == 'switch_class_group') {
+                    _showClassGroupSwitchSheet(controller);
+                  } else if (value == 'settings') {
+                    _openParentSettingsPage(controller);
+                  } else if (value.startsWith('role:')) {
+                    final role = value.substring(5);
+                    try {
+                      await widget.onSelectViewRole(role);
+                    } catch (_) {}
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem<String>(
+                    enabled: false,
+                    child: Text(
+                      '$displayName 님',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: NestColors.deepWood,
+                      ),
                     ),
                   ),
+                  const PopupMenuDivider(),
+                  if (controller.memberships.length > 1)
+                    const PopupMenuItem<String>(
+                      value: 'switch_homeschool',
+                      child: ListTile(
+                        leading: Icon(Icons.swap_horiz),
+                        title: Text('홈스쿨 전환'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  if (controller.terms.isNotEmpty)
+                    PopupMenuItem<String>(
+                      value: 'switch_term',
+                      child: ListTile(
+                        leading: const Icon(Icons.calendar_month_outlined),
+                        title: Text(
+                          '학기: ${controller.terms.where((t) => t.id == controller.selectedTermId).map((t) => t.name).firstOrNull ?? '-'}',
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  if (controller.classGroups.isNotEmpty)
+                    PopupMenuItem<String>(
+                      value: 'switch_class_group',
+                      child: ListTile(
+                        leading: const Icon(Icons.groups_2_outlined),
+                        title: Text(
+                          '반: ${controller.classGroups.where((g) => g.id == controller.selectedClassGroupId).map((g) => g.name).firstOrNull ?? '-'}',
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  const PopupMenuItem<String>(
+                    value: 'settings',
+                    child: ListTile(
+                      leading: Icon(Icons.settings_outlined),
+                      title: Text('설정'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  if (controller.availableViewRoles.length > 1) ...[
+                    const PopupMenuDivider(),
+                    ...controller.availableViewRoles.map(
+                      (role) => PopupMenuItem<String>(
+                        value: 'role:$role',
+                        child: Row(
+                          children: [
+                            Icon(
+                              controller.currentRole == role
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(_labelForRole(role)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const PopupMenuDivider(),
+                  const PopupMenuItem<String>(
+                    value: 'logout',
+                    child: ListTile(
+                      leading: Icon(Icons.logout),
+                      title: Text('로그아웃'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // ── Row 2: Actions ──
+          Row(
+            children: [
+              // Child selector field (full width)
+              Expanded(
+                child: _buildChildSelectorField(
+                  children: children,
+                  childLabel: childLabel,
+                  hasChildren: hasChildren,
                 ),
-              ],
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: ListTile(
-                  leading: Icon(Icons.logout),
-                  title: Text('로그아웃'),
-                  contentPadding: EdgeInsets.zero,
-                ),
+              ),
+              const SizedBox(width: 6),
+              // Refresh button
+              _buildActionIconButton(
+                icon: Icons.refresh,
+                tooltip: '새로고침',
+                onPressed: controller.isBusy
+                    ? null
+                    : () async {
+                        try {
+                          await widget.onRefresh();
+                        } catch (_) {}
+                      },
               ),
             ],
           ),
@@ -1349,8 +1611,6 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
     if (metadataName is String && metadataName.trim().isNotEmpty) {
       return metadataName.trim();
     }
-    final email = controller.user?.email ?? '';
-    if (email.contains('@')) return email.split('@').first;
     return '사용자';
   }
 
@@ -1618,11 +1878,10 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                               CircleAvatar(
                                 radius: 22,
                                 backgroundColor: NestColors.roseMist,
-                                child: Text(
-                                  (controller.user?.email ?? '?')[0].toUpperCase(),
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: NestColors.deepWood,
-                                  ),
+                                child: Icon(
+                                  Icons.person,
+                                  size: 24,
+                                  color: NestColors.deepWood,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -1631,7 +1890,7 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      controller.user?.email ?? '-',
+                                      _displayName(controller),
                                       style: Theme.of(context).textTheme.bodyMedium,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -1859,42 +2118,32 @@ class _MainPanelState extends State<_MainPanel> {
             icon: const Icon(Icons.refresh, size: 20),
             visualDensity: VisualDensity.compact,
           ),
-          IconButton(
-            tooltip: '설정',
-            onPressed: controller.isBusy
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (ctx) => Scaffold(
-                          appBar: AppBar(title: const Text('설정')),
-                          body: ProfileSettingsTab(
-                            controller: controller,
-                            selectedChildId: widget.selectedChildId,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-            icon: const Icon(Icons.settings_outlined, size: 20),
-            visualDensity: VisualDensity.compact,
-          ),
           PopupMenuButton<String>(
             tooltip: displayName,
             icon: CircleAvatar(
               radius: 14,
               backgroundColor: NestColors.dustyRose,
-              child: Text(
-                displayName.characters.first,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood,
-                ),
+              child: Icon(
+                Icons.person,
+                size: 16,
+                color: NestColors.deepWood,
               ),
             ),
             onSelected: (value) {
               if (value == 'logout') {
                 unawaited(widget.onLogout());
+              } else if (value == 'settings') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (ctx) => Scaffold(
+                      appBar: AppBar(title: const Text('설정')),
+                      body: ProfileSettingsTab(
+                        controller: controller,
+                        selectedChildId: widget.selectedChildId,
+                      ),
+                    ),
+                  ),
+                );
               }
             },
             itemBuilder: (context) => [
@@ -1909,6 +2158,16 @@ class _MainPanelState extends State<_MainPanel> {
                 ),
               ),
               const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined, size: 16),
+                    SizedBox(width: 8),
+                    Text('설정'),
+                  ],
+                ),
+              ),
               if (controller.availableViewRoles.length > 1)
                 ...controller.availableViewRoles.map(
                   (role) => PopupMenuItem<String>(
@@ -1995,17 +2254,26 @@ class _MainPanelState extends State<_MainPanel> {
             icon: CircleAvatar(
               radius: 14,
               backgroundColor: NestColors.dustyRose,
-              child: Text(
-                displayName.characters.first,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood,
-                ),
+              child: Icon(
+                Icons.person,
+                size: 16,
+                color: NestColors.deepWood,
               ),
             ),
             onSelected: (value) {
               if (value == 'logout') {
                 unawaited(widget.onLogout());
+              } else if (value == 'settings') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (ctx) => Scaffold(
+                      appBar: AppBar(title: const Text('설정')),
+                      body: ProfileSettingsTab(
+                        controller: controller,
+                      ),
+                    ),
+                  ),
+                );
               }
             },
             itemBuilder: (context) => [
@@ -2031,6 +2299,16 @@ class _MainPanelState extends State<_MainPanel> {
                 ),
               ),
               const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined, size: 16),
+                    SizedBox(width: 8),
+                    Text('설정'),
+                  ],
+                ),
+              ),
               if (controller.availableViewRoles.length > 1)
                 ...controller.availableViewRoles.map(
                   (role) => PopupMenuItem<String>(
@@ -2288,10 +2566,6 @@ class _MainPanelState extends State<_MainPanel> {
       return metadataName.trim();
     }
 
-    final email = controller.user?.email ?? '';
-    if (email.contains('@')) {
-      return email.split('@').first;
-    }
     return '사용자';
   }
 

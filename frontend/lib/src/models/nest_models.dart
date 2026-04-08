@@ -157,9 +157,6 @@ class HomeschoolMemberDirectoryEntry {
 
   String get displayLabel {
     final trimmedName = fullName.trim();
-    if (trimmedName.isNotEmpty && email.trim().isNotEmpty) {
-      return '$trimmedName <$email>';
-    }
     if (trimmedName.isNotEmpty) {
       return trimmedName;
     }
@@ -167,6 +164,14 @@ class HomeschoolMemberDirectoryEntry {
       return email;
     }
     return userId;
+  }
+
+  String get displayLabelWithEmail {
+    final trimmedName = fullName.trim();
+    if (trimmedName.isNotEmpty && email.trim().isNotEmpty) {
+      return '$trimmedName <$email>';
+    }
+    return displayLabel;
   }
 
   factory HomeschoolMemberDirectoryEntry.fromMap(Map<String, dynamic> map) {

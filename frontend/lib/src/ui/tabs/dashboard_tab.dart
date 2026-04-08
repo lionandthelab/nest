@@ -525,13 +525,6 @@ class _DashboardTabState extends State<DashboardTab> {
                         'Nest에 오신 것을 환영합니다!',
                         style: theme.textTheme.headlineSmall,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        controller.user?.email ?? '',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.6),
-                        ),
-                      ),
                     ],
                   ),
                 ),
