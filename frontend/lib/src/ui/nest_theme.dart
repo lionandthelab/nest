@@ -230,7 +230,11 @@ class NestTheme {
         linearTrackColor: NestColors.roseMist,
         circularTrackColor: Color(0x33DCAE96),
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
+      // Non-const map + bare constructor calls: newer Flutter stable (>3.41)
+      // made some PageTransitionsBuilder constructors non-const, which broke the
+      // previous const map literal. Bare calls compile whether or not the
+      // constructors are const (at worst a non-fatal prefer_const info).
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           TargetPlatform.android: ZoomPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
