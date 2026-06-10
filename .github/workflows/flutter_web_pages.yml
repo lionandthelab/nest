@@ -21,6 +21,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          # Pinned to the locally-verified SDK. Unpinned `stable` drifted to a
+          # Flutter that removed CupertinoPageTransitionsBuilder, breaking the
+          # build. Bump this deliberately after verifying SDK compatibility.
+          flutter-version: 3.38.7
           channel: stable
           cache: true
 
