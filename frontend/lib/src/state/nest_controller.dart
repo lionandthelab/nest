@@ -62,6 +62,12 @@ class NestController extends ChangeNotifier {
   List<ClassSession> sessions = [];
   List<ClassSession> allTermSessions = [];
 
+  /// Teacher assignments for every non-canceled session in the term (all
+  /// class groups), kept in sync by [_loadSessions]. Powers cross-class
+  /// teacher double-booking detection in the timetable builder and the
+  /// whole-school teacher-load overlay.
+  List<SessionTeacherAssignment> allTermSessionTeacherAssignments = [];
+
   List<Proposal> proposals = [];
   Map<String, List<ProposalSession>> proposalSessionsById = const {};
   List<ScheduleOptionDraft> scheduleOptionDrafts = [];
@@ -98,6 +104,20 @@ class NestController extends ChangeNotifier {
         .where((draft) => draft.id == targetId)
         .firstOrNull;
   }
+
+  Term? get selectedTerm {
+    final id = selectedTermId;
+    if (id == null) {
+      return null;
+    }
+    return terms.where((term) => term.id == id).firstOrNull;
+  }
+
+  /// True when the selected term is ARCHIVED. ARCHIVED terms block all
+  /// timetable mutations at the DB trigger layer, so the builder UI should
+  /// lock itself to read-only when this is set.
+  bool get isSelectedTermArchived =>
+      (selectedTerm?.status ?? '').toUpperCase() == 'ARCHIVED';
 
   List<String> get availableViewRoles {
     final homeschoolId = selectedHomeschoolId;
@@ -1074,6 +1094,49 @@ class NestController extends ChangeNotifier {
       await loadSessionTeacherAssignments();
       await loadTeachingPlans();
       _setStatus('수업 취소 완료');
+    });
+  }
+
+  /// Hard-deletes a session (FK children cascade). Unlike [cancelSession],
+  /// the row is removed entirely so it cannot reappear on reload. Used by the
+  /// timetable builder's drag-to-trash / draft-commit delete path.
+  Future<void> deleteSession(String sessionId) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('수업을 삭제하는 중...', () async {
+      await _repository.deleteSession(sessionId: sessionId);
+      await _loadSessions();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
+      _setStatus('수업 삭제 완료');
+    });
+  }
+
+  /// Atomic batch commit of a class group's timetable draft via the optional
+  /// `apply_timetable_draft` RPC. Throws [TimetableBatchUnsupported] when the
+  /// RPC is unavailable so the caller can fall back to the per-call loop; that
+  /// exception propagates out of [_runBusy] rather than being swallowed.
+  Future<void> applyTimetableDraft({
+    required String classGroupId,
+    required List<Map<String, dynamic>> sessions,
+    required List<String> deletedIds,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+
+    await _runBusy('시간표를 저장하는 중...', () async {
+      await _repository.applyTimetableDraft(
+        classGroupId: classGroupId,
+        sessions: sessions,
+        deletedIds: deletedIds,
+      );
+      await _loadSessions();
+      await loadSessionTeacherAssignments();
+      await loadTeachingPlans();
+      _setStatus('시간표 저장 완료');
     });
   }
 
@@ -4553,6 +4616,7 @@ class NestController extends ChangeNotifier {
     if (classGroupId == null || classGroupId.isEmpty) {
       sessions = [];
       allTermSessions = [];
+      allTermSessionTeacherAssignments = [];
       return;
     }
 
@@ -4567,6 +4631,18 @@ class NestController extends ChangeNotifier {
     } else {
       allTermSessions = sessions;
     }
+
+    // Teacher assignments across the whole term, for cross-class conflict
+    // detection (drag-time preflight) and the whole-school teacher overlay.
+    final allSessionIds = allTermSessions
+        .map((session) => session.id)
+        .where((id) => id.isNotEmpty)
+        .toList();
+    allTermSessionTeacherAssignments = allSessionIds.isEmpty
+        ? const []
+        : await _repository.fetchSessionTeacherAssignments(
+            classSessionIds: allSessionIds,
+          );
   }
 
   Future<void> _loadProposals() async {

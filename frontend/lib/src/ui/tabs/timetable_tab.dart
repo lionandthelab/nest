@@ -2,13 +2,22 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
 import '../../services/download_helper.dart';
+import '../../services/nest_repository.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/search_select_field.dart';
+import 'timetable/family_enrollment_panel.dart';
+import 'timetable/object_inspector_rail.dart';
+import 'timetable/room_normalizer.dart';
+import 'timetable/whole_school_overlay_board.dart';
+
+/// Board view mode: per-class editable build vs read-only whole-school overlay.
+enum _TimetableViewMode { perClass, wholeSchool }
 
 class TimetableTab extends StatefulWidget {
   const TimetableTab({
@@ -35,12 +44,37 @@ class _TimetableTabState extends State<TimetableTab> {
   bool _isApplyingDraft = false;
   bool _paletteOpen = true;
 
+  // Phase 2 "한눈에" view-mode toggle + whole-school pivot axis.
+  _TimetableViewMode _viewMode = _TimetableViewMode.perClass;
+  WholeSchoolAxis _wholeSchoolAxis = WholeSchoolAxis.byClass;
+  // Optional column reference surfaced from the whole-school board header tap;
+  // drives the inspector rail's initial selection.
+  WholeSchoolColumnRef? _pendingInspect;
+
   List<_EditableSession> _draftSessions = const [];
   Map<String, List<_EditableAssignment>> _draftAssignments = const {};
   Set<String> _roomPalette = const {};
 
+  // "수업 카드 조립" composer state.
+  String? _composeCourseId;
+  String? _composeTeacherId;
+  String? _composeRoom;
+  ComposedSessionPayload? _composedCard;
+
+  // Live drag feedback: non-null while a Draggable from palette/grid is active.
+  _ActiveDrag? _activeDrag;
+
+  // Client-only undo/redo stacks (capped at 30 entries each).
+  static const int _historyLimit = 30;
+  final List<_DraftSnapshot> _undoStack = [];
+  final List<_DraftSnapshot> _redoStack = [];
+
+  // Keyboard focus for Ctrl+Z / Ctrl+Shift+Z shortcuts on the board card.
+  final FocusNode _boardFocusNode = FocusNode();
+
   @override
   void dispose() {
+    _boardFocusNode.dispose();
     widget.onDirtyChanged?.call(false);
     super.dispose();
   }
@@ -541,105 +575,15 @@ class _TimetableTabState extends State<TimetableTab> {
       }
     }
 
-    return Card(
+    final archived = controller.isSelectedTermArchived;
+
+    final boardContent = Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LayoutBuilder(
-              builder: (context, headerConstraints) {
-                final compact = headerConstraints.maxWidth < 600;
-                if (compact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '시간표 메인 보드',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              _paletteOpen
-                                  ? Icons.view_sidebar_outlined
-                                  : Icons.view_sidebar,
-                            ),
-                            tooltip: _paletteOpen ? '팔레트 접기' : '팔레트 열기',
-                            onPressed: () =>
-                                setState(() => _paletteOpen = !_paletteOpen),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: !_isDraftDirty ||
-                                    controller.isBusy ||
-                                    _isApplyingDraft
-                                ? null
-                                : _commitDraftChanges,
-                            icon: const Icon(Icons.check_circle_outline, size: 18),
-                            label: const Text('수정 확정'),
-                          ),
-                          FilledButton.tonalIcon(
-                            onPressed: controller.isBusy || _isApplyingDraft
-                                ? null
-                                : () => _openRoomUtilizationExportDialog(
-                                    controller),
-                            icon: const Icon(Icons.meeting_room_outlined, size: 18),
-                            label: const Text('교실 상황표 내보내기'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '시간표 메인 보드',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed:
-                          !_isDraftDirty || controller.isBusy || _isApplyingDraft
-                          ? null
-                          : _commitDraftChanges,
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text('수정 확정'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonalIcon(
-                      onPressed: controller.isBusy || _isApplyingDraft
-                          ? null
-                          : () => _openRoomUtilizationExportDialog(controller),
-                      icon: const Icon(Icons.meeting_room_outlined),
-                      label: const Text('교실 상황표 내보내기'),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: Icon(
-                        _paletteOpen
-                            ? Icons.view_sidebar_outlined
-                            : Icons.view_sidebar,
-                      ),
-                      tooltip: _paletteOpen ? '팔레트 접기' : '팔레트 열기',
-                      onPressed: () =>
-                          setState(() => _paletteOpen = !_paletteOpen),
-                    ),
-                  ],
-                );
-              },
-            ),
+            _buildBoardHeader(controller, archived),
             if (_isApplyingDraft) ...[
               const SizedBox(height: 8),
               const LinearProgressIndicator(minHeight: 3),
@@ -650,48 +594,458 @@ class _TimetableTabState extends State<TimetableTab> {
             else if (dayOrder.isEmpty || maxPeriods == 0)
               const Text('시간표를 표시할 수 있는 슬롯 구성이 없습니다.')
             else
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final showSidePalette =
-                      _paletteOpen && constraints.maxWidth >= 1220;
-                  if (showSidePalette) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 290,
-                          child: _buildPalettePanel(controller),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildEditableGrid(
-                            controller: controller,
-                            dayOrder: dayOrder,
-                            slotsByDay: slotsByDay,
-                            maxPeriods: maxPeriods,
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-
-                  return Column(
-                    children: [
-                      if (_paletteOpen) ...[
-                        _buildPalettePanel(controller),
-                        const SizedBox(height: 12),
-                      ],
-                      _buildEditableGrid(
-                        controller: controller,
-                        dayOrder: dayOrder,
-                        slotsByDay: slotsByDay,
-                        maxPeriods: maxPeriods,
-                      ),
-                    ],
-                  );
-                },
+              _buildBoardBody(
+                controller: controller,
+                dayOrder: dayOrder,
+                slotsByDay: slotsByDay,
+                maxPeriods: maxPeriods,
+                archived: archived,
               ),
           ],
+        ),
+      ),
+    );
+
+    // Keyboard shortcuts: Ctrl+Z (undo) / Ctrl+Shift+Z (redo) on the board.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
+          if (!archived && !_isApplyingDraft && _canUndo) {
+            _undo();
+          }
+        },
+        const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          control: true,
+          shift: true,
+        ): () {
+          if (!archived && !_isApplyingDraft && _canRedo) {
+            _redo();
+          }
+        },
+      },
+      child: Focus(
+        focusNode: _boardFocusNode,
+        autofocus: true,
+        child: Listener(
+          // Re-acquire focus on any board interaction so the Ctrl+Z/Ctrl+Shift+Z
+          // shortcuts keep working after focus moves elsewhere (dialogs etc.).
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) {
+            if (!_boardFocusNode.hasFocus) {
+              _boardFocusNode.requestFocus();
+            }
+          },
+          child: boardContent,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardHeader(NestController controller, bool archived) {
+    final canCommit =
+        _isDraftDirty && !controller.isBusy && !_isApplyingDraft && !archived;
+    final historyEnabled = !controller.isBusy && !_isApplyingDraft && !archived;
+    final wholeSchool = _viewMode == _TimetableViewMode.wholeSchool;
+
+    final undoButton = IconButton(
+      icon: const Icon(Icons.undo),
+      tooltip: '실행 취소 (Ctrl+Z)',
+      onPressed: historyEnabled && _canUndo ? _undo : null,
+    );
+    final redoButton = IconButton(
+      icon: const Icon(Icons.redo),
+      tooltip: '다시 실행 (Ctrl+Shift+Z)',
+      onPressed: historyEnabled && _canRedo ? _redo : null,
+    );
+    final paletteButton = IconButton(
+      icon: Icon(
+        _paletteOpen ? Icons.view_sidebar_outlined : Icons.view_sidebar,
+      ),
+      tooltip: _paletteOpen ? '팔레트 접기' : '팔레트 열기',
+      onPressed: () => setState(() => _paletteOpen = !_paletteOpen),
+    );
+
+    final viewModeToggle = SegmentedButton<_TimetableViewMode>(
+      segments: const [
+        ButtonSegment(
+          value: _TimetableViewMode.perClass,
+          label: Text('반 빌드'),
+          icon: Icon(Icons.dashboard_customize_outlined, size: 16),
+        ),
+        ButtonSegment(
+          value: _TimetableViewMode.wholeSchool,
+          label: Text('전교 보기'),
+          icon: Icon(Icons.school_outlined, size: 16),
+        ),
+      ],
+      selected: {_viewMode},
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      onSelectionChanged: (values) {
+        if (values.isEmpty) return;
+        setState(() => _viewMode = values.first);
+      },
+    );
+
+    final axisToggle = SegmentedButton<WholeSchoolAxis>(
+      segments: const [
+        ButtonSegment(value: WholeSchoolAxis.byClass, label: Text('반')),
+        ButtonSegment(value: WholeSchoolAxis.byRoom, label: Text('장소')),
+        ButtonSegment(value: WholeSchoolAxis.byTeacher, label: Text('선생')),
+      ],
+      selected: {_wholeSchoolAxis},
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      onSelectionChanged: (values) {
+        if (values.isEmpty) return;
+        setState(() => _wholeSchoolAxis = values.first);
+      },
+    );
+
+    return LayoutBuilder(
+      builder: (context, headerConstraints) {
+        final compact = headerConstraints.maxWidth < 600;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '시간표 메인 보드',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  // Per-class-only controls hidden in whole-school mode.
+                  if (!wholeSchool) ...[
+                    undoButton,
+                    redoButton,
+                    paletteButton,
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              viewModeToggle,
+              if (wholeSchool) ...[
+                const SizedBox(height: 8),
+                axisToggle,
+              ] else ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: canCommit ? _commitDraftChanges : null,
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('수정 확정'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: controller.isBusy || _isApplyingDraft
+                          ? null
+                          : () => _openRoomUtilizationExportDialog(controller),
+                      icon: const Icon(Icons.meeting_room_outlined, size: 18),
+                      label: const Text('교실 상황표 내보내기'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: controller.isBusy
+                          ? null
+                          : () => showFamilyEnrollmentDialog(
+                                context,
+                                widget.controller,
+                              ),
+                      icon: const Icon(Icons.family_restroom, size: 18),
+                      label: const Text('가정·학생 배정'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(
+              child: Text(
+                '시간표 메인 보드',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            viewModeToggle,
+            const SizedBox(width: 8),
+            if (wholeSchool)
+              axisToggle
+            else ...[
+              undoButton,
+              redoButton,
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: canCommit ? _commitDraftChanges : null,
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('수정 확정'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: controller.isBusy || _isApplyingDraft
+                    ? null
+                    : () => _openRoomUtilizationExportDialog(controller),
+                icon: const Icon(Icons.meeting_room_outlined),
+                label: const Text('교실 상황표 내보내기'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => showFamilyEnrollmentDialog(
+                          context,
+                          widget.controller,
+                        ),
+                icon: const Icon(Icons.family_restroom),
+                label: const Text('가정·학생 배정'),
+              ),
+              const SizedBox(width: 8),
+              paletteButton,
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBoardBody({
+    required NestController controller,
+    required List<int> dayOrder,
+    required Map<int, List<TimeSlot>> slotsByDay,
+    required int maxPeriods,
+    required bool archived,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wholeSchool = _viewMode == _TimetableViewMode.wholeSchool;
+        // Read-only inspector rail shows on wide layouts in BOTH modes.
+        final showInspector = constraints.maxWidth >= 1500;
+
+        if (wholeSchool) {
+          // Whole-school overlay is STRICTLY READ-ONLY: no palette, no trash
+          // zone, and the ARCHIVED edit lock does NOT apply.
+          final board = WholeSchoolOverlayBoard(
+            controller: controller,
+            axis: _wholeSchoolAxis,
+            onColumnTap: (ref) => setState(() => _pendingInspect = ref),
+          );
+
+          if (showInspector) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: board),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 290,
+                  child: _buildInspectorRail(controller),
+                ),
+              ],
+            );
+          }
+          return board;
+        }
+
+        final showSidePalette =
+            _paletteOpen && constraints.maxWidth >= 1220;
+
+        final Widget editableArea;
+        if (showSidePalette) {
+          editableArea = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 290,
+                child: _buildPalettePanel(controller),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildEditableGrid(
+                  controller: controller,
+                  dayOrder: dayOrder,
+                  slotsByDay: slotsByDay,
+                  maxPeriods: maxPeriods,
+                ),
+              ),
+            ],
+          );
+        } else {
+          editableArea = Column(
+            children: [
+              if (_paletteOpen) ...[
+                _buildPalettePanel(controller),
+                const SizedBox(height: 12),
+              ],
+              _buildEditableGrid(
+                controller: controller,
+                dayOrder: dayOrder,
+                slotsByDay: slotsByDay,
+                maxPeriods: maxPeriods,
+              ),
+            ],
+          );
+        }
+
+        final showTrash =
+            !archived && _activeDrag?.kind == DragPayloadType.session;
+
+        // The editable grid + drag/trash/archived overlay only covers the
+        // per-class editing surface, keeping the inspector rail outside the
+        // ARCHIVED frosted lock.
+        final editableStack = Stack(
+          children: [
+            editableArea,
+            // Drag-to-delete trash zone (bottom-right) while dragging a session.
+            Positioned(
+              right: 12,
+              bottom: 12,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                opacity: showTrash ? 1 : 0,
+                child: IgnorePointer(
+                  ignoring: !showTrash,
+                  child: _buildTrashZone(),
+                ),
+              ),
+            ),
+            // ARCHIVED lock overlay (per-class edit mode only).
+            if (archived)
+              Positioned.fill(
+                child: _buildArchivedOverlay(),
+              ),
+          ],
+        );
+
+        if (showInspector) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: editableStack),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 290,
+                child: _buildInspectorRail(controller),
+              ),
+            ],
+          );
+        }
+        return editableStack;
+      },
+    );
+  }
+
+  Widget _buildInspectorRail(NestController controller) {
+    // Tapping a CLASS column header in the whole-school board pins the rail to
+    // that class (re-keyed so initState re-seeds the selection). Room/teacher
+    // column taps are left to the rail's own segmented picker, so they don't
+    // disrupt manual inspector navigation.
+    final pending = _pendingInspect;
+    final pinnedClassId =
+        pending != null && pending.axis == WholeSchoolAxis.byClass
+            ? pending.id
+            : null;
+    final initialClassId = pinnedClassId ?? controller.selectedClassGroupId;
+    return ObjectInspectorRail(
+      key: ValueKey('inspector-${pinnedClassId ?? 'self'}'),
+      controller: controller,
+      initialClassGroupId: initialClassId,
+    );
+  }
+
+  Widget _buildTrashZone() {
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (details) => details.data is DragPayload &&
+          (details.data as DragPayload).type == DragPayloadType.session,
+      onAcceptWithDetails: (details) {
+        final data = details.data;
+        if (data is DragPayload && data.type == DragPayloadType.session) {
+          _deleteDraftSession(data.id);
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final hovering = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: hovering
+                ? Colors.red.shade400
+                : NestColors.clay.withValues(alpha: 0.9),
+            border: Border.all(
+              color: hovering ? Colors.red.shade700 : NestColors.clay,
+              width: 2,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.delete_outline, color: Colors.white, size: 20),
+              const SizedBox(width: 6),
+              Text(
+                '여기로 드래그하여 삭제',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildArchivedOverlay() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        color: Colors.white.withValues(alpha: 0.6),
+        alignment: Alignment.center,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: Colors.white,
+            border: Border.all(color: NestColors.clay),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline, color: NestColors.clay),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  '이 학기는 보관됨(ARCHIVED) 상태입니다. 시간표를 수정할 수 없습니다.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: NestColors.deepWood,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1063,6 +1417,8 @@ class _TimetableTabState extends State<TimetableTab> {
       ),
       child: Column(
         children: [
+          _buildComposerSection(controller),
+          const Divider(height: 1),
           _buildPaletteSection(
             title: '과목 팔레트',
             subtitle: '${controller.courses.length}개',
@@ -1098,6 +1454,194 @@ class _TimetableTabState extends State<TimetableTab> {
         ],
       ),
     );
+  }
+
+  Widget _buildComposerSection(NestController controller) {
+    final courses = controller.courses.toList();
+    final teachers = controller.teacherProfiles.toList();
+    final rooms = _roomPalette.toList()..sort();
+    final locked = _dragsLocked;
+
+    // Keep selection valid if the underlying lists changed.
+    final courseValue =
+        courses.any((c) => c.id == _composeCourseId) ? _composeCourseId : null;
+    final teacherValue = teachers.any((t) => t.id == _composeTeacherId)
+        ? _composeTeacherId
+        : null;
+    final roomValue = rooms.contains(_composeRoom) ? _composeRoom : null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.dashboard_customize_outlined,
+                  size: 20, color: NestColors.dustyRose),
+              const SizedBox(width: 8),
+              Text(
+                '수업 카드 조립',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String?>(
+            initialValue: courseValue,
+            isDense: true,
+            decoration: const InputDecoration(
+              labelText: '과목',
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('과목 선택'),
+              ),
+              ...courses.map(
+                (course) => DropdownMenuItem<String?>(
+                  value: course.id,
+                  child: Text(course.name),
+                ),
+              ),
+            ],
+            onChanged: locked
+                ? null
+                : (value) {
+                    setState(() {
+                      _composeCourseId = value;
+                      _composedCard = null;
+                    });
+                  },
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String?>(
+            initialValue: teacherValue,
+            isDense: true,
+            decoration: const InputDecoration(
+              labelText: '주강사 (선택)',
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('미지정'),
+              ),
+              ...teachers.map(
+                (teacher) => DropdownMenuItem<String?>(
+                  value: teacher.id,
+                  child: Text(teacher.displayName),
+                ),
+              ),
+            ],
+            onChanged: locked
+                ? null
+                : (value) {
+                    setState(() {
+                      _composeTeacherId = value;
+                      _composedCard = null;
+                    });
+                  },
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String?>(
+            initialValue: roomValue,
+            isDense: true,
+            decoration: const InputDecoration(
+              labelText: '장소 (선택)',
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('미지정'),
+              ),
+              ...rooms.map(
+                (room) => DropdownMenuItem<String?>(
+                  value: room,
+                  child: Text(room),
+                ),
+              ),
+            ],
+            onChanged: locked
+                ? null
+                : (value) {
+                    setState(() {
+                      _composeRoom = value;
+                      _composedCard = null;
+                    });
+                  },
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: (locked || courseValue == null)
+                  ? null
+                  : () {
+                      setState(() {
+                        _composedCard = ComposedSessionPayload(
+                          courseId: courseValue,
+                          teacherProfileId: teacherValue,
+                          location: roomValue,
+                        );
+                      });
+                    },
+              icon: const Icon(Icons.add_box_outlined, size: 18),
+              label: const Text('카드 만들기'),
+            ),
+          ),
+          if (_composedCard != null) ...[
+            const SizedBox(height: 10),
+            _buildComposedCardChip(controller, _composedCard!, locked),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Renders the assembled card as a `Draggable<ComposedSessionPayload>` chip.
+  Widget _buildComposedCardChip(
+    NestController controller,
+    ComposedSessionPayload card,
+    bool locked,
+  ) {
+    final label = _composedCardLabel(controller, card);
+    final chip = _ComposedCardChip(label: label);
+    return Draggable<ComposedSessionPayload>(
+      data: card,
+      maxSimultaneousDrags: locked ? 0 : null,
+      onDragStarted: () => _beginDrag(
+        _ActiveDrag(
+          kind: DragPayloadType.course,
+          courseId: card.courseId,
+          teacherProfileId: card.teacherProfileId,
+        ),
+      ),
+      onDragEnd: (_) => _endDrag(),
+      onDraggableCanceled: (velocity, offset) => _endDrag(),
+      feedback: Material(
+        color: Colors.transparent,
+        child: _ComposedCardChip(label: label, dragging: true),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: chip),
+      child: chip,
+    );
+  }
+
+  String _composedCardLabel(
+    NestController controller,
+    ComposedSessionPayload card,
+  ) {
+    final parts = <String>[controller.findCourseName(card.courseId)];
+    if (card.hasTeacher) {
+      parts.add(controller.findTeacherName(card.teacherProfileId!.trim()));
+    }
+    if (card.hasLocation) {
+      parts.add(card.location!.trim());
+    }
+    return parts.join(' · ');
   }
 
   Widget _buildPaletteSection({
@@ -1142,11 +1686,20 @@ class _TimetableTabState extends State<TimetableTab> {
             runSpacing: 8,
             children: controller.courses
                 .map(
-                  (course) => LongPressDraggable<DragPayload>(
+                  (course) => Draggable<DragPayload>(
                     data: DragPayload(
                       type: DragPayloadType.course,
                       id: course.id,
                     ),
+                    maxSimultaneousDrags: _dragsLocked ? 0 : null,
+                    onDragStarted: () => _beginDrag(
+                      _ActiveDrag(
+                        kind: DragPayloadType.course,
+                        courseId: course.id,
+                      ),
+                    ),
+                    onDragEnd: (_) => _endDrag(),
+                    onDraggableCanceled: (velocity, offset) => _endDrag(),
                     feedback: Material(
                       color: Colors.transparent,
                       child: _PaletteChip(
@@ -1190,11 +1743,20 @@ class _TimetableTabState extends State<TimetableTab> {
             runSpacing: 8,
             children: controller.teacherProfiles
                 .map(
-                  (teacher) => LongPressDraggable<DragPayload>(
+                  (teacher) => Draggable<DragPayload>(
                     data: DragPayload(
                       type: DragPayloadType.teacher,
                       id: teacher.id,
                     ),
+                    maxSimultaneousDrags: _dragsLocked ? 0 : null,
+                    onDragStarted: () => _beginDrag(
+                      _ActiveDrag(
+                        kind: DragPayloadType.teacher,
+                        teacherProfileId: teacher.id,
+                      ),
+                    ),
+                    onDragEnd: (_) => _endDrag(),
+                    onDraggableCanceled: (velocity, offset) => _endDrag(),
                     feedback: Material(
                       color: Colors.transparent,
                       child: _PaletteChip(
@@ -1246,8 +1808,14 @@ class _TimetableTabState extends State<TimetableTab> {
             children: rooms
                 .map((room) {
                   final linkedClassroom = classroomByName[room.toLowerCase()];
-                  return LongPressDraggable<DragPayload>(
+                  return Draggable<DragPayload>(
                     data: DragPayload(type: DragPayloadType.room, id: room),
+                    maxSimultaneousDrags: _dragsLocked ? 0 : null,
+                    onDragStarted: () => _beginDrag(
+                      const _ActiveDrag(kind: DragPayloadType.room),
+                    ),
+                    onDragEnd: (_) => _endDrag(),
+                    onDraggableCanceled: (velocity, offset) => _endDrag(),
                     feedback: Material(
                       color: Colors.transparent,
                       child: _PaletteChip(
@@ -1422,6 +1990,9 @@ class _TimetableTabState extends State<TimetableTab> {
         _setDirty(true);
       });
     }
+    // A server-side delete is irreversible; drop draft history so undo cannot
+    // restore sessions that reference the now-deleted course.
+    _clearHistory();
     _showMessage(controller.statusMessage);
   }
 
@@ -1571,6 +2142,9 @@ class _TimetableTabState extends State<TimetableTab> {
         _setDirty(true);
       });
     }
+    // Irreversible server delete → clear draft history (undo must not restore
+    // assignments referencing the now-deleted teacher).
+    _clearHistory();
     _showMessage(controller.statusMessage);
   }
 
@@ -1734,6 +2308,8 @@ class _TimetableTabState extends State<TimetableTab> {
         _setDirty(true);
       }
     });
+    // Irreversible server delete → clear draft history.
+    _clearHistory();
     _showMessage(controller.statusMessage);
   }
 
@@ -1820,6 +2396,17 @@ class _TimetableTabState extends State<TimetableTab> {
         forExport: forExport,
         slotCellBuilder: (slot) {
           final slotSessions = _draftSessionsForSlot(slot.id);
+          // Export renders are static snapshots: no live drag feedback.
+          final activeDrag = forExport ? null : _activeDrag;
+          final conflictState = activeDrag == null
+              ? DropConflictState.none
+              : _evaluateDropConflict(
+                  slot.id,
+                  kind: activeDrag.kind,
+                  courseId: activeDrag.courseId,
+                  teacherProfileId: activeDrag.teacherProfileId,
+                  movingSessionId: activeDrag.sessionId,
+                );
           return _EditableSlotCell(
             slot: slot,
             sessions: slotSessions,
@@ -1830,8 +2417,23 @@ class _TimetableTabState extends State<TimetableTab> {
             },
             conflictMessagesForSession: _draftTeacherConflictsForSession,
             onDropPayload: (payload) => _handleDropOnSlot(slot.id, payload),
+            onComposedDrop: (payload) => _handleComposedDrop(slot.id, payload),
             onTapSession: _openSessionSettingDialog,
             onDeleteSession: _deleteDraftSession,
+            onSessionMenu: _openSessionMenu,
+            sessionMenuEnabled: !forExport &&
+                !controller.isSelectedTermArchived &&
+                !controller.isBusy,
+            onSessionDragStarted: (sessionId) => _beginDrag(
+              _ActiveDrag(
+                kind: DragPayloadType.session,
+                sessionId: sessionId,
+              ),
+            ),
+            onSessionDragEnded: _endDrag,
+            dragsLocked: _dragsLocked,
+            activeDrag: activeDrag,
+            conflictState: conflictState,
             forExport: forExport,
           );
         },
@@ -2072,135 +2674,16 @@ class _TimetableTabState extends State<TimetableTab> {
     });
 
     try {
-      final initialSessions = controller.sessions.toList();
-      final initialIds = initialSessions.map((row) => row.id).toSet();
-
-      final existingDraftRows = _draftSessions
-          .where((row) => !row.isNew && initialIds.contains(row.id))
-          .toList();
-      final existingDraftIds = existingDraftRows.map((row) => row.id).toSet();
-
-      final deleteIds = initialSessions
-          .where((row) => !existingDraftIds.contains(row.id))
-          .map((row) => row.id)
-          .toList();
-
-      for (final sessionId in deleteIds) {
-        await controller.cancelSession(sessionId);
-      }
-
-      for (final draftRow in existingDraftRows) {
-        final current = controller.sessions
-            .where((row) => row.id == draftRow.id)
-            .firstOrNull;
-        if (current == null) {
-          continue;
-        }
-
-        if (current.timeSlotId != draftRow.timeSlotId) {
-          await controller.moveSession(
-            sessionId: current.id,
-            targetSlotId: draftRow.timeSlotId,
-          );
-        }
-
-        final currentLocation = (current.location ?? '').trim();
-        final nextLocation = (draftRow.location ?? '').trim();
-        if (currentLocation != nextLocation) {
-          await controller.updateSessionLocation(
-            sessionId: current.id,
-            location: nextLocation,
-          );
-        }
-      }
-
-      final tempIdToRealId = <String, String>{};
-      final createdIds = <String>{};
-
-      for (final draftRow in _draftSessions.where((row) => row.isNew)) {
-        await controller.createSessionByCourse(
-          courseId: draftRow.courseId,
-          slotId: draftRow.timeSlotId,
-        );
-
-        final created = controller.sessions
-            .where(
-              (row) =>
-                  row.timeSlotId == draftRow.timeSlotId &&
-                  row.courseId == draftRow.courseId &&
-                  !createdIds.contains(row.id),
-            )
-            .toList()
-            .lastOrNull;
-
-        if (created == null) {
-          continue;
-        }
-
-        createdIds.add(created.id);
-        tempIdToRealId[draftRow.id] = created.id;
-
-        final location = (draftRow.location ?? '').trim();
-        if (location.isNotEmpty) {
-          await controller.updateSessionLocation(
-            sessionId: created.id,
-            location: location,
-          );
-        }
-      }
-
-      for (final draftRow in _draftSessions) {
-        final resolvedSessionId = draftRow.isNew
-            ? tempIdToRealId[draftRow.id]
-            : draftRow.id;
-        if (resolvedSessionId == null || resolvedSessionId.isEmpty) {
-          continue;
-        }
-
-        final currentRows = controller.teacherAssignmentsForSession(
-          resolvedSessionId,
-        );
-        for (final row in currentRows) {
-          await controller.removeTeacherFromSession(
-            classSessionId: resolvedSessionId,
-            teacherProfileId: row.teacherProfileId,
-          );
-        }
-
-        final desiredRows = (_draftAssignments[draftRow.id] ?? const []).toList(
-          growable: false,
-        );
-
-        final desiredMain = desiredRows
-            .where((row) => row.assignmentRole == 'MAIN')
-            .map((row) => row.teacherProfileId)
-            .firstOrNull;
-
-        if (desiredMain != null) {
-          await controller.assignTeacherToSession(
-            classSessionId: resolvedSessionId,
-            teacherProfileId: desiredMain,
-            assignmentRole: 'MAIN',
-          );
-        }
-
-        final assistantIds = desiredRows
-            .where((row) => row.assignmentRole == 'ASSISTANT')
-            .map((row) => row.teacherProfileId)
-            .where((id) => id != desiredMain)
-            .toSet();
-
-        for (final teacherId in assistantIds) {
-          await controller.assignTeacherToSession(
-            classSessionId: resolvedSessionId,
-            teacherProfileId: teacherId,
-            assignmentRole: 'ASSISTANT',
-          );
-        }
+      // Prefer the atomic batch RPC; fall back to the per-call loop when the
+      // optional `apply_timetable_draft` function is not deployed.
+      final didBatch = await _tryCommitViaBatch(controller, classGroupId);
+      if (!didBatch) {
+        await _commitDraftViaIndividualCalls(controller);
       }
 
       // Ensure parent tab guard state is cleared immediately after successful commit.
       _setDirty(false, forceNotify: true);
+      _clearHistory();
       _loadDraftFromController(controller);
       _showMessage('시간표 수정을 확정했습니다.');
     } catch (error) {
@@ -2212,6 +2695,197 @@ class _TimetableTabState extends State<TimetableTab> {
         setState(() {
           _isApplyingDraft = false;
         });
+      }
+    }
+  }
+
+  /// Attempts the atomic batch commit via the optional `apply_timetable_draft`
+  /// RPC. Returns true when applied, or false when the RPC is unavailable so
+  /// the caller falls back to [_commitDraftViaIndividualCalls]. Real errors
+  /// (TEACHER_SLOT_CONFLICT, RLS denial, etc.) propagate to the caller.
+  Future<bool> _tryCommitViaBatch(
+    NestController controller,
+    String classGroupId,
+  ) async {
+    final sessions = <Map<String, dynamic>>[];
+    for (final row in _draftSessions) {
+      final desiredRows = (_draftAssignments[row.id] ?? const []).toList(
+        growable: false,
+      );
+      final mainTeacherId = desiredRows
+          .where((assignment) => assignment.assignmentRole == 'MAIN')
+          .map((assignment) => assignment.teacherProfileId)
+          .firstOrNull;
+      final assistantIds = desiredRows
+          .where((assignment) => assignment.assignmentRole == 'ASSISTANT')
+          .map((assignment) => assignment.teacherProfileId)
+          .where((id) => id != mainTeacherId)
+          .toSet()
+          .toList(growable: false);
+
+      final location = (row.location ?? '').trim();
+
+      sessions.add(<String, dynamic>{
+        'id': row.isNew ? null : row.id,
+        'course_id': row.courseId,
+        'time_slot_id': row.timeSlotId,
+        'title': row.title.isEmpty
+            ? '${controller.findCourseName(row.courseId)} 수업'
+            : row.title,
+        'location': location.isEmpty ? null : location,
+        'main_teacher_id': mainTeacherId,
+        'assistant_ids': assistantIds,
+      });
+    }
+
+    final existingDraftIds = _draftSessions
+        .where((row) => !row.isNew)
+        .map((row) => row.id)
+        .toSet();
+    final deletedIds = controller.sessions
+        .where((row) => !existingDraftIds.contains(row.id))
+        .map((row) => row.id)
+        .toList();
+
+    try {
+      await controller.applyTimetableDraft(
+        classGroupId: classGroupId,
+        sessions: sessions,
+        deletedIds: deletedIds,
+      );
+      return true;
+    } on TimetableBatchUnsupported {
+      return false;
+    }
+  }
+
+  /// Per-call commit path (legacy fallback). Logic is unchanged from the
+  /// original inline loop in [_commitDraftChanges]; only relocated here.
+  Future<void> _commitDraftViaIndividualCalls(NestController controller) async {
+    final initialSessions = controller.sessions.toList();
+    final initialIds = initialSessions.map((row) => row.id).toSet();
+
+    final existingDraftRows = _draftSessions
+        .where((row) => !row.isNew && initialIds.contains(row.id))
+        .toList();
+    final existingDraftIds = existingDraftRows.map((row) => row.id).toSet();
+
+    final deleteIds = initialSessions
+        .where((row) => !existingDraftIds.contains(row.id))
+        .map((row) => row.id)
+        .toList();
+
+    for (final sessionId in deleteIds) {
+      await controller.deleteSession(sessionId);
+    }
+
+    for (final draftRow in existingDraftRows) {
+      final current = controller.sessions
+          .where((row) => row.id == draftRow.id)
+          .firstOrNull;
+      if (current == null) {
+        continue;
+      }
+
+      if (current.timeSlotId != draftRow.timeSlotId) {
+        await controller.moveSession(
+          sessionId: current.id,
+          targetSlotId: draftRow.timeSlotId,
+        );
+      }
+
+      final currentLocation = (current.location ?? '').trim();
+      final nextLocation = (draftRow.location ?? '').trim();
+      if (currentLocation != nextLocation) {
+        await controller.updateSessionLocation(
+          sessionId: current.id,
+          location: nextLocation,
+        );
+      }
+    }
+
+    final tempIdToRealId = <String, String>{};
+    final createdIds = <String>{};
+
+    for (final draftRow in _draftSessions.where((row) => row.isNew)) {
+      await controller.createSessionByCourse(
+        courseId: draftRow.courseId,
+        slotId: draftRow.timeSlotId,
+      );
+
+      final created = controller.sessions
+          .where(
+            (row) =>
+                row.timeSlotId == draftRow.timeSlotId &&
+                row.courseId == draftRow.courseId &&
+                !createdIds.contains(row.id),
+          )
+          .toList()
+          .lastOrNull;
+
+      if (created == null) {
+        continue;
+      }
+
+      createdIds.add(created.id);
+      tempIdToRealId[draftRow.id] = created.id;
+
+      final location = (draftRow.location ?? '').trim();
+      if (location.isNotEmpty) {
+        await controller.updateSessionLocation(
+          sessionId: created.id,
+          location: location,
+        );
+      }
+    }
+
+    for (final draftRow in _draftSessions) {
+      final resolvedSessionId = draftRow.isNew
+          ? tempIdToRealId[draftRow.id]
+          : draftRow.id;
+      if (resolvedSessionId == null || resolvedSessionId.isEmpty) {
+        continue;
+      }
+
+      final currentRows = controller.teacherAssignmentsForSession(
+        resolvedSessionId,
+      );
+      for (final row in currentRows) {
+        await controller.removeTeacherFromSession(
+          classSessionId: resolvedSessionId,
+          teacherProfileId: row.teacherProfileId,
+        );
+      }
+
+      final desiredRows = (_draftAssignments[draftRow.id] ?? const []).toList(
+        growable: false,
+      );
+
+      final desiredMain = desiredRows
+          .where((row) => row.assignmentRole == 'MAIN')
+          .map((row) => row.teacherProfileId)
+          .firstOrNull;
+
+      if (desiredMain != null) {
+        await controller.assignTeacherToSession(
+          classSessionId: resolvedSessionId,
+          teacherProfileId: desiredMain,
+          assignmentRole: 'MAIN',
+        );
+      }
+
+      final assistantIds = desiredRows
+          .where((row) => row.assignmentRole == 'ASSISTANT')
+          .map((row) => row.teacherProfileId)
+          .where((id) => id != desiredMain)
+          .toSet();
+
+      for (final teacherId in assistantIds) {
+        await controller.assignTeacherToSession(
+          classSessionId: resolvedSessionId,
+          teacherProfileId: teacherId,
+          assignmentRole: 'ASSISTANT',
+        );
       }
     }
   }
@@ -2234,6 +2908,9 @@ class _TimetableTabState extends State<TimetableTab> {
       case DragPayloadType.room:
         await _applyRoomToSlot(slotId: slotId, roomName: payload.id);
         return;
+      case DragPayloadType.child:
+        // Child drags are not valid drop targets on slots in Phase 1.
+        return;
     }
   }
 
@@ -2253,8 +2930,72 @@ class _TimetableTabState extends State<TimetableTab> {
       location: null,
     );
 
+    _pushUndo();
     setState(() {
       _draftSessions = [..._draftSessions, next];
+      _setDirty(true);
+    });
+  }
+
+  /// Handles dropping a fully-assembled "수업 카드 조립" card on an EMPTY cell:
+  /// creates the session and applies the main teacher + location in one gesture.
+  void _handleComposedDrop(String slotId, ComposedSessionPayload payload) {
+    final controller = widget.controller;
+    final occupied = _draftSessions.any((row) => row.timeSlotId == slotId);
+    if (occupied) {
+      _showMessage('이미 수업이 있는 슬롯입니다.');
+      return;
+    }
+
+    final slot = controller.findTimeSlot(slotId);
+    if (slot == null) {
+      _showMessage('슬롯 정보를 찾을 수 없습니다.');
+      return;
+    }
+    if (payload.hasTeacher) {
+      final conflict = _hasTeacherSlotConflict(
+        teacherProfileId: payload.teacherProfileId!.trim(),
+        timeSlotId: slot.id,
+        courseId: payload.courseId,
+      );
+      if (conflict) {
+        _showMessage(
+          '교사 충돌: ${controller.findTeacherName(payload.teacherProfileId!.trim())} 같은 시간 다른 수업에 배정됨',
+        );
+        return;
+      }
+    }
+
+    final sessionId = 'tmp-manual-${DateTime.now().microsecondsSinceEpoch}';
+    final location = payload.hasLocation ? payload.location!.trim() : null;
+    final next = _EditableSession(
+      id: sessionId,
+      courseId: payload.courseId,
+      timeSlotId: slotId,
+      title: '${controller.findCourseName(payload.courseId)} 수업',
+      isNew: true,
+      location: location,
+    );
+
+    final assignments = <_EditableAssignment>[];
+    if (payload.hasTeacher) {
+      assignments.add(
+        _EditableAssignment(
+          teacherProfileId: payload.teacherProfileId!.trim(),
+          assignmentRole: 'MAIN',
+        ),
+      );
+    }
+
+    _pushUndo();
+    setState(() {
+      _draftSessions = [..._draftSessions, next];
+      if (assignments.isNotEmpty) {
+        _draftAssignments = {..._draftAssignments, sessionId: assignments};
+      }
+      if (location != null && location.isNotEmpty) {
+        _roomPalette = {..._roomPalette, location};
+      }
       _setDirty(true);
     });
   }
@@ -2271,6 +3012,7 @@ class _TimetableTabState extends State<TimetableTab> {
       return;
     }
 
+    _pushUndo();
     setState(() {
       _draftSessions = _draftSessions
           .map(
@@ -2293,11 +3035,28 @@ class _TimetableTabState extends State<TimetableTab> {
       return;
     }
 
-    final session = slotSessions.length == 1
+    // One-session-per-slot holds within a class, so a single session applies
+    // directly. The picker remains for safety if more than one ever appears.
+    final session = slotSessions.length <= 1
         ? slotSessions.first
         : await _pickSessionForSlot(slotSessions, '교사를 배정할 수업 선택');
 
     if (session == null) {
+      return;
+    }
+
+    // Mirror the DB guard before applying: reject hard teacher conflicts.
+    final slot = widget.controller.findTimeSlot(slotId);
+    if (slot != null &&
+        _hasTeacherSlotConflict(
+          teacherProfileId: teacherProfileId,
+          timeSlotId: slot.id,
+          courseId: session.courseId,
+          excludeSessionId: session.id,
+        )) {
+      _showMessage(
+        '교사 충돌: ${widget.controller.findTeacherName(teacherProfileId)} 같은 시간 다른 수업에 배정됨',
+      );
       return;
     }
 
@@ -2314,7 +3073,9 @@ class _TimetableTabState extends State<TimetableTab> {
       return;
     }
 
-    final session = slotSessions.length == 1
+    // One-session-per-slot holds within a class, so a single session applies
+    // directly. The picker remains for safety if more than one ever appears.
+    final session = slotSessions.length <= 1
         ? slotSessions.first
         : await _pickSessionForSlot(slotSessions, '교실을 지정할 수업 선택');
 
@@ -2566,6 +3327,7 @@ class _TimetableTabState extends State<TimetableTab> {
       );
     }
 
+    _pushUndo();
     setState(() {
       _draftAssignments = {..._draftAssignments, sessionId: rows};
       _setDirty(true);
@@ -2589,6 +3351,7 @@ class _TimetableTabState extends State<TimetableTab> {
       ...current,
     ];
 
+    _pushUndo();
     setState(() {
       _draftAssignments = {..._draftAssignments, sessionId: next};
       _setDirty(true);
@@ -2596,7 +3359,8 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   void _setSessionLocation(String sessionId, String location) {
-    final normalized = location.trim();
+    final normalized = RoomNormalizer.normalize(location);
+    _pushUndo();
     setState(() {
       _draftSessions = _draftSessions
           .map(
@@ -2613,6 +3377,7 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   void _deleteDraftSession(String sessionId) {
+    _pushUndo();
     setState(() {
       _draftSessions = _draftSessions
           .where((row) => row.id != sessionId)
@@ -2623,6 +3388,525 @@ class _TimetableTabState extends State<TimetableTab> {
       };
       _setDirty(true);
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bulk power-moves (session context menu → draft-only replication)
+  // ---------------------------------------------------------------------------
+
+  /// Opens the per-session context menu at [globalPosition] and routes the
+  /// chosen [_BulkAction] to its draft-only handler. Gated by the caller, but
+  /// re-checked here so the menu never mutates a read-only/archived board.
+  Future<void> _openSessionMenu(
+    String sessionId,
+    Offset globalPosition,
+  ) async {
+    final controller = widget.controller;
+    if (controller.isSelectedTermArchived || controller.isBusy) {
+      return;
+    }
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) {
+      return;
+    }
+
+    final selected = await showMenu<_BulkAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem<_BulkAction>(
+          value: _BulkAction.fillDay,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.calendar_view_day_outlined),
+            title: Text('이 요일 전체에 적용'),
+          ),
+        ),
+        PopupMenuItem<_BulkAction>(
+          value: _BulkAction.fillPeriod,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.view_week_outlined),
+            title: Text('이 교시 모든 요일에 적용'),
+          ),
+        ),
+        PopupMenuItem<_BulkAction>(
+          value: _BulkAction.fillWeek,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.grid_view_outlined),
+            title: Text('주 전체 채우기'),
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem<_BulkAction>(
+          value: _BulkAction.duplicateToComposer,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.dashboard_customize_outlined),
+            title: Text('수업 복제(카드로)'),
+          ),
+        ),
+      ],
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    switch (selected) {
+      case _BulkAction.fillDay:
+        _bulkFillDay(sessionId);
+        break;
+      case _BulkAction.fillPeriod:
+        _bulkFillPeriod(sessionId);
+        break;
+      case _BulkAction.fillWeek:
+        _bulkFillWeek(sessionId);
+        break;
+      case _BulkAction.duplicateToComposer:
+        _replicateToComposer(sessionId);
+        break;
+    }
+  }
+
+  /// Replicates the source session into every EMPTY time slot on the same day
+  /// of the week. Occupied or teacher-conflicting slots are skipped.
+  void _bulkFillDay(String sessionId) {
+    final source = _draftSessions
+        .where((row) => row.id == sessionId)
+        .firstOrNull;
+    if (source == null) {
+      return;
+    }
+    final sourceSlot = widget.controller.findTimeSlot(source.timeSlotId);
+    if (sourceSlot == null) {
+      _showMessage('슬롯 정보를 찾을 수 없습니다.');
+      return;
+    }
+    final targets = widget.controller.timeSlots
+        .where(
+          (slot) =>
+              slot.dayOfWeek == sourceSlot.dayOfWeek &&
+              slot.id != source.timeSlotId,
+        )
+        .toList();
+    _applyBulkFill(source, targets);
+  }
+
+  /// Replicates the source session into the same period (start/end time) on
+  /// every day of the week. Occupied or teacher-conflicting slots are skipped.
+  void _bulkFillPeriod(String sessionId) {
+    final source = _draftSessions
+        .where((row) => row.id == sessionId)
+        .firstOrNull;
+    if (source == null) {
+      return;
+    }
+    final sourceSlot = widget.controller.findTimeSlot(source.timeSlotId);
+    if (sourceSlot == null) {
+      _showMessage('슬롯 정보를 찾을 수 없습니다.');
+      return;
+    }
+    final targets = widget.controller.timeSlots
+        .where(
+          (slot) =>
+              slot.startTime == sourceSlot.startTime &&
+              slot.endTime == sourceSlot.endTime &&
+              slot.id != source.timeSlotId,
+        )
+        .toList();
+    _applyBulkFill(source, targets);
+  }
+
+  /// Replicates the source session into EVERY time slot of the week. Occupied
+  /// or teacher-conflicting slots are skipped.
+  void _bulkFillWeek(String sessionId) {
+    final source = _draftSessions
+        .where((row) => row.id == sessionId)
+        .firstOrNull;
+    if (source == null) {
+      return;
+    }
+    final targets = widget.controller.timeSlots
+        .where((slot) => slot.id != source.timeSlotId)
+        .toList();
+    _applyBulkFill(source, targets);
+  }
+
+  /// Shared engine for the three fill actions. For each [targetSlots] entry,
+  /// creates a draft session copying [source]'s course + location + teacher
+  /// assignments when the slot is EMPTY and the source's MAIN teacher (if any)
+  /// would not introduce a HARD teacher conflict for the source course. Slots
+  /// that are occupied or would conflict are skipped and counted.
+  void _applyBulkFill(
+    _EditableSession source,
+    List<TimeSlot> targetSlots,
+  ) {
+    final sourceAssignments = (_draftAssignments[source.id] ?? const [])
+        .toList(growable: false);
+    final mainTeacherId = sourceAssignments
+        .where((row) => row.assignmentRole == 'MAIN')
+        .map((row) => row.teacherProfileId)
+        .firstOrNull;
+    final location = (source.location ?? '').trim();
+    final normalizedLocation =
+        location.isEmpty ? null : RoomNormalizer.normalize(location);
+
+    final newSessions = <_EditableSession>[];
+    final newAssignments = <String, List<_EditableAssignment>>{};
+    var skipped = 0;
+
+    for (final slot in targetSlots) {
+      final occupied = _draftSessions.any((row) => row.timeSlotId == slot.id) ||
+          newSessions.any((row) => row.timeSlotId == slot.id);
+      if (occupied) {
+        skipped++;
+        continue;
+      }
+      if (mainTeacherId != null &&
+          _hasTeacherSlotConflict(
+            teacherProfileId: mainTeacherId,
+            timeSlotId: slot.id,
+            courseId: source.courseId,
+          )) {
+        skipped++;
+        continue;
+      }
+
+      final newId =
+          'tmp-manual-${DateTime.now().microsecondsSinceEpoch}-${newSessions.length}';
+      newSessions.add(
+        _EditableSession(
+          id: newId,
+          courseId: source.courseId,
+          timeSlotId: slot.id,
+          title: '${widget.controller.findCourseName(source.courseId)} 수업',
+          location: normalizedLocation,
+          isNew: true,
+        ),
+      );
+      if (sourceAssignments.isNotEmpty) {
+        newAssignments[newId] = sourceAssignments
+            .map(
+              (row) => _EditableAssignment(
+                teacherProfileId: row.teacherProfileId,
+                assignmentRole: row.assignmentRole,
+              ),
+            )
+            .toList();
+      }
+    }
+
+    if (newSessions.isEmpty) {
+      _showMessage('적용할 빈 칸이 없습니다.');
+      return;
+    }
+
+    _pushUndo();
+    setState(() {
+      _draftSessions = [..._draftSessions, ...newSessions];
+      if (newAssignments.isNotEmpty) {
+        _draftAssignments = {..._draftAssignments, ...newAssignments};
+      }
+      if (normalizedLocation != null && normalizedLocation.isNotEmpty) {
+        _roomPalette = {..._roomPalette, normalizedLocation};
+      }
+      _setDirty(true);
+    });
+    _showMessage('${newSessions.length}개 칸에 적용했습니다. ($skipped개 건너뜀)');
+  }
+
+  /// Loads the source session's course + MAIN teacher + location into the
+  /// composer state and assembles the draggable card, so the user can drop it
+  /// wherever they like.
+  void _replicateToComposer(String sessionId) {
+    final source = _draftSessions
+        .where((row) => row.id == sessionId)
+        .firstOrNull;
+    if (source == null) {
+      return;
+    }
+    final mainTeacherId = (_draftAssignments[sessionId] ?? const [])
+        .where((row) => row.assignmentRole == 'MAIN')
+        .map((row) => row.teacherProfileId)
+        .firstOrNull;
+    final location = (source.location ?? '').trim();
+    final normalizedLocation =
+        location.isEmpty ? null : RoomNormalizer.normalize(location);
+
+    setState(() {
+      _composeCourseId = source.courseId;
+      _composeTeacherId = mainTeacherId;
+      _composeRoom = normalizedLocation;
+      _composedCard = ComposedSessionPayload(
+        courseId: source.courseId,
+        teacherProfileId: mainTeacherId,
+        location: normalizedLocation,
+      );
+    });
+    _showMessage('수업 카드로 복제했습니다. 원하는 칸에 드래그하세요.');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Undo / redo (client-only)
+  // ---------------------------------------------------------------------------
+
+  _DraftSnapshot _captureSnapshot() {
+    return _DraftSnapshot(
+      sessions: List<_EditableSession>.from(_draftSessions),
+      assignments: {
+        for (final entry in _draftAssignments.entries)
+          entry.key: List<_EditableAssignment>.from(entry.value),
+      },
+      roomPalette: Set<String>.from(_roomPalette),
+      isDirty: _isDraftDirty,
+    );
+  }
+
+  void _restoreSnapshot(_DraftSnapshot snapshot) {
+    _draftSessions = List<_EditableSession>.from(snapshot.sessions);
+    _draftAssignments = {
+      for (final entry in snapshot.assignments.entries)
+        entry.key: List<_EditableAssignment>.from(entry.value),
+    };
+    _roomPalette = Set<String>.from(snapshot.roomPalette);
+    _setDirty(snapshot.isDirty);
+  }
+
+  /// Records the current draft state so it can be restored via [_undo].
+  /// Invoked at the START of every draft-mutating action.
+  void _pushUndo() {
+    _undoStack.add(_captureSnapshot());
+    if (_undoStack.length > _historyLimit) {
+      _undoStack.removeAt(0);
+    }
+    _redoStack.clear();
+  }
+
+  void _clearHistory() {
+    _undoStack.clear();
+    _redoStack.clear();
+  }
+
+  bool get _canUndo => _undoStack.isNotEmpty;
+  bool get _canRedo => _redoStack.isNotEmpty;
+
+  /// True when drags must be disabled (busy commit or ARCHIVED term lock).
+  bool get _dragsLocked =>
+      _isApplyingDraft || widget.controller.isSelectedTermArchived;
+
+  void _beginDrag(_ActiveDrag drag) {
+    setState(() {
+      _activeDrag = drag;
+    });
+  }
+
+  void _endDrag() {
+    if (_activeDrag == null) {
+      return;
+    }
+    setState(() {
+      _activeDrag = null;
+    });
+  }
+
+  void _undo() {
+    if (_undoStack.isEmpty) {
+      return;
+    }
+    final snapshot = _undoStack.removeLast();
+    _redoStack.add(_captureSnapshot());
+    if (_redoStack.length > _historyLimit) {
+      _redoStack.removeAt(0);
+    }
+    setState(() {
+      _restoreSnapshot(snapshot);
+    });
+  }
+
+  void _redo() {
+    if (_redoStack.isEmpty) {
+      return;
+    }
+    final snapshot = _redoStack.removeLast();
+    _undoStack.add(_captureSnapshot());
+    if (_undoStack.length > _historyLimit) {
+      _undoStack.removeAt(0);
+    }
+    setState(() {
+      _restoreSnapshot(snapshot);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Live drop-conflict evaluation (mirrors DB guards)
+  // ---------------------------------------------------------------------------
+
+  /// Evaluates the drop feedback state for [slotId] given the drag in progress.
+  /// Mirrors the DB triggers so HARD states (occupied/teacherConflict) can be
+  /// rejected before commit, while [warning] (unavailability) still allows drop.
+  DropConflictState _evaluateDropConflict(
+    String slotId, {
+    required DragPayloadType kind,
+    String? courseId,
+    String? teacherProfileId,
+    String? movingSessionId,
+  }) {
+    final controller = widget.controller;
+    final slot = controller.findTimeSlot(slotId);
+    if (slot == null) {
+      return DropConflictState.none;
+    }
+
+    final isNewSession =
+        kind == DragPayloadType.course || kind == DragPayloadType.child;
+    final isComposed = courseId != null && kind == DragPayloadType.course;
+
+    // Occupancy: a new session onto an already-occupied draft slot, or moving a
+    // session onto a slot that holds a DIFFERENT draft session.
+    if (kind == DragPayloadType.session) {
+      final occupied = _draftSessions.any(
+        (row) => row.timeSlotId == slotId && row.id != movingSessionId,
+      );
+      if (occupied) {
+        return DropConflictState.occupied;
+      }
+    } else if (isNewSession) {
+      final occupied = _draftSessions.any(
+        (row) => row.timeSlotId == slotId && row.id != movingSessionId,
+      );
+      if (occupied) {
+        return DropConflictState.occupied;
+      }
+    }
+
+    // Teacher/room chips can only land on a cell that already holds a session.
+    final targetSession = _draftSessionsForSlot(slotId).firstOrNull;
+    if ((kind == DragPayloadType.teacher || kind == DragPayloadType.room) &&
+        targetSession == null) {
+      return DropConflictState.none;
+    }
+
+    // Teacher conflict / unavailability: only relevant when a teacher is part of
+    // the drag (a teacher chip, or a composed card carrying a main teacher). The
+    // course used for the conflict check is the composed/new course, or — for a
+    // bare teacher chip — the course of the session already in the target cell,
+    // so a legitimate combined-class assignment (same course) is NOT rejected.
+    final draggedTeacherId = (teacherProfileId ?? '').trim();
+    final hasTeacher =
+        draggedTeacherId.isNotEmpty &&
+        (kind == DragPayloadType.teacher || isComposed);
+    if (hasTeacher) {
+      final effectiveCourseId = courseId ?? targetSession?.courseId;
+      if (_hasTeacherSlotConflict(
+        teacherProfileId: draggedTeacherId,
+        timeSlotId: slot.id,
+        courseId: effectiveCourseId,
+        excludeSessionId: movingSessionId ?? targetSession?.id,
+      )) {
+        return DropConflictState.teacherConflict;
+      }
+      if (_hasTeacherUnavailability(
+        teacherProfileId: draggedTeacherId,
+        slot: slot,
+      )) {
+        return DropConflictState.warning;
+      }
+    }
+
+    return DropConflictState.valid;
+  }
+
+  /// HARD teacher conflict: another NON-canceled session anywhere in the term at
+  /// the SAME time_slot_id assigned to [teacherProfileId] with a DIFFERENT
+  /// course. Same course at same slot = combined class → allowed.
+  bool _hasTeacherSlotConflict({
+    required String teacherProfileId,
+    required String timeSlotId,
+    required String? courseId,
+    String? excludeSessionId,
+  }) {
+    final controller = widget.controller;
+    final normalizedCourse = (courseId ?? '').trim();
+
+    // Cross-class sessions from the controller (other classes in the term).
+    final draftClassId = controller.selectedClassGroupId;
+    for (final session in controller.allTermSessions) {
+      if (session.status == 'CANCELED') {
+        continue;
+      }
+      if (session.timeSlotId != timeSlotId) {
+        continue;
+      }
+      // Sessions belonging to the class currently being edited are represented
+      // by the draft buffer instead, so skip them here to avoid double-count.
+      if (draftClassId != null && session.classGroupId == draftClassId) {
+        continue;
+      }
+      final assigned = controller.allTermSessionTeacherAssignments.any(
+        (row) =>
+            row.classSessionId == session.id &&
+            row.teacherProfileId == teacherProfileId,
+      );
+      if (!assigned) {
+        continue;
+      }
+      if (session.courseId.trim() != normalizedCourse) {
+        return true;
+      }
+    }
+
+    // Current draft (the class being edited).
+    for (final draft in _draftSessions) {
+      if (draft.id == excludeSessionId) {
+        continue;
+      }
+      if (draft.timeSlotId != timeSlotId) {
+        continue;
+      }
+      final assigned = (_draftAssignments[draft.id] ?? const [])
+          .any((row) => row.teacherProfileId == teacherProfileId);
+      if (!assigned) {
+        continue;
+      }
+      if (draft.courseId.trim() != normalizedCourse) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// WARNING (not HARD): teacher has an unavailability block whose day matches
+  /// the slot's day and whose [startTime,endTime) overlaps the slot range.
+  bool _hasTeacherUnavailability({
+    required String teacherProfileId,
+    required TimeSlot slot,
+  }) {
+    for (final block in widget.controller.memberUnavailabilityBlocks) {
+      if (block.ownerKind != 'TEACHER_PROFILE' ||
+          block.ownerId != teacherProfileId) {
+        continue;
+      }
+      if (block.dayOfWeek != slot.dayOfWeek) {
+        continue;
+      }
+      // Overlap of half-open ranges [start, end): start < otherEnd && otherStart < end.
+      if (slot.startTime.compareTo(block.endTime) < 0 &&
+          block.startTime.compareTo(slot.endTime) < 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   List<_EditableSession> _draftSessionsForSlot(String slotId) {
@@ -2874,30 +4158,32 @@ class _TimetableTabState extends State<TimetableTab> {
     _draftAssignments = assignments;
     _ensureRoomPaletteFromController(controller);
     _controllerSignature = _buildControllerSignature(controller, classId);
+    _clearHistory();
     _setDirty(false);
   }
 
   void _ensureRoomPaletteFromController(NestController controller) {
-    final rooms = <String>{};
-    for (final classroom in controller.classrooms) {
-      final name = classroom.name.trim();
-      if (name.isNotEmpty) {
-        rooms.add(name);
+    // Dedupe by RoomNormalizer.canonical so "A강의실" / "a강의실 " collapse to a
+    // single palette entry while preserving the first display form seen.
+    final byCanonical = <String, String>{};
+    void addRoom(String? raw) {
+      final display = RoomNormalizer.normalize(raw ?? '');
+      if (display.isEmpty) {
+        return;
       }
+      byCanonical.putIfAbsent(RoomNormalizer.canonical(display), () => display);
+    }
+
+    for (final classroom in controller.classrooms) {
+      addRoom(classroom.name);
     }
     for (final session in controller.allTermSessions) {
-      final location = session.location?.trim();
-      if (location != null && location.isNotEmpty) {
-        rooms.add(location);
-      }
+      addRoom(session.location);
     }
     for (final session in _draftSessions) {
-      final location = session.location?.trim();
-      if (location != null && location.isNotEmpty) {
-        rooms.add(location);
-      }
+      addRoom(session.location);
     }
-    _roomPalette = rooms;
+    _roomPalette = byCanonical.values.toSet();
   }
 
   void _setDirty(bool value, {bool forceNotify = false}) {
@@ -2954,8 +4240,16 @@ class _EditableSlotCell extends StatelessWidget {
     required this.teacherNameById,
     required this.conflictMessagesForSession,
     required this.onDropPayload,
+    required this.onComposedDrop,
     required this.onTapSession,
     required this.onDeleteSession,
+    required this.onSessionMenu,
+    required this.sessionMenuEnabled,
+    required this.onSessionDragStarted,
+    required this.onSessionDragEnded,
+    required this.dragsLocked,
+    required this.activeDrag,
+    required this.conflictState,
     required this.forExport,
   });
 
@@ -2965,125 +4259,207 @@ class _EditableSlotCell extends StatelessWidget {
   final Map<String, String> teacherNameById;
   final List<String> Function(String sessionId) conflictMessagesForSession;
   final Future<void> Function(DragPayload payload) onDropPayload;
+  final void Function(ComposedSessionPayload payload) onComposedDrop;
   final void Function(String sessionId) onTapSession;
   final void Function(String sessionId) onDeleteSession;
+  final void Function(String sessionId, Offset globalPosition) onSessionMenu;
+  final bool sessionMenuEnabled;
+  final void Function(String sessionId) onSessionDragStarted;
+  final VoidCallback onSessionDragEnded;
+  final bool dragsLocked;
+  final _ActiveDrag? activeDrag;
+  final DropConflictState conflictState;
   final bool forExport;
+
+  /// True when the current drag-time conflict state must block the drop.
+  bool get _isHardReject =>
+      conflictState == DropConflictState.occupied ||
+      conflictState == DropConflictState.teacherConflict;
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<DragPayload>(
-      onWillAcceptWithDetails: (_) => true,
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (details) {
+        final data = details.data;
+        if (data is! DragPayload && data is! ComposedSessionPayload) {
+          return false;
+        }
+        // Reject HARD conflict states so the cell visibly refuses the drop.
+        if (activeDrag != null && _isHardReject) {
+          return false;
+        }
+        return true;
+      },
       onAcceptWithDetails: (details) async {
-        await onDropPayload(details.data);
+        final data = details.data;
+        if (data is ComposedSessionPayload) {
+          onComposedDrop(data);
+        } else if (data is DragPayload) {
+          await onDropPayload(data);
+        }
       },
       builder: (context, candidateData, rejectedData) {
         final hovering = candidateData.isNotEmpty;
+        final showFeedback = !forExport && activeDrag != null;
+
+        Color background = Colors.white;
+        Color borderColor = NestColors.roseMist;
+        double borderWidth = 1;
+        double opacity = 1;
+        List<BoxShadow>? shadow;
+
+        if (showFeedback) {
+          switch (conflictState) {
+            case DropConflictState.valid:
+              background = NestColors.roseMist.withValues(alpha: 0.45);
+              borderColor = NestColors.dustyRose;
+              borderWidth = 2;
+              shadow = [
+                BoxShadow(
+                  color: NestColors.dustyRose.withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ];
+              break;
+            case DropConflictState.occupied:
+            case DropConflictState.teacherConflict:
+              background = Colors.red.shade50;
+              borderColor = Colors.red.shade400;
+              borderWidth = 2;
+              opacity = 0.5;
+              break;
+            case DropConflictState.warning:
+              background = Colors.amber.shade50;
+              borderColor = Colors.amber.shade600;
+              borderWidth = 2;
+              break;
+            case DropConflictState.none:
+              break;
+          }
+        } else if (hovering) {
+          background = NestColors.roseMist.withValues(alpha: 0.58);
+          borderColor = NestColors.clay;
+        }
+
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
+          duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: hovering
-                ? NestColors.roseMist.withValues(alpha: 0.58)
-                : Colors.white,
-            border: Border.all(
-              color: hovering ? NestColors.clay : NestColors.roseMist,
-            ),
+            color: background,
+            border: Border.all(color: borderColor, width: borderWidth),
+            boxShadow: shadow,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.75),
+          child: Opacity(
+            opacity: opacity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.75),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              if (sessions.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: NestColors.creamyWhite,
-                    border: Border.all(color: NestColors.roseMist),
-                  ),
-                  child: forExport
-                      ? const SizedBox(height: 16)
-                      : Text(
-                          '과목/교사/교실을 드래그',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                )
-              else
-                ...sessions.map((session) {
-                  final title = session.title.isEmpty
-                      ? session.courseId
-                      : session.title;
-                  final rows = assignmentsBySessionId[session.id] ?? const [];
-                  final teacherBadges = rows
-                      .map(
-                        (row) =>
-                            '${row.assignmentRole == 'MAIN' ? '주' : '보조'} ${teacherNameById[row.teacherProfileId] ?? row.teacherProfileId}',
-                      )
-                      .toList();
-                  final conflictRows = conflictMessagesForSession(session.id);
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: LongPressDraggable<DragPayload>(
-                      data: DragPayload(
-                        type: DragPayloadType.session,
-                        id: session.id,
-                      ),
-                      feedback: Material(
-                        color: Colors.transparent,
-                        child: _GridSessionTile(
-                          title: title,
-                          subtitle: session.courseId,
-                          location: session.location,
-                          teacherBadges: teacherBadges,
-                          conflictMessages: conflictRows,
-                          canDelete: false,
-                          onDelete: null,
-                          onTap: null,
-                        ),
-                      ),
-                      childWhenDragging: Opacity(
-                        opacity: 0.36,
-                        child: _GridSessionTile(
-                          title: title,
-                          subtitle: session.courseId,
-                          location: session.location,
-                          teacherBadges: teacherBadges,
-                          conflictMessages: conflictRows,
-                          canDelete: false,
-                          onDelete: null,
-                          onTap: null,
-                        ),
-                      ),
-                      child: _GridSessionTile(
-                        title: title,
-                        subtitle: session.courseId,
-                        location: session.location,
-                        teacherBadges: teacherBadges,
-                        conflictMessages: conflictRows,
-                        canDelete: !forExport,
-                        onDelete: forExport
-                            ? null
-                            : () => onDeleteSession(session.id),
-                        onTap: forExport
-                            ? null
-                            : () => onTapSession(session.id),
-                      ),
+                const SizedBox(height: 8),
+                if (sessions.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
                     ),
-                  );
-                }),
-            ],
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: NestColors.creamyWhite,
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: forExport
+                        ? const SizedBox(height: 16)
+                        : Text(
+                            '과목/교사/교실을 드래그',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                  )
+                else
+                  ...sessions.map((session) {
+                    final title = session.title.isEmpty
+                        ? '수업'
+                        : session.title;
+                    final rows =
+                        assignmentsBySessionId[session.id] ?? const [];
+                    final teacherBadges = rows
+                        .map(
+                          (row) =>
+                              '${row.assignmentRole == 'MAIN' ? '주' : '보조'} ${teacherNameById[row.teacherProfileId] ?? row.teacherProfileId}',
+                        )
+                        .toList();
+                    final conflictRows =
+                        conflictMessagesForSession(session.id);
+
+                    final canMenu = !forExport && sessionMenuEnabled;
+                    final tile = _GridSessionTile(
+                      title: title,
+                      subtitle: '',
+                      location: session.location,
+                      teacherBadges: teacherBadges,
+                      conflictMessages: conflictRows,
+                      canDelete: !forExport,
+                      onDelete: forExport
+                          ? null
+                          : () => onDeleteSession(session.id),
+                      onTap: forExport
+                          ? null
+                          : () => onTapSession(session.id),
+                      canMenu: canMenu,
+                      onMenu: canMenu
+                          ? (position) => onSessionMenu(session.id, position)
+                          : null,
+                    );
+
+                    final feedbackTile = _GridSessionTile(
+                      title: title,
+                      subtitle: '',
+                      location: session.location,
+                      teacherBadges: teacherBadges,
+                      conflictMessages: conflictRows,
+                      canDelete: false,
+                      onDelete: null,
+                      onTap: null,
+                      canMenu: false,
+                      onMenu: null,
+                    );
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: forExport
+                          ? tile
+                          : Draggable<DragPayload>(
+                              data: DragPayload(
+                                type: DragPayloadType.session,
+                                id: session.id,
+                              ),
+                              maxSimultaneousDrags: dragsLocked ? 0 : null,
+                              onDragStarted: () =>
+                                  onSessionDragStarted(session.id),
+                              onDragEnd: (_) => onSessionDragEnded(),
+                              onDraggableCanceled: (velocity, offset) =>
+                                  onSessionDragEnded(),
+                              feedback: Material(
+                                color: Colors.transparent,
+                                child: feedbackTile,
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0.36,
+                                child: feedbackTile,
+                              ),
+                              child: tile,
+                            ),
+                    );
+                  }),
+              ],
+            ),
           ),
         );
       },
@@ -3165,12 +4541,10 @@ class _GridHeaderCell extends StatelessWidget {
   const _GridHeaderCell({
     required this.width,
     required this.title,
-    this.subtitle,
   });
 
   final double width;
   final String title;
-  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -3183,16 +4557,7 @@ class _GridHeaderCell extends StatelessWidget {
         color: NestColors.roseMist.withValues(alpha: 0.72),
         border: Border.all(color: NestColors.roseMist),
       ),
-      child: subtitle != null
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 2),
-                Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            )
-          : Text(title, style: Theme.of(context).textTheme.titleSmall),
+      child: Text(title, style: Theme.of(context).textTheme.titleSmall),
     );
   }
 }
@@ -3207,6 +4572,8 @@ class _GridSessionTile extends StatelessWidget {
     required this.onDelete,
     required this.onTap,
     this.location,
+    this.canMenu = false,
+    this.onMenu,
   });
 
   final String title;
@@ -3218,53 +4585,84 @@ class _GridSessionTile extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onTap;
 
+  /// When true, exposes the bulk-action menu (⋮ button + right-click).
+  final bool canMenu;
+
+  /// Opens the bulk-action context menu at the given global position.
+  final void Function(Offset globalPosition)? onMenu;
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
+    final showMenuAffordance = canMenu && onMenu != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapDown: showMenuAffordance
+          ? (details) => onMenu!(details.globalPosition)
+          : null,
+      child: Material(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: NestColors.roseMist),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: NestColors.roseMist),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  if (canDelete)
-                    IconButton(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.close, size: 16),
-                      visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints(),
-                      padding: const EdgeInsets.all(4),
-                      tooltip: '삭제',
-                    ),
-                ],
-              ),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+                    if (showMenuAffordance)
+                      Builder(
+                        builder: (buttonContext) => IconButton(
+                          onPressed: () {
+                            final box =
+                                buttonContext.findRenderObject() as RenderBox?;
+                            final position = box == null
+                                ? Offset.zero
+                                : box.localToGlobal(box.size.center(Offset.zero));
+                            onMenu!(position);
+                          },
+                          icon: const Icon(Icons.more_vert, size: 16),
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(4),
+                          tooltip: '일괄 적용',
+                        ),
+                      ),
+                    if (canDelete)
+                      IconButton(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.close, size: 16),
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        tooltip: '삭제',
+                      ),
+                  ],
+                ),
+              if (subtitle.trim().isNotEmpty)
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               if (location != null && location!.trim().isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Row(
@@ -3336,7 +4734,8 @@ class _GridSessionTile extends StatelessWidget {
                       .toList(),
                 ),
               ],
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -3411,6 +4810,52 @@ class _PaletteChip extends StatelessWidget {
   }
 }
 
+/// A draggable chip representing the assembled "수업 카드 조립" payload.
+class _ComposedCardChip extends StatelessWidget {
+  const _ComposedCardChip({
+    required this.label,
+    this.dragging = false,
+  });
+
+  final String label;
+  final bool dragging;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: dragging
+            ? NestColors.dustyRose.withValues(alpha: 0.92)
+            : NestColors.roseMist,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.dustyRose),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.drag_indicator,
+            size: 16,
+            color: dragging ? Colors.white : NestColors.deepWood,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: dragging ? Colors.white : NestColors.deepWood,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EditableSession {
   const _EditableSession({
     required this.id,
@@ -3455,6 +4900,44 @@ class _EditableAssignment {
 
   final String teacherProfileId;
   final String assignmentRole;
+}
+
+/// Live drop-target feedback state computed while a drag is in progress.
+/// Mirrors the DB-level guards so the UI rejects invalid drops before commit.
+enum DropConflictState { none, valid, occupied, teacherConflict, warning }
+
+/// Bulk power-moves available from a session tile's context menu.
+enum _BulkAction { fillDay, fillPeriod, fillWeek, duplicateToComposer }
+
+/// Snapshot of the active drag, set on [Draggable.onDragStarted] and cleared
+/// on drag end so each grid cell can evaluate its own drop feedback live.
+class _ActiveDrag {
+  const _ActiveDrag({
+    required this.kind,
+    this.courseId,
+    this.teacherProfileId,
+    this.sessionId,
+  });
+
+  final DragPayloadType kind;
+  final String? courseId;
+  final String? teacherProfileId;
+  final String? sessionId;
+}
+
+/// Immutable copy of the draft buffer used for client-side undo/redo.
+class _DraftSnapshot {
+  const _DraftSnapshot({
+    required this.sessions,
+    required this.assignments,
+    required this.roomPalette,
+    required this.isDirty,
+  });
+
+  final List<_EditableSession> sessions;
+  final Map<String, List<_EditableAssignment>> assignments;
+  final Set<String> roomPalette;
+  final bool isDirty;
 }
 
 String _dayLabel(int dayOfWeek) {

@@ -1398,11 +1398,31 @@ class ScheduleOptionDraft {
   }
 }
 
-enum DragPayloadType { course, session, teacher, room }
+enum DragPayloadType { course, session, teacher, room, child }
 
 class DragPayload {
   const DragPayload({required this.type, required this.id});
 
   final DragPayloadType type;
   final String id;
+}
+
+/// A fully-assembled session dragged in a single gesture: course (required)
+/// plus an optional main teacher and room. Dropping one on an empty grid cell
+/// creates the session and applies the teacher/location at once, removing the
+/// old "drop course → modal → drag teacher → modal" multi-step flow.
+class ComposedSessionPayload {
+  const ComposedSessionPayload({
+    required this.courseId,
+    this.teacherProfileId,
+    this.location,
+  });
+
+  final String courseId;
+  final String? teacherProfileId;
+  final String? location;
+
+  bool get hasTeacher =>
+      teacherProfileId != null && teacherProfileId!.trim().isNotEmpty;
+  bool get hasLocation => location != null && location!.trim().isNotEmpty;
 }

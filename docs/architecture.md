@@ -263,6 +263,25 @@ Admin dashboard onboarding:
   - parent timetable includes weekly board view (`요일 x 교시`) for selected child.
   - parent notice preview shows latest 3 announcements at home header with `모두 보기` jump.
 
+### 6.2.1b Timetable Builder Redesign (2026 개편)
+
+전체 설계 스펙: `docs/06_admin_timetable_redesign.md`. 기존 `_draftSessions`/`_draftAssignments`/`_commitDraftChanges` 드래프트 버퍼 위에 얹은 인플레이스 업그레이드(새 상태 라이브러리 없음, 단일 `NestController` 유지).
+
+- 드래그 빌더 코어(Phase 1):
+  - 모든 드래그가 즉시 `Draggable`(기존 `LongPressDraggable` 제거).
+  - "수업 카드 조립" — 과목+주강사+장소를 한 번의 드래그로 배치(`ComposedSessionPayload`).
+  - 드롭 전 실시간 충돌 표시(`DropConflictState`): 점유/교사충돌(HARD, 드롭 거부) · 불가시간(WARN, 허용). `_hasTeacherSlotConflict`는 DB 트리거(`enforce_teacher_timeslot_conflict`)를 그대로 반영(같은 time_slot_id·다른 course만 충돌, 합반 허용)하며 `allTermSessions`+`allTermSessionTeacherAssignments`로 전교 범위 검사.
+  - 드래그-투-트래시 삭제(하드 `deleteSession`), 클라이언트 Undo/Redo(Ctrl+Z/Ctrl+Shift+Z), ARCHIVED 학기 frosted 잠금.
+- 한눈에 보기(Phase 2):
+  - `WholeSchoolOverlayBoard`(읽기 전용) — 요일×교시를 반/장소/선생 축으로 피벗, 교사·교실 더블부킹 강조.
+  - `ObjectInspectorRail`(우측 ≥1500px) — 반/선생/가정 선택 시 등록 학생·세션·교사·불가시간·보호자 등 FK 관계를 읽기 전용으로 펼침.
+  - `RoomNormalizer`로 장소 문자열 정규화/중복 제거.
+- 오브젝트 워크스페이스(Phase 3):
+  - `FamilyEnrollmentPanel` 다이얼로그 — 학생 카드를 반 드롭존에 드래그해 등록, 다중 선택 일괄 배정은 `syncClassEnrollments`(합집합 add-only). ARCHIVED/권한/busy 가드.
+- 벌크 + 원자적 커밋(Phase 4):
+  - 세션 ⋮/우클릭 컨텍스트 메뉴: 이 요일 전체/이 교시 모든 요일/주 전체 채우기/수업 카드 복제(드래프트 한정, 점유·충돌 칸 스킵).
+  - `apply_timetable_draft` RPC(`supabase/migrations/20260610100000_*.sql`, SECURITY INVOKER, 단일 트랜잭션)로 커밋을 원자화. 마이그레이션 미배포 시 `TimetableBatchUnsupported`(PGRST202) 감지 → 기존 개별 호출 루프(`_commitDraftViaIndividualCalls`)로 자동 폴백. 웹 배포(GitHub Pages)는 프론트만 배포하므로 운영 활성 경로는 폴백 루프이며, RPC는 `scripts/deploy_supabase.sh` 적용 후 활성화.
+
 ### 6.2.1 Session Location Compatibility
 
 - Some deployments had `class_sessions.location` while older ones did not.

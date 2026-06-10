@@ -35,11 +35,20 @@ class CommunityReactionSnapshot {
   final Set<String> likedPostIds;
 }
 
+/// Thrown by [NestRepository.applyTimetableDraft] when the optional
+/// `apply_timetable_draft` RPC is not available on the server (e.g. the
+/// Supabase migration has not been deployed yet). Callers must catch this and
+/// fall back to the per-call commit loop, which always works.
+class TimetableBatchUnsupported implements Exception {
+  const TimetableBatchUnsupported();
+}
+
 class NestRepository {
   NestRepository(this.client);
 
   final SupabaseClient client;
   bool? _classSessionLocationSupported;
+  bool? _applyTimetableDraftSupported;
 
   User? get currentUser => client.auth.currentUser;
   Session? get currentSession => client.auth.currentSession;
@@ -1636,6 +1645,50 @@ class NestRepository {
         .eq('id', sessionId);
   }
 
+  /// Hard-deletes a session row. FK children (session_teacher_assignments,
+  /// teaching_plans) cascade; activity logs / media references set null.
+  /// Use [cancelSession] instead when the record should be preserved.
+  Future<void> deleteSession({required String sessionId}) {
+    return client.from('class_sessions').delete().eq('id', sessionId);
+  }
+
+  /// Atomic batch commit of a class group's timetable draft via the optional
+  /// `apply_timetable_draft` RPC. The whole apply runs in a single DB
+  /// transaction, so any failure (RLS denial, TEACHER_SLOT_CONFLICT, archived
+  /// term, etc.) rolls back every change.
+  ///
+  /// The RPC ships only with the Supabase migration, which is NOT part of the
+  /// web deploy. If it is missing/uncallable this throws
+  /// [TimetableBatchUnsupported] so callers can fall back to the per-call loop.
+  Future<void> applyTimetableDraft({
+    required String classGroupId,
+    required List<Map<String, dynamic>> sessions,
+    required List<String> deletedIds,
+  }) async {
+    if (_applyTimetableDraftSupported == false) {
+      throw const TimetableBatchUnsupported();
+    }
+
+    try {
+      await client.rpc(
+        'apply_timetable_draft',
+        params: {
+          'p_class_group_id': classGroupId,
+          'p_sessions': sessions,
+          'p_deleted_ids': deletedIds,
+        },
+      );
+      _applyTimetableDraftSupported = true;
+    } on PostgrestException catch (error) {
+      if (_isMissingApplyTimetableDraft(error)) {
+        _applyTimetableDraftSupported = false;
+        throw const TimetableBatchUnsupported();
+      }
+      _applyTimetableDraftSupported = true;
+      rethrow;
+    }
+  }
+
   Future<String> createUploadSession({
     required String homeschoolId,
     required String uploaderUserId,
@@ -2135,4 +2188,19 @@ bool _isMissingLocationColumn(PostgrestException error) {
 bool _isLocationNullViolation(PostgrestException error) {
   final message = error.message.toLowerCase();
   return message.contains('null value') && message.contains('location');
+}
+
+/// True when the error indicates the optional `apply_timetable_draft` RPC is
+/// missing/uncallable (function not deployed or not in the schema cache),
+/// rather than a real runtime error raised inside the function.
+bool _isMissingApplyTimetableDraft(PostgrestException error) {
+  if (error.code == 'PGRST202') {
+    return true;
+  }
+  final message = error.message.toLowerCase();
+  return message.contains('apply_timetable_draft') &&
+      (message.contains('not find') ||
+          message.contains('schema cache') ||
+          message.contains('does not exist') ||
+          message.contains('function'));
 }
