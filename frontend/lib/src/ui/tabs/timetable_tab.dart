@@ -11,13 +11,15 @@ import '../../services/nest_repository.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/search_select_field.dart';
+import 'timetable/empty_room_finder.dart';
 import 'timetable/family_enrollment_panel.dart';
 import 'timetable/object_inspector_rail.dart';
 import 'timetable/room_normalizer.dart';
 import 'timetable/whole_school_overlay_board.dart';
 
-/// Board view mode: per-class editable build vs read-only whole-school overlay.
-enum _TimetableViewMode { perClass, wholeSchool }
+/// Board view mode: per-class editable build, read-only whole-school overlay,
+/// or the read-only "빈 강의실 찾기" picker.
+enum _TimetableViewMode { perClass, wholeSchool, emptyRoom }
 
 class TimetableTab extends StatefulWidget {
   const TimetableTab({
@@ -43,6 +45,10 @@ class _TimetableTabState extends State<TimetableTab> {
   bool _isDraftDirty = false;
   bool _isApplyingDraft = false;
   bool _paletteOpen = true;
+
+  // Read-only view (teachers / non-admin): toggle between the schedule grid and
+  // the "빈 강의실 찾기" picker.
+  bool _readOnlyEmptyRoom = false;
 
   // Phase 2 "한눈에" view-mode toggle + whole-school pivot axis.
   _TimetableViewMode _viewMode = _TimetableViewMode.perClass;
@@ -100,6 +106,28 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Widget _buildReadOnlyView(NestController controller) {
+    final modeToggle = SegmentedButton<bool>(
+      segments: const [
+        ButtonSegment(
+          value: false,
+          label: Text('시간표'),
+          icon: Icon(Icons.calendar_view_week_outlined, size: 16),
+        ),
+        ButtonSegment(
+          value: true,
+          label: Text('빈 강의실'),
+          icon: Icon(Icons.meeting_room_outlined, size: 16),
+        ),
+      ],
+      selected: {_readOnlyEmptyRoom},
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      onSelectionChanged: (values) {
+        if (values.isEmpty) return;
+        setState(() => _readOnlyEmptyRoom = values.first);
+      },
+    );
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -107,15 +135,21 @@ class _TimetableTabState extends State<TimetableTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('시간표', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '현재 뷰에서는 열람만 가능합니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
+            const SizedBox(height: 10),
+            modeToggle,
             const SizedBox(height: 12),
-            _buildReadOnlyGrid(controller),
+            if (_readOnlyEmptyRoom)
+              EmptyRoomFinder(controller: controller)
+            else ...[
+              Text(
+                '현재 뷰에서는 열람만 가능합니다.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.72),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildReadOnlyGrid(controller),
+            ],
           ],
         ),
       ),
@@ -647,6 +681,9 @@ class _TimetableTabState extends State<TimetableTab> {
         _isDraftDirty && !controller.isBusy && !_isApplyingDraft && !archived;
     final historyEnabled = !controller.isBusy && !_isApplyingDraft && !archived;
     final wholeSchool = _viewMode == _TimetableViewMode.wholeSchool;
+    // Per-class editing controls (undo/redo/commit/palette/exports) only make
+    // sense in the editable build mode — both read-only modes hide them.
+    final perClass = _viewMode == _TimetableViewMode.perClass;
 
     final undoButton = IconButton(
       icon: const Icon(Icons.undo),
@@ -677,6 +714,11 @@ class _TimetableTabState extends State<TimetableTab> {
           value: _TimetableViewMode.wholeSchool,
           label: Text('전교 보기'),
           icon: Icon(Icons.school_outlined, size: 16),
+        ),
+        ButtonSegment(
+          value: _TimetableViewMode.emptyRoom,
+          label: Text('빈 강의실'),
+          icon: Icon(Icons.meeting_room_outlined, size: 16),
         ),
       ],
       selected: {_viewMode},
@@ -718,8 +760,8 @@ class _TimetableTabState extends State<TimetableTab> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
-                  // Per-class-only controls hidden in whole-school mode.
-                  if (!wholeSchool) ...[
+                  // Per-class-only controls hidden in the read-only modes.
+                  if (perClass) ...[
                     undoButton,
                     redoButton,
                     paletteButton,
@@ -731,7 +773,7 @@ class _TimetableTabState extends State<TimetableTab> {
               if (wholeSchool) ...[
                 const SizedBox(height: 8),
                 axisToggle,
-              ] else ...[
+              ] else if (perClass) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -777,7 +819,7 @@ class _TimetableTabState extends State<TimetableTab> {
             const SizedBox(width: 8),
             if (wholeSchool)
               axisToggle
-            else ...[
+            else if (perClass) ...[
               undoButton,
               redoButton,
               const SizedBox(width: 8),
@@ -823,6 +865,11 @@ class _TimetableTabState extends State<TimetableTab> {
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        // "빈 강의실 찾기" is a self-contained read-only picker.
+        if (_viewMode == _TimetableViewMode.emptyRoom) {
+          return EmptyRoomFinder(controller: controller);
+        }
+
         final wholeSchool = _viewMode == _TimetableViewMode.wholeSchool;
         // Read-only inspector rail shows on wide layouts in BOTH modes.
         final showInspector = constraints.maxWidth >= 1500;

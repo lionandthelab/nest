@@ -113,11 +113,22 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     final periodKeys = <String>{};
     final byPeriodDay = <String, Map<int, List<_ParentScheduleEntry>>>{};
 
+    // Build the grid axes from the FULL term slot set, not just this child's
+    // sessions. That way every child shares an identical day/period layout —
+    // a child with no morning class still shows the (empty) morning rows
+    // instead of starting the table partway down.
+    for (final slot in controller.timeSlots) {
+      days.add(slot.dayOfWeek);
+      periodKeys.add('${slot.startTime}-${slot.endTime}');
+    }
+
     for (final entry in entries) {
       final slot = slotById[entry.session.timeSlotId];
       if (slot == null) continue;
 
       final periodKey = '${slot.startTime}-${slot.endTime}';
+      // Defensive: keep the cell visible even if the slot somehow isn't in the
+      // term list (e.g. stale data).
       days.add(slot.dayOfWeek);
       periodKeys.add(periodKey);
 

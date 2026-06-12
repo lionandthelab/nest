@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../models/nest_models.dart';
 import '../../../state/nest_controller.dart';
 import '../../nest_theme.dart';
+import '../../widgets/horizontal_mouse_scroll.dart';
 import 'room_normalizer.dart';
 
 /// Pivot axis for the whole-school overlay board.
@@ -94,8 +95,7 @@ class WholeSchoolOverlayBoard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        HorizontalMouseScroll(
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
