@@ -1426,3 +1426,167 @@ class ComposedSessionPayload {
       teacherProfileId != null && teacherProfileId!.trim().isNotEmpty;
   bool get hasLocation => location != null && location!.trim().isNotEmpty;
 }
+
+/// 공과(수업외 자습) 계획. 한 학기에 대해 채울 요일/창/기간/최소 공강을 담는다.
+/// 자습 슬롯([SelfStudySlot])은 이 계획의 설정을 기준으로 수업 시간표의 공강을
+/// 자동 탐지해 생성된다.
+class SelfStudyPlan {
+  const SelfStudyPlan({
+    required this.id,
+    required this.termId,
+    required this.name,
+    required this.days,
+    required this.windowStart,
+    required this.windowEnd,
+    required this.periodStart,
+    required this.periodEnd,
+    required this.minGapMinutes,
+    required this.note,
+    this.createdByUserId,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String termId;
+  final String name;
+
+  /// 채울 요일 목록. 0=일 .. 6=토 (앱 전역에서 쓰는 day_of_week 규약과 동일).
+  final List<int> days;
+
+  /// 'HH:MM:SS' 형태의 자습 창 시작/종료.
+  final String windowStart;
+  final String windowEnd;
+
+  /// 출석부 날짜 열 범위(없으면 학기 범위로 대체).
+  final DateTime? periodStart;
+  final DateTime? periodEnd;
+
+  final int minGapMinutes;
+  final String note;
+  final String? createdByUserId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory SelfStudyPlan.fromMap(Map<String, dynamic> map) {
+    final rawDays = map['days'];
+    final days = rawDays is List
+        ? rawDays
+            .map((e) => e is num ? e.toInt() : int.tryParse('$e') ?? -1)
+            .where((d) => d >= 0 && d <= 6)
+            .toList()
+        : <int>[];
+    return SelfStudyPlan(
+      id: (map['id'] as String?) ?? '',
+      termId: (map['term_id'] as String?) ?? '',
+      name: (map['name'] as String?) ?? '자습 계획',
+      days: days,
+      windowStart: (map['window_start'] as String?) ?? '09:00:00',
+      windowEnd: (map['window_end'] as String?) ?? '12:00:00',
+      periodStart: parseDateTime(map['period_start']),
+      periodEnd: parseDateTime(map['period_end']),
+      minGapMinutes: (map['min_gap_minutes'] as num?)?.toInt() ?? 60,
+      note: (map['note'] as String?) ?? '',
+      createdByUserId: map['created_by_user_id'] as String?,
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'term_id': termId,
+    'name': name,
+    'days': days,
+    'window_start': windowStart,
+    'window_end': windowEnd,
+    'period_start': periodStart?.toIso8601String().split('T').first,
+    'period_end': periodEnd?.toIso8601String().split('T').first,
+    'min_gap_minutes': minGapMinutes,
+    'note': note,
+  };
+}
+
+/// 자습 슬롯: (반, 요일, 공강 구간) 하나 + 배정된 방/감독.
+/// 명단은 반의 재원생 전체에서 [SelfStudySlotExclusion] 을 뺀 것.
+class SelfStudySlot {
+  const SelfStudySlot({
+    required this.id,
+    required this.planId,
+    required this.classGroupId,
+    required this.dayOfWeek,
+    required this.startTime,
+    required this.endTime,
+    required this.room,
+    required this.supervisorTeacherId,
+    required this.label,
+    required this.sortOrder,
+  });
+
+  final String id;
+  final String planId;
+  final String classGroupId;
+  final int dayOfWeek;
+  final String startTime;
+  final String endTime;
+  final String room;
+  final String? supervisorTeacherId;
+  final String label;
+  final int sortOrder;
+
+  factory SelfStudySlot.fromMap(Map<String, dynamic> map) {
+    return SelfStudySlot(
+      id: (map['id'] as String?) ?? '',
+      planId: (map['plan_id'] as String?) ?? '',
+      classGroupId: (map['class_group_id'] as String?) ?? '',
+      dayOfWeek: (map['day_of_week'] as num?)?.toInt() ?? 0,
+      startTime: (map['start_time'] as String?) ?? '00:00:00',
+      endTime: (map['end_time'] as String?) ?? '00:00:00',
+      room: (map['room'] as String?) ?? '',
+      supervisorTeacherId: map['supervisor_teacher_id'] as String?,
+      label: (map['label'] as String?) ?? '',
+      sortOrder: (map['sort_order'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'plan_id': planId,
+    'class_group_id': classGroupId,
+    'day_of_week': dayOfWeek,
+    'start_time': startTime,
+    'end_time': endTime,
+    'room': room,
+    'supervisor_teacher_id': supervisorTeacherId,
+    'label': label,
+    'sort_order': sortOrder,
+  };
+}
+
+/// 자습 슬롯에서 제외된 아동. 반 전체 자동 포함이 기본이므로, 참여하지 않는
+/// 아동만 이 표에 기록한다.
+class SelfStudySlotExclusion {
+  const SelfStudySlotExclusion({
+    required this.id,
+    required this.slotId,
+    required this.childId,
+  });
+
+  final String id;
+  final String slotId;
+  final String childId;
+
+  factory SelfStudySlotExclusion.fromMap(Map<String, dynamic> map) {
+    return SelfStudySlotExclusion(
+      id: (map['id'] as String?) ?? '',
+      slotId: (map['slot_id'] as String?) ?? '',
+      childId: (map['child_id'] as String?) ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'slot_id': slotId,
+    'child_id': childId,
+  };
+}

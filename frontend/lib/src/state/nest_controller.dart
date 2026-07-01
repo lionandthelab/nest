@@ -7,6 +7,7 @@ import '../models/nest_models.dart';
 import '../services/local_planner.dart';
 import '../services/nest_cache.dart';
 import '../services/nest_repository.dart';
+import '../services/self_study_planner.dart';
 
 class NestController extends ChangeNotifier {
   NestController({
@@ -72,6 +73,12 @@ class NestController extends ChangeNotifier {
   Map<String, List<ProposalSession>> proposalSessionsById = const {};
   List<ScheduleOptionDraft> scheduleOptionDrafts = [];
   String? selectedScheduleOptionId;
+
+  // ── 공과 자습 시간표 (self-study) ──
+  List<SelfStudyPlan> selfStudyPlans = [];
+  String? selectedSelfStudyPlanId;
+  List<SelfStudySlot> selfStudySlots = [];
+  List<SelfStudySlotExclusion> selfStudyExclusions = [];
 
   List<GalleryItem> galleryItems = [];
   Map<String, List<String>> mediaChildrenByAsset = const {};
@@ -1305,6 +1312,10 @@ class NestController extends ChangeNotifier {
       studentActivityLogs = [];
       announcements = [];
       auditLogs = [];
+      selfStudyPlans = [];
+      selectedSelfStudyPlanId = null;
+      selfStudySlots = [];
+      selfStudyExclusions = [];
       pendingCommunityMediaFile = null;
 
       if (pendingInvites.isNotEmpty) {
@@ -4552,7 +4563,361 @@ class NestController extends ChangeNotifier {
     // classGroups sets selectedClassGroupId needed by _loadSessions.
     // timetableAssets only needs termId, so it can run in parallel with classGroups.
     await Future.wait([_loadClassGroups(), _loadTimetableAssets()]);
-    await Future.wait([_loadSessions(), _loadProposals()]);
+    await Future.wait([_loadSessions(), _loadProposals(), _loadSelfStudy()]);
+  }
+
+  Future<void> _loadSelfStudy() async {
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      selfStudyPlans = [];
+      selectedSelfStudyPlanId = null;
+      selfStudySlots = [];
+      selfStudyExclusions = [];
+      return;
+    }
+
+    selfStudyPlans = await _repository.fetchSelfStudyPlans(termId: termId);
+    final validIds = selfStudyPlans.map((p) => p.id).toSet();
+    if (selectedSelfStudyPlanId == null ||
+        !validIds.contains(selectedSelfStudyPlanId)) {
+      selectedSelfStudyPlanId =
+          selfStudyPlans.isNotEmpty ? selfStudyPlans.first.id : null;
+    }
+    await _reloadSelfStudySlotsAndExclusions();
+  }
+
+  Future<void> _reloadSelfStudySlotsAndExclusions() async {
+    final planIds = selfStudyPlans.map((p) => p.id).toList();
+    selfStudySlots = await _repository.fetchSelfStudySlots(planIds: planIds);
+    final slotIds = selfStudySlots.map((s) => s.id).toList();
+    selfStudyExclusions =
+        await _repository.fetchSelfStudyExclusions(slotIds: slotIds);
+  }
+
+  // ── 공과 자습: getters ──
+
+  SelfStudyPlan? get selectedSelfStudyPlan {
+    final id = selectedSelfStudyPlanId;
+    if (id == null) return selfStudyPlans.firstOrNull;
+    return selfStudyPlans.where((p) => p.id == id).firstOrNull;
+  }
+
+  /// 선택된 계획의 슬롯(정렬 순).
+  List<SelfStudySlot> get selectedPlanSelfStudySlots {
+    final id = selectedSelfStudyPlan?.id;
+    if (id == null) return const [];
+    final list = selfStudySlots.where((s) => s.planId == id).toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return list;
+  }
+
+  Set<String> excludedChildIdsForSelfStudySlot(String slotId) => selfStudyExclusions
+      .where((e) => e.slotId == slotId)
+      .map((e) => e.childId)
+      .toSet();
+
+  /// 슬롯 자습 명단 = 반 재원생 − 제외 아동(이름 순).
+  List<ChildProfile> rosterForSelfStudySlot(SelfStudySlot slot) {
+    final excluded = excludedChildIdsForSelfStudySlot(slot.id);
+    return childrenForClassGroup(slot.classGroupId)
+        .where((c) => !excluded.contains(c.id))
+        .toList();
+  }
+
+  // ── 공과 자습: actions ──
+
+  Future<void> selectSelfStudyPlan(String? planId) async {
+    final normalized = _normalizeNullable(planId);
+    if (normalized == selectedSelfStudyPlanId) return;
+    selectedSelfStudyPlanId = normalized;
+    notifyListeners();
+  }
+
+  Future<void> createSelfStudyPlan({
+    required String name,
+    required List<int> days,
+    required String windowStart,
+    required String windowEnd,
+    DateTime? periodStart,
+    DateTime? periodEnd,
+    int minGapMinutes = 60,
+    String note = '',
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('자습 계획 이름을 입력하세요.');
+    }
+    if (days.isEmpty) {
+      throw StateError('채울 요일을 하나 이상 선택하세요.');
+    }
+    if (selfStudyPlans.any(
+      (p) => p.name.trim().toLowerCase() == trimmed.toLowerCase(),
+    )) {
+      throw StateError('이미 동일한 이름의 자습 계획이 있습니다: $trimmed');
+    }
+
+    await _runBusy('자습 계획을 생성하는 중...', () async {
+      final created = await _repository.createSelfStudyPlan(
+        termId: termId,
+        name: trimmed,
+        days: (days.toSet().toList()..sort()),
+        windowStart: windowStart,
+        windowEnd: windowEnd,
+        periodStart: _dateOnly(periodStart),
+        periodEnd: _dateOnly(periodEnd),
+        minGapMinutes: minGapMinutes,
+        note: note,
+        createdByUserId: user?.id,
+      );
+      await _loadSelfStudy();
+      selectedSelfStudyPlanId = created.id;
+      await _logAudit(
+        actionType: 'SELF_STUDY_PLAN_CREATE',
+        resourceType: 'self_study_plans',
+        resourceId: created.id,
+        afterJson: {'name': created.name},
+      );
+      _setStatus('자습 계획을 생성했습니다.');
+    });
+  }
+
+  Future<void> updateSelfStudyPlan({
+    required String planId,
+    required String name,
+    required List<int> days,
+    required String windowStart,
+    required String windowEnd,
+    DateTime? periodStart,
+    DateTime? periodEnd,
+    required int minGapMinutes,
+    String note = '',
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('자습 계획 이름을 입력하세요.');
+    }
+    if (days.isEmpty) {
+      throw StateError('채울 요일을 하나 이상 선택하세요.');
+    }
+    if (selfStudyPlans.any(
+      (p) => p.id != planId &&
+          p.name.trim().toLowerCase() == trimmed.toLowerCase(),
+    )) {
+      throw StateError('이미 동일한 이름의 자습 계획이 있습니다: $trimmed');
+    }
+
+    await _runBusy('자습 계획을 저장하는 중...', () async {
+      await _repository.updateSelfStudyPlan(
+        planId: planId,
+        name: trimmed,
+        days: (days.toSet().toList()..sort()),
+        windowStart: windowStart,
+        windowEnd: windowEnd,
+        periodStart: _dateOnly(periodStart),
+        periodEnd: _dateOnly(periodEnd),
+        minGapMinutes: minGapMinutes,
+        note: note,
+      );
+      await _loadSelfStudy();
+      _setStatus('자습 계획을 저장했습니다.');
+    });
+  }
+
+  Future<void> deleteSelfStudyPlan(String planId) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    await _runBusy('자습 계획을 삭제하는 중...', () async {
+      await _repository.deleteSelfStudyPlan(planId: planId);
+      if (selectedSelfStudyPlanId == planId) {
+        selectedSelfStudyPlanId = null;
+      }
+      await _loadSelfStudy();
+      await _logAudit(
+        actionType: 'SELF_STUDY_PLAN_DELETE',
+        resourceType: 'self_study_plans',
+        resourceId: planId,
+      );
+      _setStatus('자습 계획을 삭제했습니다.');
+    });
+  }
+
+  /// 수업 시간표의 공강을 계산해 선택된(또는 지정된) 계획의 자습 슬롯을 전면
+  /// 재생성한다. 기존 슬롯의 방/감독/라벨과 제외 명단은 (반·요일·시간이 같은
+  /// 슬롯에 한해) 최대한 보존한다.
+  Future<void> regenerateSelfStudySlots({String? planId}) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final id = _normalizeNullable(planId) ?? selectedSelfStudyPlan?.id;
+    final plan = selfStudyPlans.where((p) => p.id == id).firstOrNull;
+    if (plan == null) {
+      throw StateError('자습 계획을 먼저 선택하세요.');
+    }
+    if (classGroups.isEmpty) {
+      throw StateError('반이 없습니다. 학기 설정에서 반을 먼저 만드세요.');
+    }
+
+    await _runBusy('빈 시간을 계산해 자습을 배치하는 중...', () async {
+      // 1) 수업 점유 구간 수집 (반 × 요일).
+      final slotById = {for (final s in timeSlots) s.id: s};
+      final occupancy = <GroupOccupancy>[];
+      for (final session in allTermSessions) {
+        final ts = slotById[session.timeSlotId];
+        if (ts == null) continue;
+        occupancy.add(GroupOccupancy(
+          classGroupId: session.classGroupId,
+          dayOfWeek: ts.dayOfWeek,
+          startMin: minutesFromTime(ts.startTime),
+          endMin: minutesFromTime(ts.endTime),
+        ));
+      }
+
+      // 2) 공강 → 슬롯 후보.
+      final groupIds = classGroups.map((g) => g.id).toList();
+      final groupIndex = {
+        for (var i = 0; i < groupIds.length; i++) groupIds[i]: i,
+      };
+      final generated = generateSelfStudySlots(
+        classGroupIds: groupIds,
+        occupancy: occupancy,
+        config: SelfStudyPlanConfig(
+          days: plan.days,
+          windowStartMin: minutesFromTime(plan.windowStart),
+          windowEndMin: minutesFromTime(plan.windowEnd),
+          minGapMinutes: plan.minGapMinutes,
+        ),
+      );
+
+      // 3) 기존 슬롯의 방/감독/라벨/제외를 (반·요일·시간) 키로 보존.
+      String keyOf(String gid, int day, String start, String end) =>
+          '$gid|$day|${start.length >= 5 ? start.substring(0, 5) : start}'
+          '|${end.length >= 5 ? end.substring(0, 5) : end}';
+      final existing = selfStudySlots.where((s) => s.planId == plan.id).toList();
+      final carryDetail = <String, SelfStudySlot>{
+        for (final s in existing)
+          keyOf(s.classGroupId, s.dayOfWeek, s.startTime, s.endTime): s,
+      };
+      final carryExclusions = <String, Set<String>>{};
+      for (final s in existing) {
+        final ex = excludedChildIdsForSelfStudySlot(s.id);
+        if (ex.isNotEmpty) {
+          carryExclusions[
+              keyOf(s.classGroupId, s.dayOfWeek, s.startTime, s.endTime)] = ex;
+        }
+      }
+
+      final payload = <Map<String, dynamic>>[];
+      for (final g in generated) {
+        final startSecs = timeFromMinutes(g.startMin, withSeconds: true);
+        final endSecs = timeFromMinutes(g.endMin, withSeconds: true);
+        final key = keyOf(g.classGroupId, g.dayOfWeek, startSecs, endSecs);
+        final prior = carryDetail[key];
+        payload.add({
+          'class_group_id': g.classGroupId,
+          'day_of_week': g.dayOfWeek,
+          'start_time': startSecs,
+          'end_time': endSecs,
+          'room': prior?.room ?? '',
+          'supervisor_teacher_id': prior?.supervisorTeacherId,
+          'label': prior?.label ?? '',
+          'sort_order': g.dayOfWeek * 100000 +
+              g.startMin * 100 +
+              (groupIndex[g.classGroupId] ?? 0),
+        });
+      }
+
+      final createdSlots = await _repository.replaceSelfStudySlots(
+        planId: plan.id,
+        slots: payload,
+      );
+
+      // 4) 보존 대상 제외 명단 재적용(아동이 아직 반에 있을 때만).
+      for (final slot in createdSlots) {
+        final key =
+            keyOf(slot.classGroupId, slot.dayOfWeek, slot.startTime, slot.endTime);
+        final childIds = carryExclusions[key];
+        if (childIds == null || childIds.isEmpty) continue;
+        final memberIds =
+            childrenForClassGroup(slot.classGroupId).map((c) => c.id).toSet();
+        for (final childId in childIds) {
+          if (!memberIds.contains(childId)) continue;
+          await _repository.addSelfStudyExclusion(
+            slotId: slot.id,
+            childId: childId,
+          );
+        }
+      }
+
+      await _reloadSelfStudySlotsAndExclusions();
+      await _logAudit(
+        actionType: 'SELF_STUDY_SLOTS_REGENERATE',
+        resourceType: 'self_study_plans',
+        resourceId: plan.id,
+        afterJson: {'slot_count': createdSlots.length},
+      );
+      _setStatus('자습 슬롯 ${createdSlots.length}개를 배치했습니다.');
+    });
+  }
+
+  Future<void> updateSelfStudySlotDetails({
+    required String slotId,
+    required String room,
+    String? supervisorTeacherId,
+    String label = '',
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    await _runBusy('자습 슬롯을 저장하는 중...', () async {
+      await _repository.updateSelfStudySlot(
+        slotId: slotId,
+        room: room,
+        supervisorTeacherId: _normalizeNullable(supervisorTeacherId),
+        label: label,
+      );
+      await _reloadSelfStudySlotsAndExclusions();
+      _setStatus('자습 슬롯을 저장했습니다.');
+    });
+  }
+
+  Future<void> setSelfStudyExclusion({
+    required String slotId,
+    required String childId,
+    required bool excluded,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    await _runBusy(excluded ? '명단에서 제외하는 중...' : '명단에 추가하는 중...', () async {
+      if (excluded) {
+        await _repository.addSelfStudyExclusion(slotId: slotId, childId: childId);
+      } else {
+        await _repository.removeSelfStudyExclusion(
+          slotId: slotId,
+          childId: childId,
+        );
+      }
+      await _reloadSelfStudySlotsAndExclusions();
+    });
+  }
+
+  String? _dateOnly(DateTime? value) {
+    if (value == null) return null;
+    final y = value.year.toString().padLeft(4, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final d = value.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 
   Future<void> _loadTerms() async {

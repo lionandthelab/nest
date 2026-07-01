@@ -15,6 +15,7 @@ import 'tabs/gallery_tab.dart';
 import 'tabs/parent_home_tab.dart';
 import 'tabs/parent_timetable_tab.dart';
 import 'tabs/profile_settings_tab.dart';
+import 'tabs/self_study/self_study_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
@@ -200,6 +201,10 @@ class _HomePageState extends State<HomePage> {
             controller: controller,
             onDirtyChanged: _handleScheduleDirtyChanged,
           ),
+        ),
+        _TabSpec(
+          label: '자습',
+          page: SelfStudyTab(controller: controller),
         ),
         _TabSpec(
           label: '시스템',
@@ -2636,6 +2641,7 @@ Icon _iconForLabel(String label, {required bool filled}) {
     '시간표' => Icon(
       filled ? Icons.calendar_view_week : Icons.calendar_view_week_outlined,
     ),
+    '자습' => Icon(filled ? Icons.menu_book : Icons.menu_book_outlined),
     '학습 현황' => Icon(filled ? Icons.insights : Icons.insights_outlined),
     '소식' => Icon(filled ? Icons.newspaper : Icons.newspaper_outlined),
     'Teacher Hub' => Icon(filled ? Icons.school : Icons.school_outlined),

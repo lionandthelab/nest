@@ -1652,6 +1652,177 @@ class NestRepository {
     return client.from('class_sessions').delete().eq('id', sessionId);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 공과 자습 시간표 (self-study plans / slots / exclusions)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  static const String _selfStudyPlanCols =
+      'id, term_id, name, days, window_start, window_end, period_start, '
+      'period_end, min_gap_minutes, note, created_by_user_id, created_at, '
+      'updated_at';
+  static const String _selfStudySlotCols =
+      'id, plan_id, class_group_id, day_of_week, start_time, end_time, room, '
+      'supervisor_teacher_id, label, sort_order';
+
+  Future<List<SelfStudyPlan>> fetchSelfStudyPlans({
+    required String termId,
+  }) async {
+    final data = await client
+        .from('self_study_plans')
+        .select(_selfStudyPlanCols)
+        .eq('term_id', termId)
+        .order('created_at');
+    return _asRows(data).map(SelfStudyPlan.fromMap).toList();
+  }
+
+  Future<SelfStudyPlan> createSelfStudyPlan({
+    required String termId,
+    required String name,
+    required List<int> days,
+    required String windowStart,
+    required String windowEnd,
+    String? periodStart,
+    String? periodEnd,
+    int minGapMinutes = 60,
+    String note = '',
+    String? createdByUserId,
+  }) async {
+    final row = await client
+        .from('self_study_plans')
+        .insert({
+          'term_id': termId,
+          'name': name.trim(),
+          'days': days,
+          'window_start': windowStart,
+          'window_end': windowEnd,
+          'period_start': periodStart,
+          'period_end': periodEnd,
+          'min_gap_minutes': minGapMinutes,
+          'note': note.trim(),
+          'created_by_user_id': ?createdByUserId,
+        })
+        .select(_selfStudyPlanCols)
+        .single();
+    return SelfStudyPlan.fromMap(_asMap(row));
+  }
+
+  Future<SelfStudyPlan> updateSelfStudyPlan({
+    required String planId,
+    required String name,
+    required List<int> days,
+    required String windowStart,
+    required String windowEnd,
+    String? periodStart,
+    String? periodEnd,
+    required int minGapMinutes,
+    required String note,
+  }) async {
+    final row = await client
+        .from('self_study_plans')
+        .update({
+          'name': name.trim(),
+          'days': days,
+          'window_start': windowStart,
+          'window_end': windowEnd,
+          'period_start': periodStart,
+          'period_end': periodEnd,
+          'min_gap_minutes': minGapMinutes,
+          'note': note.trim(),
+        })
+        .eq('id', planId)
+        .select(_selfStudyPlanCols)
+        .single();
+    return SelfStudyPlan.fromMap(_asMap(row));
+  }
+
+  Future<void> deleteSelfStudyPlan({required String planId}) {
+    return client.from('self_study_plans').delete().eq('id', planId);
+  }
+
+  Future<List<SelfStudySlot>> fetchSelfStudySlots({
+    required List<String> planIds,
+  }) async {
+    if (planIds.isEmpty) return const [];
+    final data = await client
+        .from('self_study_slots')
+        .select(_selfStudySlotCols)
+        .inFilter('plan_id', planIds)
+        .order('sort_order');
+    return _asRows(data).map(SelfStudySlot.fromMap).toList();
+  }
+
+  /// Replaces every slot of a plan in one shot: delete-all then bulk insert.
+  /// Exclusions cascade-delete with the removed slots (regeneration is a fresh
+  /// placement), so callers should only use this for (re)generation, not for
+  /// routine room/supervisor edits ([updateSelfStudySlot]).
+  Future<List<SelfStudySlot>> replaceSelfStudySlots({
+    required String planId,
+    required List<Map<String, dynamic>> slots,
+  }) async {
+    await client.from('self_study_slots').delete().eq('plan_id', planId);
+    if (slots.isEmpty) return const [];
+    final payload = slots
+        .map((s) => {...s, 'plan_id': planId})
+        .toList(growable: false);
+    final data = await client
+        .from('self_study_slots')
+        .insert(payload)
+        .select(_selfStudySlotCols);
+    return _asRows(data).map(SelfStudySlot.fromMap).toList();
+  }
+
+  Future<SelfStudySlot> updateSelfStudySlot({
+    required String slotId,
+    required String room,
+    required String? supervisorTeacherId,
+    required String label,
+  }) async {
+    final row = await client
+        .from('self_study_slots')
+        .update({
+          'room': room.trim(),
+          'supervisor_teacher_id': supervisorTeacherId,
+          'label': label.trim(),
+        })
+        .eq('id', slotId)
+        .select(_selfStudySlotCols)
+        .single();
+    return SelfStudySlot.fromMap(_asMap(row));
+  }
+
+  Future<List<SelfStudySlotExclusion>> fetchSelfStudyExclusions({
+    required List<String> slotIds,
+  }) async {
+    if (slotIds.isEmpty) return const [];
+    final data = await client
+        .from('self_study_slot_exclusions')
+        .select('id, slot_id, child_id')
+        .inFilter('slot_id', slotIds);
+    return _asRows(data).map(SelfStudySlotExclusion.fromMap).toList();
+  }
+
+  Future<void> addSelfStudyExclusion({
+    required String slotId,
+    required String childId,
+  }) {
+    return client.from('self_study_slot_exclusions').upsert(
+      {'slot_id': slotId, 'child_id': childId},
+      onConflict: 'slot_id,child_id',
+      ignoreDuplicates: true,
+    );
+  }
+
+  Future<void> removeSelfStudyExclusion({
+    required String slotId,
+    required String childId,
+  }) {
+    return client
+        .from('self_study_slot_exclusions')
+        .delete()
+        .eq('slot_id', slotId)
+        .eq('child_id', childId);
+  }
+
   /// Atomic batch commit of a class group's timetable draft via the optional
   /// `apply_timetable_draft` RPC. The whole apply runs in a single DB
   /// transaction, so any failure (RLS denial, TEACHER_SLOT_CONFLICT, archived
