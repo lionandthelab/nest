@@ -394,12 +394,26 @@ class _SheetTable extends StatelessWidget {
           header1,
           header2,
           ...bodyRows,
+          // 감독 행: 날짜 열마다 이 (요일·방) 자습의 감독을 표기.
+          Row(
+            children: [
+              cell('감독',
+                  width: _idxW + _nameW + _gradeW, bg: headerBg, bold: true),
+              for (var i = 0; i < dates.length; i++)
+                cell(
+                  group.supervisors.isEmpty
+                      ? '-'
+                      : group.supervisors.join(', '),
+                  width: _bandW * bands.length,
+                  fontSize: 11,
+                ),
+            ],
+          ),
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Text(
-              'X = 수업 중(자습 불가) · 빈칸 = 자습'
-              '${group.supervisors.isEmpty ? '' : '   |   감독: ${group.supervisors.join(', ')}'}',
+              'X = 수업 중(자습 불가) · 빈칸 = 자습',
               style: TextStyle(
                 fontSize: 11,
                 color: NestColors.deepWood.withValues(alpha: 0.7),

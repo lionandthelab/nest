@@ -8,6 +8,7 @@ import '../services/nest_cache.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
 import 'nest_theme.dart';
+import 'homeschool_select_page.dart';
 import 'tabs/community_feed_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/family_admin_tab.dart';
@@ -19,7 +20,6 @@ import 'tabs/self_study/self_study_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
-import 'widgets/homeschool_create_dialog.dart';
 import 'widgets/nest_motion.dart';
 
 class HomePage extends StatefulWidget {
@@ -35,7 +35,7 @@ class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   bool _hasUnsavedScheduleChanges = false;
   DateTime? _lastBackPress;
-  bool _hasShownHomeschoolPicker = false;
+  bool _homeschoolConfirmed = false;
 
   // ── Parent child selector state (shared across parent tabs) ──
   String? _selectedChildId;
@@ -79,15 +79,20 @@ class _HomePageState extends State<HomePage> {
           _syncSelectedChild(widget.controller);
         }
 
-        // Show homeschool picker once after login for multi-homeschool users
-        if (!_hasShownHomeschoolPicker &&
-            widget.controller.isBootstrapped &&
-            widget.controller.memberships.length >= 2) {
-          _hasShownHomeschoolPicker = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _showHomeschoolPickerSheet();
-          });
+        // 다중 소속(홈스쿨 2개 이상)이면 전용 선택 화면을 먼저 보여준다.
+        // 홈스쿨당 카드 1개, 누르면 그 홈스쿨의 최근 역할로 진입.
+        if (widget.controller.isBootstrapped &&
+            widget.controller.hasMultipleHomeschools &&
+            !_homeschoolConfirmed) {
+          return HomeschoolSelectPage(
+            controller: widget.controller,
+            onSelect: (id) {
+              setState(() => _homeschoolConfirmed = true);
+              if (id != widget.controller.selectedHomeschoolId) {
+                _handleHomeschoolChange(id);
+              }
+            },
+          );
         }
 
         final width = MediaQuery.sizeOf(context).width;
@@ -454,6 +459,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _handleLogout() async {
+    // 다음 로그인 때 홈스쿨 선택 화면을 다시 보이도록 초기화.
+    _homeschoolConfirmed = false;
     try {
       await widget.controller.signOut();
     } catch (_) {
@@ -475,101 +482,6 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }
-  }
-
-  void _showHomeschoolPickerSheet() {
-    final controller = widget.controller;
-    final memberships = controller.memberships;
-    if (memberships.length < 2) return;
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        String? selectedId = controller.selectedHomeschoolId;
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '홈스쿨을 선택하세요',
-                      style: Theme.of(ctx).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '여러 홈스쿨에 소속되어 있습니다.',
-                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ...memberships.map((m) {
-                      final isSelected = m.homeschoolId == selectedId;
-                      return ListTile(
-                        leading: Icon(
-                          isSelected
-                              ? Icons.check_circle
-                              : Icons.circle_outlined,
-                          color: isSelected ? NestColors.dustyRose : null,
-                        ),
-                        title: Text(
-                          m.homeschool.name,
-                          style: isSelected
-                              ? const TextStyle(fontWeight: FontWeight.w700)
-                              : null,
-                        ),
-                        subtitle: Text(_labelForRole(m.role)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        onTap: () {
-                          setSheetState(() => selectedId = m.homeschoolId);
-                        },
-                      );
-                    }),
-                    const Divider(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              showHomeschoolCreateDialog(
-                                context: context,
-                                controller: controller,
-                              );
-                            },
-                            icon: const Icon(Icons.add_home_outlined, size: 18),
-                            label: const Text('새 홈스쿨 개설'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              if (selectedId != controller.selectedHomeschoolId) {
-                                _handleHomeschoolChange(selectedId);
-                              }
-                            },
-                            child: const Text('확인'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _handleTermChange(String? value) async {
@@ -826,80 +738,20 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
 
 
   void _showHomeschoolSwitchSheet(NestController controller) {
-    final memberships = controller.memberships;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '홈스쿨 전환',
-                      style: Theme.of(ctx).textTheme.titleLarge,
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ...memberships.map((m) {
-                  final isSelected =
-                      m.homeschoolId == controller.selectedHomeschoolId;
-                  return ListTile(
-                    leading: Icon(
-                      isSelected
-                          ? Icons.check_circle
-                          : Icons.circle_outlined,
-                      color: isSelected ? NestColors.dustyRose : null,
-                    ),
-                    title: Text(
-                      m.homeschool.name,
-                      style: isSelected
-                          ? const TextStyle(fontWeight: FontWeight.w700)
-                          : null,
-                    ),
-                    subtitle: Text(_labelForRole(m.role)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      if (!isSelected) {
-                        widget.onSelectHomeschool(m.homeschoolId);
-                      }
-                    },
-                  );
-                }),
-                const Divider(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      showHomeschoolCreateDialog(
-                        context: context,
-                        controller: controller,
-                      );
-                    },
-                    icon: const Icon(Icons.add_home_outlined, size: 18),
-                    label: const Text('새 홈스쿨 개설'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    // 헤더에서 홈스쿨을 바꿀 때도 첫 진입과 동일한 전용 선택 화면을 쓴다.
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HomeschoolSelectPage(
+          controller: controller,
+          showBack: true,
+          onSelect: (id) {
+            Navigator.of(context).pop();
+            if (id != controller.selectedHomeschoolId) {
+              widget.onSelectHomeschool(id);
+            }
+          },
+        ),
+      ),
     );
   }
 
@@ -910,7 +762,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     if (membership == null) return const SizedBox.shrink();
 
     final name = membership.homeschool.name;
-    final canSwitch = controller.memberships.length > 1;
+    final canSwitch = controller.hasMultipleHomeschools;
 
     return GestureDetector(
       onTap: canSwitch && !controller.isBusy
@@ -1226,7 +1078,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 ),
               ),
               const PopupMenuDivider(),
-              if (controller.memberships.length > 1)
+              if (controller.hasMultipleHomeschools)
                 const PopupMenuItem<String>(
                   value: 'switch_homeschool',
                   child: ListTile(
@@ -2381,12 +2233,14 @@ class _ContextSelectorState extends State<_ContextSelector> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
 
-    final homeschoolOptions = controller.memberships
+    // 홈스쿨은 중복 없이(홈스쿨당 1개), 부제엔 그 홈스쿨의 최근 역할을 보여준다.
+    final homeschoolOptions = controller.distinctHomeschools
         .map(
-          (membership) => _ContextOption(
-            id: membership.homeschoolId,
-            title: membership.homeschool.name,
-            subtitle: _labelForRole(membership.role),
+          (hs) => _ContextOption(
+            id: hs.id,
+            title: hs.name,
+            subtitle:
+                _labelForRole(controller.recentRoleForHomeschool(hs.id) ?? ''),
           ),
         )
         .toList();

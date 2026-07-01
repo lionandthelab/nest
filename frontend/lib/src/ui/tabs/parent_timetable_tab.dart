@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/self_study_planner.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
@@ -26,6 +27,9 @@ class ParentTimetableTab extends StatefulWidget {
 }
 
 class _ParentTimetableTabState extends State<ParentTimetableTab> {
+  // false = 수업 시간표, true = 자습 시간표.
+  bool _showSelfStudy = false;
+
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
@@ -34,7 +38,13 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        if (widget.isLoadingChildClasses && bundles.isEmpty) ...[
+        if (widget.selectedChildId != null) ...[
+          _buildModeToggle(context),
+          const SizedBox(height: 12),
+        ],
+        if (widget.selectedChildId != null && _showSelfStudy)
+          _buildSelfStudyView(context, controller)
+        else if (widget.isLoadingChildClasses && bundles.isEmpty) ...[
           const SizedBox(height: 24),
           const Center(child: CircularProgressIndicator()),
         ] else if (widget.selectedChildId == null)
@@ -93,6 +103,170 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
             },
           ),
       ],
+    );
+  }
+
+  Widget _buildModeToggle(BuildContext context) {
+    return SegmentedButton<bool>(
+      segments: const [
+        ButtonSegment(
+          value: false,
+          label: Text('수업'),
+          icon: Icon(Icons.school_outlined, size: 16),
+        ),
+        ButtonSegment(
+          value: true,
+          label: Text('자습'),
+          icon: Icon(Icons.edit_note_outlined, size: 16),
+        ),
+      ],
+      selected: {_showSelfStudy},
+      showSelectedIcon: false,
+      onSelectionChanged: (selection) =>
+          setState(() => _showSelfStudy = selection.first),
+    );
+  }
+
+  Widget _buildSelfStudyView(
+    BuildContext context,
+    NestController controller,
+  ) {
+    final childId = widget.selectedChildId;
+    if (childId == null) {
+      return const NestEmptyState(
+        icon: Icons.self_improvement,
+        title: '아이를 먼저 선택하세요',
+      );
+    }
+    if (controller.selfStudyPlans.isEmpty) {
+      return const NestEmptyState(
+        icon: Icons.menu_book_outlined,
+        title: '자습 시간표가 아직 없습니다',
+        subtitle: '관리자가 자습 시간표를 만들면 여기에 표시됩니다.',
+      );
+    }
+    final slots = controller.selfStudySlotsForChild(childId);
+    if (slots.isEmpty) {
+      return const NestEmptyState(
+        icon: Icons.event_available_outlined,
+        title: '배정된 자습이 없습니다',
+        subtitle: '이 아이는 현재 자습 배정이 없어요.',
+      );
+    }
+
+    final byDay = <int, List<SelfStudySlot>>{};
+    for (final s in slots) {
+      byDay.putIfAbsent(s.dayOfWeek, () => []).add(s);
+    }
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    final planName = controller.selectedSelfStudyPlan?.name ?? '자습';
+
+    final children = <Widget>[
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 2),
+        child: Text(
+          planName,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
+      ),
+    ];
+    for (final day in order) {
+      final ds = byDay[day];
+      if (ds == null || ds.isEmpty) continue;
+      ds.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 6, bottom: 6, left: 2),
+        child: Text(
+          '${weekdayLabel(day)}요일',
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
+      ));
+      for (final slot in ds) {
+        children.add(_selfStudyCard(context, controller, slot));
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  Widget _selfStudyCard(
+    BuildContext context,
+    NestController controller,
+    SelfStudySlot slot,
+  ) {
+    final time = rangeLabel(
+      minutesFromTime(slot.startTime),
+      minutesFromTime(slot.endTime),
+    );
+    final room = slot.room.trim().isEmpty ? '장소 미정' : slot.room.trim();
+    final supervisorId = slot.supervisorTeacherId;
+    final supervisor = (supervisorId == null || supervisorId.isEmpty)
+        ? null
+        : controller.findTeacherName(supervisorId);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: NestColors.mutedSage.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              time,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: NestColors.deepWood,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.meeting_room_outlined,
+                        size: 16, color: NestColors.clay),
+                    const SizedBox(width: 4),
+                    Text(
+                      room,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                if (supervisor != null && supervisor.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '감독 · $supervisor',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.7),
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

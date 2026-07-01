@@ -11,6 +11,7 @@ import '../../services/nest_repository.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/search_select_field.dart';
+import 'self_study/supervision_schedule_view.dart';
 import 'timetable/empty_room_finder.dart';
 import 'timetable/family_enrollment_panel.dart';
 import 'timetable/object_inspector_rail.dart';
@@ -20,6 +21,9 @@ import 'timetable/whole_school_overlay_board.dart';
 /// Board view mode: per-class editable build, read-only whole-school overlay,
 /// or the read-only "빈 강의실 찾기" picker.
 enum _TimetableViewMode { perClass, wholeSchool, emptyRoom }
+
+/// 교사 열람 뷰 모드: 내 수업 / 내 감독 / 빈 강의실.
+enum _ReadOnlyMode { schedule, supervision, emptyRoom }
 
 class TimetableTab extends StatefulWidget {
   const TimetableTab({
@@ -48,7 +52,7 @@ class _TimetableTabState extends State<TimetableTab> {
 
   // Read-only view (teachers / non-admin): toggle between the schedule grid and
   // the "빈 강의실 찾기" picker.
-  bool _readOnlyEmptyRoom = false;
+  _ReadOnlyMode _readOnlyMode = _ReadOnlyMode.schedule;
 
   // Phase 2 "한눈에" view-mode toggle + whole-school pivot axis.
   _TimetableViewMode _viewMode = _TimetableViewMode.perClass;
@@ -106,51 +110,89 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Widget _buildReadOnlyView(NestController controller) {
-    final modeToggle = SegmentedButton<bool>(
-      segments: const [
-        ButtonSegment(
-          value: false,
-          label: Text('시간표'),
+    // 교사(교사 프로필 보유)면 "내 감독" 탭을 노출한다.
+    final myProfileId = controller.currentUserTeacherProfiles.firstOrNull?.id;
+    final canSupervise = myProfileId != null && myProfileId.isNotEmpty;
+
+    var mode = _readOnlyMode;
+    if (mode == _ReadOnlyMode.supervision && !canSupervise) {
+      mode = _ReadOnlyMode.schedule;
+    }
+
+    final modeToggle = SegmentedButton<_ReadOnlyMode>(
+      segments: [
+        const ButtonSegment(
+          value: _ReadOnlyMode.schedule,
+          label: Text('수업'),
           icon: Icon(Icons.calendar_view_week_outlined, size: 16),
         ),
-        ButtonSegment(
-          value: true,
+        if (canSupervise)
+          const ButtonSegment(
+            value: _ReadOnlyMode.supervision,
+            label: Text('감독'),
+            icon: Icon(Icons.assignment_ind_outlined, size: 16),
+          ),
+        const ButtonSegment(
+          value: _ReadOnlyMode.emptyRoom,
           label: Text('빈 강의실'),
           icon: Icon(Icons.meeting_room_outlined, size: 16),
         ),
       ],
-      selected: {_readOnlyEmptyRoom},
+      selected: {mode},
       showSelectedIcon: false,
       style: const ButtonStyle(visualDensity: VisualDensity.compact),
       onSelectionChanged: (values) {
         if (values.isEmpty) return;
-        setState(() => _readOnlyEmptyRoom = values.first);
+        setState(() => _readOnlyMode = values.first);
       },
     );
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    late final Widget body;
+    switch (mode) {
+      case _ReadOnlyMode.emptyRoom:
+        body = EmptyRoomFinder(controller: controller);
+        break;
+      case _ReadOnlyMode.supervision:
+        body = SupervisionScheduleView(
+          controller: controller,
+          teacherProfileId: myProfileId!,
+          showHeader: false,
+        );
+        break;
+      case _ReadOnlyMode.schedule:
+        body = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('시간표', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
-            modeToggle,
+            Text(
+              '현재 뷰에서는 열람만 가능합니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.72),
+                  ),
+            ),
             const SizedBox(height: 12),
-            if (_readOnlyEmptyRoom)
-              EmptyRoomFinder(controller: controller)
-            else ...[
-              Text(
-                '현재 뷰에서는 열람만 가능합니다.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.72),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildReadOnlyGrid(controller),
-            ],
+            _buildReadOnlyGrid(controller),
           ],
+        );
+        break;
+    }
+
+    return SingleChildScrollView(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                mode == _ReadOnlyMode.supervision ? '내 감독 시간표' : '시간표',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 10),
+              modeToggle,
+              const SizedBox(height: 12),
+              body,
+            ],
+          ),
         ),
       ),
     );

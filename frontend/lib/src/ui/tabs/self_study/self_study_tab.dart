@@ -7,6 +7,7 @@ import '../../nest_theme.dart';
 import '../../widgets/nest_empty_state.dart';
 import '../../widgets/search_select_field.dart';
 import 'self_study_sheet.dart';
+import 'supervision_schedule_view.dart';
 
 /// 공과(수업외 자습) 시간표 — 관리자용.
 ///
@@ -63,6 +64,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             else ...[
               _buildConfigCard(context, plan),
               const SizedBox(height: 12),
+              _buildSupervisorSection(context),
               ..._buildSlotSections(context, plan),
             ],
           ],
@@ -185,6 +187,60 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // ── 감독표 바로가기 ──
+  Widget _buildSupervisorSection(BuildContext context) {
+    final ids = controller.supervisorTeacherIdsInSelectedPlan;
+    if (ids.isEmpty) return const SizedBox.shrink();
+    final sorted = ids.toList()
+      ..sort((a, b) =>
+          controller.findTeacherName(a).compareTo(controller.findTeacherName(b)));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.assignment_ind_outlined,
+                    size: 18, color: NestColors.clay),
+                const SizedBox(width: 8),
+                Text(
+                  '감독표',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '교사를 누르면 그 교사의 감독 날짜·시간·장소가 나옵니다.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.7),
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final id in sorted)
+                  ActionChip(
+                    avatar: const Icon(Icons.person_outline, size: 16),
+                    label: Text(controller.findTeacherName(id)),
+                    onPressed: () =>
+                        showSupervisionSchedulePage(context, controller, id),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

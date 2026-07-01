@@ -153,6 +153,69 @@ class NestController extends ChangeNotifier {
     return roles.toList();
   }
 
+  /// 소속 홈스쿨을 중복 없이(홈스쿨당 1개) 이름 순으로 반환한다.
+  /// 한 홈스쿨에 여러 역할이 있어도 하나로만 나타난다.
+  List<Homeschool> get distinctHomeschools {
+    final seen = <String>{};
+    final out = <Homeschool>[];
+    for (final m in memberships) {
+      if (m.homeschoolId.isEmpty) continue;
+      if (seen.add(m.homeschoolId)) out.add(m.homeschool);
+    }
+    out.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
+    return out;
+  }
+
+  bool get hasMultipleHomeschools => distinctHomeschools.length > 1;
+
+  /// 특정 홈스쿨에서 내가 가진 역할들(우선순위 정렬).
+  List<String> rolesForHomeschool(String homeschoolId) {
+    final roles = memberships
+        .where((m) => m.homeschoolId == homeschoolId)
+        .map((m) => m.role)
+        .toSet();
+    const rolePriority = <String>[
+      'HOMESCHOOL_ADMIN',
+      'STAFF',
+      'TEACHER',
+      'GUEST_TEACHER',
+      'PARENT',
+    ];
+    final ordered = rolePriority.where(roles.contains).toList();
+    return ordered.isNotEmpty ? ordered : roles.toList();
+  }
+
+  /// 이 홈스쿨에 들어갈 때 쓸 "최근 역할"(기억된 값 → 캐시 → 우선순위 기본값).
+  String? recentRoleForHomeschool(String homeschoolId) {
+    final roles = rolesForHomeschool(homeschoolId);
+    final remembered = _viewRoleByHomeschool[homeschoolId];
+    if (remembered != null && roles.contains(remembered)) {
+      return remembered;
+    }
+    final uid = user?.id;
+    if (uid != null) {
+      final cached = NestCache.loadMeta(userId: uid, homeschoolId: homeschoolId)?[
+              'currentRole']
+          as String?;
+      if (cached != null && roles.contains(cached)) {
+        return cached;
+      }
+    }
+    return roles.firstOrNull;
+  }
+
+  String get selectedHomeschoolName {
+    final id = selectedHomeschoolId;
+    if (id == null) return '';
+    return memberships
+            .where((m) => m.homeschoolId == id)
+            .map((m) => m.homeschool.name)
+            .firstOrNull ??
+        '';
+  }
+
   bool get hasAdminLikeMembershipInSelectedHomeschool {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
@@ -417,7 +480,18 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> changeHomeschool(String? homeschoolId) async {
-    selectedHomeschoolId = _normalizeNullable(homeschoolId);
+    final hid = _normalizeNullable(homeschoolId);
+    selectedHomeschoolId = hid;
+    // 이 홈스쿨에서 이전에 쓰던 역할을 캐시에서 복원(재시작 후에도 최근 역할 유지).
+    final uid = user?.id;
+    if (hid != null && uid != null && !_viewRoleByHomeschool.containsKey(hid)) {
+      final cachedRole = NestCache.loadMeta(userId: uid, homeschoolId: hid)?[
+              'currentRole']
+          as String?;
+      if (cachedRole != null && cachedRole.isNotEmpty) {
+        _viewRoleByHomeschool[hid] = cachedRole;
+      }
+    }
     currentRole = _resolveViewRole(selectedHomeschoolId);
     _ensureRoleViewTargetSelection();
     notifyListeners();
@@ -436,6 +510,7 @@ class NestController extends ChangeNotifier {
       ]);
       _ensureRoleViewTargetSelection();
     });
+    unawaited(_persistToCache());
   }
 
   Future<void> changeViewRole(String? role) async {
@@ -465,6 +540,8 @@ class NestController extends ChangeNotifier {
       _ensureRoleViewTargetSelection(roleOverride: nextRole);
       _setStatus('현재 뷰: $nextRole');
     });
+    // 방금 고른 역할을 이 홈스쿨의 '최근 역할'로 영속화(재시작 후에도 유지).
+    unawaited(_persistToCache());
   }
 
   Future<void> selectParentViewTargetUserId(String? userId) async {
@@ -4624,6 +4701,40 @@ class NestController extends ChangeNotifier {
         .toList();
   }
 
+  /// 특정 아동의 자습 슬롯(선택된 계획 기준, 제외 반영, 정렬). 부모/교사 뷰용.
+  List<SelfStudySlot> selfStudySlotsForChild(String childId) {
+    final groupIds = classGroupsForChild(childId).map((g) => g.id).toSet();
+    if (groupIds.isEmpty) return const [];
+    final excludedSlotIds = selfStudyExclusions
+        .where((e) => e.childId == childId)
+        .map((e) => e.slotId)
+        .toSet();
+    return selectedPlanSelfStudySlots
+        .where((s) =>
+            groupIds.contains(s.classGroupId) &&
+            !excludedSlotIds.contains(s.id))
+        .toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  }
+
+  /// 특정 교사가 감독하는 자습 슬롯(선택된 계획 기준, 정렬). 감독표용.
+  List<SelfStudySlot> selfStudySlotsForSupervisor(String teacherProfileId) {
+    return selectedPlanSelfStudySlots
+        .where((s) => s.supervisorTeacherId == teacherProfileId)
+        .toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  }
+
+  /// 선택된 계획에서 감독으로 배정된 교사 프로필 id 목록(중복 제거).
+  List<String> get supervisorTeacherIdsInSelectedPlan {
+    final ids = <String>{};
+    for (final s in selectedPlanSelfStudySlots) {
+      final id = s.supervisorTeacherId;
+      if (id != null && id.isNotEmpty) ids.add(id);
+    }
+    return ids.toList();
+  }
+
   // ── 공과 자습: actions ──
 
   Future<void> selectSelfStudyPlan(String? planId) async {
@@ -5189,6 +5300,9 @@ class NestController extends ChangeNotifier {
     selectedTermId = cachedMeta['selectedTermId'] as String?;
     selectedClassGroupId = cachedMeta['selectedClassGroupId'] as String?;
     currentRole = cachedMeta['currentRole'] as String?;
+    if (currentRole != null && currentRole!.isNotEmpty) {
+      _viewRoleByHomeschool[lastHomeschoolId] = currentRole!;
+    }
     final cachedParentTarget = cachedMeta['parentViewTargetUserId'] as String?;
     if (cachedParentTarget != null && cachedParentTarget.trim().isNotEmpty) {
       _parentViewTargetByHomeschool[lastHomeschoolId] = cachedParentTarget;
