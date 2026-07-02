@@ -945,6 +945,14 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
         ? controller.parentViewCandidateUserIds
         : const <String>[];
 
+    // Admin viewing as teacher: show teacher target switch (다른 교사 계정 뷰로
+    // 전환해 그 교사의 감독 시간표 등을 열람할 수 있게 한다).
+    final isAdminAsTeacher = controller.isTeacherView &&
+        controller.hasAdminLikeMembershipInSelectedHomeschool;
+    final teacherCandidates = controller.teacherViewCandidateProfiles;
+    final showTeacherTarget = isAdminAsTeacher && teacherCandidates.isNotEmpty;
+    final activeTeacherId = controller.activeTeacherViewTargetProfileId;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1012,6 +1020,53 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                           Icons.family_restroom_outlined,
                           size: 14,
                         ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  )
+                else if (showTeacherTarget)
+                  Flexible(
+                    child: PopupMenuButton<String>(
+                      tooltip: '교사 대상 전환',
+                      onSelected: (teacherId) async {
+                        try {
+                          await controller
+                              .selectTeacherViewTargetProfileId(teacherId);
+                        } catch (_) {}
+                      },
+                      itemBuilder: (context) => teacherCandidates
+                          .map(
+                            (teacher) => PopupMenuItem<String>(
+                              value: teacher.id,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    teacher.id == activeTeacherId
+                                        ? Icons.check_circle
+                                        : Icons.circle_outlined,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      teacher.displayName,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      child: Chip(
+                        label: Text(
+                          activeTeacherId == null
+                              ? '교사 선택'
+                              : controller.findTeacherName(activeTeacherId),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        avatar: const Icon(Icons.school_outlined, size: 14),
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
@@ -1096,13 +1151,20 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
             icon: CircleAvatar(
               radius: 16,
               backgroundColor: NestColors.dustyRose,
-              child: Text(
-                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood,
-                ),
-              ),
+              backgroundImage: controller.myAvatarUrl.isNotEmpty
+                  ? NetworkImage(controller.myAvatarUrl)
+                  : null,
+              child: controller.myAvatarUrl.isNotEmpty
+                  ? null
+                  : Text(
+                      displayName.isNotEmpty
+                          ? displayName[0].toUpperCase()
+                          : '?',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: NestColors.deepWood,
+                      ),
+                    ),
             ),
             onSelected: (value) async {
               if (value == 'settings') {
@@ -1793,13 +1855,18 @@ class _MainPanelState extends State<_MainPanel> {
             icon: CircleAvatar(
               radius: 14,
               backgroundColor: NestColors.dustyRose,
-              child: Text(
-                displayName.characters.first,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood,
-                ),
-              ),
+              backgroundImage: controller.myAvatarUrl.isNotEmpty
+                  ? NetworkImage(controller.myAvatarUrl)
+                  : null,
+              child: controller.myAvatarUrl.isNotEmpty
+                  ? null
+                  : Text(
+                      displayName.characters.first,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: NestColors.deepWood,
+                      ),
+                    ),
             ),
             onSelected: (value) {
               if (value == 'logout') {
@@ -1904,13 +1971,18 @@ class _MainPanelState extends State<_MainPanel> {
             icon: CircleAvatar(
               radius: 14,
               backgroundColor: NestColors.dustyRose,
-              child: Text(
-                displayName.characters.first,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood,
-                ),
-              ),
+              backgroundImage: controller.myAvatarUrl.isNotEmpty
+                  ? NetworkImage(controller.myAvatarUrl)
+                  : null,
+              child: controller.myAvatarUrl.isNotEmpty
+                  ? null
+                  : Text(
+                      displayName.characters.first,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: NestColors.deepWood,
+                      ),
+                    ),
             ),
             onSelected: (value) {
               if (value == 'logout') {

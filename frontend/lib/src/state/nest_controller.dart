@@ -447,6 +447,59 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  /// 현재 사용자의 프로필 사진 URL(없으면 빈 문자열).
+  String get myAvatarUrl {
+    final value = user?.userMetadata?['avatar_url'];
+    return value is String ? value : '';
+  }
+
+  /// 갤러리에서 이미지를 골라 프로필 사진으로 업로드한다.
+  /// 업로드하면 true, 사용자가 선택을 취소하면 false 를 반환한다.
+  Future<bool> pickAndUploadAvatar() async {
+    final userId = user?.id;
+    if (userId == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return false;
+    }
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      throw StateError('이미지를 읽지 못했습니다. 다시 시도하세요.');
+    }
+    await _runBusy('프로필 사진 변경 중...', () async {
+      await _repository.uploadAvatar(
+        userId: userId,
+        bytes: bytes,
+        filename: file.name,
+        mimeType: _mimeForExtension(file.extension),
+      );
+      _setStatus('프로필 사진이 변경되었습니다.');
+    });
+    return true;
+  }
+
+  String _mimeForExtension(String? ext) {
+    switch ((ext ?? '').toLowerCase()) {
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
   Future<void> requestPasswordReset({required String email}) async {
     final normalized = email.trim();
     if (normalized.isEmpty) {

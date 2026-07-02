@@ -10,6 +10,9 @@ PwaInstallHelper createHelper() => _PwaInstallHelperWeb();
 class _PwaInstallHelperWeb implements PwaInstallHelper {
   @override
   bool get isInstallable {
+    final can = js.context.callMethod('_nestCanInstall', []);
+    if (can is bool) return can;
+    // 폴백: 함수가 없으면 저장된 프롬프트 존재 여부로 판단.
     final prompt = js.context['_nestDeferredPrompt'];
     return prompt != null && prompt is! bool;
   }
@@ -40,9 +43,9 @@ class _PwaInstallHelperWeb implements PwaInstallHelper {
     final prompt = js.context['_nestDeferredPrompt'];
     if (prompt == null) return false;
     try {
-      prompt.callMethod('prompt', []);
-      // Clear stored prompt — it can only be used once
-      js.context['_nestDeferredPrompt'] = null;
+      // 이벤트 객체의 메서드를 직접 부르지 않고, index.html 이 노출한 순수 JS
+      // 함수로 프롬프트를 띄운다(디스패치 실패 방지).
+      js.context.callMethod('_nestPromptInstall', []);
       return true;
     } catch (_) {
       return false;

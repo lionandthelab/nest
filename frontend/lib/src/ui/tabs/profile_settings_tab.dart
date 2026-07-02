@@ -81,44 +81,52 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
     final phone = _phoneNumber(controller);
     final isParent = controller.isParentView;
+    final avatarUrl = controller.myAvatarUrl;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         const SizedBox(height: 20),
-        // ── Profile Avatar ──
+        // ── Profile Avatar (탭하면 프로필 사진 변경) ──
         Center(
-          child: Stack(
-            children: [
-              CircleAvatar(
-                radius: 52,
-                backgroundColor: NestColors.roseMist,
-                child: Text(
-                  initial,
-                  style: theme.textTheme.displaySmall?.copyWith(
-                    color: NestColors.deepWood,
-                    fontWeight: FontWeight.w700,
+          child: GestureDetector(
+            onTap: controller.isBusy ? null : _changeAvatar,
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 52,
+                  backgroundColor: NestColors.roseMist,
+                  backgroundImage:
+                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  child: avatarUrl.isNotEmpty
+                      ? null
+                      : Text(
+                          initial,
+                          style: theme.textTheme.displaySmall?.copyWith(
+                            color: NestColors.deepWood,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: NestColors.dustyRose,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: NestColors.dustyRose,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.camera_alt,
-                    size: 18,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -659,6 +667,20 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
       setState(() {});
     } catch (e) {
       if (mounted) _showMessage(e.toString().replaceFirst('StateError: ', ''));
+    }
+  }
+
+  Future<void> _changeAvatar() async {
+    final controller = widget.controller;
+    if (controller.isBusy) return;
+    try {
+      final changed = await controller.pickAndUploadAvatar();
+      if (changed && mounted) {
+        setState(() {});
+        _showMessage('프로필 사진이 변경되었습니다.');
+      }
+    } catch (_) {
+      if (mounted) _showMessage(controller.statusMessage);
     }
   }
 

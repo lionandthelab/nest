@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
@@ -96,6 +98,29 @@ class NestRepository {
     await client.auth.updateUser(
       UserAttributes(data: {'phone_number': phone.trim()}),
     );
+  }
+
+  /// 프로필 사진 업로드: 공개 'media' 버킷의 avatars/{userId}/ 경로에 저장하고,
+  /// 공개 URL 을 사용자 메타데이터 avatar_url 에 기록한 뒤 URL 을 반환한다.
+  /// 경로에 타임스탬프를 포함해 매번 고유 URL 이므로 캐시 무효화가 자연히 된다.
+  Future<String> uploadAvatar({
+    required String userId,
+    required Uint8List bytes,
+    required String filename,
+    required String mimeType,
+  }) async {
+    final ext = filename.contains('.')
+        ? filename.substring(filename.lastIndexOf('.')).toLowerCase()
+        : '.jpg';
+    final path = 'avatars/$userId/${DateTime.now().millisecondsSinceEpoch}$ext';
+    await client.storage.from('media').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: mimeType, upsert: true),
+        );
+    final url = client.storage.from('media').getPublicUrl(path);
+    await client.auth.updateUser(UserAttributes(data: {'avatar_url': url}));
+    return url;
   }
 
   Future<void> sendPasswordResetEmail({required String email}) {

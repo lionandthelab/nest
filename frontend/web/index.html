@@ -123,6 +123,21 @@
     window.addEventListener('appinstalled', function() {
       window._nestDeferredPrompt = null;
     });
+    // Dart(dart:js)에서 BeforeInstallPromptEvent 의 prompt() 를 직접 호출하면
+    // 렌더러/컴파일 환경에 따라 메서드 디스패치가 되지 않는 경우가 있어,
+    // 프롬프트 실행을 순수 JS 함수로 노출한다. Dart 는 이 함수만 호출한다.
+    window._nestCanInstall = function() { return !!window._nestDeferredPrompt; };
+    window._nestPromptInstall = function() {
+      var e = window._nestDeferredPrompt;
+      if (!e) return;
+      e.prompt();
+      var choice = e.userChoice;
+      if (choice && typeof choice.then === 'function') {
+        choice.then(function() { window._nestDeferredPrompt = null; });
+      } else {
+        window._nestDeferredPrompt = null;
+      }
+    };
   </script>
   <script src="flutter_bootstrap.js" async=""></script>
 
