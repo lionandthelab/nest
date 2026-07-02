@@ -336,6 +336,28 @@ class _SheetTable extends StatelessWidget {
       );
     }
 
+    // (날짜·밴드)별 감독 이름 셀. 오버라이드→매주기본→슬롯감독→미지정 순으로 해석.
+    Widget supCell(DateTime d, List<int> band) {
+      final id = controller.resolveSelfStudySupervisor(
+        dayOfWeek: group.day,
+        room: group.roomDisplay,
+        bandStartMin: band[0],
+        bandEndMin: band[1],
+        date: d,
+      );
+      final name = (id == null || id.isEmpty)
+          ? '미지정'
+          : controller.findTeacherName(id);
+      return cell(
+        name,
+        width: _bandW,
+        fontSize: 10,
+        bg: id == null
+            ? NestColors.roseMist.withValues(alpha: 0.28)
+            : NestColors.creamyWhite,
+      );
+    }
+
     final headerBg = NestColors.roseMist.withValues(alpha: 0.5);
 
     // 헤더 1행: (연번/이름/학년 병합) + 날짜별(밴드 병합).
@@ -394,19 +416,13 @@ class _SheetTable extends StatelessWidget {
           header1,
           header2,
           ...bodyRows,
-          // 감독 행: 날짜 열마다 이 (요일·방) 자습의 감독을 표기.
+          // 감독 행: (날짜·밴드)별로 그 시간의 감독을 표기(회전 감독 반영).
           Row(
             children: [
               cell('감독',
                   width: _idxW + _nameW + _gradeW, bg: headerBg, bold: true),
-              for (var i = 0; i < dates.length; i++)
-                cell(
-                  group.supervisors.isEmpty
-                      ? '미지정'
-                      : group.supervisors.join(', '),
-                  width: _bandW * bands.length,
-                  fontSize: 11,
-                ),
+              for (final d in dates)
+                for (final band in bands) supCell(d, band),
             ],
           ),
           const SizedBox(height: 6),

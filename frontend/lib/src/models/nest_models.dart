@@ -1563,6 +1563,55 @@ class SelfStudySlot {
   };
 }
 
+/// 자습 감독 오버라이드: (요일·방·시간밴드·날짜)별 감독.
+/// 한 방을 여러 학년이 종일 함께 쓰며 감독이 시간대·주차별로 회전하는 경우
+/// (월 중예배실·금요일 등)를 표현한다. occurrenceDate=null 은 매주 기본.
+class SelfStudySupervision {
+  const SelfStudySupervision({
+    required this.id,
+    required this.planId,
+    required this.dayOfWeek,
+    required this.room,
+    required this.bandStart,
+    required this.bandEnd,
+    required this.occurrenceDate,
+    required this.supervisorTeacherId,
+  });
+
+  final String id;
+  final String planId;
+  final int dayOfWeek;
+  final String room;
+  final String bandStart; // 'HH:MM:SS'
+  final String bandEnd;
+  final DateTime? occurrenceDate;
+  final String? supervisorTeacherId;
+
+  factory SelfStudySupervision.fromMap(Map<String, dynamic> map) {
+    return SelfStudySupervision(
+      id: (map['id'] as String?) ?? '',
+      planId: (map['plan_id'] as String?) ?? '',
+      dayOfWeek: (map['day_of_week'] as num?)?.toInt() ?? 0,
+      room: (map['room'] as String?) ?? '',
+      bandStart: (map['band_start'] as String?) ?? '00:00:00',
+      bandEnd: (map['band_end'] as String?) ?? '00:00:00',
+      occurrenceDate: parseDateTime(map['occurrence_date']),
+      supervisorTeacherId: map['supervisor_teacher_id'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'plan_id': planId,
+    'day_of_week': dayOfWeek,
+    'room': room,
+    'band_start': bandStart,
+    'band_end': bandEnd,
+    'occurrence_date': occurrenceDate?.toIso8601String().split('T').first,
+    'supervisor_teacher_id': supervisorTeacherId,
+  };
+}
+
 /// 자습 슬롯에서 제외된 아동. 반 전체 자동 포함이 기본이므로, 참여하지 않는
 /// 아동만 이 표에 기록한다.
 class SelfStudySlotExclusion {

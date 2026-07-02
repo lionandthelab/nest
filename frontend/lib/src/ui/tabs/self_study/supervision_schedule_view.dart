@@ -31,6 +31,8 @@ class SupervisionScheduleView extends StatelessWidget {
       builder: (context, _) {
         final plan = controller.selectedSelfStudyPlan;
         final slots = controller.selfStudySlotsForSupervisor(teacherProfileId);
+        final rotations =
+            controller.selfStudySupervisionsForTeacher(teacherProfileId);
         final name = teacherName ?? controller.findTeacherName(teacherProfileId);
 
         if (plan == null) {
@@ -39,7 +41,7 @@ class SupervisionScheduleView extends StatelessWidget {
             title: '자습 시간표가 아직 없습니다',
           );
         }
-        if (slots.isEmpty) {
+        if (slots.isEmpty && rotations.isEmpty) {
           return NestEmptyState(
             icon: Icons.event_busy_outlined,
             title: '배정된 감독이 없습니다',
@@ -74,7 +76,7 @@ class SupervisionScheduleView extends StatelessWidget {
           children.add(Padding(
             padding: const EdgeInsets.only(bottom: 10, left: 2),
             child: Text(
-              '${plan.name} · 총 ${slots.length}회',
+              '${plan.name} · 총 ${slots.length + rotations.length}회',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: NestColors.deepWood.withValues(alpha: 0.7),
                   ),
@@ -101,11 +103,105 @@ class SupervisionScheduleView extends StatelessWidget {
           }
         }
 
+        if (rotations.isNotEmpty) {
+          children.add(Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 6, left: 2),
+            child: Text(
+              '회전 감독 (날짜별)',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ));
+          final byBand = <String, List<SelfStudySupervision>>{};
+          for (final r in rotations) {
+            byBand
+                .putIfAbsent('${r.dayOfWeek}|${r.room}|${r.bandStart}', () => [])
+                .add(r);
+          }
+          for (final entry in byBand.entries) {
+            children.add(_rotationCard(context, entry.value));
+          }
+        }
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: children,
         );
       },
+    );
+  }
+
+  Widget _rotationCard(
+    BuildContext context,
+    List<SelfStudySupervision> list,
+  ) {
+    final f = list.first;
+    final time = rangeLabel(
+      minutesFromTime(f.bandStart),
+      minutesFromTime(f.bandEnd),
+    );
+    final room = f.room.trim().isEmpty ? '장소 미정' : f.room.trim();
+    final weekly = list.any((r) => r.occurrenceDate == null);
+    final dates = list
+        .map((r) => r.occurrenceDate)
+        .whereType<DateTime>()
+        .map((d) => '${d.month}/${d.day}')
+        .join(', ');
+    final datesLabel = weekly ? '매주' : dates;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: NestColors.dustyRose.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              time,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: NestColors.deepWood,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.meeting_room_outlined,
+                        size: 16, color: NestColors.clay),
+                    const SizedBox(width: 4),
+                    Text('${weekdayLabel(f.dayOfWeek)}요일 · $room',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  datesLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.7),
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

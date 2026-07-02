@@ -79,6 +79,7 @@ class NestController extends ChangeNotifier {
   String? selectedSelfStudyPlanId;
   List<SelfStudySlot> selfStudySlots = [];
   List<SelfStudySlotExclusion> selfStudyExclusions = [];
+  List<SelfStudySupervision> selfStudySupervisions = [];
 
   List<GalleryItem> galleryItems = [];
   Map<String, List<String>> mediaChildrenByAsset = const {};
@@ -1393,6 +1394,7 @@ class NestController extends ChangeNotifier {
       selectedSelfStudyPlanId = null;
       selfStudySlots = [];
       selfStudyExclusions = [];
+      selfStudySupervisions = [];
       pendingCommunityMediaFile = null;
 
       if (pendingInvites.isNotEmpty) {
@@ -4650,6 +4652,7 @@ class NestController extends ChangeNotifier {
       selectedSelfStudyPlanId = null;
       selfStudySlots = [];
       selfStudyExclusions = [];
+      selfStudySupervisions = [];
       return;
     }
 
@@ -4669,6 +4672,70 @@ class NestController extends ChangeNotifier {
     final slotIds = selfStudySlots.map((s) => s.id).toList();
     selfStudyExclusions =
         await _repository.fetchSelfStudyExclusions(slotIds: slotIds);
+    selfStudySupervisions =
+        await _repository.fetchSelfStudySupervisions(planIds: planIds);
+  }
+
+  /// (요일·방·시간밴드·날짜) 한 칸의 감독 교사 id 를 결정한다.
+  /// 우선순위: 날짜 오버라이드 → 매주 기본(occurrence_date null) → 그 밴드를
+  /// 포함하는 슬롯의 감독 → null(미지정). 오버라이드 행이 존재하면 그 값(널이면
+  /// 명시적 미지정)을 그대로 쓴다.
+  String? resolveSelfStudySupervisor({
+    required int dayOfWeek,
+    required String room,
+    required int bandStartMin,
+    required int bandEndMin,
+    DateTime? date,
+  }) {
+    final planId = selectedSelfStudyPlan?.id;
+    if (planId == null) return null;
+    final roomKey = room.trim().toLowerCase();
+    bool sameBand(SelfStudySupervision s) =>
+        s.planId == planId &&
+        s.dayOfWeek == dayOfWeek &&
+        s.room.trim().toLowerCase() == roomKey &&
+        minutesFromTime(s.bandStart) == bandStartMin;
+
+    // 1) 날짜 오버라이드.
+    if (date != null) {
+      for (final s in selfStudySupervisions) {
+        final od = s.occurrenceDate;
+        if (sameBand(s) &&
+            od != null &&
+            od.year == date.year &&
+            od.month == date.month &&
+            od.day == date.day) {
+          return s.supervisorTeacherId;
+        }
+      }
+    }
+    // 2) 매주 기본.
+    for (final s in selfStudySupervisions) {
+      if (sameBand(s) && s.occurrenceDate == null) {
+        return s.supervisorTeacherId;
+      }
+    }
+    // 3) 밴드를 포함하는 슬롯의 감독(가장 좁은 범위 우선).
+    SelfStudySlot? best;
+    for (final slot in selfStudySlots) {
+      if (slot.planId != planId ||
+          slot.dayOfWeek != dayOfWeek ||
+          slot.room.trim().toLowerCase() != roomKey) {
+        continue;
+      }
+      final ss = minutesFromTime(slot.startTime);
+      final se = minutesFromTime(slot.endTime);
+      if (ss <= bandStartMin && se >= bandEndMin) {
+        if (slot.supervisorTeacherId == null) continue;
+        if (best == null ||
+            (minutesFromTime(slot.endTime) - minutesFromTime(slot.startTime)) <
+                (minutesFromTime(best.endTime) -
+                    minutesFromTime(best.startTime))) {
+          best = slot;
+        }
+      }
+    }
+    return best?.supervisorTeacherId;
   }
 
   // ── 공과 자습: getters ──
@@ -4725,14 +4792,44 @@ class NestController extends ChangeNotifier {
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   }
 
-  /// 선택된 계획에서 감독으로 배정된 교사 프로필 id 목록(중복 제거).
+  /// 선택된 계획에서 감독으로 배정된 교사 프로필 id 목록(슬롯 + 회전 오버라이드).
   List<String> get supervisorTeacherIdsInSelectedPlan {
+    final planId = selectedSelfStudyPlan?.id;
     final ids = <String>{};
     for (final s in selectedPlanSelfStudySlots) {
       final id = s.supervisorTeacherId;
       if (id != null && id.isNotEmpty) ids.add(id);
     }
+    for (final s in selfStudySupervisions) {
+      if (s.planId != planId) continue;
+      final id = s.supervisorTeacherId;
+      if (id != null && id.isNotEmpty) ids.add(id);
+    }
     return ids.toList();
+  }
+
+  /// 특정 교사의 회전 감독(날짜·밴드별) 오버라이드 목록(선택된 계획, 정렬).
+  List<SelfStudySupervision> selfStudySupervisionsForTeacher(
+    String teacherProfileId,
+  ) {
+    final planId = selectedSelfStudyPlan?.id;
+    if (planId == null) return const [];
+    final rows = selfStudySupervisions
+        .where((s) =>
+            s.planId == planId && s.supervisorTeacherId == teacherProfileId)
+        .toList();
+    rows.sort((a, b) {
+      final byDay = (a.dayOfWeek == 0 ? 7 : a.dayOfWeek)
+          .compareTo(b.dayOfWeek == 0 ? 7 : b.dayOfWeek);
+      if (byDay != 0) return byDay;
+      final ad = a.occurrenceDate, bd = b.occurrenceDate;
+      if (ad != null && bd != null) {
+        final byDate = ad.compareTo(bd);
+        if (byDate != 0) return byDate;
+      }
+      return a.bandStart.compareTo(b.bandStart);
+    });
+    return rows;
   }
 
   // ── 공과 자습: actions ──

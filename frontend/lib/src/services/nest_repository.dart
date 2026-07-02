@@ -1823,6 +1823,75 @@ class NestRepository {
         .eq('child_id', childId);
   }
 
+  static const String _selfStudySupervisionCols =
+      'id, plan_id, day_of_week, room, band_start, band_end, '
+      'occurrence_date, supervisor_teacher_id';
+
+  Future<List<SelfStudySupervision>> fetchSelfStudySupervisions({
+    required List<String> planIds,
+  }) async {
+    if (planIds.isEmpty) return const [];
+    final data = await client
+        .from('self_study_supervisions')
+        .select(_selfStudySupervisionCols)
+        .inFilter('plan_id', planIds);
+    return _asRows(data).map(SelfStudySupervision.fromMap).toList();
+  }
+
+  /// (요일·방·밴드·날짜) 한 칸의 감독을 지정한다. 같은 키의 기존 행을 지우고
+  /// 새로 넣는다(occurrence_date null 여부에 따라 유일 인덱스가 다르므로 직접 처리).
+  Future<void> upsertSelfStudySupervision({
+    required String planId,
+    required int dayOfWeek,
+    required String room,
+    required String bandStart,
+    required String bandEnd,
+    required String? occurrenceDate,
+    required String? supervisorTeacherId,
+  }) async {
+    var del = client
+        .from('self_study_supervisions')
+        .delete()
+        .eq('plan_id', planId)
+        .eq('day_of_week', dayOfWeek)
+        .eq('room', room)
+        .eq('band_start', bandStart);
+    del = occurrenceDate == null
+        ? del.isFilter('occurrence_date', null)
+        : del.eq('occurrence_date', occurrenceDate);
+    await del;
+    await client.from('self_study_supervisions').insert({
+      'plan_id': planId,
+      'day_of_week': dayOfWeek,
+      'room': room,
+      'band_start': bandStart,
+      'band_end': bandEnd,
+      'occurrence_date': occurrenceDate,
+      'supervisor_teacher_id': supervisorTeacherId,
+    });
+  }
+
+  /// (요일·방·밴드·날짜) 오버라이드를 제거한다(→ 상위 규칙으로 폴백).
+  Future<void> deleteSelfStudySupervision({
+    required String planId,
+    required int dayOfWeek,
+    required String room,
+    required String bandStart,
+    required String? occurrenceDate,
+  }) async {
+    var del = client
+        .from('self_study_supervisions')
+        .delete()
+        .eq('plan_id', planId)
+        .eq('day_of_week', dayOfWeek)
+        .eq('room', room)
+        .eq('band_start', bandStart);
+    del = occurrenceDate == null
+        ? del.isFilter('occurrence_date', null)
+        : del.eq('occurrence_date', occurrenceDate);
+    await del;
+  }
+
   /// Atomic batch commit of a class group's timetable draft via the optional
   /// `apply_timetable_draft` RPC. The whole apply runs in a single DB
   /// transaction, so any failure (RLS denial, TEACHER_SLOT_CONFLICT, archived
