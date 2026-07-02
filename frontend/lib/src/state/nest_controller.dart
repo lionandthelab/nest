@@ -4264,6 +4264,47 @@ class NestController extends ChangeNotifier {
     return findHomeschoolMemberByUserId(normalized)?.fullName.trim() ?? '';
   }
 
+  /// 보호자(부모) userId가 속한 가정의 자녀 목록.
+  List<ChildProfile> childrenForGuardian(String? guardianUserId) {
+    final normalized = _normalizeNullable(guardianUserId);
+    if (normalized == null) {
+      return const [];
+    }
+    final familyIds = <String>{};
+    familyGuardianUserIdsByFamily.forEach((familyId, guardians) {
+      if (guardians.contains(normalized)) {
+        familyIds.add(familyId);
+      }
+    });
+    if (familyIds.isEmpty) {
+      return const [];
+    }
+    final rows = children
+        .where((child) => familyIds.contains(child.familyId))
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return rows;
+  }
+
+  /// 관리자가 '부모 뷰 대상'을 고를 때 raw uid가 노출되지 않도록,
+  /// 그 보호자의 자녀 이름을 우선 보여준다.
+  /// 자녀가 있으면 자녀 이름(복수면 쉼표로 연결), 없으면 멤버 이름,
+  /// 그래도 없으면 '학부모'로 폴백한다. (절대 uid를 그대로 반환하지 않음)
+  String parentCandidateLabel(String? userId) {
+    final childNames = childrenForGuardian(userId)
+        .map((child) => child.name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (childNames.isNotEmpty) {
+      return childNames.join(', ');
+    }
+    final name = findMemberName(userId);
+    if (name.isNotEmpty) {
+      return name;
+    }
+    return '학부모';
+  }
+
   List<String> get membershipUserIds {
     return homeschoolMemberships
         .map((row) => row.userId)

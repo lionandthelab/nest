@@ -572,6 +572,14 @@ class _TabSpec {
   final Widget page;
 }
 
+/// '@'가 포함된 값(이메일 등)은 로컬 파트만 남겨, 헤더에 이메일 주소가
+/// 노출되지 않도록 한다. (일부 계정은 full_name에 이메일이 저장돼 있을 수 있음)
+String _stripEmailDomain(String value) {
+  final trimmed = value.trim();
+  final at = trimmed.indexOf('@');
+  return at >= 0 ? trimmed.substring(0, at).trim() : trimmed;
+}
+
 class _DesktopScaffold extends StatelessWidget {
   const _DesktopScaffold({
     required this.currentIndex,
@@ -717,19 +725,23 @@ class _MobileScaffold extends StatefulWidget {
 
 class _MobileScaffoldState extends State<_MobileScaffold> {
   String _displayName(NestController controller) {
-    // 이메일 주소가 헤더에 노출되지 않도록 이름만 조회한다.
-    final directoryName = controller.findMemberName(controller.user?.id);
+    // 이메일 주소가 헤더에 노출되지 않도록 이름만 조회하고,
+    // full_name 등에 이메일이 들어있어도 '@' 앞 로컬 파트만 사용한다.
+    final directoryName =
+        _stripEmailDomain(controller.findMemberName(controller.user?.id));
     if (directoryName.isNotEmpty) {
       return directoryName;
     }
 
     final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
     final metadataName = metadata['full_name'] ?? metadata['name'];
-    if (metadataName is String && metadataName.trim().isNotEmpty) {
-      return metadataName.trim();
+    if (metadataName is String) {
+      final cleaned = _stripEmailDomain(metadataName);
+      if (cleaned.isNotEmpty) {
+        return cleaned;
+      }
     }
 
-    // 최후의 폴백으로도 전체 이메일이 아닌 로컬 파트만 사용한다.
     final email = controller.user?.email ?? '';
     if (email.contains('@')) {
       return email.split('@').first;
@@ -979,7 +991,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      controller.findMemberDisplayName(userId),
+                                      controller.parentCandidateLabel(userId),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -990,7 +1002,9 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                           .toList(),
                       child: Chip(
                         label: Text(
-                          '$displayName 님',
+                          controller.parentCandidateLabel(
+                            controller.activeParentViewTargetUserId,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -2040,7 +2054,7 @@ class _MainPanelState extends State<_MainPanel> {
     }
 
     final activeUserId = controller.activeParentViewTargetUserId;
-    final activeLabel = controller.findMemberDisplayName(activeUserId);
+    final activeLabel = controller.parentCandidateLabel(activeUserId);
 
     return PopupMenuButton<String>(
       tooltip: '부모 대상 전환',
@@ -2066,7 +2080,7 @@ class _MainPanelState extends State<_MainPanel> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      controller.findMemberDisplayName(userId),
+                      controller.parentCandidateLabel(userId),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -2078,7 +2092,7 @@ class _MainPanelState extends State<_MainPanel> {
       child: Chip(
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 180),
-          child: Text('부모: $activeLabel', overflow: TextOverflow.ellipsis),
+          child: Text('자녀: $activeLabel', overflow: TextOverflow.ellipsis),
         ),
         avatar: const Icon(Icons.family_restroom_outlined, size: 14),
         visualDensity: VisualDensity.compact,
@@ -2171,19 +2185,23 @@ class _MainPanelState extends State<_MainPanel> {
   }
 
   String _displayName(NestController controller) {
-    // 이메일 주소가 헤더에 노출되지 않도록 이름만 조회한다.
-    final directoryName = controller.findMemberName(controller.user?.id);
+    // 이메일 주소가 헤더에 노출되지 않도록 이름만 조회하고,
+    // full_name 등에 이메일이 들어있어도 '@' 앞 로컬 파트만 사용한다.
+    final directoryName =
+        _stripEmailDomain(controller.findMemberName(controller.user?.id));
     if (directoryName.isNotEmpty) {
       return directoryName;
     }
 
     final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
     final metadataName = metadata['full_name'] ?? metadata['name'];
-    if (metadataName is String && metadataName.trim().isNotEmpty) {
-      return metadataName.trim();
+    if (metadataName is String) {
+      final cleaned = _stripEmailDomain(metadataName);
+      if (cleaned.isNotEmpty) {
+        return cleaned;
+      }
     }
 
-    // 최후의 폴백으로도 전체 이메일이 아닌 로컬 파트만 사용한다.
     final email = controller.user?.email ?? '';
     if (email.contains('@')) {
       return email.split('@').first;
