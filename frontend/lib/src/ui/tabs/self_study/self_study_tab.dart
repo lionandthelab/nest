@@ -48,8 +48,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
         }
 
         final plan = controller.selectedSelfStudyPlan;
+        // 외곽 패딩은 _MainPanel(EdgeInsets.all(16))에서 공통 적용되므로
+        // 여기서 별도 padding을 주면 다른 탭보다 여백이 두 배가 된다.
         return ListView(
-          padding: const EdgeInsets.all(16),
           children: [
             _buildPlanBar(context),
             const SizedBox(height: 12),
