@@ -1786,43 +1786,52 @@ class _MainPanelState extends State<_MainPanel> {
             ),
           ),
           const SizedBox(width: 10),
-          if (children.length <= 1)
-            Chip(
-              label: Text(childLabel),
-              avatar: const Icon(Icons.child_friendly_outlined, size: 14),
-              visualDensity: VisualDensity.compact,
-            )
-          else
-            PopupMenuButton<String>(
-              tooltip: '아이 선택',
-              onSelected: widget.onSelectChild,
-              itemBuilder: (context) => children
-                  .map(
-                    (child) => PopupMenuItem<String>(
-                      value: child.id,
-                      child: Row(
-                        children: [
-                          Icon(
-                            child.id == widget.selectedChildId
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text('${child.name} (${child.familyName})'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-              child: Chip(
+          // 관리자: 다른 부모/교사 계정 뷰로 전환(해당 뷰가 아니면 자동 숨김).
+          // 웹 레이아웃에서도 감독 시간표 등 타 교사 뷰를 열람할 수 있게 한다.
+          _buildParentViewTargetSwitchButton(controller),
+          _buildTeacherViewTargetSwitchButton(controller),
+          // 아이 선택 칩은 학부모 뷰에서만 노출(교사 뷰의 '아이 미연동' 칩 제거).
+          if (controller.isParentView) ...[
+            const SizedBox(width: 6),
+            if (children.length <= 1)
+              Chip(
                 label: Text(childLabel),
                 avatar: const Icon(Icons.child_friendly_outlined, size: 14),
                 visualDensity: VisualDensity.compact,
+              )
+            else
+              PopupMenuButton<String>(
+                tooltip: '아이 선택',
+                onSelected: widget.onSelectChild,
+                itemBuilder: (context) => children
+                    .map(
+                      (child) => PopupMenuItem<String>(
+                        value: child.id,
+                        child: Row(
+                          children: [
+                            Icon(
+                              child.id == widget.selectedChildId
+                                  ? Icons.check_circle
+                                  : Icons.circle_outlined,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child:
+                                  Text('${child.name} (${child.familyName})'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+                child: Chip(
+                  label: Text(childLabel),
+                  avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
-            ),
+          ],
           const Spacer(),
           IconButton(
             tooltip: '새로고침',
