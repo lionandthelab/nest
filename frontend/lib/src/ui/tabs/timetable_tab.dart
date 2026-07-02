@@ -25,6 +25,15 @@ enum _TimetableViewMode { perClass, wholeSchool, emptyRoom }
 /// 교사 열람 뷰 모드: 내 수업 / 내 감독 / 빈 강의실.
 enum _ReadOnlyMode { schedule, supervision, emptyRoom }
 
+/// 뷰 토글 공용 스타일. 세그먼트 패딩/폰트를 줄여 '빈 강의실'(아이콘+4글자)
+/// 같은 라벨이 좁은 화면에서도 한 줄에 들어가게 한다.
+const ButtonStyle _kViewToggleStyle = ButtonStyle(
+  visualDensity: VisualDensity.compact,
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 5)),
+  textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 13)),
+);
+
 class TimetableTab extends StatefulWidget {
   const TimetableTab({
     super.key,
@@ -134,13 +143,13 @@ class _TimetableTabState extends State<TimetableTab> {
           ),
         const ButtonSegment(
           value: _ReadOnlyMode.emptyRoom,
-          label: Text('빈 강의실'),
+          label: Text('빈 강의실', maxLines: 1, softWrap: false),
           icon: Icon(Icons.meeting_room_outlined, size: 16),
         ),
       ],
       selected: {mode},
       showSelectedIcon: false,
-      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      style: _kViewToggleStyle,
       onSelectionChanged: (values) {
         if (values.isEmpty) return;
         setState(() => _readOnlyMode = values.first);
@@ -759,13 +768,13 @@ class _TimetableTabState extends State<TimetableTab> {
         ),
         ButtonSegment(
           value: _TimetableViewMode.emptyRoom,
-          label: Text('빈 강의실'),
+          label: Text('빈 강의실', maxLines: 1, softWrap: false),
           icon: Icon(Icons.meeting_room_outlined, size: 16),
         ),
       ],
       selected: {_viewMode},
       showSelectedIcon: false,
-      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      style: _kViewToggleStyle,
       onSelectionChanged: (values) {
         if (values.isEmpty) return;
         setState(() => _viewMode = values.first);
