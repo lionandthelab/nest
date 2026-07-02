@@ -295,12 +295,16 @@ class _SheetTable extends StatelessWidget {
   static const double _idxW = 34;
   static const double _nameW = 78;
   static const double _gradeW = 52;
-  static const double _bandW = 60;
+  // 30분 밴드라 열 수가 배로 늘어나므로 폭을 줄여 시트가 과도하게 넓어지지
+  // 않게 한다('9:30-10시' 라벨이 들어갈 정도).
+  static const double _bandW = 48;
   static const double _rowH = 34;
 
   @override
   Widget build(BuildContext context) {
-    final bands = hourBands(group.startMin, group.endMin);
+    // 30분 단위 밴드: '9:00-9:30 자습 / 9:30-10:00 수업'처럼 반시간 단위로
+    // 자습/수업(X)을 구분해 표기한다.
+    final bands = halfHourBands(group.startMin, group.endMin);
     final dates = group.dates;
     final border = Border.all(color: NestColors.deepWood.withValues(alpha: 0.4));
 

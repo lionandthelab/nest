@@ -4743,11 +4743,15 @@ class NestController extends ChangeNotifier {
     final planId = selectedSelfStudyPlan?.id;
     if (planId == null) return null;
     final roomKey = room.trim().toLowerCase();
+    // 회전 감독 밴드가 요청 밴드를 '포함'하면 매칭한다. (출석부가 30분 단위로
+    // 세분화돼도, 시각 단위(예: 9-10)로 등록된 회전 감독이 각 30분 서브밴드
+    // 9:00-9:30 / 9:30-10:00 모두에 올바로 적용되도록.)
     bool sameBand(SelfStudySupervision s) =>
         s.planId == planId &&
         s.dayOfWeek == dayOfWeek &&
         s.room.trim().toLowerCase() == roomKey &&
-        minutesFromTime(s.bandStart) == bandStartMin;
+        minutesFromTime(s.bandStart) <= bandStartMin &&
+        minutesFromTime(s.bandEnd) >= bandEndMin;
 
     // 1) 날짜 오버라이드.
     if (date != null) {

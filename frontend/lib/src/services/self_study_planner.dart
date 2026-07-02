@@ -230,16 +230,36 @@ List<DateTime> datesForWeekday(DateTime start, DateTime end, int dayOfWeek) {
 /// 부분만 남기며, 30분 미만으로 겹치는 밴드는 버린다.
 /// 9-12 → [9-10, 10-11, 11-12] ; 9:30-11 → [9:30-10, 10-11].
 List<List<int>> hourBands(int windowStartMin, int windowEndMin) {
+  return _timeBands(windowStartMin, windowEndMin, stepMin: 60, minOverlap: 30);
+}
+
+/// [hourBands]의 30분 단위 버전. 자습 창을 30분 경계(:00/:30)로 나눈다.
+/// 출석부에서 "9:00-9:30 자습 / 9:30-10:00 수업"처럼 30분 단위로 자습/수업을
+/// 구분해 표기하기 위한 소열이다.
+/// 9-10 → [9:00-9:30, 9:30-10:00] ; 9:30-11 → [9:30-10, 10-10:30, 10:30-11].
+/// 15분 미만으로만 겹치는 밴드는 버린다.
+List<List<int>> halfHourBands(int windowStartMin, int windowEndMin) {
+  return _timeBands(windowStartMin, windowEndMin, stepMin: 30, minOverlap: 15);
+}
+
+/// 자습 창을 [stepMin] 경계로 나눈 시간 밴드. 각 밴드는 창과 겹치는 부분만
+/// 남기며, [minOverlap] 미만으로 겹치는 밴드는 버린다.
+List<List<int>> _timeBands(
+  int windowStartMin,
+  int windowEndMin, {
+  required int stepMin,
+  required int minOverlap,
+}) {
   final bands = <List<int>>[];
-  var hourStart = (windowStartMin ~/ 60) * 60;
-  while (hourStart < windowEndMin) {
-    final bandStart = hourStart < windowStartMin ? windowStartMin : hourStart;
+  var slotStart = (windowStartMin ~/ stepMin) * stepMin;
+  while (slotStart < windowEndMin) {
+    final bandStart = slotStart < windowStartMin ? windowStartMin : slotStart;
     final bandEnd =
-        (hourStart + 60) > windowEndMin ? windowEndMin : (hourStart + 60);
-    if (bandEnd - bandStart >= 30) {
+        (slotStart + stepMin) > windowEndMin ? windowEndMin : (slotStart + stepMin);
+    if (bandEnd - bandStart >= minOverlap) {
       bands.add([bandStart, bandEnd]);
     }
-    hourStart += 60;
+    slotStart += stepMin;
   }
   return bands;
 }
