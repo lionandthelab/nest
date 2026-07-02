@@ -368,7 +368,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
               Expanded(
                 child: SelectFieldCard(
                   label: '감독',
-                  hintText: '감독 지정',
+                  hintText: '미지정',
                   icon: Icons.person_outline,
                   enabled: true,
                   value: supervisorName,
@@ -560,9 +560,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
   }
 
   Future<void> _openSupervisorPicker(SelfStudySlot slot) async {
-    // "지정 안 함"은 빈 문자열 sentinel 로 두어, 취소(null 반환)와 구분한다.
+    // "미지정"은 빈 문자열 sentinel 로 두어, 취소(null 반환)와 구분한다.
     final options = <SelectSheetOption<String>>[
-      const SelectSheetOption<String>(value: '', title: '지정 안 함'),
+      const SelectSheetOption<String>(value: '', title: '미지정'),
       for (final t in controller.teacherProfiles)
         SelectSheetOption<String>(
           value: t.id,

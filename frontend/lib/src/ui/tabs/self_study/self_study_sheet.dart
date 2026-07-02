@@ -402,7 +402,7 @@ class _SheetTable extends StatelessWidget {
               for (var i = 0; i < dates.length; i++)
                 cell(
                   group.supervisors.isEmpty
-                      ? '-'
+                      ? '미지정'
                       : group.supervisors.join(', '),
                   width: _bandW * bands.length,
                   fontSize: 11,
