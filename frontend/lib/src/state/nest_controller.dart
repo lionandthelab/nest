@@ -4252,6 +4252,18 @@ class NestController extends ChangeNotifier {
     return findHomeschoolMemberByUserId(normalized)?.displayLabel ?? normalized;
   }
 
+  /// 이메일을 제외한 표시용 이름만 반환한다.
+  /// 디렉토리에 이름이 없으면 빈 문자열을 반환하므로, 호출부에서 다른
+  /// 폴백(메타데이터/이메일 로컬파트 등)으로 이어갈 수 있다.
+  /// (헤더 등 UI에 이메일 주소가 노출되지 않도록 [findMemberDisplayName] 대신 사용)
+  String findMemberName(String? userId) {
+    final normalized = _normalizeNullable(userId);
+    if (normalized == null) {
+      return '';
+    }
+    return findHomeschoolMemberByUserId(normalized)?.fullName.trim() ?? '';
+  }
+
   List<String> get membershipUserIds {
     return homeschoolMemberships
         .map((row) => row.userId)

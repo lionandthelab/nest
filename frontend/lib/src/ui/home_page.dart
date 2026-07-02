@@ -717,10 +717,10 @@ class _MobileScaffold extends StatefulWidget {
 
 class _MobileScaffoldState extends State<_MobileScaffold> {
   String _displayName(NestController controller) {
-    final fromDirectory = controller.findMemberDisplayName(controller.user?.id);
-    if (fromDirectory.trim().isNotEmpty &&
-        fromDirectory != controller.user?.id) {
-      return fromDirectory;
+    // 이메일 주소가 헤더에 노출되지 않도록 이름만 조회한다.
+    final directoryName = controller.findMemberName(controller.user?.id);
+    if (directoryName.isNotEmpty) {
+      return directoryName;
     }
 
     final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
@@ -729,6 +729,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
       return metadataName.trim();
     }
 
+    // 최후의 폴백으로도 전체 이메일이 아닌 로컬 파트만 사용한다.
     final email = controller.user?.email ?? '';
     if (email.contains('@')) {
       return email.split('@').first;
@@ -944,99 +945,136 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
         children: [
           _buildHomeschoolBadge(controller),
           const SizedBox(width: 6),
-          // Parent name (or parent target switch for admin)
-          if (parentCandidates.isNotEmpty)
-            PopupMenuButton<String>(
-              tooltip: '부모 대상 전환',
-              onSelected: (userId) async {
-                try {
-                  await controller.selectParentViewTargetUserId(userId);
-                } catch (_) {}
-              },
-              itemBuilder: (context) => parentCandidates
-                  .map(
-                    (userId) => PopupMenuItem<String>(
-                      value: userId,
-                      child: Row(
-                        children: [
-                          Icon(
-                            userId == controller.activeParentViewTargetUserId
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              controller.findMemberDisplayName(userId),
-                              overflow: TextOverflow.ellipsis,
+          // 이름 + 아이 칩은 남는 공간을 나눠 갖고, 넘치면 '...'로 잘린다.
+          // 이렇게 해야 맨 오른쪽 프로필(로그아웃) 메뉴가 절대 화면 밖으로
+          // 밀려나지 않는다.
+          Expanded(
+            child: Row(
+              children: [
+                // Parent name (or parent target switch for admin)
+                if (parentCandidates.isNotEmpty)
+                  Flexible(
+                    child: PopupMenuButton<String>(
+                      tooltip: '부모 대상 전환',
+                      onSelected: (userId) async {
+                        try {
+                          await controller
+                              .selectParentViewTargetUserId(userId);
+                        } catch (_) {}
+                      },
+                      itemBuilder: (context) => parentCandidates
+                          .map(
+                            (userId) => PopupMenuItem<String>(
+                              value: userId,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    userId ==
+                                            controller
+                                                .activeParentViewTargetUserId
+                                        ? Icons.check_circle
+                                        : Icons.circle_outlined,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      controller.findMemberDisplayName(userId),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          )
+                          .toList(),
+                      child: Chip(
+                        label: Text(
+                          '$displayName 님',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        avatar: const Icon(
+                          Icons.family_restroom_outlined,
+                          size: 14,
+                        ),
+                        visualDensity: VisualDensity.compact,
                       ),
                     ),
                   )
-                  .toList(),
-              child: Chip(
-                label: Text(
-                  '$displayName 님',
-                  overflow: TextOverflow.ellipsis,
-                ),
-                avatar: const Icon(Icons.family_restroom_outlined, size: 14),
-                visualDensity: VisualDensity.compact,
-              ),
-            )
-          else
-            Text(
-              '$displayName 님',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          const SizedBox(width: 8),
-          // Child selector chip
-          if (children.length <= 1)
-            Chip(
-              label: Text(childLabel, overflow: TextOverflow.ellipsis),
-              avatar: const Icon(Icons.child_friendly_outlined, size: 14),
-              visualDensity: VisualDensity.compact,
-            )
-          else
-            PopupMenuButton<String>(
-              tooltip: '아이 선택',
-              onSelected: widget.onSelectChild,
-              itemBuilder: (context) => children
-                  .map(
-                    (child) => PopupMenuItem<String>(
-                      value: child.id,
-                      child: Row(
-                        children: [
-                          Icon(
-                            child.id == widget.selectedChildId
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${child.name} (${child.familyName})',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                else
+                  Flexible(
+                    child: Text(
+                      '$displayName 님',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  )
-                  .toList(),
-              child: Chip(
-                label: Text(childLabel, overflow: TextOverflow.ellipsis),
-                avatar: const Icon(Icons.child_friendly_outlined, size: 14),
-                visualDensity: VisualDensity.compact,
-              ),
+                  ),
+                // Child selector chip — 학부모 뷰에서만 노출
+                if (controller.isParentView) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: children.length <= 1
+                        ? Chip(
+                            label: Text(
+                              childLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            avatar: const Icon(
+                              Icons.child_friendly_outlined,
+                              size: 14,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          )
+                        : PopupMenuButton<String>(
+                            tooltip: '아이 선택',
+                            onSelected: widget.onSelectChild,
+                            itemBuilder: (context) => children
+                                .map(
+                                  (child) => PopupMenuItem<String>(
+                                    value: child.id,
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          child.id == widget.selectedChildId
+                                              ? Icons.check_circle
+                                              : Icons.circle_outlined,
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            '${child.name} (${child.familyName})',
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            child: Chip(
+                              label: Text(
+                                childLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              avatar: const Icon(
+                                Icons.child_friendly_outlined,
+                                size: 14,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                  ),
+                ],
+              ],
             ),
+          ),
           const SizedBox(width: 4),
           // Profile avatar with role switch / settings / logout
           PopupMenuButton<String>(
@@ -2133,10 +2171,10 @@ class _MainPanelState extends State<_MainPanel> {
   }
 
   String _displayName(NestController controller) {
-    final fromDirectory = controller.findMemberDisplayName(controller.user?.id);
-    if (fromDirectory.trim().isNotEmpty &&
-        fromDirectory != controller.user?.id) {
-      return fromDirectory;
+    // 이메일 주소가 헤더에 노출되지 않도록 이름만 조회한다.
+    final directoryName = controller.findMemberName(controller.user?.id);
+    if (directoryName.isNotEmpty) {
+      return directoryName;
     }
 
     final metadata = controller.user?.userMetadata ?? const <String, dynamic>{};
@@ -2145,6 +2183,7 @@ class _MainPanelState extends State<_MainPanel> {
       return metadataName.trim();
     }
 
+    // 최후의 폴백으로도 전체 이메일이 아닌 로컬 파트만 사용한다.
     final email = controller.user?.email ?? '';
     if (email.contains('@')) {
       return email.split('@').first;
