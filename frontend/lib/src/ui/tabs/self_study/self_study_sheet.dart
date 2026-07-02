@@ -139,6 +139,8 @@ class _SelfStudySheetPageState extends State<SelfStudySheetPage> {
         if (ga != gb) return ga.compareTo(gb);
         return a.child.name.compareTo(b.child.name);
       });
+      // 신청자 없는 (요일·방) 시트는 생략.
+      if (rosterRows.isEmpty) return;
 
       // 감독 이름(중복 제거).
       final supervisors = <String>[];
