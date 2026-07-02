@@ -14,15 +14,19 @@ class NestColors {
 class NestTheme {
   const NestTheme._();
 
-  static const _fontFamily = 'Pretendard Variable';
+  // 슬라이드 안내물과 동일한 폰트 시스템(번들 에셋).
+  static const _display = 'BlackHanSans'; // 큰 제목/헤더 (임팩트)
+  static const _ui = 'DoHyeon'; // 소제목·버튼·라벨 (깔끔한 강조)
+  static const _body = 'Jua'; // 본문·친근한 텍스트
 
-  static TextStyle _pretendard({
+  static TextStyle _font(
+    String family, {
     double fontSize = 15,
     FontWeight fontWeight = FontWeight.w400,
     Color color = NestColors.deepWood,
   }) =>
       TextStyle(
-        fontFamily: _fontFamily,
+        fontFamily: family,
         fontSize: fontSize,
         fontWeight: fontWeight,
         color: color,
@@ -31,7 +35,7 @@ class NestTheme {
   static ThemeData light() {
     final base = ThemeData(
       useMaterial3: true,
-      fontFamily: _fontFamily,
+      fontFamily: _body,
       colorScheme:
           ColorScheme.fromSeed(
             seedColor: NestColors.dustyRose,
@@ -45,52 +49,20 @@ class NestTheme {
     );
 
     final textTheme = base.textTheme.copyWith(
-      displayLarge: _pretendard(
-        fontSize: 42,
-        fontWeight: FontWeight.w700,
-      ),
-      displayMedium: _pretendard(
-        fontSize: 34,
-        fontWeight: FontWeight.w700,
-      ),
-      displaySmall: _pretendard(
-        fontSize: 28,
-        fontWeight: FontWeight.w700,
-      ),
-      headlineMedium: _pretendard(
-        fontSize: 24,
-        fontWeight: FontWeight.w700,
-      ),
-      titleLarge: _pretendard(
-        fontSize: 22,
-        fontWeight: FontWeight.w700,
-      ),
-      titleMedium: _pretendard(
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
-      ),
-      titleSmall: _pretendard(
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-      ),
-      bodyLarge: _pretendard(
-        fontSize: 17,
-        fontWeight: FontWeight.w500,
-      ),
-      bodyMedium: _pretendard(
-        fontSize: 15,
-        fontWeight: FontWeight.w400,
-      ),
-      bodySmall: _pretendard(
-        fontSize: 13,
-        fontWeight: FontWeight.w400,
-        color: NestColors.deepWood,
-      ),
-      labelLarge: _pretendard(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: Colors.white,
-      ),
+      // 큰 제목/헤더 → Black Han Sans
+      displayLarge: _font(_display, fontSize: 42),
+      displayMedium: _font(_display, fontSize: 34),
+      displaySmall: _font(_display, fontSize: 28),
+      headlineMedium: _font(_display, fontSize: 24),
+      titleLarge: _font(_display, fontSize: 22),
+      // 소제목·라벨 → Do Hyeon
+      titleMedium: _font(_ui, fontSize: 17),
+      titleSmall: _font(_ui, fontSize: 15),
+      labelLarge: _font(_ui, fontSize: 15, color: Colors.white),
+      // 본문 → Jua
+      bodyLarge: _font(_body, fontSize: 17),
+      bodyMedium: _font(_body, fontSize: 15),
+      bodySmall: _font(_body, fontSize: 13),
     );
 
     return base.copyWith(

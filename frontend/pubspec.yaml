@@ -72,6 +72,17 @@ flutter:
     - assets/logo.png
     - assets/logo_square.png
 
+  fonts:
+    - family: BlackHanSans
+      fonts:
+        - asset: assets/fonts/BlackHanSans-Regular.ttf
+    - family: Jua
+      fonts:
+        - asset: assets/fonts/Jua-Regular.ttf
+    - family: DoHyeon
+      fonts:
+        - asset: assets/fonts/DoHyeon-Regular.ttf
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
