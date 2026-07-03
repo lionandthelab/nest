@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.0.6+7 (2026-07-03)
+
+### Added
+
+- 감독 선생님(대부분 학부모) 계정 연결 + 감독 시간표 노출
+  - 학부모 홈에 "내 감독 시간표" 카드 추가 — 계정이 교사 프로필과 연결되고 실제 감독 배정이 있을 때만 표시 (`parent_home_tab.dart`)
+  - 가입 승인 시 신청자 이름과 일치하는 미연결 교사 프로필을 함께 연결하는 체크박스 추가 (`members_tab.dart`) — 엑셀로 미리 만든 감독 프로필 ↔ 실가입 계정 잇기
+  - 감독 계정 연결 리컨사일 스크립트 추가 (`scripts/reconcile_supervisor_accounts.mjs`, DRY 기본)
+
+### Changed
+
+- 감독표(자습 감독 시간표) 전면 개선 (`supervision_schedule_view.dart`)
+  - 같은 요일·같은 방에서 겹치거나 이어지는 자습(여러 반)을 하나의 카드로 병합
+  - 매주 반복은 '매주', 특정 날짜 회전 감독은 날짜 배지로 직관적으로 표기
+  - 카드 탭 시 반별 자습생 명단 또는 방 단위 회전 감독 날짜 상세 표시
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 28건 통과
+- `flutter build appbundle --release` 통과
+
 ## 2.0.4+5 (2026-03-23)
 
 ### Fixed

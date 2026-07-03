@@ -6,6 +6,7 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import 'self_study/supervision_schedule_view.dart';
 
 class ParentHomeTab extends StatefulWidget {
   const ParentHomeTab({
@@ -79,9 +80,75 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
 
         const SizedBox(height: 16),
 
+        // ── 내 감독 시간표 (감독을 맡은 학부모만) ──
+        _buildMySupervision(controller),
+
         // ── Homeschool full schedule ──
         _buildHomeschoolSchedule(controller),
       ],
+    );
+  }
+
+  // ── 내 감독 시간표 ──
+  //
+  // 감독 선생님이 대부분 학부모라, 학부모 뷰에서도 자기 감독 자습을 볼 수 있게
+  // 한다. 계정이 교사 프로필과 연결되어(currentUserTeacherProfiles) 실제 감독
+  // 배정이 있는 경우에만 카드가 나타난다. 연결 안 됐거나 감독이 없으면 숨김.
+  Widget _buildMySupervision(NestController controller) {
+    if (controller.selectedSelfStudyPlan == null) {
+      return const SizedBox.shrink();
+    }
+    final withDuty = controller.currentUserTeacherProfiles
+        .where(
+          (p) =>
+              controller.selfStudySlotsForSupervisor(p.id).isNotEmpty ||
+              controller.selfStudySupervisionsForTeacher(p.id).isNotEmpty,
+        )
+        .toList();
+    if (withDuty.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.assignment_ind_outlined, color: NestColors.clay),
+                  const SizedBox(width: 8),
+                  Text(
+                    '내 감독 시간표',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '내가 감독하는 공과 자습이에요.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 12),
+              // 여러 교사 프로필이 연결된 경우 각 이름을 헤더로 구분한다.
+              for (final p in withDuty)
+                SupervisionScheduleView(
+                  controller: controller,
+                  teacherProfileId: p.id,
+                  teacherName: p.displayName,
+                  showHeader: withDuty.length > 1,
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

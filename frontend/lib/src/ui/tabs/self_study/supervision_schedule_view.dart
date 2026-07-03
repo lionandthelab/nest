@@ -35,8 +35,9 @@ class SupervisionScheduleView extends StatelessWidget {
       builder: (context, _) {
         final plan = controller.selectedSelfStudyPlan;
         final slots = controller.selfStudySlotsForSupervisor(teacherProfileId);
-        final rotations =
-            controller.selfStudySupervisionsForTeacher(teacherProfileId);
+        final rotations = controller.selfStudySupervisionsForTeacher(
+          teacherProfileId,
+        );
         final name =
             teacherName ?? controller.findTeacherName(teacherProfileId);
 
@@ -68,31 +69,34 @@ class SupervisionScheduleView extends StatelessWidget {
 
         final children = <Widget>[];
         if (showHeader) {
-          children.add(Padding(
-            padding: const EdgeInsets.only(bottom: 4, left: 2),
-            child: Row(
-              children: [
-                Icon(Icons.assignment_ind_outlined, color: NestColors.clay),
-                const SizedBox(width: 8),
-                Text(
-                  '$name 감독표',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
-          ));
-          children.add(Padding(
-            padding: const EdgeInsets.only(bottom: 10, left: 2),
-            child: Text(
-              '${plan.name} · 총 ${cards.length}건',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.7),
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4, left: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.assignment_ind_outlined, color: NestColors.clay),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$name 감독표',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
+                ],
+              ),
             ),
-          ));
+          );
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10, left: 2),
+              child: Text(
+                '${plan.name} · 총 ${cards.length}건',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+          );
         }
 
         for (final day in order) {
@@ -103,16 +107,17 @@ class SupervisionScheduleView extends StatelessWidget {
             if (byStart != 0) return byStart;
             return a.room.compareTo(b.room);
           });
-          children.add(Padding(
-            padding: const EdgeInsets.only(top: 6, bottom: 6, left: 2),
-            child: Text(
-              '${weekdayLabel(day)}요일',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w800),
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 6, left: 2),
+              child: Text(
+                '${weekdayLabel(day)}요일',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
             ),
-          ));
+          );
           for (final c in ds) {
             children.add(_card(context, c));
           }
@@ -137,11 +142,15 @@ class SupervisionScheduleView extends StatelessWidget {
 
     final cards = <_SupCard>[];
     byDayRoom.forEach((_, group) {
-      group.sort((a, b) =>
-          minutesFromTime(a.startTime).compareTo(minutesFromTime(b.startTime)));
+      group.sort(
+        (a, b) => minutesFromTime(
+          a.startTime,
+        ).compareTo(minutesFromTime(b.startTime)),
+      );
       final day = group.first.dayOfWeek;
-      final room =
-          group.first.room.trim().isEmpty ? '장소 미정' : group.first.room.trim();
+      final room = group.first.room.trim().isEmpty
+          ? '장소 미정'
+          : group.first.room.trim();
 
       var start = -1;
       var end = -1;
@@ -155,14 +164,17 @@ class SupervisionScheduleView extends StatelessWidget {
             childIds.add(child.id);
           }
         }
-        cards.add(_SupCard(
-          day: day,
-          startMin: start,
-          endMin: end,
-          room: room,
-          count: childIds.length,
-          dateLabel: '매주',
-        ));
+        cards.add(
+          _SupCard(
+            day: day,
+            startMin: start,
+            endMin: end,
+            room: room,
+            count: childIds.length,
+            dateLabel: '매주',
+            slots: List<SelfStudySlot>.from(bucket),
+          ),
+        );
         bucket.clear();
       }
 
@@ -199,21 +211,23 @@ class SupervisionScheduleView extends StatelessWidget {
     byBand.forEach((_, list) {
       final f = list.first;
       final weekly = list.any((r) => r.occurrenceDate == null);
-      final dates = list
-          .map((r) => r.occurrenceDate)
-          .whereType<DateTime>()
-          .toList()
-        ..sort();
-      final dateLabel =
-          weekly ? '매주' : dates.map((d) => '${d.month}/${d.day}').join(', ');
-      cards.add(_SupCard(
-        day: f.dayOfWeek,
-        startMin: minutesFromTime(f.bandStart),
-        endMin: minutesFromTime(f.bandEnd),
-        room: f.room.trim().isEmpty ? '장소 미정' : f.room.trim(),
-        count: null,
-        dateLabel: dateLabel,
-      ));
+      final dates =
+          list.map((r) => r.occurrenceDate).whereType<DateTime>().toList()
+            ..sort();
+      final dateLabel = weekly
+          ? '매주'
+          : dates.map((d) => '${d.month}/${d.day}').join(', ');
+      cards.add(
+        _SupCard(
+          day: f.dayOfWeek,
+          startMin: minutesFromTime(f.bandStart),
+          endMin: minutesFromTime(f.bandEnd),
+          room: f.room.trim().isEmpty ? '장소 미정' : f.room.trim(),
+          count: null,
+          dateLabel: dateLabel,
+          supervisions: List<SelfStudySupervision>.from(list),
+        ),
+      );
     });
     return cards;
   }
@@ -225,79 +239,417 @@ class SupervisionScheduleView extends StatelessWidget {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: NestColors.roseMist),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: NestColors.dustyRose.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              time,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: NestColors.deepWood,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showCardDetail(context, card),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: NestColors.dustyRose.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  time,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: NestColors.deepWood,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.meeting_room_outlined,
-                        size: 16, color: NestColors.clay),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(card.room,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.meeting_room_outlined,
+                          size: 16,
+                          color: NestColors.clay,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            card.room,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      card.count != null ? '자습생 ${card.count}명' : '자습 감독',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.7),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  card.count != null ? '자습생 ${card.count}명' : '자습 감독',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 8),
+              // '언제'를 직관적으로: 매주 반복이면 '매주', 특정 날짜만이면 날짜.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 104),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: everyWeek
+                        ? NestColors.mutedSage.withValues(alpha: 0.18)
+                        : NestColors.clay.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    everyWeek ? '매주' : card.dateLabel,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: NestColors.deepWood.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: NestColors.deepWood.withValues(alpha: 0.35),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 교시 카드를 탭했을 때 세부 정보(반·자습생 명단 또는 감독 날짜)를 보여주는
+  /// 바텀시트를 연다.
+  void _showCardDetail(BuildContext context, _SupCard card) {
+    final time = rangeLabel(card.startMin, card.endMin);
+    final everyWeek = card.dateLabel == '매주';
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NestColors.creamyWhite,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.82,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${weekdayLabel(card.day)}요일 $time',
+                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _metaChip(Icons.meeting_room_outlined, card.room),
+                      _metaChip(
+                        everyWeek ? Icons.repeat_rounded : Icons.event_outlined,
+                        everyWeek ? '매주 반복' : card.dateLabel,
+                        highlight: !everyWeek,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  ..._detailBody(ctx, card),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 상세 팝업 본문: 슬롯 기반이면 반별 명단, 회전 감독이면 감독 날짜 안내.
+  List<Widget> _detailBody(BuildContext context, _SupCard card) {
+    if (card.slots.isNotEmpty) {
+      return _rosterDetail(context, card);
+    }
+    return _supervisionDetail(context, card);
+  }
+
+  /// 반별 자습 명단을 그룹으로 나눠 보여준다.
+  List<Widget> _rosterDetail(BuildContext context, _SupCard card) {
+    // 같은 반이 인접 교시로 여러 슬롯을 가질 수 있으니 반 기준으로 묶는다.
+    final byGroup = <String, List<SelfStudySlot>>{};
+    for (final s in card.slots) {
+      byGroup.putIfAbsent(s.classGroupId, () => []).add(s);
+    }
+
+    final totalIds = <String>{};
+    for (final s in card.slots) {
+      for (final child in controller.rosterForSelfStudySlot(s)) {
+        totalIds.add(child.id);
+      }
+    }
+
+    final widgets = <Widget>[
+      Text(
+        '자습생 총 ${totalIds.length}명 · ${byGroup.length}개 반',
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: NestColors.deepWood,
+        ),
+      ),
+      const SizedBox(height: 12),
+    ];
+
+    final entries = byGroup.entries.toList()
+      ..sort(
+        (a, b) => controller
+            .findClassGroupName(a.key)
+            .compareTo(controller.findClassGroupName(b.key)),
+      );
+
+    for (final entry in entries) {
+      final groupName = controller.findClassGroupName(entry.key);
+      final roster = <String, ChildProfile>{};
+      for (final s in entry.value) {
+        for (final child in controller.rosterForSelfStudySlot(s)) {
+          roster[child.id] = child;
+        }
+      }
+      final children = roster.values.toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+
+      widgets.add(_groupBlock(context, groupName, children));
+      widgets.add(const SizedBox(height: 12));
+    }
+
+    if (widgets.isNotEmpty) widgets.removeLast();
+    return widgets;
+  }
+
+  /// 한 반의 이름 배지 + 자습생 이름 칩 목록.
+  Widget _groupBlock(
+    BuildContext context,
+    String groupName,
+    List<ChildProfile> children,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: NestColors.mutedSage.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  gradeLabelForGroupName(groupName),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: NestColors.deepWood,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  groupName,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Text(
+                '${children.length}명',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.clay,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (children.isEmpty)
+            Text(
+              '자습생이 없습니다.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.6),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final child in children)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: NestColors.creamyWhite,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Text(
+                      child.name,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: NestColors.deepWood,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 회전(방 단위) 감독 상세: 감독 날짜 목록 안내.
+  List<Widget> _supervisionDetail(BuildContext context, _SupCard card) {
+    final weekly = card.supervisions.any((s) => s.occurrenceDate == null);
+    final dates =
+        card.supervisions
+            .map((s) => s.occurrenceDate)
+            .whereType<DateTime>()
+            .toSet()
+            .toList()
+          ..sort();
+
+    return [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: NestColors.roseMist),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.assignment_ind_outlined,
+                  size: 18,
+                  color: NestColors.clay,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '방 단위 자습 감독',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            Text(
+              '${card.room}에서 이 시간대를 감독합니다. 특정 반이 지정되지 않아 자습생 명단은 표시되지 않습니다.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.7),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              weekly ? '감독 주기' : '감독 날짜 ${dates.length}회',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            if (weekly)
+              _metaChip(Icons.repeat_rounded, '매주 반복')
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final d in dates)
+                    _metaChip(
+                      Icons.event_outlined,
+                      '${d.month}/${d.day}(${weekdayLabel(d.weekday % 7)})',
+                      highlight: true,
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _metaChip(IconData icon, String label, {bool highlight = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: highlight
+            ? NestColors.clay.withValues(alpha: 0.16)
+            : NestColors.dustyRose.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color: NestColors.deepWood.withValues(alpha: 0.8),
           ),
-          const SizedBox(width: 8),
-          // '언제'를 직관적으로: 매주 반복이면 '매주', 특정 날짜만이면 날짜.
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 104),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: everyWeek
-                    ? NestColors.mutedSage.withValues(alpha: 0.18)
-                    : NestColors.clay.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                everyWeek ? '매주' : card.dateLabel,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood.withValues(alpha: 0.85),
-                ),
-              ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: NestColors.deepWood,
             ),
           ),
         ],
@@ -314,6 +666,8 @@ class _SupCard {
     required this.room,
     required this.count,
     required this.dateLabel,
+    this.slots = const [],
+    this.supervisions = const [],
   });
 
   final int day;
@@ -326,6 +680,12 @@ class _SupCard {
 
   /// '매주' 또는 특정 날짜 목록(예: '7/6, 7/20').
   final String dateLabel;
+
+  /// 이 카드로 병합된 자습 슬롯(반별). 상세 팝업에서 반·명단을 보여줄 때 사용.
+  final List<SelfStudySlot> slots;
+
+  /// 회전(날짜 지정) 감독 오버라이드. 상세 팝업에서 감독 날짜를 보여줄 때 사용.
+  final List<SelfStudySupervision> supervisions;
 }
 
 /// 감독표를 전체 화면으로 연다(관리자에서 교사 클릭 시).

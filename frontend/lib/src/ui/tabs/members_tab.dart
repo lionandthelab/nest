@@ -325,6 +325,23 @@ class _MembersTabState extends State<MembersTab> {
     final families = controller.families.toList()
       ..sort((a, b) => a.familyName.compareTo(b.familyName));
 
+    // 이름이 일치하는 미연결 교사 프로필(엑셀로 미리 만든 감독 등)을 찾아, 승인과
+    // 동시에 이 계정과 이어줄지 제안한다. 연결되면 학부모 뷰에서도 감독 시간표가
+    // 보인다. (공백 무시 매칭)
+    final reqName = (req.requesterName ?? '').replaceAll(RegExp(r'\s+'), '');
+    TeacherProfile? found;
+    if (reqName.isNotEmpty) {
+      for (final t in controller.teacherProfiles) {
+        if ((t.userId == null || t.userId!.isEmpty) &&
+            t.displayName.replaceAll(RegExp(r'\s+'), '') == reqName) {
+          found = t;
+          break;
+        }
+      }
+    }
+    final TeacherProfile? matched = found;
+    var linkTeacher = matched != null;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
@@ -391,6 +408,26 @@ class _MembersTabState extends State<MembersTab> {
                           onChanged: (v) => setInner(() => familyId = v),
                         ),
                     ],
+                    if (matched != null) ...[
+                      const SizedBox(height: 14),
+                      const Divider(height: 1),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: linkTeacher,
+                        onChanged: (v) =>
+                            setInner(() => linkTeacher = v ?? false),
+                        title: Text(
+                          "'${matched.displayName}' 선생님 프로필과 연결",
+                          style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        subtitle: const Text(
+                          '기존 감독/교사 프로필과 이 계정을 이어, 감독 시간표가 보이게 합니다.',
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -419,7 +456,18 @@ class _MembersTabState extends State<MembersTab> {
         role: role,
         familyId: role == 'PARENT' ? familyId : null,
       );
-      _showMessage(controller.statusMessage);
+      // 승인과 동시에 기존 교사 프로필과 계정을 연결(감독 시간표 노출용).
+      if (linkTeacher && matched != null && req.requesterUserId.isNotEmpty) {
+        await controller.updateTeacherProfile(
+          teacherProfileId: matched.id,
+          displayName: matched.displayName,
+          teacherType: matched.teacherType,
+          userId: req.requesterUserId,
+        );
+        _showMessage('승인 완료 · ${matched.displayName} 선생님 프로필과 연결했습니다.');
+      } else {
+        _showMessage(controller.statusMessage);
+      }
     } catch (_) {
       _showMessage(controller.statusMessage);
     }
