@@ -183,6 +183,63 @@ void main() {
 
     await _shoot(tester, key, 'admin_approve_dialog.png');
   });
+
+  testWidgets('viewswitch: 프로필 메뉴 (선생님/학부모 전환)', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(400, 104);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = _seedParentTeacher(client);
+    final key = GlobalKey();
+
+    await tester.pumpWidget(frame(
+      key,
+      _MobileHeaderMock(controller: controller, displayName: '민지'),
+      bg: NestColors.creamyWhite,
+    ));
+    await tester.pumpAndSettle();
+
+    // ① 메뉴 닫힌 헤더 — 프로필 아바타 위치를 보여줌.
+    await _shoot(tester, key, 'view_switch_header.png');
+
+    // ② 프로필 아바타 탭 → 뷰 전환 메뉴 열기.
+    tester.view.physicalSize = const Size(400, 360);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await _shoot(tester, key, 'view_switch_menu.png');
+  });
+}
+
+NestController _seedParentTeacher(SupabaseClient client) {
+  final controller = NestController(repository: NestRepository(client));
+  final hs = Homeschool(
+    id: 'joy',
+    name: 'JOY 홈스쿨',
+    timezone: 'Asia/Seoul',
+    joinCode: _guideCode,
+  );
+  // 같은 홈스쿨에서 선생님(감독) + 학부모 두 역할 보유.
+  controller.memberships = [
+    Membership(
+      userId: 'me',
+      homeschoolId: 'joy',
+      role: 'TEACHER',
+      status: 'ACTIVE',
+      homeschool: hs,
+    ),
+    Membership(
+      userId: 'me',
+      homeschoolId: 'joy',
+      role: 'PARENT',
+      status: 'ACTIVE',
+      homeschool: hs,
+    ),
+  ];
+  controller.selectedHomeschoolId = 'joy';
+  controller.currentRole = 'PARENT'; // 지금은 학부모 뷰로 보는 중
+  return controller;
 }
 
 NestController _seedAdmin(SupabaseClient client) {
@@ -234,4 +291,132 @@ NestController _seedAdmin(SupabaseClient client) {
     ),
   ];
   return controller;
+}
+
+String _labelForRole(String role) {
+  switch (role) {
+    case 'HOMESCHOOL_ADMIN':
+      return '관리자';
+    case 'STAFF':
+      return '스태프';
+    case 'TEACHER':
+      return '선생님';
+    case 'GUEST_TEACHER':
+      return '초청교사';
+    case 'PARENT':
+      return '학부모';
+    default:
+      return role;
+  }
+}
+
+/// 모바일 헤더의 프로필 아바타 + 뷰 전환 메뉴를 실제와 동일하게 재현.
+/// (home_page.dart `_buildMobileHeader` 의 PopupMenuButton 구조와 일치.)
+class _MobileHeaderMock extends StatelessWidget {
+  const _MobileHeaderMock({required this.controller, required this.displayName});
+
+  final NestController controller;
+  final String displayName;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Material(
+          color: Colors.white,
+          elevation: 1,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.nest_cam_wired_stand, size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    '우리 아이',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: '새로고침',
+                    onPressed: () {},
+                    icon: const Icon(Icons.refresh, size: 20),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: '설정',
+                    onPressed: () {},
+                    icon: const Icon(Icons.settings_outlined, size: 20),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: displayName,
+                    icon: CircleAvatar(
+                      radius: 14,
+                      backgroundColor: NestColors.dustyRose,
+                      child: Text(
+                        displayName.characters.first,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: NestColors.deepWood,
+                        ),
+                      ),
+                    ),
+                    itemBuilder: (context) => [
+                      PopupMenuItem<String>(
+                        enabled: false,
+                        child: Text(
+                          '$displayName 님',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: NestColors.deepWood,
+                          ),
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      ...controller.availableViewRoles.map(
+                        (role) => PopupMenuItem<String>(
+                          value: 'role:$role',
+                          child: Row(
+                            children: [
+                              Icon(
+                                controller.currentRole == role
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                size: 16,
+                                color: controller.currentRole == role
+                                    ? NestColors.mutedSage
+                                    : null,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(_labelForRole(role)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem<String>(
+                        value: 'logout',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 16),
+                            SizedBox(width: 8),
+                            Text('로그아웃'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const Expanded(child: SizedBox()),
+      ],
+    );
+  }
 }
