@@ -374,8 +374,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                       requestId: req.id,
                                     );
                                     _showMessage(controller.statusMessage);
-                                  } catch (_) {
-                                    _showMessage(controller.statusMessage);
+                                  } catch (error) {
+                                    _showActionError(controller, error);
                                   }
                                 },
                           icon: const Icon(Icons.close, size: 18),
@@ -394,8 +394,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                       requestId: req.id,
                                     );
                                     _showMessage(controller.statusMessage);
-                                  } catch (_) {
-                                    _showMessage(controller.statusMessage);
+                                  } catch (error) {
+                                    _showActionError(controller, error);
                                   }
                                 },
                           icon: const Icon(Icons.check, size: 18),
@@ -726,8 +726,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -764,8 +764,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       isSaving = false;
                     });
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -816,8 +816,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       isSaving = false;
                     });
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -895,8 +895,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -1234,8 +1234,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -1294,8 +1294,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -1591,8 +1591,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -1648,8 +1648,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -2002,8 +2002,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (mounted) {
                     setState(() {});
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                 } finally {
                   if (context.mounted) {
                     setDialogState(() {
@@ -2032,8 +2032,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     setDialogState(() {});
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                 }
               }
 
@@ -2045,8 +2045,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     setDialogState(() {});
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                 }
               }
 
@@ -2346,8 +2346,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                 if (context.mounted) {
                                   Navigator.of(context).pop();
                                 }
-                              } catch (_) {
-                                _showMessage(controller.statusMessage);
+                              } catch (error) {
+                                _showActionError(controller, error);
                                 if (context.mounted) {
                                   setDialogState(() {
                                     isSaving = false;
@@ -2738,8 +2738,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -2792,8 +2792,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -3049,8 +3049,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -3104,8 +3104,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                } catch (_) {
-                  _showMessage(controller.statusMessage);
+                } catch (error) {
+                  _showActionError(controller, error);
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
@@ -3228,6 +3228,14 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  /// 컨트롤러 가드가 던진 StateError는 statusMessage에 반영되지 않으므로
+  /// 메시지를 직접 꺼내 보여준다(시간표 탭 _tryAction과 동일한 규칙).
+  void _showActionError(NestController controller, Object error) {
+    _showMessage(
+      error is StateError ? error.message : controller.statusMessage,
+    );
   }
 }
 

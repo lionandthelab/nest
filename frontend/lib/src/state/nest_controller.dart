@@ -48,6 +48,10 @@ class NestController extends ChangeNotifier {
   String? selectedHomeschoolId;
   String? currentRole;
   final Map<String, String> _viewRoleByHomeschool = <String, String>{};
+  // 이번 세션에서 사용자가 직접 뷰 역할을 전환한 홈스쿨 ID 집합.
+  // 관리자/스태프 멤버는 여기에 없으면 기기 캐시에 남은 비관리자 뷰를 무시하고
+  // 항상 관리자 뷰로 부팅한다(모바일/PC 동작 통일).
+  final Set<String> _sessionViewRoleSelections = <String>{};
   final Map<String, String> _parentViewTargetByHomeschool = <String, String>{};
   final Map<String, String> _teacherViewTargetByHomeschool = <String, String>{};
 
@@ -189,10 +193,15 @@ class NestController extends ChangeNotifier {
   }
 
   /// 이 홈스쿨에 들어갈 때 쓸 "최근 역할"(기억된 값 → 캐시 → 우선순위 기본값).
+  /// 관리자/스태프 멤버는 세션 내 직접 전환이 아니면 항상 관리자 뷰로 진입한다
+  /// (_honorsPreferredViewRole와 동일 규칙, 모바일/PC 동작 통일).
   String? recentRoleForHomeschool(String homeschoolId) {
     final roles = rolesForHomeschool(homeschoolId);
+    final heldRoles = roles.toSet();
     final remembered = _viewRoleByHomeschool[homeschoolId];
-    if (remembered != null && roles.contains(remembered)) {
+    if (remembered != null &&
+        heldRoles.contains(remembered) &&
+        _honorsPreferredViewRole(homeschoolId, remembered, heldRoles)) {
       return remembered;
     }
     final uid = user?.id;
@@ -200,7 +209,9 @@ class NestController extends ChangeNotifier {
       final cached = NestCache.loadMeta(userId: uid, homeschoolId: homeschoolId)?[
               'currentRole']
           as String?;
-      if (cached != null && roles.contains(cached)) {
+      if (cached != null &&
+          heldRoles.contains(cached) &&
+          _honorsPreferredViewRole(homeschoolId, cached, heldRoles)) {
         return cached;
       }
     }
@@ -580,6 +591,8 @@ class NestController extends ChangeNotifier {
 
     currentRole = nextRole;
     _viewRoleByHomeschool[homeschoolId] = nextRole;
+    // 사용자가 직접 고른 뷰는 이번 세션 동안 새로고침을 거쳐도 유지한다.
+    _sessionViewRoleSelections.add(homeschoolId);
     _ensureRoleViewTargetSelection(roleOverride: nextRole);
     notifyListeners();
 
@@ -1409,6 +1422,7 @@ class NestController extends ChangeNotifier {
       selectedHomeschoolId = null;
       currentRole = null;
       _viewRoleByHomeschool.clear();
+      _sessionViewRoleSelections.clear();
       _parentViewTargetByHomeschool.clear();
       _teacherViewTargetByHomeschool.clear();
       terms = [];
@@ -1576,43 +1590,112 @@ class NestController extends ChangeNotifier {
     _notifyIfIdle();
   }
 
+  /// 가입 요청을 한 번에 승인한다. 멤버십 생성 + (학부모면) 지정한 가정 연결까지
+  /// 서버 RPC(approve_join_request)에서 원자적으로 처리한다.
   Future<void> approveJoinRequest({
     required String requestId,
-    required String requesterUserId,
+    String? requesterUserId, // 하위호환용(현재 RPC는 요청 행에서 직접 조회)
     String role = 'PARENT',
+    String? familyId,
   }) async {
     if (!canManageMemberships) {
       throw StateError('홈스쿨 관리자 권한이 필요합니다.');
     }
-
-    final homeschoolId = selectedHomeschoolId;
-    if (homeschoolId == null || homeschoolId.isEmpty) {
-      throw StateError('홈스쿨을 먼저 선택하세요.');
-    }
-
-    final currentUserId = user?.id;
-    if (currentUserId == null) {
+    if (user?.id == null) {
       throw StateError('로그인이 필요합니다.');
+    }
+    if (role == 'PARENT' && familyId == null) {
+      throw StateError('학부모는 연결할 가정을 선택해야 합니다.');
     }
 
     await _runBusy('가입 요청을 승인하는 중...', () async {
-      await _repository.updateJoinRequestStatus(
+      await _repository.approveJoinRequestWithFamily(
         requestId: requestId,
-        status: 'APPROVED',
-        reviewedByUserId: currentUserId,
-      );
-      await _repository.grantMembershipRole(
-        homeschoolId: homeschoolId,
-        userId: requesterUserId,
         role: role,
+        familyId: familyId,
       );
       await Future.wait([
         loadJoinRequests(),
         loadHomeschoolMemberships(),
         loadHomeschoolMemberDirectory(),
+        loadFamilies(),
       ]);
       _setStatus('가입 요청을 승인했습니다.');
     });
+  }
+
+  // ── 참여 코드로 간편 합류 ──
+
+  String? get selectedHomeschoolJoinCode {
+    final id = selectedHomeschoolId;
+    if (id == null) return null;
+    return memberships
+        .where((m) => m.homeschoolId == id)
+        .map((m) => m.homeschool.joinCode)
+        .firstOrNull;
+  }
+
+  /// 참여 코드로 홈스쿨을 확인한다(합류 전 미리보기). 없으면 null.
+  Future<({String homeschoolId, String name})?> resolveJoinCode(
+    String code,
+  ) async {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) return null;
+    return _repository.resolveJoinCode(trimmed);
+  }
+
+  /// 참여 코드 + 역할로 합류를 요청한다. 성공 시 홈스쿨명을 돌려준다.
+  Future<String> joinWithCode({
+    required String code,
+    required String role,
+    String note = '',
+  }) async {
+    if (user == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('참여 코드를 입력하세요.');
+    }
+    if (!const {'PARENT', 'TEACHER', 'GUEST_TEACHER'}.contains(role)) {
+      throw StateError('역할을 선택하세요.');
+    }
+
+    var name = '';
+    await _runBusy('홈스쿨 합류를 요청하는 중...', () async {
+      final result = await _repository.requestJoinWithCode(
+        code: trimmed,
+        role: role,
+        note: note,
+      );
+      if (result == null) {
+        throw StateError('참여 코드에 해당하는 홈스쿨을 찾을 수 없습니다.');
+      }
+      name = result.name;
+      _setStatus('$name 합류를 요청했습니다. 관리자 승인을 기다려 주세요.');
+    });
+    return name;
+  }
+
+  /// 참여 코드 재발급(관리자). 재발급 후 멤버십을 다시 불러와 새 코드를 반영.
+  Future<String> rotateJoinCode() async {
+    if (!canManageMemberships) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+    var code = '';
+    await _runBusy('참여 코드를 재발급하는 중...', () async {
+      code = await _repository.rotateJoinCode(homeschoolId: homeschoolId);
+      final uid = user?.id;
+      if (uid != null) {
+        memberships = await _repository.fetchMemberships(userId: uid);
+      }
+      _setStatus('참여 코드를 재발급했습니다.');
+    });
+    return code;
   }
 
   Future<void> rejectJoinRequest({
@@ -5451,6 +5534,27 @@ class NestController extends ChangeNotifier {
     }
   }
 
+  /// 기억된(캐시된) 뷰 역할을 그대로 존중할지 판단한다.
+  /// 관리자/스태프 멤버십 보유자는 이번 세션에서 직접 전환한 경우에만
+  /// 학부모/교사 등 비관리자 뷰를 유지한다. 기기별 캐시에 남은 미리보기 뷰가
+  /// 재시작 후에도 관리자 기능(학기 설정, 시간표 편집)을 숨기는 것을 막아
+  /// 어떤 기기에서든 같은 계정은 같은 뷰로 부팅되도록 한다.
+  bool _honorsPreferredViewRole(
+    String homeschoolId,
+    String preferred,
+    Set<String> heldRoles,
+  ) {
+    final isAdminLikeMember =
+        heldRoles.contains('HOMESCHOOL_ADMIN') || heldRoles.contains('STAFF');
+    if (!isAdminLikeMember) {
+      return true;
+    }
+    if (preferred == 'HOMESCHOOL_ADMIN' || preferred == 'STAFF') {
+      return true;
+    }
+    return _sessionViewRoleSelections.contains(homeschoolId);
+  }
+
   String? _resolveViewRole(String? homeschoolId) {
     if (homeschoolId == null) {
       return null;
@@ -5462,7 +5566,9 @@ class NestController extends ChangeNotifier {
         .toSet();
 
     final preferred = _viewRoleByHomeschool[homeschoolId];
-    if (preferred != null && roles.contains(preferred)) {
+    if (preferred != null &&
+        roles.contains(preferred) &&
+        _honorsPreferredViewRole(homeschoolId, preferred, roles)) {
       return preferred;
     }
 
@@ -5528,6 +5634,11 @@ class NestController extends ChangeNotifier {
           fromMap: Membership.fromMap,
         ) ??
         const [];
+    // 캐시된 멤버십 기준으로 뷰 역할을 재해석한다. 관리자/스태프 멤버는 기기에
+    // 남아 있던 학부모/교사 미리보기 뷰 대신 관리자 뷰로 부팅된다.
+    if (memberships.isNotEmpty) {
+      currentRole = _resolveViewRole(lastHomeschoolId);
+    }
     terms =
         NestCache.loadCollection(
           userId: userId,
@@ -5863,6 +5974,7 @@ class NestController extends ChangeNotifier {
     announcements = [];
     auditLogs = [];
     _viewRoleByHomeschool.clear();
+    _sessionViewRoleSelections.clear();
     _parentViewTargetByHomeschool.clear();
     _teacherViewTargetByHomeschool.clear();
     selectedHomeschoolId = null;

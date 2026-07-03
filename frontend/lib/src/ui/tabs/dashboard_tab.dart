@@ -83,6 +83,8 @@ class _DashboardTabState extends State<DashboardTab> {
             _PendingInvitesCard(controller: controller),
           ],
           const SizedBox(height: 16),
+          _JoinByCodeCard(controller: controller),
+          const SizedBox(height: 16),
           _buildOnboardingJoinRequestCard(theme, controller),
           const SizedBox(height: 16),
           _buildOnboardingCreateCard(theme, controller),
@@ -1339,6 +1341,207 @@ class _PendingJoinRequestsBanner extends StatelessWidget {
                   color: NestColors.deepWood.withValues(alpha: 0.5)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 온보딩: 참여 코드로 홈스쿨에 합류하기 (가장 간편한 경로).
+/// 코드 입력 → 홈스쿨 확인 → 역할(학부모/선생님) 선택 → 요청. 승인은 관리자가.
+class _JoinByCodeCard extends StatefulWidget {
+  const _JoinByCodeCard({required this.controller});
+
+  final NestController controller;
+
+  @override
+  State<_JoinByCodeCard> createState() => _JoinByCodeCardState();
+}
+
+class _JoinByCodeCardState extends State<_JoinByCodeCard> {
+  final _codeController = TextEditingController();
+  final _noteController = TextEditingController();
+  String? _resolvedName;
+  bool _resolving = false;
+  String _role = 'PARENT';
+  bool _submitting = false;
+  String? _submittedName;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  String _msg(Object e) => e is StateError ? e.message : e.toString();
+  void _snack(String m) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    }
+  }
+
+  Future<void> _resolve() async {
+    final code = _codeController.text.trim();
+    if (code.isEmpty) return;
+    setState(() {
+      _resolving = true;
+      _resolvedName = null;
+    });
+    try {
+      final r = await widget.controller.resolveJoinCode(code);
+      if (!mounted) return;
+      setState(() => _resolvedName = r?.name);
+      if (r == null) _snack('참여 코드에 해당하는 홈스쿨이 없어요. 코드를 확인해 주세요.');
+    } catch (e) {
+      _snack(_msg(e));
+    } finally {
+      if (mounted) setState(() => _resolving = false);
+    }
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    try {
+      final name = await widget.controller.joinWithCode(
+        code: _codeController.text.trim(),
+        role: _role,
+        note: _noteController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _submittedName = name);
+    } catch (e) {
+      _snack(_msg(e));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (_submittedName != null) {
+      return Card(
+        color: NestColors.mutedSage.withValues(alpha: 0.12),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.check_circle,
+                      color: NestColors.mutedSage, size: 26),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('$_submittedName 합류를 요청했어요!',
+                        style: theme.textTheme.titleMedium),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '관리자가 승인하면 바로 이용할 수 있어요. 조금만 기다려 주세요.\n'
+                '승인 후 앱을 새로고침하면 홈스쿨이 나타납니다.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.vpn_key_outlined, color: NestColors.clay),
+                const SizedBox(width: 8),
+                Text('참여 코드로 합류하기', style: theme.textTheme.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '학교(홈스쿨)에서 받은 코드를 입력하세요.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _codeController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      labelText: '참여 코드',
+                      hintText: '예: 44UDMV',
+                      prefixIcon: Icon(Icons.tag),
+                    ),
+                    onSubmitted: (_) => _resolve(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  onPressed: _resolving ? null : _resolve,
+                  child: _resolving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('확인'),
+                ),
+              ],
+            ),
+            if (_resolvedName != null) ...[
+              const Divider(height: 26),
+              Text('“$_resolvedName” 에 합류할까요?',
+                  style: theme.textTheme.titleMedium),
+              const SizedBox(height: 10),
+              Text('나는 …', style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('학부모'),
+                    selected: _role == 'PARENT',
+                    onSelected: (_) => setState(() => _role = 'PARENT'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('선생님'),
+                    selected: _role == 'TEACHER',
+                    onSelected: (_) => setState(() => _role = 'TEACHER'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _noteController,
+                decoration: const InputDecoration(
+                  labelText: '관리자에게 한마디 (선택)',
+                  hintText: '관리자가 알아볼 수 있게 (예: 홍길동 아빠 · 자녀 예서)',
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _submitting ? null : _submit,
+                  icon: const Icon(Icons.send_outlined, size: 18),
+                  label: Text(_submitting ? '요청 중...' : '합류 요청 보내기'),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

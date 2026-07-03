@@ -136,7 +136,7 @@ class NestRepository {
     final data = await client
         .from('homeschool_memberships')
         .select(
-          'user_id, homeschool_id, role, status, homeschools(id, name, timezone)',
+          'user_id, homeschool_id, role, status, homeschools(id, name, timezone, join_code)',
         )
         .eq('user_id', userId)
         .eq('status', 'ACTIVE');
@@ -199,13 +199,71 @@ class NestRepository {
     }).eq('id', requestId);
   }
 
+  // ── 참여 코드로 간편 합류 ──
+
+  /// 참여 코드 → 홈스쿨(id, name). 없으면 null.
+  Future<({String homeschoolId, String name})?> resolveJoinCode(
+    String code,
+  ) async {
+    final data = await client.rpc('resolve_join_code', params: {'p_code': code});
+    final rows = _asRows(data);
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return (
+      homeschoolId: (r['homeschool_id'] as String?) ?? '',
+      name: (r['name'] as String?) ?? '',
+    );
+  }
+
+  /// 코드 + 역할로 합류 요청 생성(중복/이미회원은 서버에서 처리). 홈스쿨명 반환.
+  Future<({String homeschoolId, String name})?> requestJoinWithCode({
+    required String code,
+    required String role,
+    String note = '',
+  }) async {
+    final data = await client.rpc('request_join_with_code', params: {
+      'p_code': code,
+      'p_role': role,
+      'p_note': note,
+    });
+    final rows = _asRows(data);
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return (
+      homeschoolId: (r['homeschool_id'] as String?) ?? '',
+      name: (r['name'] as String?) ?? '',
+    );
+  }
+
+  /// 합류 요청 한 번에 승인: 멤버십 + (학부모면) 가정 연결.
+  Future<void> approveJoinRequestWithFamily({
+    required String requestId,
+    required String role,
+    String? familyId,
+  }) async {
+    await client.rpc('approve_join_request', params: {
+      'p_request_id': requestId,
+      'p_role': role,
+      'p_family_id': familyId,
+    });
+  }
+
+  /// 참여 코드 재발급(관리자). 새 코드 반환.
+  Future<String> rotateJoinCode({required String homeschoolId}) async {
+    final data = await client.rpc(
+      'rotate_join_code',
+      params: {'p_homeschool_id': homeschoolId},
+    );
+    return (data as String?) ?? '';
+  }
+
   Future<List<Membership>> fetchHomeschoolMemberships({
     required String homeschoolId,
   }) async {
     final data = await client
         .from('homeschool_memberships')
         .select(
-          'user_id, homeschool_id, role, status, homeschools(id, name, timezone)',
+          'user_id, homeschool_id, role, status, homeschools(id, name, timezone, join_code)',
         )
         .eq('homeschool_id', homeschoolId)
         .order('created_at', ascending: true);

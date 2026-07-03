@@ -112,6 +112,8 @@ class _HomePageState extends State<HomePage> {
           });
         }
 
+        final activeTab = _wrapWithRolePreviewBanner(tabs[safeIndex].page);
+
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: Stack(
@@ -129,7 +131,7 @@ class _HomePageState extends State<HomePage> {
                         labels: labels,
                         controller: widget.controller,
                         tabLabel: tabs[safeIndex].label,
-                        tab: tabs[safeIndex].page,
+                        tab: activeTab,
                         onLogout: _handleLogout,
                         onRefresh: _handleRefresh,
                         onSelectHomeschool: _handleHomeschoolChange,
@@ -151,7 +153,7 @@ class _HomePageState extends State<HomePage> {
                       labels: labels,
                       controller: widget.controller,
                       tabLabel: tabs[safeIndex].label,
-                      tab: tabs[safeIndex].page,
+                      tab: activeTab,
                       onLogout: _handleLogout,
                       onRefresh: _handleRefresh,
                       onSelectHomeschool: _handleHomeschoolChange,
@@ -509,9 +511,65 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _currentIndex = 0;
       });
-    } catch (_) {
-      _showMessage(widget.controller.statusMessage);
+    } catch (error) {
+      _showMessage(
+        error is StateError ? error.message : widget.controller.statusMessage,
+      );
     }
+  }
+
+  /// 관리자/스태프 멤버가 학부모/교사 뷰로 전환해 보는 중일 때, 현재 상태를
+  /// 항상 보이게 하고 원터치로 관리자 뷰에 복귀할 수 있는 배너를 덧붙인다.
+  /// 모바일에서 뷰 전환 후 관리 기능(선생님 추가 등)이 사라진 것처럼 보이는
+  /// 혼란을 막는다.
+  Widget _wrapWithRolePreviewBanner(Widget tab) {
+    final controller = widget.controller;
+    if (controller.isAdminLike ||
+        !controller.hasAdminLikeMembershipInSelectedHomeschool) {
+      return tab;
+    }
+
+    final adminRole = controller.availableViewRoles.firstWhere(
+      (role) => role == 'HOMESCHOOL_ADMIN' || role == 'STAFF',
+      orElse: () => 'HOMESCHOOL_ADMIN',
+    );
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: NestColors.roseMist,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.visibility_outlined,
+                size: 18,
+                color: NestColors.deepWood,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_labelForRole(controller.currentRole ?? '')} 뷰로 보는 중',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _handleViewRoleChange(adminRole),
+                child: Text('${_labelForRole(adminRole)} 뷰로 전환'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: tab),
+      ],
+    );
   }
 
   void _navigateToTabLabel(String label) {

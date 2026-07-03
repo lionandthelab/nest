@@ -31,17 +31,22 @@ class Homeschool {
     required this.id,
     required this.name,
     required this.timezone,
+    this.joinCode,
   });
 
   final String id;
   final String name;
   final String timezone;
 
+  /// 참여 코드(관리자 공유용). null 이면 아직 없음.
+  final String? joinCode;
+
   factory Homeschool.fromMap(Map<String, dynamic> map) {
     return Homeschool(
       id: map['id'] as String,
       name: (map['name'] as String?) ?? 'Unnamed Homeschool',
       timezone: (map['timezone'] as String?) ?? 'Asia/Seoul',
+      joinCode: map['join_code'] as String?,
     );
   }
 
@@ -49,6 +54,7 @@ class Homeschool {
     'id': id,
     'name': name,
     'timezone': timezone,
+    'join_code': joinCode,
   };
 }
 
@@ -129,6 +135,7 @@ class Membership {
         'id': fallbackId,
         'name': homeschoolMap['name'],
         'timezone': homeschoolMap['timezone'],
+        'join_code': homeschoolMap['join_code'],
       }),
     );
   }
@@ -260,6 +267,7 @@ class HomeschoolJoinRequest {
     required this.requestNote,
     required this.status,
     required this.createdAt,
+    this.requestedRole,
   });
 
   final String id;
@@ -270,6 +278,9 @@ class HomeschoolJoinRequest {
   final String? requestNote;
   final String status; // PENDING, APPROVED, REJECTED, CANCELED
   final DateTime? createdAt;
+
+  /// 신청자가 고른 희망 역할(PARENT/TEACHER/GUEST_TEACHER). null 이면 미지정.
+  final String? requestedRole;
 
   bool get isPending => status == 'PENDING';
 
@@ -283,6 +294,7 @@ class HomeschoolJoinRequest {
       requestNote: map['request_note'] as String?,
       status: (map['status'] as String?) ?? 'PENDING',
       createdAt: parseDateTime(map['created_at']),
+      requestedRole: map['requested_role'] as String?,
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
@@ -57,6 +58,8 @@ class _MembersTabState extends State<MembersTab> {
 
     return ListView(
       children: [
+        _buildJoinCodeCard(controller),
+        const SizedBox(height: 12),
         if (pendingRequests.isNotEmpty) ...[
           _buildJoinRequestCard(controller, pendingRequests),
           const SizedBox(height: 12),
@@ -68,6 +71,106 @@ class _MembersTabState extends State<MembersTab> {
         _buildMemberListCard(controller),
       ],
     );
+  }
+
+  Widget _buildJoinCodeCard(NestController controller) {
+    final theme = Theme.of(context);
+    final code = controller.selectedHomeschoolJoinCode ?? '------';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.vpn_key_outlined,
+                    size: 20, color: NestColors.clay),
+                const SizedBox(width: 8),
+                Text('참여 코드', style: theme.textTheme.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '이 코드를 학부모·선생님께 공유하세요. 코드만 입력하면 합류를 요청할 수 있어요.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: NestColors.roseMist.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Text(
+                      code,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        letterSpacing: 6,
+                        color: NestColors.deepWood,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: '복사',
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: code));
+                    _showMessage('참여 코드를 복사했어요: $code');
+                  },
+                  icon: const Icon(Icons.copy, size: 20),
+                ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: controller.isBusy ? null : _regenerateCode,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('코드 재발급'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _regenerateCode() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('참여 코드 재발급'),
+        content: const Text(
+          '새 코드를 만들면 기존 코드는 더 이상 쓸 수 없어요. 계속할까요?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('재발급'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final code = await widget.controller.rotateJoinCode();
+      _showMessage('새 참여 코드: $code');
+    } catch (_) {
+      _showMessage(widget.controller.statusMessage);
+    }
   }
 
   Widget _buildJoinRequestCard(
@@ -142,6 +245,20 @@ class _MembersTabState extends State<MembersTab> {
             req.requesterEmail,
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if ((req.requestedRole ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: NestColors.mutedSage.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '희망 역할 · ${_joinRoleLabel(req.requestedRole!)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
           if (req.requestNote != null && req.requestNote!.trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -172,9 +289,8 @@ class _MembersTabState extends State<MembersTab> {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed: controller.isBusy
-                    ? null
-                    : () => _approveRequest(req.id, req.requesterUserId),
+                onPressed:
+                    controller.isBusy ? null : () => _showApproveDialog(req),
                 icon: const Icon(Icons.check, size: 18),
                 label: const Text('승인'),
               ),
@@ -185,15 +301,127 @@ class _MembersTabState extends State<MembersTab> {
     );
   }
 
-  Future<void> _approveRequest(String requestId, String userId) async {
+  String _joinRoleLabel(String role) {
+    switch (role) {
+      case 'PARENT':
+        return '학부모';
+      case 'TEACHER':
+        return '선생님';
+      case 'GUEST_TEACHER':
+        return '초청교사';
+      default:
+        return role;
+    }
+  }
+
+  /// 가입 승인: 역할 확정 + (학부모면) 연결할 가정 선택 → 한 번에 승인.
+  Future<void> _showApproveDialog(HomeschoolJoinRequest req) async {
+    final controller = widget.controller;
+    const roleOptions = ['PARENT', 'TEACHER', 'GUEST_TEACHER'];
+    var role = roleOptions.contains(req.requestedRole)
+        ? req.requestedRole!
+        : 'PARENT';
+    String? familyId;
+    final families = controller.families.toList()
+      ..sort((a, b) => a.familyName.compareTo(b.familyName));
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setInner) {
+            return AlertDialog(
+              title: const Text('가입 승인'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.requesterName ?? req.requesterEmail,
+                      style: Theme.of(ctx).textTheme.titleSmall,
+                    ),
+                    Text(req.requesterEmail,
+                        style: Theme.of(ctx).textTheme.bodySmall),
+                    if ((req.requestNote ?? '').trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text('메모: ${req.requestNote}',
+                            style: Theme.of(ctx).textTheme.bodySmall),
+                      ),
+                    const SizedBox(height: 14),
+                    const Text('역할'),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final r in roleOptions)
+                          ChoiceChip(
+                            label: Text(_joinRoleLabel(r)),
+                            selected: role == r,
+                            onSelected: (_) => setInner(() => role = r),
+                          ),
+                      ],
+                    ),
+                    if (role == 'PARENT') ...[
+                      const SizedBox(height: 14),
+                      const Text('연결할 가정'),
+                      const SizedBox(height: 6),
+                      if (families.isEmpty)
+                        Text(
+                          '등록된 가정이 없습니다. 학기 설정 › 가정에서 먼저 만들어 주세요.',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: NestColors.clay,
+                              ),
+                        )
+                      else
+                        DropdownButtonFormField<String>(
+                          initialValue: familyId,
+                          isExpanded: true,
+                          decoration:
+                              const InputDecoration(hintText: '가정 선택'),
+                          items: [
+                            for (final f in families)
+                              DropdownMenuItem(
+                                value: f.id,
+                                child: Text(f.familyName,
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                          ],
+                          onChanged: (v) => setInner(() => familyId = v),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('취소'),
+                ),
+                FilledButton(
+                  onPressed: (role == 'PARENT' && familyId == null)
+                      ? null
+                      : () => Navigator.pop(ctx, true),
+                  child: const Text('승인'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (ok != true) return;
+
     try {
-      await widget.controller.approveJoinRequest(
-        requestId: requestId,
-        requesterUserId: userId,
+      await controller.approveJoinRequest(
+        requestId: req.id,
+        role: role,
+        familyId: role == 'PARENT' ? familyId : null,
       );
-      _showMessage(widget.controller.statusMessage);
+      _showMessage(controller.statusMessage);
     } catch (_) {
-      _showMessage(widget.controller.statusMessage);
+      _showMessage(controller.statusMessage);
     }
   }
 
