@@ -18,6 +18,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_PATH = path.join(ROOT, '.env');
+// LION_* 키는 .env.example이 있는 packages/lion_auth/.env 에 채우는 것이
+// 자연스러우므로 두 위치를 병합해서 읽는다(패키지 값이 우선).
+const PACKAGE_ENV_PATH = path.join(ROOT, 'packages', 'lion_auth', '.env');
 const MANIFEST_PATH = path.join(
   ROOT, 'frontend', 'android', 'app', 'src', 'main', 'AndroidManifest.xml',
 );
@@ -37,7 +40,7 @@ function parseEnv(filePath) {
   return env;
 }
 
-const env = parseEnv(ENV_PATH);
+const env = { ...parseEnv(ENV_PATH), ...parseEnv(PACKAGE_ENV_PATH) };
 // 기존 Nest 스크립트들과의 호환: SUPABASE_TOKEN도 액세스 토큰으로 인정.
 env.SUPABASE_ACCESS_TOKEN = env.SUPABASE_ACCESS_TOKEN || env.SUPABASE_TOKEN;
 
@@ -229,16 +232,30 @@ function patchIos() {
 function deployBroker() {
   const ref = projectRef();
   console.log('\n[broker] social-broker Edge Function 배포 중...');
-  const probe = spawnSync('supabase', ['--version'], { shell: true, encoding: 'utf8' });
-  if (probe.status !== 0) {
-    console.log(`[broker] supabase CLI를 찾지 못했습니다. 수동 배포 명령:
-  supabase functions deploy social-broker --project-ref ${ref}`);
-    return;
+
+  // 로그인 전(익명) 클라이언트가 브로커를 호출하므로 --no-verify-jwt 필요.
+  // supabase CLI가 PATH에 없으면 npx로 폴백한다. 인증은 SUPABASE_ACCESS_TOKEN.
+  const deployArgs = [
+    'functions', 'deploy', 'social-broker',
+    '--project-ref', ref, '--no-verify-jwt',
+  ];
+  const child = spawnSync('supabase', ['--version'], { shell: true, encoding: 'utf8' });
+  const runner = child.status === 0 ? 'supabase' : 'npx --yes supabase';
+  if (runner.startsWith('npx')) {
+    console.log('[broker] supabase CLI 미설치 → npx supabase 로 실행');
   }
-  execSync(`supabase functions deploy social-broker --project-ref ${ref}`, {
+
+  const result = spawnSync(`${runner} ${deployArgs.join(' ')}`, {
     cwd: ROOT,
     stdio: 'inherit',
+    shell: true,
+    env: { ...process.env, SUPABASE_ACCESS_TOKEN: env.SUPABASE_ACCESS_TOKEN },
   });
+  if (result.status !== 0) {
+    console.log(`[broker] 배포 실패. 수동 배포:
+  npx supabase functions deploy social-broker --project-ref ${ref} --no-verify-jwt`);
+    return;
+  }
   console.log('[broker] 배포 완료');
 }
 

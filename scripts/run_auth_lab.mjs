@@ -26,7 +26,12 @@ function parseEnv(filePath) {
   return env;
 }
 
-const env = parseEnv(path.join(ROOT, '.env'));
+// 루트 .env + packages/lion_auth/.env 병합(패키지 값 우선).
+// LION_* 키는 .env.example이 있는 패키지 폴더에 채우는 것이 자연스럽다.
+const env = {
+  ...parseEnv(path.join(ROOT, '.env')),
+  ...parseEnv(path.join(ROOT, 'packages', 'lion_auth', '.env')),
+};
 
 // 클라이언트에 주입해도 되는 키만 전달한다. (NAVER_CLIENT_SECRET은
 // Android 매니페스트/서버 브로커 전용 — dart-define으로 넘기지 않는다)
