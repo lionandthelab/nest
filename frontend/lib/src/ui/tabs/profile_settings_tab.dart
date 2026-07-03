@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../config/app_config.dart';
 import '../../services/pwa_install_helper.dart';
 import '../../state/nest_controller.dart';
+import '../legal/legal_page.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
@@ -243,6 +244,28 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           label: '홈스쿨 ID',
           value: controller.selectedHomeschoolId ?? '-',
           onTap: null,
+        ),
+
+        // ── 약관·정책 ──
+        const SizedBox(height: 28),
+        Text(
+          '약관 및 정책',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SettingsTile(
+          icon: Icons.privacy_tip_outlined,
+          label: '개인정보처리방침',
+          value: '수집·이용·보관 안내',
+          onTap: () => LegalPage.open(context, LegalDocument.privacy),
+        ),
+        _SettingsTile(
+          icon: Icons.description_outlined,
+          label: '이용약관',
+          value: '서비스 이용 조건',
+          onTap: () => LegalPage.open(context, LegalDocument.terms),
         ),
 
         // ── PWA Install ──

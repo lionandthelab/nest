@@ -75,6 +75,8 @@ flutter:
   assets:
     - assets/logo.png
     - assets/logo_square.png
+    - assets/legal/privacy.md
+    - assets/legal/terms.md
 
   fonts:
     - family: BlackHanSans
