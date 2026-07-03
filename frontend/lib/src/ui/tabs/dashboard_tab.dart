@@ -83,7 +83,7 @@ class _DashboardTabState extends State<DashboardTab> {
             _PendingInvitesCard(controller: controller),
           ],
           const SizedBox(height: 16),
-          _JoinByCodeCard(controller: controller),
+          JoinByCodeCard(controller: controller),
           const SizedBox(height: 16),
           _buildOnboardingJoinRequestCard(theme, controller),
           const SizedBox(height: 16),
@@ -1349,16 +1349,18 @@ class _PendingJoinRequestsBanner extends StatelessWidget {
 
 /// 온보딩: 참여 코드로 홈스쿨에 합류하기 (가장 간편한 경로).
 /// 코드 입력 → 홈스쿨 확인 → 역할(학부모/선생님) 선택 → 요청. 승인은 관리자가.
-class _JoinByCodeCard extends StatefulWidget {
-  const _JoinByCodeCard({required this.controller});
+/// 참여 코드로 홈스쿨에 합류를 요청하는 온보딩 카드.
+/// 코드 확인 → 역할(학부모/선생님) 선택 → 요청 흐름을 담는다.
+class JoinByCodeCard extends StatefulWidget {
+  const JoinByCodeCard({super.key, required this.controller});
 
   final NestController controller;
 
   @override
-  State<_JoinByCodeCard> createState() => _JoinByCodeCardState();
+  State<JoinByCodeCard> createState() => _JoinByCodeCardState();
 }
 
-class _JoinByCodeCardState extends State<_JoinByCodeCard> {
+class _JoinByCodeCardState extends State<JoinByCodeCard> {
   final _codeController = TextEditingController();
   final _noteController = TextEditingController();
   String? _resolvedName;
