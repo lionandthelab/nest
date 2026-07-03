@@ -327,8 +327,11 @@ class _MembersTabState extends State<MembersTab> {
 
     // 이름이 일치하는 미연결 교사 프로필(엑셀로 미리 만든 감독 등)을 찾아, 승인과
     // 동시에 이 계정과 이어줄지 제안한다. 연결되면 학부모 뷰에서도 감독 시간표가
-    // 보인다. (공백 무시 매칭)
-    final reqName = (req.requesterName ?? '').replaceAll(RegExp(r'\s+'), '');
+    // 보인다. 실명 우선(없으면 닉네임)으로 공백 무시 매칭.
+    final rawName = (req.requesterRealName ?? '').trim().isNotEmpty
+        ? req.requesterRealName!
+        : (req.requesterName ?? '');
+    final reqName = rawName.replaceAll(RegExp(r'\s+'), '');
     TeacherProfile? found;
     if (reqName.isNotEmpty) {
       for (final t in controller.teacherProfiles) {
@@ -355,9 +358,14 @@ class _MembersTabState extends State<MembersTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      req.requesterName ?? req.requesterEmail,
+                      (req.requesterRealName ?? '').trim().isNotEmpty
+                          ? req.requesterRealName!
+                          : (req.requesterName ?? req.requesterEmail),
                       style: Theme.of(ctx).textTheme.titleSmall,
                     ),
+                    if ((req.requesterName ?? '').trim().isNotEmpty)
+                      Text('닉네임: ${req.requesterName}',
+                          style: Theme.of(ctx).textTheme.bodySmall),
                     Text(req.requesterEmail,
                         style: Theme.of(ctx).textTheme.bodySmall),
                     if ((req.requestNote ?? '').trim().isNotEmpty)

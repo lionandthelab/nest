@@ -20,6 +20,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nicknameController = TextEditingController();
+  final _realNameController = TextEditingController();
   bool _isSignUpMode = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
@@ -30,6 +31,7 @@ class _LoginPageState extends State<LoginPage> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _nicknameController.dispose();
+    _realNameController.dispose();
     super.dispose();
   }
 
@@ -46,6 +48,7 @@ class _LoginPageState extends State<LoginPage> {
           email: _emailController.text,
           password: _passwordController.text,
           displayName: _nicknameController.text,
+          realName: _realNameController.text,
         );
         if (mounted) {
           HapticFeedback.mediumImpact();
@@ -223,6 +226,27 @@ class _LoginPageState extends State<LoginPage> {
                                         ? Column(
                                             key: const ValueKey('signup-nickname'),
                                             children: [
+                                              TextFormField(
+                                                controller: _realNameController,
+                                                textInputAction: TextInputAction.next,
+                                                autofillHints: const [AutofillHints.name],
+                                                decoration: const InputDecoration(
+                                                  labelText: '실명',
+                                                  hintText: '실제 이름 (선생님·감독 확인용)',
+                                                  prefixIcon: Icon(Icons.badge_outlined, size: 20),
+                                                ),
+                                                validator: (value) {
+                                                  if (!_isSignUpMode) return null;
+                                                  if (value == null || value.trim().isEmpty) {
+                                                    return '실명을 입력하세요.';
+                                                  }
+                                                  if (value.trim().length < 2) {
+                                                    return '실명은 2자 이상으로 입력하세요.';
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                              const SizedBox(height: 14),
                                               TextFormField(
                                                 controller: _nicknameController,
                                                 textInputAction: TextInputAction.next,

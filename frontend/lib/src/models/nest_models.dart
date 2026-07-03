@@ -268,6 +268,7 @@ class HomeschoolJoinRequest {
     required this.status,
     required this.createdAt,
     this.requestedRole,
+    this.requesterRealName,
   });
 
   final String id;
@@ -282,6 +283,9 @@ class HomeschoolJoinRequest {
   /// 신청자가 고른 희망 역할(PARENT/TEACHER/GUEST_TEACHER). null 이면 미지정.
   final String? requestedRole;
 
+  /// 신청자의 실명(닉네임과 별개). 관리자 승인 시 교사 프로필 매칭에 쓴다.
+  final String? requesterRealName;
+
   bool get isPending => status == 'PENDING';
 
   factory HomeschoolJoinRequest.fromMap(Map<String, dynamic> map) {
@@ -295,6 +299,7 @@ class HomeschoolJoinRequest {
       status: (map['status'] as String?) ?? 'PENDING',
       createdAt: parseDateTime(map['created_at']),
       requestedRole: map['requested_role'] as String?,
+      requesterRealName: map['requester_real_name'] as String?,
     );
   }
 }

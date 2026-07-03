@@ -409,6 +409,7 @@ class NestController extends ChangeNotifier {
     required String email,
     required String password,
     String? displayName,
+    String? realName,
   }) async {
     _isExplicitAuthInProgress = true;
     try {
@@ -417,6 +418,7 @@ class NestController extends ChangeNotifier {
           email: email.trim(),
           password: password.trim(),
           displayName: displayName?.trim(),
+          realName: realName?.trim(),
         );
 
         final currentSession = _repository.currentSession;
@@ -455,6 +457,23 @@ class NestController extends ChangeNotifier {
     await _runBusy('연락처 변경 중...', () async {
       await _repository.updatePhoneNumber(trimmed);
       _setStatus('연락처가 변경되었습니다.');
+    });
+  }
+
+  /// 현재 사용자의 실명(없으면 빈 문자열). 닉네임(full_name)과 별개.
+  String get myRealName {
+    final value = user?.userMetadata?['real_name'];
+    return value is String ? value : '';
+  }
+
+  Future<void> updateRealName(String realName) async {
+    final trimmed = realName.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('실명을 입력하세요.');
+    }
+    await _runBusy('실명 저장 중...', () async {
+      await _repository.updateRealName(trimmed);
+      _setStatus('실명이 저장되었습니다.');
     });
   }
 

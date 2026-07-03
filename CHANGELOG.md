@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.7+8 (2026-07-03)
+
+### Added
+
+- 회원가입 시 **실명(real_name)** 수집 — 닉네임과 별도로 실명을 받아 교사/감독 계정 매칭을 이름 흔들림 없이 안정화 (소셜 로그인 도입 시에도 동일 필드 사용)
+  - 회원가입 폼에 "실명" 필드 추가 (`login_page.dart`)
+  - 프로필 설정에 실명 입력·수정 추가 — 기존 사용자 백필용 (`profile_settings_tab.dart`)
+  - 가입 승인 시 **실명 우선**으로 교사 프로필 자동 연결 매칭 + 승인 화면에 실명 표시 (`members_tab.dart`)
+  - DB: `profiles.real_name`, `homeschool_join_requests.requester_real_name` 컬럼 추가, `handle_new_user`·`request_join_with_code` 갱신 (`20260703120000_profiles_real_name.sql`)
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 28건 통과
+
 ## 2.0.6+7 (2026-07-03)
 
 ### Added

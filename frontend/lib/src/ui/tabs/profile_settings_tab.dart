@@ -171,6 +171,23 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           ),
         ),
         _SettingsTile(
+          icon: Icons.badge_outlined,
+          label: '실명',
+          value: controller.myRealName.isEmpty ? '미설정' : controller.myRealName,
+          valueColor: controller.myRealName.isEmpty
+              ? NestColors.deepWood.withValues(alpha: 0.4)
+              : null,
+          onTap: () => _editField(
+            title: '실명 입력',
+            currentValue: controller.myRealName,
+            hint: '실제 이름 (선생님·감독 확인용)',
+            onSave: (value) async {
+              await controller.updateRealName(value);
+              if (mounted) _showMessage('실명이 저장되었습니다.');
+            },
+          ),
+        ),
+        _SettingsTile(
           icon: Icons.email_outlined,
           label: '이메일',
           value: email,

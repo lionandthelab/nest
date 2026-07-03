@@ -71,14 +71,21 @@ class NestRepository {
     required String email,
     required String password,
     String? displayName,
+    String? realName,
   }) async {
+    // full_name = 앱 표시용 닉네임, real_name = 실명(교사/감독 매칭·관리자 확인용).
+    final data = <String, dynamic>{};
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      data['full_name'] = displayName.trim();
+    }
+    if (realName != null && realName.trim().isNotEmpty) {
+      data['real_name'] = realName.trim();
+    }
     final response = await client.auth.signUp(
       email: email,
       password: password,
       emailRedirectTo: AppConfig.authEmailRedirectUrl,
-      data: displayName != null && displayName.trim().isNotEmpty
-          ? {'full_name': displayName.trim()}
-          : null,
+      data: data.isEmpty ? null : data,
     );
 
     if (response.user == null) {
@@ -86,6 +93,20 @@ class NestRepository {
     }
 
     return response;
+  }
+
+  /// 실명(real_name)을 auth 메타데이터와 profiles 테이블에 함께 반영한다.
+  /// (기존 사용자 백필 및 프로필 설정 편집에 사용)
+  Future<void> updateRealName(String realName) async {
+    final trimmed = realName.trim();
+    await client.auth.updateUser(UserAttributes(data: {'real_name': trimmed}));
+    final uid = client.auth.currentUser?.id;
+    if (uid != null) {
+      await client
+          .from('profiles')
+          .update({'real_name': trimmed.isEmpty ? null : trimmed})
+          .eq('id', uid);
+    }
   }
 
   Future<void> updateDisplayName(String displayName) async {
