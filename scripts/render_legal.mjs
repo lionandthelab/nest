@@ -174,7 +174,7 @@ function pageTemplate(title, bodyHtml) {
 </head>
 <body>
   <div class="wrap">
-    <a class="brand" href="./">🪺 Nest</a>
+    <a class="brand" href="welcome.html">🪺 Nest</a>
     ${bodyHtml}
     <div class="foot">
       본 문서는 Nest 앱 내 <b>설정 &gt; 약관 및 정책</b>에서도 확인할 수 있습니다.<br>
