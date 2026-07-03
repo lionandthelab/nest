@@ -1,0 +1,17 @@
+{
+  "name": "nest-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nest 운영/검증 스크립트 (Node ESM). auth-lab headless 스모크 등.",
+  "type": "module",
+  "scripts": {
+    "auth-lab": "node scripts/run_auth_lab.mjs",
+    "auth-lab:build": "node scripts/run_auth_lab.mjs --build",
+    "auth-lab:smoke": "node scripts/auth_lab_smoke.mjs",
+    "lion-auth:setup": "node scripts/lion_auth_setup.mjs all",
+    "lion-auth:doctor": "node scripts/lion_auth_setup.mjs doctor"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.3.0"
+  }
+}
