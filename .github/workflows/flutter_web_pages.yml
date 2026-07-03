@@ -42,7 +42,10 @@ jobs:
 
       - name: Build web
         working-directory: frontend
-        run: flutter build web --release --base-href /nest/
+        # Custom domain (nestapp.life) serves from the site root, so the app
+        # must be built with base-href "/" — not the old "/nest/" subpath used
+        # by lionandthelab.github.io/nest/.
+        run: flutter build web --release --base-href /
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
@@ -51,3 +54,7 @@ jobs:
           publish_branch: gh-pages
           publish_dir: frontend/build/web
           force_orphan: true
+          # force_orphan recreates gh-pages from scratch each deploy, which
+          # would delete the CNAME GitHub added for the custom domain. Re-write
+          # it here so the custom domain survives every deploy.
+          cname: nestapp.life

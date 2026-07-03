@@ -44,7 +44,7 @@ class AppConfig {
 
   static const String authEmailRedirectUrlWeb = String.fromEnvironment(
     'AUTH_EMAIL_REDIRECT_URL',
-    defaultValue: 'https://lionandthelab.github.io/nest/',
+    defaultValue: 'https://nestapp.life/',
   );
 
   static const String authEmailRedirectUrlMobile = String.fromEnvironment(

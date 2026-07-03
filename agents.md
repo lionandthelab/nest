@@ -394,7 +394,7 @@ cd frontend && flutter analyze --no-fatal-infos --no-fatal-warnings
 flutter test
 
 # 3. 웹 빌드 검증
-flutter build web --release --base-href /nest/
+flutter build web --release --base-href /
 
 # 4. E2E (시크릿 필요)
 SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/e2e_remote.mjs
@@ -429,8 +429,8 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... node script
 2. GitHub Actions가 자동으로:
    - `flutter analyze`
    - `flutter test`
-   - `flutter build web --release --base-href /nest/`
-   - `gh-pages` 브랜치에 배포
+   - `flutter build web --release --base-href /`
+   - `gh-pages` 브랜치에 배포 (CNAME `nestapp.life` 재기록)
 
 #### Supabase 배포
 

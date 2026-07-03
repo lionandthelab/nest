@@ -298,7 +298,7 @@ PARENT           - 본인 가정/자녀 중심 조회
 ```bash
 flutter analyze --no-fatal-infos --no-fatal-warnings
 flutter test
-flutter build web --release --base-href /nest/
+flutter build web --release --base-href /
 ```
 
 ---
@@ -319,7 +319,7 @@ flutter run -d chrome --web-port=8080  # OAuth 테스트 시
 ### 빌드
 
 ```bash
-flutter build web --release --base-href /nest/
+flutter build web --release --base-href /   # nestapp.life는 루트에서 서빙
 flutter build appbundle --release   # Android
 flutter build ios --release --no-codesign  # iOS
 ```
