@@ -835,16 +835,16 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                   .toList()
                               ..sort();
               final linkedSet = linkedGuardianUserIds.toSet();
-              final parentMatches = controller
+              // 이 가정에 아직 연결되지 않은 모든 홈스쿨 구성원을 후보로 보여준다.
+              // PARENT 권한이 없어도 연결 시 자동으로 부여되므로, 예전처럼
+              // PARENT 계정만 필터링해 계정이 목록에서 조용히 사라지는 문제를
+              // 없앤다.
+              final guardianCandidates = controller
                   .searchHomeschoolMemberDirectory(
                     accountQueryController.text,
                     maxResults: 12,
                   )
-                  .where(
-                    (entry) =>
-                        entry.roles.contains('PARENT') &&
-                        !linkedSet.contains(entry.userId),
-                  )
+                  .where((entry) => !linkedSet.contains(entry.userId))
                   .toList();
 
               Future<void> deleteFamily() async {
@@ -935,7 +935,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'PARENT 권한을 가진 계정을 검색해 이 가정에 연결합니다.',
+                            '계정을 검색해 이 가정의 보호자로 연결합니다. '
+                            '학부모(PARENT) 권한이 없으면 연결 시 자동으로 부여됩니다.',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   color: NestColors.deepWood.withValues(
@@ -953,8 +954,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             onChanged: (_) => setDialogState(() {}),
                           ),
                           const SizedBox(height: 8),
-                          if (parentMatches.isEmpty)
-                            _buildEmptyHint('연결 가능한 학부모 계정이 없습니다.')
+                          if (guardianCandidates.isEmpty)
+                            _buildEmptyHint(
+                              accountQueryController.text.trim().isEmpty
+                                  ? '이름·이메일로 계정을 검색하세요.'
+                                  : '검색 결과가 없습니다. 이 계정이 홈스쿨 구성원인지 확인하세요.',
+                            )
                           else
                             Container(
                               constraints: const BoxConstraints(maxHeight: 180),
@@ -964,12 +969,14 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                               ),
                               child: ListView.builder(
                                 shrinkWrap: true,
-                                itemCount: parentMatches.length,
+                                itemCount: guardianCandidates.length,
                                 itemBuilder: (context, index) {
-                                  final member = parentMatches[index];
+                                  final member = guardianCandidates[index];
                                   final selected =
                                       selectedGuardianAccount?.userId ==
                                       member.userId;
+                                  final willGrantParent =
+                                      !member.roles.contains('PARENT');
                                   return ListTile(
                                     dense: true,
                                     leading: Icon(
@@ -984,9 +991,11 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                           : member.fullName,
                                     ),
                                     subtitle: Text(
-                                      member.email.isEmpty
-                                          ? member.userId
-                                          : member.email,
+                                      willGrantParent
+                                          ? '${member.email.isEmpty ? member.userId : member.email} · 연결 시 학부모 권한 부여'
+                                          : (member.email.isEmpty
+                                                ? member.userId
+                                                : member.email),
                                     ),
                                     onTap: isSaving
                                         ? null

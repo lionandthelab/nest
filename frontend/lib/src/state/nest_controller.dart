@@ -3200,17 +3200,36 @@ class NestController extends ChangeNotifier {
       throw StateError('보호자 유형이 올바르지 않습니다.');
     }
 
-    final hasParentRole = homeschoolMemberships.any(
-      (row) =>
-          row.userId == normalizedUserId &&
-          row.role == 'PARENT' &&
-          row.status == 'ACTIVE',
-    );
-    if (!hasParentRole) {
-      throw StateError('해당 계정은 아직 PARENT 권한이 없습니다. 먼저 권한을 부여하세요.');
-    }
-
     await _runBusy('가정에 학부모 계정을 연결하는 중...', () async {
+      // 가정 보호자는 곧 학부모다. PARENT 역할이 없으면 자동으로 부여해
+      // "권한 부여 → 연결" 순서나 로컬 캐시 지연 때문에 연결이 조용히
+      // 실패하던 문제를 없앤다. (부여 실패 시에만 명확한 에러로 안내)
+      final hasParentRole = homeschoolMemberships.any(
+        (row) =>
+            row.userId == normalizedUserId &&
+            row.role == 'PARENT' &&
+            row.status == 'ACTIVE',
+      );
+      if (!hasParentRole) {
+        final homeschoolId = selectedHomeschoolId;
+        if (homeschoolId == null || homeschoolId.isEmpty) {
+          throw StateError('홈스쿨을 먼저 선택하세요.');
+        }
+        try {
+          await _repository.grantMembershipRole(
+            homeschoolId: homeschoolId,
+            userId: normalizedUserId,
+            role: 'PARENT',
+          );
+          await loadHomeschoolMemberships();
+        } catch (_) {
+          throw StateError(
+            '이 계정에 PARENT 권한을 부여하지 못했습니다. 관리자 권한으로 '
+            '먼저 학부모 권한을 부여한 뒤 다시 연결해 주세요.',
+          );
+        }
+      }
+
       await _repository.upsertFamilyGuardian(
         familyId: normalizedFamilyId,
         userId: normalizedUserId,
