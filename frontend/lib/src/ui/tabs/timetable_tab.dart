@@ -216,6 +216,7 @@ class _TimetableTabState extends State<TimetableTab> {
       });
     final daySet = slots.map((s) => s.dayOfWeek).toSet();
     final periodSet = slots.map((s) => '${s.startTime}-${s.endTime}').toSet();
+    final locked = controller.isBusy || controller.isSelectedTermReadOnly;
 
     return Card(
       child: Padding(
@@ -241,10 +242,21 @@ class _TimetableTabState extends State<TimetableTab> {
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             const Spacer(),
+            // 교시를 잘못 설정(예: 29교시)했을 때, 현재 상태에서 값을 추론하지 않고
+            // 깨끗한 기본값(평일 09:00~15:00 · 50분)으로 편집기를 열어 재설정한다.
+            if (slots.isNotEmpty)
+              TextButton.icon(
+                onPressed: locked
+                    ? null
+                    : () => _openTimeSlotEditorDialog(controller,
+                        resetToDefaults: true),
+                icon: const Icon(Icons.restart_alt, size: 18),
+                label: const Text('초기화'),
+                style: TextButton.styleFrom(foregroundColor: NestColors.clay),
+              ),
             TextButton.icon(
-              onPressed: controller.isBusy
-                  ? null
-                  : () => _openTimeSlotEditorDialog(controller),
+              onPressed:
+                  locked ? null : () => _openTimeSlotEditorDialog(controller),
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: const Text('편집'),
             ),
@@ -254,7 +266,10 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
-  Future<void> _openTimeSlotEditorDialog(NestController controller) async {
+  Future<void> _openTimeSlotEditorDialog(
+    NestController controller, {
+    bool resetToDefaults = false,
+  }) async {
     // Infer current settings from existing slots
     final slots = controller.timeSlots.toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
@@ -265,13 +280,14 @@ class _TimetableTabState extends State<TimetableTab> {
       uniquePeriods.add('${s.startTime}|${s.endTime}');
     }
 
-    // Infer defaults from existing slots
+    // 기본값(초기화 시엔 현재 상태를 무시하고 이 값으로 시작).
     String inferredStart = '09:00';
     String inferredEnd = '15:00';
     int inferredDuration = 50;
     int inferredBreak = 10;
 
-    if (uniquePeriods.isNotEmpty) {
+    // 초기화 모드에서는 망가진 현재 교시에서 값을 추론하지 않는다.
+    if (!resetToDefaults && uniquePeriods.isNotEmpty) {
       final sortedPeriods = uniquePeriods.toList()..sort();
 
       // First period start
@@ -304,7 +320,7 @@ class _TimetableTabState extends State<TimetableTab> {
     final durationCtrl =
         TextEditingController(text: inferredDuration.toString());
     final breakCtrl = TextEditingController(text: inferredBreak.toString());
-    var selectedDays = activeDays.isNotEmpty
+    var selectedDays = (!resetToDefaults && activeDays.isNotEmpty)
         ? Set<int>.from(activeDays)
         : <int>{1, 2, 3, 4, 5}; // Default: Mon-Fri
 
@@ -342,7 +358,7 @@ class _TimetableTabState extends State<TimetableTab> {
               }
 
               return AlertDialog(
-                title: const Text('교시/요일 설정'),
+                title: Text(resetToDefaults ? '교시 설정 초기화' : '교시/요일 설정'),
                 content: SizedBox(
                   width: 420,
                   child: SingleChildScrollView(
@@ -351,7 +367,11 @@ class _TimetableTabState extends State<TimetableTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '시간 범위와 교시 길이를 설정하면 자동으로 교시가 생성됩니다.',
+                          resetToDefaults
+                              ? '기본값(평일 09:00~15:00 · 50분 교시)으로 되돌립니다. '
+                                  '적용하면 현재 교시가 모두 지워지고 아래 미리보기대로 다시 만들어집니다.'
+                              : '시간 범위와 교시 길이를 설정하면 자동으로 교시가 생성됩니다. '
+                                  '적용하면 기존 교시는 새 설정으로 교체됩니다.',
                           style: Theme.of(dialogContext)
                               .textTheme
                               .bodyMedium
