@@ -185,4 +185,49 @@ void main() {
       expect(archived.isArchived, isTrue);
     });
   });
+
+  group('defaultTermForToday', () {
+    Term term(String name, String start, String end) => Term.fromMap({
+          'id': name,
+          'homeschool_id': 's1',
+          'name': name,
+          'status': 'DRAFT',
+          'start_date': start,
+          'end_date': end,
+        });
+
+    final spring = term('2026 Spring', '2026-03-03', '2026-06-30');
+    final fall = term('2026 가을', '2026-09-01', '2026-11-30');
+
+    test('empty list returns null', () {
+      expect(defaultTermForToday(const [], DateTime(2026, 7, 7)), isNull);
+    });
+
+    test('picks the current term when today is within a range', () {
+      final t = defaultTermForToday([spring, fall], DateTime(2026, 5, 10));
+      expect(t?.name, '2026 Spring');
+    });
+
+    test('gap between terms picks the most recently started (예승 버그)', () {
+      // 오늘이 Spring 종료(06-30)와 가을 시작(09-01) 사이 → 빈 미래 학기가 아니라
+      // 방금 끝난 Spring을 골라야 한다.
+      final t = defaultTermForToday([spring, fall], DateTime(2026, 7, 7));
+      expect(t?.name, '2026 Spring');
+    });
+
+    test('order-independent: fall-first list still picks Spring in the gap', () {
+      final t = defaultTermForToday([fall, spring], DateTime(2026, 7, 7));
+      expect(t?.name, '2026 Spring');
+    });
+
+    test('during the fall term picks fall', () {
+      final t = defaultTermForToday([spring, fall], DateTime(2026, 10, 1));
+      expect(t?.name, '2026 가을');
+    });
+
+    test('all future terms picks the earliest upcoming', () {
+      final t = defaultTermForToday([fall, spring], DateTime(2026, 1, 1));
+      expect(t?.name, '2026 Spring');
+    });
+  });
 }

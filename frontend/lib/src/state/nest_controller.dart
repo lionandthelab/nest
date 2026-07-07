@@ -5596,8 +5596,9 @@ class NestController extends ChangeNotifier {
 
     final validTermIds = terms.map((term) => term.id).toSet();
     if (selectedTermId == null || !validTermIds.contains(selectedTermId)) {
-      // 기본 선택은 오늘이 포함된 "현재 학기" 우선, 없으면 가장 최근 학기.
-      selectedTermId = currentTerm?.id ?? terms.firstOrNull?.id;
+      // 기본 선택: 현재 학기 → 없으면 직전(방금 시작/종료한) 학기 → 전부 미래면
+      // 가장 이른 예정 학기. 다음 학기를 미리 만들어도 빈 미래 학기로 튀지 않게 한다.
+      selectedTermId = defaultTermForToday(terms, DateTime.now())?.id;
     }
   }
 

@@ -822,6 +822,50 @@ class Term {
   bool get isArchived => status.toUpperCase() == 'ARCHIVED';
 }
 
+/// 오늘([now]) 기준으로 기본 선택할 학기를 고른다.
+///
+/// 우선순위:
+///   1) 오늘이 기간에 포함된 "현재 학기"
+///   2) 없으면(학기 사이 공백 등) 이미 시작한 학기 중 가장 최근 시작한 것
+///      (= 방금 끝난/진행성 학기) — 예정 학기(빈 미래 학기)로 튀지 않도록.
+///   3) 모두 미래면 가장 이른 예정 학기.
+///
+/// 단순히 start_date 최신순 첫 학기를 고르면, 다음 학기를 미리 만들어 둔 순간
+/// 아직 시작도 안 한 빈 학기가 선택돼 학부모/교사 뷰가 "반 배정 대기 중"으로
+/// 잘못 뜨는 문제가 생긴다(그 버그를 막기 위한 로직).
+Term? defaultTermForToday(List<Term> terms, DateTime now) {
+  if (terms.isEmpty) return null;
+  final today = DateTime(now.year, now.month, now.day);
+
+  DateTime? day(DateTime? d) =>
+      d == null ? null : DateTime(d.year, d.month, d.day);
+
+  // 1) 현재 학기.
+  for (final t in terms) {
+    if (t.phaseAt(now) == TermPhase.current) return t;
+  }
+
+  // 2) 이미 시작한 학기(start <= today) 중 가장 최근 시작.
+  Term? recentStarted;
+  for (final t in terms) {
+    final s = day(t.startDate);
+    if (s == null || s.isAfter(today)) continue;
+    final best = day(recentStarted?.startDate);
+    if (best == null || s.isAfter(best)) recentStarted = t;
+  }
+  if (recentStarted != null) return recentStarted;
+
+  // 3) 전부 미래 → 가장 이른 예정 학기.
+  Term? earliest;
+  for (final t in terms) {
+    final s = day(t.startDate);
+    if (s == null) continue;
+    final best = day(earliest?.startDate);
+    if (best == null || s.isBefore(best)) earliest = t;
+  }
+  return earliest ?? terms.first;
+}
+
 class AcademicEvent {
   const AcademicEvent({
     required this.id,
