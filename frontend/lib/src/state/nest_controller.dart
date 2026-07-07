@@ -3259,15 +3259,19 @@ class NestController extends ChangeNotifier {
       }
     }
 
+    // 중복 방어: 같은 (요일, 시작, 종료) 조합이 두 번 생성되지 않도록.
+    final uniquePeriods = <String, (String, String)>{
+      for (final p in periods) '${p.$1}-${p.$2}': p,
+    }.values.toList();
+
     await _runBusy('교시를 재설정하는 중...', () async {
-      // Delete all existing slots for this term
-      for (final slot in timeSlots) {
-        await _repository.deleteTimeSlot(slotId: slot.id);
-      }
+      // 이 학기의 기존 교시를 DB에서 통째로 삭제(메모리 목록에 없는 잔여 행까지
+      // 확실히 제거해 unique(term, day, start, end) 충돌을 막는다).
+      await _repository.deleteAllTimeSlots(termId: termId);
 
       // Create new slots for each active day × period
       for (final day in activeDays) {
-        for (final period in periods) {
+        for (final period in uniquePeriods) {
           await _repository.createTimeSlot(
             termId: termId,
             dayOfWeek: day,
@@ -3278,7 +3282,7 @@ class NestController extends ChangeNotifier {
       }
 
       await _loadTimetableAssets();
-      _setStatus('교시를 재설정했습니다 (${periods.length}교시 × ${activeDays.length}요일).');
+      _setStatus('교시를 재설정했습니다 (${uniquePeriods.length}교시 × ${activeDays.length}요일).');
     });
   }
 

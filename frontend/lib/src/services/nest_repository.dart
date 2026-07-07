@@ -1331,6 +1331,13 @@ class NestRepository {
         .eq('day_of_week', dayOfWeek);
   }
 
+  /// Delete every time slot for a term in a single server-side statement.
+  /// Used when regenerating the whole grid so no stale/leftover row can
+  /// collide with the unique (term, day, start, end) constraint.
+  Future<void> deleteAllTimeSlots({required String termId}) async {
+    await client.from('time_slots').delete().eq('term_id', termId);
+  }
+
   /// Update start/end times for all time slots matching old times across days.
   Future<void> updateTimeSlotTimeRange({
     required String termId,
