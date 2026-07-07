@@ -660,7 +660,9 @@ class _TimetableTabState extends State<TimetableTab> {
       }
     }
 
-    final archived = controller.isSelectedTermArchived;
+    // 읽기 전용 잠금: ARCHIVED(하드) + 지난 학기(소프트, 관리자 해제 가능).
+    // 아래 잠금 UI(버튼 비활성/프로스트 오버레이)는 이 플래그로 일괄 제어된다.
+    final archived = controller.isSelectedTermReadOnly;
 
     final boardContent = Card(
       child: Padding(
@@ -1108,6 +1110,10 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Widget _buildArchivedOverlay() {
+    final controller = widget.controller;
+    final message = controller.isSelectedTermArchived
+        ? '이 학기는 보관됨(ARCHIVED) 상태입니다. 시간표를 수정할 수 없습니다.'
+        : '지난 학기입니다(읽기 전용). 상단 학기 바에서 편집 잠금을 해제하면 수정할 수 있습니다.';
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Container(
@@ -1135,7 +1141,7 @@ class _TimetableTabState extends State<TimetableTab> {
               const SizedBox(width: 10),
               Flexible(
                 child: Text(
-                  '이 학기는 보관됨(ARCHIVED) 상태입니다. 시간표를 수정할 수 없습니다.',
+                  message,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: NestColors.deepWood,
                     fontWeight: FontWeight.w700,
@@ -2520,7 +2526,7 @@ class _TimetableTabState extends State<TimetableTab> {
             onDeleteSession: _deleteDraftSession,
             onSessionMenu: _openSessionMenu,
             sessionMenuEnabled: !forExport &&
-                !controller.isSelectedTermArchived &&
+                !controller.isSelectedTermReadOnly &&
                 !controller.isBusy,
             onSessionDragStarted: (sessionId) => _beginDrag(
               _ActiveDrag(
@@ -3222,6 +3228,11 @@ class _TimetableTabState extends State<TimetableTab> {
 
   Future<void> _openSessionSettingDialog(String sessionId) async {
     final controller = widget.controller;
+    // 읽기 전용(지난/보관) 학기에서는 세션 편집 다이얼로그를 열지 않는다
+    // (_openSessionMenu와 동일한 방어선).
+    if (controller.isSelectedTermReadOnly || controller.isBusy) {
+      return;
+    }
     final session = _draftSessions
         .where((row) => row.id == sessionId)
         .firstOrNull;
@@ -3500,7 +3511,7 @@ class _TimetableTabState extends State<TimetableTab> {
     Offset globalPosition,
   ) async {
     final controller = widget.controller;
-    if (controller.isSelectedTermArchived || controller.isBusy) {
+    if (controller.isSelectedTermReadOnly || controller.isBusy) {
       return;
     }
     final overlay =
@@ -3798,9 +3809,10 @@ class _TimetableTabState extends State<TimetableTab> {
   bool get _canUndo => _undoStack.isNotEmpty;
   bool get _canRedo => _redoStack.isNotEmpty;
 
-  /// True when drags must be disabled (busy commit or ARCHIVED term lock).
+  /// True when drags must be disabled (busy commit or read-only term lock:
+  /// ARCHIVED hard-lock or past-term soft-lock).
   bool get _dragsLocked =>
-      _isApplyingDraft || widget.controller.isSelectedTermArchived;
+      _isApplyingDraft || widget.controller.isSelectedTermReadOnly;
 
   void _beginDrag(_ActiveDrag drag) {
     setState(() {

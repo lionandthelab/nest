@@ -755,6 +755,11 @@ class AuditLog {
   }
 }
 
+/// 학기를 오늘 날짜 기준으로 분류한 시간적 단계.
+/// DB의 [Term.status] enum(DRAFT/ACTIVE/ARCHIVED)과는 별개로,
+/// [Term.startDate]/[Term.endDate]로 파생한다.
+enum TermPhase { past, current, upcoming }
+
 class Term {
   const Term({
     required this.id,
@@ -791,6 +796,30 @@ class Term {
     'start_date': startDate?.toUtc().toIso8601String(),
     'end_date': endDate?.toUtc().toIso8601String(),
   };
+
+  /// DB `date` 값이므로 하루 단위로 비교한다.
+  /// [now] 이전에 시작하지 않았으면 예정, [now] 이후에 종료됐으면 지난,
+  /// 그 사이(기간 포함)면 현재.
+  TermPhase phaseAt(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    final start = startDate;
+    if (start != null) {
+      final startDay = DateTime(start.year, start.month, start.day);
+      if (today.isBefore(startDay)) {
+        return TermPhase.upcoming;
+      }
+    }
+    final end = endDate;
+    if (end != null) {
+      final endDay = DateTime(end.year, end.month, end.day);
+      if (today.isAfter(endDay)) {
+        return TermPhase.past;
+      }
+    }
+    return TermPhase.current;
+  }
+
+  bool get isArchived => status.toUpperCase() == 'ARCHIVED';
 }
 
 class AcademicEvent {

@@ -58,6 +58,11 @@ class NestController extends ChangeNotifier {
   List<Term> terms = [];
   String? selectedTermId;
 
+  /// 지난 학기(기간 종료)는 기본적으로 읽기 전용이지만, 관리자가 상단 학기 바에서
+  /// 이 값을 켜면 편집을 허용한다. 학기를 전환하면 다시 잠긴다. ARCHIVED 학기는
+  /// 이 값과 무관하게 DB 트리거가 하드 잠금한다.
+  bool _allowReadOnlyTermEditing = false;
+
   List<ClassGroup> classGroups = [];
   String? selectedClassGroupId;
 
@@ -130,6 +135,60 @@ class NestController extends ChangeNotifier {
   /// lock itself to read-only when this is set.
   bool get isSelectedTermArchived =>
       (selectedTerm?.status ?? '').toUpperCase() == 'ARCHIVED';
+
+  /// 학기를 오늘 날짜 기준으로 지난/현재/예정으로 분류한다.
+  TermPhase phaseOf(Term term) => term.phaseAt(DateTime.now());
+
+  TermPhase? get selectedTermPhase {
+    final term = selectedTerm;
+    return term == null ? null : phaseOf(term);
+  }
+
+  List<Term> get pastTerms => _termsByPhase(TermPhase.past);
+  List<Term> get currentTerms => _termsByPhase(TermPhase.current);
+  List<Term> get upcomingTerms => _termsByPhase(TermPhase.upcoming);
+
+  /// 오늘이 포함된 "현재 학기"(없으면 null). 여러 개면 시작일이 가장 이른 것.
+  Term? get currentTerm => currentTerms.firstOrNull;
+
+  List<Term> _termsByPhase(TermPhase phase) {
+    final now = DateTime.now();
+    final matched = terms.where((t) => t.phaseAt(now) == phase).toList()
+      ..sort((a, b) {
+        final aStart = a.startDate;
+        final bStart = b.startDate;
+        if (aStart == null || bStart == null) return 0;
+        return aStart.compareTo(bStart);
+      });
+    return matched;
+  }
+
+  /// 관리자가 지난 학기 편집 잠금을 해제했는지 여부.
+  bool get isPastTermEditingUnlocked => _allowReadOnlyTermEditing;
+
+  /// 선택된 학기가 편집 불가(읽기 전용)인지. ARCHIVED는 항상 잠금(하드),
+  /// 지난 학기는 관리자가 해제하지 않은 경우에만 잠금(소프트).
+  bool get isSelectedTermReadOnly {
+    if (isSelectedTermArchived) return true;
+    if (selectedTermPhase == TermPhase.past && !_allowReadOnlyTermEditing) {
+      return true;
+    }
+    return false;
+  }
+
+  /// 지난 학기의 편집 잠금을 토글한다(ARCHIVED에는 영향 없음).
+  void togglePastTermEditing() {
+    _allowReadOnlyTermEditing = !_allowReadOnlyTermEditing;
+    notifyListeners();
+  }
+
+  /// 학기 스코프 뮤테이션의 방어선. 읽기 전용(지난/보관) 학기일 때 던진다.
+  /// UI 잠금이 유일한 방어선인 자습 등에 특히 중요(해당 DB 트리거가 없음).
+  void _assertSelectedTermEditable() {
+    if (isSelectedTermReadOnly) {
+      throw StateError('읽기 전용(지난/보관) 학기입니다. 상단 학기 바에서 편집 잠금을 해제하세요.');
+    }
+  }
 
   List<String> get availableViewRoles {
     final homeschoolId = selectedHomeschoolId;
@@ -696,6 +755,8 @@ class NestController extends ChangeNotifier {
     selectedTermId = _normalizeNullable(termId);
     scheduleOptionDrafts = [];
     selectedScheduleOptionId = null;
+    // 학기를 옮기면 지난 학기 편집 잠금 해제는 초기화한다.
+    _allowReadOnlyTermEditing = false;
     notifyListeners();
 
     await _runBusy('반/시간표 데이터를 불러오는 중...', () async {
@@ -710,6 +771,166 @@ class NestController extends ChangeNotifier {
       await loadGalleryItems();
       await loadCommunityFeed();
     });
+  }
+
+  /// 예정(또는 임의 기간) 학기를 새로 만들고, 만든 학기로 전환한다.
+  /// 상태는 DRAFT로 시작한다. 관리자/스태프만 호출 가능.
+  Future<void> createTerm({
+    required String name,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw StateError('학기 이름을 입력하세요.');
+    }
+    if (endDate.isBefore(startDate)) {
+      throw StateError('종료일은 시작일보다 빠를 수 없습니다.');
+    }
+
+    Term? created;
+    await _runBusy('학기를 만드는 중...', () async {
+      created = await _repository.createTerm(
+        homeschoolId: homeschoolId,
+        name: trimmed,
+        startDate: startDate,
+        endDate: endDate,
+      );
+      await _loadTerms();
+    });
+
+    // 새로 만든 학기로 전환(관련 데이터 로드).
+    final newId = created?.id;
+    if (newId != null) {
+      await changeTerm(newId);
+    }
+  }
+
+  /// 선택된(또는 지정된) 학기의 이름/기간/상태를 수정한다.
+  Future<void> updateTerm({
+    String? termId,
+    String? name,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? status,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final id = termId ?? selectedTermId;
+    if (id == null) {
+      throw StateError('수정할 학기가 없습니다.');
+    }
+    final trimmedName = name?.trim();
+    if (trimmedName != null && trimmedName.isEmpty) {
+      throw StateError('학기 이름을 입력하세요.');
+    }
+    if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+      throw StateError('종료일은 시작일보다 빠를 수 없습니다.');
+    }
+
+    // 보관(ARCHIVED) 학기는 영구 기록이라 이름·기간을 수정할 수 없다. 단, 보관을
+    // 해제(status를 ARCHIVED가 아닌 값으로 변경)하는 것은 허용한다. DB의
+    // guard_update_archived_terms 트리거와 동일한 규칙(이중 방어).
+    final target = terms.where((t) => t.id == id).firstOrNull;
+    final staysArchived = (target?.isArchived ?? false) &&
+        (status == null || status.toUpperCase() == 'ARCHIVED');
+    if (staysArchived) {
+      bool sameDay(DateTime? a, DateTime? b) {
+        if (a == null || b == null) return a == b;
+        return a.year == b.year && a.month == b.month && a.day == b.day;
+      }
+
+      final nameChanged = trimmedName != null && trimmedName != target!.name;
+      final startChanged =
+          startDate != null && !sameDay(startDate, target!.startDate);
+      final endChanged = endDate != null && !sameDay(endDate, target!.endDate);
+      if (nameChanged || startChanged || endChanged) {
+        throw StateError('보관된 학기는 이름·기간을 수정할 수 없습니다. 먼저 보관을 해제하세요.');
+      }
+    }
+
+    await _runBusy('학기 정보를 저장하는 중...', () async {
+      await _repository.updateTerm(
+        termId: id,
+        name: trimmedName,
+        startDate: startDate,
+        endDate: endDate,
+        status: status,
+      );
+      await _loadTerms();
+    });
+    notifyListeners();
+  }
+
+  /// 학기를 삭제한다. 반/세션/시간표/교실/자습이 연쇄 삭제되는 파괴적 작업이다.
+  /// - 마지막 남은 학기는 삭제할 수 없다.
+  /// - ARCHIVED(보관) 학기는 삭제할 수 없다(DB 트리거도 차단).
+  Future<void> deleteTerm({required String termId}) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final target = terms.where((t) => t.id == termId).firstOrNull;
+    if (target == null) {
+      throw StateError('삭제할 학기를 찾을 수 없습니다.');
+    }
+    if (terms.length <= 1) {
+      throw StateError('마지막 학기는 삭제할 수 없습니다.');
+    }
+    if (target.isArchived) {
+      throw StateError('보관된 학기는 삭제할 수 없습니다. 먼저 보관을 해제하세요.');
+    }
+
+    final wasSelected = selectedTermId == termId;
+    // 선택된 학기를 지울 때는 타임라인상 인접 학기(이전 우선, 없으면 다음)로
+    // 이동한다. 최신 학기로 튀지 않도록 삭제 전에 미리 계산해 둔다.
+    String? neighborId;
+    if (wasSelected) {
+      final ordered = terms.toList()
+        ..sort((a, b) {
+          final aStart = a.startDate;
+          final bStart = b.startDate;
+          if (aStart == null && bStart == null) return 0;
+          if (aStart == null) return -1;
+          if (bStart == null) return 1;
+          return aStart.compareTo(bStart);
+        });
+      final idx = ordered.indexWhere((t) => t.id == termId);
+      if (idx > 0) {
+        neighborId = ordered[idx - 1].id;
+      } else if (idx >= 0 && idx < ordered.length - 1) {
+        neighborId = ordered[idx + 1].id;
+      }
+    }
+
+    await _runBusy('학기를 삭제하는 중...', () async {
+      await _repository.deleteTerm(termId: termId);
+      // 삭제된 학기가 선택 상태였다면 재선택이 필요하므로 선택을 비운다.
+      if (wasSelected) {
+        selectedTermId = null;
+      }
+      await _loadTerms();
+      // 인접 학기가 아직 있으면 그것을 선택(없으면 _loadTerms 기본값 유지).
+      if (wasSelected &&
+          neighborId != null &&
+          terms.any((t) => t.id == neighborId)) {
+        selectedTermId = neighborId;
+      }
+    });
+
+    // 삭제된 학기가 선택 상태였다면 새로 정해진 학기로 데이터를 다시 로드한다.
+    if (wasSelected) {
+      await changeTerm(selectedTermId);
+    } else {
+      notifyListeners();
+    }
   }
 
   Future<void> changeClassGroup(String? classGroupId) async {
@@ -5176,6 +5397,7 @@ class NestController extends ChangeNotifier {
     if (!isAdminLike) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
     }
+    _assertSelectedTermEditable();
     await _runBusy('자습 계획을 삭제하는 중...', () async {
       await _repository.deleteSelfStudyPlan(planId: planId);
       if (selectedSelfStudyPlanId == planId) {
@@ -5198,6 +5420,7 @@ class NestController extends ChangeNotifier {
     if (!isAdminLike) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
     }
+    _assertSelectedTermEditable();
     final id = _normalizeNullable(planId) ?? selectedSelfStudyPlan?.id;
     final plan = selfStudyPlans.where((p) => p.id == id).firstOrNull;
     if (plan == null) {
@@ -5318,6 +5541,7 @@ class NestController extends ChangeNotifier {
     if (!isAdminLike) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
     }
+    _assertSelectedTermEditable();
     await _runBusy('자습 슬롯을 저장하는 중...', () async {
       await _repository.updateSelfStudySlot(
         slotId: slotId,
@@ -5338,6 +5562,7 @@ class NestController extends ChangeNotifier {
     if (!isAdminLike) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
     }
+    _assertSelectedTermEditable();
     await _runBusy(excluded ? '명단에서 제외하는 중...' : '명단에 추가하는 중...', () async {
       if (excluded) {
         await _repository.addSelfStudyExclusion(slotId: slotId, childId: childId);
@@ -5371,7 +5596,8 @@ class NestController extends ChangeNotifier {
 
     final validTermIds = terms.map((term) => term.id).toSet();
     if (selectedTermId == null || !validTermIds.contains(selectedTermId)) {
-      selectedTermId = terms.isNotEmpty ? terms.first.id : null;
+      // 기본 선택은 오늘이 포함된 "현재 학기" 우선, 없으면 가장 최근 학기.
+      selectedTermId = currentTerm?.id ?? terms.firstOrNull?.id;
     }
   }
 

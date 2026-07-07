@@ -1033,14 +1033,78 @@ class NestRepository {
     });
   }
 
+  static const String _termColumns =
+      'id, homeschool_id, name, status, start_date, end_date';
+
   Future<List<Term>> fetchTerms({required String homeschoolId}) async {
     final data = await client
         .from('terms')
-        .select('id, homeschool_id, name, status, start_date, end_date')
+        .select(_termColumns)
         .eq('homeschool_id', homeschoolId)
         .order('start_date', ascending: false);
 
     return _asRows(data).map(Term.fromMap).toList();
+  }
+
+  static String _termDate(DateTime value) {
+    final y = value.year.toString().padLeft(4, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final d = value.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  /// 새 학기를 만든다. 상태는 항상 DRAFT로 시작한다(운영 전 초안).
+  /// RLS는 HOMESCHOOL_ADMIN/STAFF만 INSERT를 허용한다.
+  Future<Term> createTerm({
+    required String homeschoolId,
+    required String name,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final created = await client
+        .from('terms')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'name': name,
+          'start_date': _termDate(startDate),
+          'end_date': _termDate(endDate),
+          'status': 'DRAFT',
+        })
+        .select(_termColumns)
+        .single();
+
+    return Term.fromMap(_asMap(created));
+  }
+
+  /// 학기 메타데이터(이름/기간/상태)를 수정한다. null 필드는 변경하지 않는다.
+  Future<Term> updateTerm({
+    required String termId,
+    String? name,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? status,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (startDate != null) payload['start_date'] = _termDate(startDate);
+    if (endDate != null) payload['end_date'] = _termDate(endDate);
+    if (status != null) payload['status'] = status;
+
+    final updated = await client
+        .from('terms')
+        .update(payload)
+        .eq('id', termId)
+        .select(_termColumns)
+        .single();
+
+    return Term.fromMap(_asMap(updated));
+  }
+
+  /// 학기를 삭제한다. 참조 테이블(반/세션/시간표/교실/자습)은 ON DELETE CASCADE로
+  /// 함께 삭제되고, 학사 일정은 term_id가 NULL로 해제된다. ARCHIVED 학기는
+  /// DB 트리거가 삭제를 막는다.
+  Future<void> deleteTerm({required String termId}) async {
+    await client.from('terms').delete().eq('id', termId);
   }
 
   Future<List<ClassGroup>> fetchClassGroups({required String termId}) async {

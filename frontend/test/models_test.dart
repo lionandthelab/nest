@@ -127,4 +127,62 @@ void main() {
       expect(entry.hasPendingRequest, isTrue);
     });
   });
+
+  group('Term.phaseAt', () {
+    Term term({String start = '2026-03-01', String end = '2026-07-31'}) {
+      return Term.fromMap({
+        'id': 't1',
+        'homeschool_id': 's1',
+        'name': '2026-1',
+        'status': 'ACTIVE',
+        'start_date': start,
+        'end_date': end,
+      });
+    }
+
+    test('before start date is upcoming', () {
+      expect(term().phaseAt(DateTime(2026, 2, 15)), TermPhase.upcoming);
+    });
+
+    test('after end date is past', () {
+      expect(term().phaseAt(DateTime(2026, 8, 15)), TermPhase.past);
+    });
+
+    test('within the range is current', () {
+      expect(term().phaseAt(DateTime(2026, 5, 10)), TermPhase.current);
+    });
+
+    test('boundary days (start/end) are inclusive → current', () {
+      expect(term().phaseAt(DateTime(2026, 3, 1)), TermPhase.current);
+      expect(term().phaseAt(DateTime(2026, 7, 31)), TermPhase.current);
+      // 하루 단위 비교이므로 종료일 당일 늦은 시각도 현재로 취급.
+      expect(term().phaseAt(DateTime(2026, 7, 31, 23, 59)), TermPhase.current);
+    });
+
+    test('null dates fall back to current', () {
+      final t = Term.fromMap({
+        'id': 't2',
+        'homeschool_id': 's1',
+        'name': '미정',
+        'status': 'DRAFT',
+        'start_date': null,
+        'end_date': null,
+      });
+      expect(t.phaseAt(DateTime(2026, 5, 10)), TermPhase.current);
+    });
+
+    test('isArchived reflects status', () {
+      expect(term().isArchived, isFalse);
+      expect(term(start: '2025-01-01', end: '2025-06-30').isArchived, isFalse);
+      final archived = Term.fromMap({
+        'id': 't3',
+        'homeschool_id': 's1',
+        'name': '보관',
+        'status': 'ARCHIVED',
+        'start_date': '2025-01-01',
+        'end_date': '2025-06-30',
+      });
+      expect(archived.isArchived, isTrue);
+    });
+  });
 }

@@ -72,9 +72,44 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     return ListView(
       children: [
         _buildTermSetupHeaderCard(controller),
+        if (controller.isSelectedTermReadOnly) ...[
+          const SizedBox(height: 12),
+          _buildReadOnlyBanner(controller),
+        ],
         const SizedBox(height: 12),
         ...unitCards,
       ],
+    );
+  }
+
+  /// 지난/보관 학기를 편집하려 할 때 학기 설정 상단에 표시하는 안내 배너.
+  Widget _buildReadOnlyBanner(NestController controller) {
+    final archived = controller.isSelectedTermArchived;
+    final message = archived
+        ? '보관됨(ARCHIVED) 학기입니다. 반·교실 등 학기 구성을 변경할 수 없습니다.'
+        : '지난 학기입니다(읽기 전용). 상단 학기 바에서 편집 잠금을 해제하면 변경할 수 있습니다.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: NestColors.roseMist.withValues(alpha: 0.6),
+        border: Border.all(color: NestColors.clay),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline, size: 18, color: NestColors.clay),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.85),
+                  ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1435,7 +1470,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: controller.isBusy
+                  onPressed:
+                      controller.isBusy || controller.isSelectedTermReadOnly
                       ? null
                       : () => _openClassEditorDialog(controller: controller),
                   icon: const Icon(Icons.add_circle_outline),
@@ -1465,7 +1501,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       final selected = _selectedClassGroupId == classGroup.id;
                       return InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: controller.isBusy
+                        onTap:
+                            controller.isBusy ||
+                                controller.isSelectedTermReadOnly
                             ? null
                             : () {
                                 setState(() {
@@ -2908,7 +2946,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: controller.isBusy
+                  onPressed:
+                      controller.isBusy || controller.isSelectedTermReadOnly
                       ? null
                       : () =>
                             _openClassroomEditorDialog(controller: controller),
@@ -2940,7 +2979,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       final selected = _selectedClassroomId == classroom.id;
                       return InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: controller.isBusy
+                        onTap:
+                            controller.isBusy ||
+                                controller.isSelectedTermReadOnly
                             ? null
                             : () {
                                 setState(() {

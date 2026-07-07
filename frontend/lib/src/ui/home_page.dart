@@ -21,6 +21,7 @@ import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'widgets/nest_motion.dart';
+import 'widgets/term_navigator_bar.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -887,6 +888,8 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
             child: Column(
               children: [
                 _buildParentCompactHeader(theme, controller, displayName),
+                if (controller.isAdminLike)
+                  TermNavigatorBar(controller: controller),
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -2368,6 +2371,8 @@ class _MainPanelState extends State<_MainPanel> {
           if (controller.isBusy)
             const LinearProgressIndicator(minHeight: 2),
           const Divider(height: 1),
+          if (controller.isAdminLike)
+            TermNavigatorBar(controller: controller),
           Expanded(
             child: Stack(
               children: [

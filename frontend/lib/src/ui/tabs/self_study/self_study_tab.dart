@@ -50,8 +50,13 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
         final plan = controller.selectedSelfStudyPlan;
         // 외곽 패딩은 _MainPanel(EdgeInsets.all(16))에서 공통 적용되므로
         // 여기서 별도 padding을 주면 다른 탭보다 여백이 두 배가 된다.
+        final readOnly = controller.isSelectedTermReadOnly;
         return ListView(
           children: [
+            if (readOnly) ...[
+              _buildReadOnlyBanner(context),
+              const SizedBox(height: 12),
+            ],
             _buildPlanBar(context),
             const SizedBox(height: 12),
             if (plan == null)
@@ -59,8 +64,8 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                 icon: Icons.menu_book_outlined,
                 title: '자습 계획이 없습니다',
                 subtitle: '오전 등 지정한 시간대의 공강을 자습으로 채우는 계획을 만들어 보세요.',
-                actionLabel: '자습 계획 만들기',
-                onAction: () => _openPlanDialog(),
+                actionLabel: readOnly ? null : '자습 계획 만들기',
+                onAction: readOnly ? null : () => _openPlanDialog(),
               )
             else ...[
               _buildConfigCard(context, plan),
@@ -74,8 +79,32 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
     );
   }
 
+  // ── 지난/보관 학기 읽기 전용 안내 ──
+  Widget _buildReadOnlyBanner(BuildContext context) {
+    final message = controller.isSelectedTermArchived
+        ? '보관됨(ARCHIVED) 학기입니다. 자습 계획을 변경할 수 없습니다.'
+        : '지난 학기입니다(읽기 전용). 상단 학기 바에서 편집 잠금을 해제하면 변경할 수 있습니다.';
+    return _card(
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline, size: 18, color: NestColors.clay),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.85),
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── 계획 선택 바 ──
   Widget _buildPlanBar(BuildContext context) {
+    final readOnly = controller.isSelectedTermReadOnly;
     final plans = controller.selfStudyPlans;
     return _card(
       child: Row(
@@ -110,7 +139,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                     ),
                   ),
           ),
-          if (controller.selectedSelfStudyPlan != null) ...[
+          if (!readOnly && controller.selectedSelfStudyPlan != null) ...[
             IconButton(
               tooltip: '계획 삭제',
               icon: const Icon(Icons.delete_outline, size: 20),
@@ -118,7 +147,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             ),
           ],
           FilledButton.tonalIcon(
-            onPressed: () => _openPlanDialog(),
+            onPressed: readOnly ? null : () => _openPlanDialog(),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('새 계획'),
           ),
@@ -140,6 +169,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
         ? '${_fmtDate(plan.periodStart!)} ~ ${_fmtDate(plan.periodEnd!)}'
         : '학기 기간';
     final slotCount = controller.selectedPlanSelfStudySlots.length;
+    final readOnly = controller.isSelectedTermReadOnly;
 
     return _card(
       child: Column(
@@ -171,12 +201,12 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: () => _openPlanDialog(plan: plan),
+                onPressed: readOnly ? null : () => _openPlanDialog(plan: plan),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('설정 수정'),
               ),
               FilledButton.icon(
-                onPressed: _confirmRegenerate,
+                onPressed: readOnly ? null : _confirmRegenerate,
                 icon: const Icon(Icons.auto_awesome, size: 18),
                 label: Text(slotCount == 0 ? '자동 배치' : '다시 배치'),
               ),
@@ -298,6 +328,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
   }
 
   Widget _buildSlotCard(BuildContext context, SelfStudySlot slot) {
+    final readOnly = controller.isSelectedTermReadOnly;
     final groupName = controller.findClassGroupName(slot.classGroupId);
     final roster = controller.rosterForSelfStudySlot(slot);
     final excludedCount =
@@ -360,9 +391,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                   label: '자습 장소',
                   hintText: '방 지정',
                   icon: Icons.meeting_room_outlined,
-                  enabled: true,
+                  enabled: !readOnly,
                   value: slot.room.trim().isEmpty ? null : slot.room,
-                  onTap: () => _openRoomEditor(slot),
+                  onTap: readOnly ? null : () => _openRoomEditor(slot),
                 ),
               ),
               const SizedBox(width: 8),
@@ -371,15 +402,15 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                   label: '감독',
                   hintText: '미지정',
                   icon: Icons.person_outline,
-                  enabled: true,
+                  enabled: !readOnly,
                   value: supervisorName,
-                  onTap: () => _openSupervisorPicker(slot),
+                  onTap: readOnly ? null : () => _openSupervisorPicker(slot),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          _buildRoster(context, slot, roster, excludedCount),
+          _buildRoster(context, slot, roster, excludedCount, readOnly),
         ],
       ),
     );
@@ -390,6 +421,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
     SelfStudySlot slot,
     List<ChildProfile> roster,
     int excludedCount,
+    bool readOnly,
   ) {
     final allMembers = controller.childrenForClassGroup(slot.classGroupId);
     final excluded = controller.excludedChildIdsForSelfStudySlot(slot.id);
@@ -422,11 +454,13 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                   selected: !excluded.contains(child.id),
                   showCheckmark: false,
                   selectedColor: NestColors.mutedSage.withValues(alpha: 0.28),
-                  onSelected: (included) => _toggleExclusion(
-                    slot,
-                    child.id,
-                    excluded: !included,
-                  ),
+                  onSelected: readOnly
+                      ? null
+                      : (included) => _toggleExclusion(
+                          slot,
+                          child.id,
+                          excluded: !included,
+                        ),
                 ),
             ],
           ),

@@ -55,7 +55,7 @@ class _FamilyEnrollmentPanelState extends State<FamilyEnrollmentPanel> {
   String? _bulkClassGroupId;
 
   bool get _locked =>
-      widget.controller.isBusy || widget.controller.isSelectedTermArchived;
+      widget.controller.isBusy || widget.controller.isSelectedTermReadOnly;
 
   void _toggleSelected(String childId) {
     setState(() {
@@ -211,7 +211,7 @@ class _FamilyEnrollmentPanelState extends State<FamilyEnrollmentPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (controller.isSelectedTermArchived) _buildArchivedBanner(context),
+        if (controller.isSelectedTermReadOnly) _buildReadOnlyBanner(context),
         _buildDropZoneRow(context, controller),
         _buildBulkActionBar(context, controller),
         Expanded(
@@ -221,7 +221,11 @@ class _FamilyEnrollmentPanelState extends State<FamilyEnrollmentPanel> {
     );
   }
 
-  Widget _buildArchivedBanner(BuildContext context) {
+  Widget _buildReadOnlyBanner(BuildContext context) {
+    final controller = widget.controller;
+    final message = controller.isSelectedTermArchived
+        ? '보관됨(ARCHIVED) 학기입니다. 반 배정을 변경할 수 없습니다.'
+        : '지난 학기입니다(읽기 전용). 상단 학기 바에서 편집 잠금을 해제하면 변경할 수 있습니다.';
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -237,7 +241,7 @@ class _FamilyEnrollmentPanelState extends State<FamilyEnrollmentPanel> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '보관됨(ARCHIVED) 학기입니다. 반 배정을 변경할 수 없습니다.',
+              message,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: NestColors.deepWood.withValues(alpha: 0.8),
                   ),

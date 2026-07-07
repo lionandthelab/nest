@@ -282,6 +282,16 @@ Admin dashboard onboarding:
   - 세션 ⋮/우클릭 컨텍스트 메뉴: 이 요일 전체/이 교시 모든 요일/주 전체 채우기/수업 카드 복제(드래프트 한정, 점유·충돌 칸 스킵).
   - `apply_timetable_draft` RPC(`supabase/migrations/20260610100000_*.sql`, SECURITY INVOKER, 단일 트랜잭션)로 커밋을 원자화. 마이그레이션 미배포 시 `TimetableBatchUnsupported`(PGRST202) 감지 → 기존 개별 호출 루프(`_commitDraftViaIndividualCalls`)로 자동 폴백. 웹 배포(GitHub Pages)는 프론트만 배포하므로 운영 활성 경로는 폴백 루프이며, RPC는 `scripts/deploy_supabase.sh` 적용 후 활성화.
 
+### 6.2.1c 학기 네비게이터 / 다음 학기 미리 설정 (2026)
+
+관리자가 다음 학기를 미리 만들어 설정하고, 지난/현재/예정 학기를 오가며 관리하는 상위 뷰.
+
+- **날짜 기반 phase**: `Term.phaseAt(now)`(`nest_models.dart`)가 `start_date`/`end_date`를 오늘과 하루 단위로 비교해 `TermPhase.past/current/upcoming`을 파생한다. DB `term_status`(DRAFT/ACTIVE/ARCHIVED)와 **독립**적이다. 컨트롤러는 `phaseOf`, `pastTerms`/`currentTerm`/`upcomingTerms`, `selectedTermPhase`를 노출한다.
+- **상단 학기 바** (`widgets/term_navigator_bar.dart`, 관리자 전용): `home_page.dart`의 데스크톱(`_MainPanel`)·모바일(`_MobileScaffold`) 탭 콘텐츠 위에 고정. 학기 칩(지난/현재/예정 배지) + ◀▶ 이동으로 `changeTerm`을 호출하면 모든 탭이 그 학기 기준으로 전환된다. `+ 예정 학기` 및 편집(연필)은 `TermEditorDialog`를 연다.
+- **학기 CRUD**: `NestRepository.createTerm/updateTerm/deleteTerm` + `NestController.createTerm/updateTerm/deleteTerm`. 생성은 항상 `DRAFT`. 기본 선택은 `currentTerm ?? terms.first`. 삭제는 반/세션/시간표/교실/자습이 `ON DELETE CASCADE`로 함께 지워지는 파괴적 작업이라, 앱단에서 **마지막 학기·ARCHIVED 삭제를 차단**하고 연쇄 삭제를 경고한다. DB단은 `terms_delete_admin_staff` RLS + `guard_delete_terms` BEFORE DELETE 트리거(ARCHIVED 차단)로 이중 방어(`20260708090000_term_delete_policy.sql`).
+- **지난 학기 읽기 전용**: `isSelectedTermReadOnly = ARCHIVED || (past && !unlock)`. `togglePastTermEditing`으로 관리자가 해제(학기 전환 시 자동 재잠금). timetable/enrollment/family-admin(반·교실)/self-study의 편집 진입점이 이 플래그로 잠기고 배너를 표시한다. self-study 뮤테이션은 컨트롤러 `_assertSelectedTermEditable()`로 백스톱(자습 테이블엔 DB 소프트락 없음). 지난 학기는 UI 소프트 잠금.
+- **ARCHIVED = 불가침 기록**: DB 트리거로 하드 잠금 — `guard_delete_terms`(삭제 금지) + `guard_update_archived_terms`(보관 상태 유지 시 이름·기간 수정 금지, 보관 해제(status 변경)만 허용) + 자습 3테이블 `guard_mutation_self_study_*`(반·수업 테이블과 동일 패턴). 앱단도 `updateTerm`/`deleteTerm`에서 동일 규칙을 선검증. 편집 다이얼로그는 보관 학기의 이름·기간 필드를 잠근다.
+
 ### 6.2.1 Session Location Compatibility
 
 - Some deployments had `class_sessions.location` while older ones did not.
