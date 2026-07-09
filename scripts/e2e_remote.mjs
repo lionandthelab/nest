@@ -554,12 +554,17 @@ async function main() {
       throw new Error("unexpected auth_url domain");
     }
 
-    if (!res.auth_url.includes(encodeURIComponent("http://localhost:8080/oauth/google/callback.html"))) {
-      throw new Error("redirect_uri not set to localhost callback");
+    // redirect_uri 는 배포된 GOOGLE_REDIRECT_URI 시크릿에서 나오므로 환경마다 다르다
+    // (dev=localhost:8080, prod=배포 콜백). 특정 호스트를 강제하지 말고, redirect_uri 가
+    // Nest OAuth 콜백 경로로 설정돼 있는지만 검증한다(환경 무관).
+    const redirectUri = new URL(res.auth_url).searchParams.get("redirect_uri") || "";
+    if (!redirectUri.endsWith("/oauth/google/callback.html")) {
+      throw new Error(`redirect_uri not a Nest OAuth callback: ${redirectUri || "(missing)"}`);
     }
 
     return {
-      auth_url_prefix: res.auth_url.slice(0, 140)
+      auth_url_prefix: res.auth_url.slice(0, 140),
+      redirect_uri: redirectUri
     };
   });
 
