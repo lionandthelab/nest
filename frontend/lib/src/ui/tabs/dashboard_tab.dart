@@ -51,6 +51,12 @@ class _DashboardTabState extends State<DashboardTab> {
     _endDateController = TextEditingController(
       text: DateFormat('yyyy-MM-dd').format(end),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.controller.isAdminLike) {
+        widget.controller.loadDriveIntegration();
+      }
+    });
   }
 
   @override
@@ -185,6 +191,8 @@ class _DashboardTabState extends State<DashboardTab> {
         if (controller.isAdminLike) ...[
           const SizedBox(height: 16),
           _AcademicEventsCard(controller: controller),
+          const SizedBox(height: 16),
+          _DriveIntegrationCard(controller: controller),
         ],
         const SizedBox(height: 16),
         Card(
@@ -1046,6 +1054,136 @@ class _DashboardTabState extends State<DashboardTab> {
       ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
       return false;
     }
+  }
+}
+
+class _DriveIntegrationCard extends StatefulWidget {
+  const _DriveIntegrationCard({required this.controller});
+
+  final NestController controller;
+
+  @override
+  State<_DriveIntegrationCard> createState() => _DriveIntegrationCardState();
+}
+
+class _DriveIntegrationCardState extends State<_DriveIntegrationCard> {
+  final _rootFolderController = TextEditingController();
+  bool _connecting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rootFolderController.text =
+        widget.controller.driveIntegration?.rootFolderId ?? '';
+  }
+
+  @override
+  void dispose() {
+    _rootFolderController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connect() async {
+    setState(() => _connecting = true);
+    final error = await widget.controller.connectGoogleDrive(
+      rootFolderId: _rootFolderController.text,
+    );
+    if (!mounted) return;
+    setState(() => _connecting = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? 'Google Drive가 연결되었습니다.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final controller = widget.controller;
+    final integration = controller.driveIntegration;
+    final connected = integration?.isConnected ?? false;
+    final email = integration?.googleEmail;
+    final supported = controller.isWebOauthSupported;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.add_to_drive, color: NestColors.dustyRose),
+                const SizedBox(width: 8),
+                Text('Google Drive 연결', style: theme.textTheme.titleLarge),
+                const Spacer(),
+                if (controller.isLoadingDriveIntegration)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Chip(
+                    label: Text(connected ? '연결됨' : '미연결'),
+                    visualDensity: VisualDensity.compact,
+                    avatar: Icon(
+                      connected ? Icons.check_circle : Icons.cloud_off,
+                      size: 16,
+                      color: connected
+                          ? NestColors.mutedSage
+                          : NestColors.deepWood.withValues(alpha: 0.4),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              connected
+                  ? '연결됨: ${email != null && email.isNotEmpty ? email : '연결됨'}\n'
+                        '갤러리·커뮤니티에 올린 사진·영상이 Google Drive에도 함께 저장됩니다.'
+                  : '연결하면 갤러리·커뮤니티에 올린 사진·영상이 Google Drive에도 함께 저장됩니다.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _rootFolderController,
+              decoration: const InputDecoration(
+                labelText: '루트 폴더 ID (선택)',
+                hintText: '비워두면 Drive 최상위에 저장됩니다.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (!supported)
+              Text(
+                '웹에서 연결할 수 있어요.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.5),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _connecting ? null : _connect,
+                  icon: _connecting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.link, size: 18),
+                  label: Text(connected ? '다시 연결' : '연결하기'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -63,6 +63,34 @@ void main() {
       expect(invite.homeschoolName, 'Warm Nest 2');
     });
 
+    test('DriveIntegration.fromMap parses status and isConnected', () {
+      final integration = DriveIntegration.fromMap({
+        'id': 'drive-1',
+        'homeschool_id': 'school-1',
+        'status': 'CONNECTED',
+        'root_folder_id': 'folder-abc',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      expect(integration.id, 'drive-1');
+      expect(integration.homeschoolId, 'school-1');
+      expect(integration.status, 'CONNECTED');
+      expect(integration.rootFolderId, 'folder-abc');
+      expect(integration.isConnected, isTrue);
+      expect(integration.googleEmail, isNull);
+    });
+
+    test('DriveIntegration.fromMap defaults to disconnected', () {
+      final integration = DriveIntegration.fromMap({
+        'id': 'drive-2',
+        'homeschool_id': 'school-2',
+      });
+
+      expect(integration.status, 'DISCONNECTED');
+      expect(integration.isConnected, isFalse);
+      expect(integration.rootFolderId, isNull);
+    });
+
     test('ChildProfile.fromMap reads nested family fields', () {
       final child = ChildProfile.fromMap({
         'id': 'child-1',

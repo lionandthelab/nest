@@ -1185,6 +1185,48 @@ class GalleryItem {
   }
 }
 
+class DriveIntegration {
+  const DriveIntegration({
+    required this.id,
+    required this.homeschoolId,
+    required this.status,
+    this.rootFolderId,
+    this.googleEmail,
+    this.updatedAt,
+  });
+
+  factory DriveIntegration.fromMap(Map<String, dynamic> map) {
+    return DriveIntegration(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      status: (map['status'] as String?) ?? 'DISCONNECTED',
+      rootFolderId: map['root_folder_id'] as String?,
+      // google_email is not stored in the app-visible columns today; parsed
+      // defensively so the model stays forward-compatible if it is added.
+      googleEmail: map['google_email'] as String?,
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+
+  final String id;
+  final String homeschoolId;
+  final String status;
+  final String? rootFolderId;
+  final String? googleEmail;
+  final DateTime? updatedAt;
+
+  bool get isConnected => status == 'CONNECTED';
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'status': status,
+    'root_folder_id': rootFolderId,
+    'google_email': googleEmail,
+    'updated_at': updatedAt?.toIso8601String(),
+  };
+}
+
 class CommunityPost {
   const CommunityPost({
     required this.id,

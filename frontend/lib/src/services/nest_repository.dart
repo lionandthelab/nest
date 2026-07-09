@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -2205,6 +2206,85 @@ class NestRepository {
         .from('media_upload_sessions')
         .update({'status': status})
         .eq('id', uploadSessionId);
+  }
+
+  // ── Google Drive integration (admin connect + additive media mirror) ──
+
+  /// Starts the admin OAuth flow. Returns the Google consent [auth_url] to open
+  /// in a popup, or null if the edge function did not return one.
+  Future<String?> driveConnectStart({required String homeschoolId}) async {
+    final response = await client.functions.invoke(
+      'google-drive-connect-start',
+      body: {'homeschool_id': homeschoolId},
+    );
+
+    final authUrl = _asMap(response.data)['auth_url'];
+    return authUrl is String && authUrl.isNotEmpty ? authUrl : null;
+  }
+
+  /// Reads the non-secret Drive integration row for a homeschool. Never selects
+  /// google_access_token/google_refresh_token — those stay server-side only.
+  Future<DriveIntegration?> fetchDriveIntegration(String homeschoolId) async {
+    final row = await client
+        .from('drive_integrations')
+        .select('id, homeschool_id, status, root_folder_id, updated_at')
+        .eq('homeschool_id', homeschoolId)
+        .maybeSingle();
+
+    if (row == null) {
+      return null;
+    }
+
+    return DriveIntegration.fromMap(_asMap(row));
+  }
+
+  /// Uploads already-fetched bytes to Google Drive via the edge function. The
+  /// function does not persist media_assets — callers must attach the returned
+  /// ids with [attachDriveInfoToMediaAsset].
+  Future<({String driveFileId, String? driveWebViewLink})?> uploadMediaToDrive({
+    required String homeschoolId,
+    required String uploadSessionId,
+    required String fileName,
+    required String mimeType,
+    required List<int> bytes,
+  }) async {
+    final response = await client.functions.invoke(
+      'google-drive-upload',
+      body: {
+        'homeschool_id': homeschoolId,
+        'upload_session_id': uploadSessionId,
+        'file_name': fileName,
+        'mime_type': mimeType,
+        'file_base64': base64Encode(bytes),
+      },
+    );
+
+    final body = _asMap(response.data);
+    final driveFileId = body['drive_file_id'];
+    if (driveFileId is! String || driveFileId.isEmpty) {
+      return null;
+    }
+
+    final link = body['drive_web_view_link'];
+    return (
+      driveFileId: driveFileId,
+      driveWebViewLink: link is String && link.isNotEmpty ? link : null,
+    );
+  }
+
+  /// Attaches the returned Drive ids to an already-inserted media asset.
+  Future<void> attachDriveInfoToMediaAsset({
+    required String mediaAssetId,
+    required String driveFileId,
+    String? driveWebViewLink,
+  }) async {
+    await client
+        .from('media_assets')
+        .update({
+          'drive_file_id': driveFileId,
+          'drive_web_view_link': driveWebViewLink,
+        })
+        .eq('id', mediaAssetId);
   }
 
   Future<List<GalleryItem>> fetchGalleryItems({

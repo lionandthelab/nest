@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/app_config.dart';
 import '../models/nest_models.dart';
 import '../services/local_planner.dart';
 import '../services/nest_cache.dart';
 import '../services/nest_repository.dart';
 import '../services/self_study_planner.dart';
+import '../services/web_oauth_bridge.dart';
 
 class NestController extends ChangeNotifier {
   NestController({
@@ -101,6 +103,14 @@ class NestController extends ChangeNotifier {
   Set<String> likedCommunityPostIds = <String>{};
   List<CommunityReport> communityReports = [];
   PendingMediaFile? pendingCommunityMediaFile;
+
+  // ── Google Drive integration (admin connect + additive media mirror) ──
+  final WebOauthBridge _oauthBridge = createWebOauthBridge();
+  DriveIntegration? driveIntegration;
+  bool isLoadingDriveIntegration = false;
+
+  /// True on platforms that can run the OAuth popup flow (web).
+  bool get isWebOauthSupported => _oauthBridge.supported;
 
   /// Suppress intermediate UI rebuilds while a [_runBusy] operation is active.
   /// Standalone calls (outside _runBusy) still notify immediately.
@@ -1624,10 +1634,184 @@ class NestController extends ChangeNotifier {
         childIds: childIds,
       );
 
+      await _mirrorMediaToDriveBestEffort(
+        homeschoolId: homeschoolId,
+        mediaAssetId: mediaAssetId,
+        file: file,
+      );
+
       pendingMediaFile = null;
       await loadGalleryItems();
       _setStatus('업로드 완료');
     });
+  }
+
+  // ── Google Drive integration ──
+
+  /// Loads the current homeschool's Drive integration row (non-secret columns).
+  /// Best-effort: keeps the previous value on failure so the UI never breaks.
+  Future<void> loadDriveIntegration() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      driveIntegration = null;
+      return;
+    }
+
+    isLoadingDriveIntegration = true;
+    _notifyIfIdle();
+    try {
+      driveIntegration = await _repository.fetchDriveIntegration(homeschoolId);
+    } catch (_) {
+      // Non-fatal: leave the last known value in place.
+    } finally {
+      isLoadingDriveIntegration = false;
+      _notifyIfIdle();
+    }
+  }
+
+  /// Runs the admin Google Drive OAuth popup flow (web only). Returns null on
+  /// success or a Korean error message string on failure. Does not throw.
+  Future<String?> connectGoogleDrive({String rootFolderId = ''}) async {
+    if (!_oauthBridge.supported) {
+      return '웹에서 연결할 수 있어요.';
+    }
+    if (!isAdminLike) {
+      return '관리자만 Google Drive를 연결할 수 있습니다.';
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return '홈스쿨을 먼저 선택하세요.';
+    }
+
+    final accessToken = _repository.currentSession?.accessToken;
+    if (accessToken == null || accessToken.isEmpty) {
+      return '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.';
+    }
+
+    try {
+      await _oauthBridge.stashContext(
+        homeschoolId: homeschoolId,
+        rootFolderId: rootFolderId.trim(),
+        folderPolicy: 'TERM_CLASS_DATE',
+        supabaseUrl: AppConfig.supabaseUrl,
+        supabaseAnonKey: AppConfig.supabaseAnonKey,
+        accessToken: accessToken,
+      );
+
+      final authUrl = await _repository.driveConnectStart(
+        homeschoolId: homeschoolId,
+      );
+      if (authUrl == null || authUrl.isEmpty) {
+        return 'Google 인증 주소를 받지 못했습니다. 잠시 후 다시 시도하세요.';
+      }
+
+      await _oauthBridge.openPopup(authUrl);
+
+      final result = await _pollOauthResult();
+      if (result == null) {
+        return '연결이 완료되지 않았습니다. 팝업 창에서 인증을 마쳤는지 확인하세요.';
+      }
+
+      if (result['success'] != true) {
+        final error = result['error'];
+        return error is String && error.isNotEmpty
+            ? 'Google Drive 연결 실패: $error'
+            : 'Google Drive 연결에 실패했습니다.';
+      }
+
+      await loadDriveIntegration();
+      notifyListeners();
+      return null;
+    } catch (error) {
+      return error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      // Always clear the stashed context (incl. the user access token) from
+      // client-side storage once the flow ends — success, failure, or timeout.
+      await _oauthBridge.clearContext();
+    }
+  }
+
+  /// Polls the OAuth bridge for the popup result (localStorage/postMessage
+  /// handshake) until it arrives or a sane timeout elapses.
+  Future<Map<String, dynamic>?> _pollOauthResult() async {
+    const timeout = Duration(minutes: 3);
+    const interval = Duration(milliseconds: 700);
+    final deadline = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(deadline)) {
+      final result = await _oauthBridge.consumeResult();
+      if (result != null) {
+        return result;
+      }
+      // If the admin closed/abandoned the popup, stop waiting the full timeout.
+      // callback.html writes its result ~1s before it self-closes, so one final
+      // read still catches a just-completed flow.
+      if (_oauthBridge.isPopupClosed) {
+        return await _oauthBridge.consumeResult();
+      }
+      await Future<void>.delayed(interval);
+    }
+
+    return null;
+  }
+
+  /// Additive mirror of an uploaded media asset to Google Drive when the
+  /// homeschool has an active integration. Never throws — a Drive failure must
+  /// not break the Supabase Storage upload (the primary path).
+  Future<void> _mirrorMediaToDriveBestEffort({
+    required String homeschoolId,
+    required String mediaAssetId,
+    required PendingMediaFile file,
+  }) async {
+    final integration = driveIntegration;
+    if (user == null || integration == null || !integration.isConnected) {
+      return;
+    }
+
+    // The edge function takes the file inline as base64 JSON, so mirroring a
+    // large video would base64-encode it (~1.33x) on the UI isolate and may
+    // exceed the request-size limit. Mirroring is additive — skipping a large
+    // file never affects the Storage-backed primary upload.
+    const maxDriveMirrorBytes = 40 * 1024 * 1024;
+    if (file.sizeBytes > maxDriveMirrorBytes) {
+      debugPrint('[Drive] skip mirror: file too large (${file.sizeBytes} bytes)');
+      return;
+    }
+
+    try {
+      final uploadSessionId = await _repository.createUploadSession(
+        homeschoolId: homeschoolId,
+        uploaderUserId: user!.id,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+      );
+
+      final driveResult = await _repository.uploadMediaToDrive(
+        homeschoolId: homeschoolId,
+        uploadSessionId: uploadSessionId,
+        fileName: file.name,
+        mimeType: file.mimeType,
+        bytes: file.bytes,
+      );
+
+      if (driveResult != null) {
+        await _repository.attachDriveInfoToMediaAsset(
+          mediaAssetId: mediaAssetId,
+          driveFileId: driveResult.driveFileId,
+          driveWebViewLink: driveResult.driveWebViewLink,
+        );
+        // Finalize the throwaway mirror session so it does not dangle at
+        // UPLOADING forever.
+        await _repository.updateUploadStatus(
+          uploadSessionId: uploadSessionId,
+          status: 'COMPLETED',
+        );
+      }
+    } catch (error) {
+      // Drive is additive; swallow so the Storage-backed upload stays intact.
+      debugPrint('[Drive] media mirror failed: $error');
+    }
   }
 
 
@@ -2387,6 +2571,12 @@ class NestController extends ChangeNotifier {
         await _repository.linkCommunityPostMedia(
           postId: postId,
           mediaAssetId: mediaAssetId,
+        );
+
+        await _mirrorMediaToDriveBestEffort(
+          homeschoolId: homeschoolId,
+          mediaAssetId: mediaAssetId,
+          file: pendingFile,
         );
       }
 

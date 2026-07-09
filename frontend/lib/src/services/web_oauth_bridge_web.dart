@@ -5,12 +5,24 @@ import 'dart:html' as html;
 
 import 'web_oauth_bridge.dart';
 
-WebOauthBridge createBridge() => const _WebOauthBridgeWeb();
+WebOauthBridge createBridge() => _WebOauthBridgeWeb();
 
 class _WebOauthBridgeWeb implements WebOauthBridge {
-  const _WebOauthBridgeWeb();
+  _WebOauthBridgeWeb();
 
   static const String _prefix = 'nest.oauth';
+
+  // Context keys stashed for callback.html to read during the OAuth exchange.
+  static const List<String> _contextKeys = [
+    '$_prefix.homeschool_id',
+    '$_prefix.root_folder_id',
+    '$_prefix.folder_policy',
+    '$_prefix.supabase_url',
+    '$_prefix.supabase_anon_key',
+    '$_prefix.access_token',
+  ];
+
+  html.WindowBase? _popup;
 
   @override
   bool get supported => true;
@@ -34,12 +46,15 @@ class _WebOauthBridgeWeb implements WebOauthBridge {
 
   @override
   Future<void> openPopup(String url) async {
-    html.window.open(
+    _popup = html.window.open(
       url,
       'nest_google_oauth',
       'popup=yes,width=520,height=760,menubar=no,toolbar=no,location=no,status=no',
     );
   }
+
+  @override
+  bool get isPopupClosed => _popup?.closed == true;
 
   @override
   Future<Map<String, dynamic>?> consumeResult() async {
@@ -62,5 +77,14 @@ class _WebOauthBridgeWeb implements WebOauthBridge {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<void> clearContext() async {
+    for (final key in _contextKeys) {
+      html.window.localStorage.remove(key);
+    }
+    html.window.localStorage.remove('$_prefix.result');
+    _popup = null;
   }
 }

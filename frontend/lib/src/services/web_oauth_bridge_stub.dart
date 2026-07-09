@@ -12,6 +12,12 @@ class _WebOauthBridgeStub implements WebOauthBridge {
   Future<Map<String, dynamic>?> consumeResult() async => null;
 
   @override
+  bool get isPopupClosed => false;
+
+  @override
+  Future<void> clearContext() async {}
+
+  @override
   Future<void> openPopup(String url) async {}
 
   @override
