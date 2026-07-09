@@ -16,6 +16,8 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      E2E_DRIVE_REFRESH_TOKEN: ${{ secrets.E2E_DRIVE_REFRESH_TOKEN }}
+      E2E_DRIVE_ROOT_FOLDER_ID: ${{ secrets.E2E_DRIVE_ROOT_FOLDER_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -16,6 +16,10 @@ const password = `Nest!${Math.random().toString(36).slice(2)}A1`;
 const invitedEmail = `parent_${runTag}@nest.local`;
 const invitedPassword = `Nest!${Math.random().toString(36).slice(2)}B1`;
 
+// 1x1 투명 PNG (Drive 실제 업로드 E2E용 최소 유효 이미지)
+const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
 const report = {
   runTag,
   startedAt: new Date().toISOString(),
@@ -607,6 +611,81 @@ async function main() {
     );
     await fs.access(callbackPath);
     return { path: callbackPath };
+  });
+
+  await step("drive_real_upload_when_connected", async () => {
+    const refreshToken = process.env.E2E_DRIVE_REFRESH_TOKEN;
+    if (!refreshToken) {
+      return { skipped: true, reason: "E2E_DRIVE_REFRESH_TOKEN not set" };
+    }
+
+    // 만료된 시각으로 설정해 google-drive-upload의 maybeRefreshToken()이
+    // 실제 refresh_token 교환 경로를 타도록 강제한다.
+    const expiredAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const integrationRows = await api(
+      "POST",
+      `/rest/v1/drive_integrations?on_conflict=homeschool_id`,
+      {
+        headers: {
+          apikey: ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          Prefer: "return=representation,resolution=merge-duplicates"
+        },
+        body: {
+          homeschool_id: homeschool.id,
+          provider: "GOOGLE_DRIVE",
+          status: "CONNECTED",
+          root_folder_id: process.env.E2E_DRIVE_ROOT_FOLDER_ID || null,
+          connected_by_user_id: userId,
+          connected_at: new Date().toISOString(),
+          google_access_token: "expired-placeholder",
+          google_refresh_token: refreshToken,
+          google_token_expires_at: expiredAt
+        }
+      }
+    );
+    report.ids.driveIntegrationId = integrationRows[0].id;
+
+    const fileBytes = Buffer.from(TINY_PNG_BASE64, "base64").length;
+
+    const sessionRows = await restInsert(accessToken, "media_upload_sessions", [
+      {
+        homeschool_id: homeschool.id,
+        uploader_user_id: userId,
+        status: "UPLOADING",
+        mime_type: "image/png",
+        size_bytes: fileBytes
+      }
+    ]);
+    const uploadSessionId = sessionRows[0].id;
+    report.ids.mediaUploadSessionId = uploadSessionId;
+
+    const uploadRes = await api("POST", `/functions/v1/google-drive-upload`, {
+      headers: {
+        apikey: ANON_KEY,
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: {
+        homeschool_id: homeschool.id,
+        upload_session_id: uploadSessionId,
+        file_name: "nest-e2e.png",
+        mime_type: "image/png",
+        file_base64: TINY_PNG_BASE64
+      }
+    });
+
+    if (!uploadRes.drive_file_id) {
+      throw new Error(`drive upload did not return drive_file_id: ${JSON.stringify(uploadRes)}`);
+    }
+
+    report.ids.driveFileId = uploadRes.drive_file_id;
+
+    return {
+      uploaded: true,
+      drive_file_id: uploadRes.drive_file_id,
+      drive_web_view_link: uploadRes.drive_web_view_link || null
+    };
   });
 
   report.summary = {
