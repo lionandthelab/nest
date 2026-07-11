@@ -1,0 +1,3 @@
+[submodule "packages/lion_auth"]
+	path = packages/lion_auth
+	url = https://github.com/lionandthelab/lion_auth.git

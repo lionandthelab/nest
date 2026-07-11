@@ -5,6 +5,8 @@ on:
     branches: ["main"]
     paths:
       - "frontend/**"
+      - "packages/lion_auth"
+      - ".gitmodules"
       - ".github/workflows/flutter_web_pages.yml"
   workflow_dispatch:
 
@@ -17,6 +19,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # packages/lion_auth 는 private 서브모듈 — read-only 배포 키로 클론한다.
+          # (레포를 public 으로 전환하면 ssh-key 없이도 동작한다)
+          submodules: recursive
+          ssh-key: ${{ secrets.LION_AUTH_DEPLOY_KEY }}
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
