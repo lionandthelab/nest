@@ -22,6 +22,7 @@ import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'widgets/nest_motion.dart';
 import 'widgets/term_navigator_bar.dart';
+import 'widgets/term_select_chip.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -1233,6 +1234,18 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                           ),
                   ),
                 ],
+                // 학기 칩은 학부모/교사 뷰 전용 — 관리자는 바로 아래
+                // TermNavigatorBar가 있으므로 중복 노출하지 않는다.
+                if (controller.isParentView || controller.isTeacherView) ...[
+                  const SizedBox(width: 8),
+                  // 보고 있는 학기 표시/전환(기본값: 현재 학기).
+                  Flexible(
+                    child: TermSelectChip(
+                      controller: controller,
+                      onSelectTerm: widget.onSelectTerm,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1924,6 +1937,17 @@ class _MainPanelState extends State<_MainPanel> {
                 ),
               ),
           ],
+          const SizedBox(width: 6),
+          // 학부모/교사 뷰에서 보고 있는 학기를 표시/전환한다(기본값: 현재 학기).
+          // Spacer가 유일한 flex 자식이어야 우측 아이콘이 끝에 붙으므로
+          // 칩은 Flexible 대신 최대 폭으로만 제한한다(긴 이름은 내부 말줄임).
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 260),
+            child: TermSelectChip(
+              controller: controller,
+              onSelectTerm: widget.onSelectTerm,
+            ),
+          ),
           const Spacer(),
           IconButton(
             tooltip: '새로고침',

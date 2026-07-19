@@ -24,14 +24,7 @@ class TermNavigatorBar extends StatelessWidget {
       builder: (context, _) {
         // 시간순(시작일 오름차순) 정렬 — 화살표 이동과 타임라인 표시 기준.
         final ordered = controller.terms.toList()
-          ..sort((a, b) {
-            final aStart = a.startDate;
-            final bStart = b.startDate;
-            if (aStart == null && bStart == null) return 0;
-            if (aStart == null) return -1;
-            if (bStart == null) return 1;
-            return aStart.compareTo(bStart);
-          });
+          ..sort(compareTermsByStartDate);
 
         final selectedId = controller.selectedTermId;
         final selectedIndex = ordered.indexWhere((t) => t.id == selectedId);
@@ -194,7 +187,9 @@ String termPhaseLabel(TermPhase phase) {
   };
 }
 
-Color _phaseColor(TermPhase phase) {
+/// 학기 시간 단계별 배지 색. TermNavigatorBar(관리자)와
+/// TermSelectChip(학부모/교사)이 같은 색 규칙을 공유한다.
+Color termPhaseColor(TermPhase phase) {
   return switch (phase) {
     TermPhase.past => NestColors.clay,
     TermPhase.current => NestColors.mutedSage,
@@ -217,7 +212,7 @@ class _TermChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final phaseColor = _phaseColor(phase);
+    final phaseColor = termPhaseColor(phase);
     final bg = selected ? NestColors.deepWood : Colors.white;
     final fg = selected ? Colors.white : NestColors.deepWood;
 
