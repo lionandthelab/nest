@@ -1,6 +1,39 @@
 # Mobile Release Checklist (Android/iOS)
 
-Last updated: 2026-03-13
+Last updated: 2026-07-19
+
+## 0) Fastlane 배포 (권장)
+
+수동 Xcode/콘솔 업로드 대신 fastlane 레인으로 배포한다. 인증은 전부
+비대화식(App Store Connect API 키 / Play 서비스 계정)이다.
+
+### 1회 사전 준비
+
+- **iOS**: `frontend/ios/fastlane/.env` 작성 — `.env.example` 참고
+  (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`, `FASTLANE_TEAM_ID`).
+- **Android**: `frontend/android/fastlane/.env`에 `GOOGLE_PLAY_JSON_KEY`
+  (Play 서비스 계정 JSON 경로) 지정 + `frontend/android/key.properties`
+  (업로드 키 서명, 아래 §7) 배치.
+- 두 `.env`와 `key.properties`는 gitignore 되어 있다 — 절대 커밋 금지.
+
+### 릴리스 절차
+
+1. `frontend/pubspec.yaml`의 `version: X.Y.Z+BUILD`에서 **BUILD를 올린다**
+   (스토어 업로드마다 필수 — 레인이 스토어 최신 번호와 비교해 검증한다).
+2. iOS — `cd frontend/ios`:
+   - `fastlane ios status` — pubspec vs TestFlight/App Store 버전 확인
+   - `fastlane ios build` — 서명된 릴리스 IPA 빌드만
+   - `fastlane ios upload` — 빌드된 IPA를 TestFlight 업로드만
+   - `fastlane ios beta` — 빌드 + TestFlight 업로드
+   - `fastlane ios release` — 빌드 + 업로드 + **프로덕션 심사 제출**(승인 시 자동 출시)
+   - `fastlane ios submit build:N` — 이미 업로드된 빌드 N을 심사 제출만
+3. Android — `cd frontend/android`:
+   - `fastlane android internal` — 내부 테스트 트랙 업로드
+   - `fastlane android production` — **프로덕션 트랙** 업로드(검토 통과 시 즉시 공개)
+   - `fastlane android promote` — internal에 올린 빌드를 프로덕션으로 승격
+
+첫 자동화 배포는 `internal`/`beta`로 올려 확인한 뒤 `promote`/`submit`을
+권장한다. 이하 §1~§7은 수동 절차 및 스토어 요건 체크리스트다.
 
 ## 1) Auth Redirect Setup (Supabase Dashboard)
 

@@ -50,3 +50,4 @@ app.*.map.json
 **/fastlane/Preview.html
 **/fastlane/test_output
 /ios/ExportOptions.plist
+/ios/*.mobileprovision
