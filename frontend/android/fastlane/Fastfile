@@ -84,8 +84,8 @@ platform :android do
     UI.success("내부 테스트 업로드 완료: #{version} (versionCode #{build_number})")
   end
 
-  desc "프로덕션 트랙에 AAB 업로드(검토 통과 시 즉시 공개)"
-  lane :production do
+  desc "프로덕션 트랙에 AAB 업로드(기본 즉시 공개; options: status:draft로 초안 스테이징)"
+  lane :production do |options|
     json_key = play_json_key
     assert_version_code_fresh!(json_key)
     build_release_aab
@@ -93,7 +93,9 @@ platform :android do
       track: "production",
       aab: AAB_PATH,
       json_key: json_key,
-      release_status: "completed",
+      # 스토어 등록정보/신고서가 미완이면 'completed'가 Precondition 오류로
+      # 거부된다 — status:draft로 올려 콘솔에서 출시 버튼만 누르게 할 수 있다.
+      release_status: options[:status] || "completed",
       skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
