@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
+import '../services/auth_validation.dart';
 import '../state/nest_controller.dart';
 import 'nest_theme.dart';
 
@@ -284,15 +285,9 @@ class _LoginPageState extends State<LoginPage> {
                                       hintText: 'you@example.com',
                                       prefixIcon: Icon(Icons.email_outlined, size: 20),
                                     ),
-                                    validator: (value) {
-                                      if (value == null || value.trim().isEmpty) {
-                                        return '이메일을 입력하세요.';
-                                      }
-                                      if (!value.contains('@') || !value.contains('.')) {
-                                        return '유효한 이메일 형식이 아닙니다.';
-                                      }
-                                      return null;
-                                    },
+                                    // naver..com 같은 오타가 서버까지 가서 영어
+                                    // 오류로 노출되지 않도록 제출 전에 걸러낸다.
+                                    validator: validateEmailField,
                                   ),
                                   const SizedBox(height: 14),
 

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
 import '../models/nest_models.dart';
+import '../services/auth_validation.dart';
 import '../services/local_planner.dart';
 import '../services/nest_cache.dart';
 import '../services/nest_repository.dart';
@@ -5939,7 +5940,8 @@ class NestController extends ChangeNotifier {
     try {
       await task();
     } on AuthException catch (error) {
-      _setStatus('인증 오류: ${error.message}');
+      // 서버의 영어 메시지를 아는 범위에서 한국어로 바꿔 안내한다.
+      _setStatus('인증 오류: ${koreanAuthMessage(error.message)}');
       rethrow;
     } on PostgrestException catch (error) {
       _setStatus('DB 오류: ${error.message}');
