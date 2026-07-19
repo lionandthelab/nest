@@ -1,0 +1,121 @@
+# Nest Android 배포 레인.
+#
+# 필요 환경변수:
+#   GOOGLE_PLAY_JSON_KEY  Play Console 서비스 계정 JSON 경로 (커밋 금지)
+# 필요 파일:
+#   frontend/android/key.properties  업로드 키 서명 설정 (gitignored)
+#
+# 사용:
+#   cd frontend/android
+#   fastlane android internal     # 내부 테스트 트랙 업로드
+#   fastlane android production   # 프로덕션 트랙 업로드(즉시 공개)
+
+default_platform(:android)
+
+FRONTEND_DIR = File.expand_path("../..", __dir__)
+AAB_PATH = File.join(FRONTEND_DIR, "build/app/outputs/bundle/release/app-release.aab")
+
+def pubspec_build_number
+  # 로케일과 무관하게 UTF-8로 읽는다(pubspec에 한국어 주석 존재).
+  version = File.read(File.join(FRONTEND_DIR, "pubspec.yaml"), encoding: "UTF-8")[/^version:\s*(\S+)/, 1]
+  UI.user_error!("pubspec.yaml에서 version을 읽지 못했습니다") if version.to_s.empty?
+  [version, version.split("+").last.to_i]
+end
+
+def play_json_key
+  path = ENV["GOOGLE_PLAY_JSON_KEY"].to_s
+  UI.user_error!(
+    "GOOGLE_PLAY_JSON_KEY 환경변수에 Play Console 서비스 계정 JSON 경로를 지정하세요",
+  ) if path.empty?
+  expanded = File.expand_path(path)
+  UI.user_error!("서비스 계정 JSON이 없습니다: #{expanded}") unless File.exist?(expanded)
+  expanded
+end
+
+def assert_release_signing!
+  key_props = File.join(FRONTEND_DIR, "android/key.properties")
+  UI.user_error!(
+    "frontend/android/key.properties 가 없습니다. 업로드 키 서명 설정 없이는 " \
+    "디버그 서명으로 빌드되어 Play Console이 거부합니다 (docs/mobile_release.md §7).",
+  ) unless File.exist?(key_props)
+end
+
+def build_release_aab
+  assert_release_signing!
+  sh("cd #{FRONTEND_DIR.shellescape} && flutter build appbundle --release")
+  UI.user_error!("AAB가 생성되지 않았습니다: #{AAB_PATH}") unless File.exist?(AAB_PATH)
+end
+
+def assert_version_code_fresh!(json_key)
+  _, build_number = pubspec_build_number
+  existing = []
+  %w[production beta alpha internal].each do |track|
+    begin
+      existing += google_play_track_version_codes(track: track, json_key: json_key)
+    rescue StandardError
+      # 트랙 미사용 등은 무시
+    end
+  end
+  max_existing = existing.max || 0
+  return if build_number > max_existing
+
+  UI.user_error!(
+    "pubspec version의 빌드 넘버(+#{build_number})가 스토어 최고 versionCode(#{max_existing})보다 " \
+    "커야 합니다. pubspec.yaml의 version을 올린 뒤 다시 실행하세요.",
+  )
+end
+
+platform :android do
+  desc "내부 테스트 트랙에 AAB 업로드"
+  lane :internal do
+    json_key = play_json_key
+    assert_version_code_fresh!(json_key)
+    build_release_aab
+    upload_to_play_store(
+      track: "internal",
+      aab: AAB_PATH,
+      json_key: json_key,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+    )
+    version, build_number = pubspec_build_number
+    UI.success("내부 테스트 업로드 완료: #{version} (versionCode #{build_number})")
+  end
+
+  desc "프로덕션 트랙에 AAB 업로드(검토 통과 시 즉시 공개)"
+  lane :production do
+    json_key = play_json_key
+    assert_version_code_fresh!(json_key)
+    build_release_aab
+    upload_to_play_store(
+      track: "production",
+      aab: AAB_PATH,
+      json_key: json_key,
+      release_status: "completed",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+    )
+    version, build_number = pubspec_build_number
+    UI.success("프로덕션 업로드 완료: #{version} (versionCode #{build_number})")
+  end
+
+  desc "내부 테스트 트랙의 빌드를 프로덕션으로 승격"
+  lane :promote do
+    json_key = play_json_key
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      json_key: json_key,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+    )
+    UI.success("내부 테스트 → 프로덕션 승격 완료")
+  end
+end

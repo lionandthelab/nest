@@ -1,0 +1,4 @@
+# Google Play 배포 대상 앱.
+# json_key_file은 커밋 금지 — 환경변수 GOOGLE_PLAY_JSON_KEY로 서비스 계정
+# JSON 경로를 지정한다 (Fastfile에서 읽음).
+package_name("com.lionandthelab.nest")

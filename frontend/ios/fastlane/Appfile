@@ -1,0 +1,3 @@
+# App Store Connect 배포 대상 앱.
+app_identifier("com.lionandthelab.nest")
+team_id("4HA4G3HLUF")

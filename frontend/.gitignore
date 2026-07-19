@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# fastlane 시크릿/생성물 (커밋 금지)
+**/fastlane/.env
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/test_output
+/ios/ExportOptions.plist
