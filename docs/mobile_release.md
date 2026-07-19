@@ -178,6 +178,8 @@ version: MAJOR.MINOR.PATCH+BUILD
 | Date | Version | Build | Platform | Track | Notes |
 |------|---------|-------|----------|-------|-------|
 | 2026-03-13 | 2.0.0 | 1 | Android + iOS | Internal / TestFlight | Initial store submission |
+| 2026-07-19 | 2.0.7 | 8 | iOS | App Store 심사 제출 | fastlane 첫 자동 배포 (Xcode 26.5, 승인 시 자동 출시) |
+| 2026-07-19 | 2.0.7 | 8 | Android | Internal | fastlane 첫 자동 배포. 프로덕션은 콘솔 필수 신고 완료 후 promote |
 
 ## 7) Signing Configuration Reminders
 
