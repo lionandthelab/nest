@@ -31,6 +31,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 서명된 릴리스 IPA 빌드만 (업로드 없음)
 
+### ios metadata
+
+```sh
+[bundle exec] fastlane ios metadata
+```
+
+메타데이터/스크린샷만 업로드 (바이너리·심사 제출 없음)
+
 ### ios upload
 
 ```sh
