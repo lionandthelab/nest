@@ -40,7 +40,13 @@ class _HomePageState extends State<HomePage> {
 
   // ── Parent child selector state (shared across parent tabs) ──
   String? _selectedChildId;
-  String? _lastScheduledChildLoadId;
+  /// 자녀·학기·반 배정을 묶은 복합 키. 값이 바뀔 때만 번들을 다시 로드한다
+  /// (부팅 후 백그라운드에서 현재 학기로 스냅될 때도 키가 바뀌어 재로드된다).
+  String? _lastScheduledChildLoadKey;
+
+  /// 번들 로드 세대. 학기/자녀가 바뀌면 증가하며, 이전 세대의 로드 결과는
+  /// 완료 시점에 버려져 이전 학기 데이터가 새 학기 화면을 덮지 않는다.
+  int _childLoadGeneration = 0;
   Map<String, ChildClassBundle> _childClassBundles = const {};
   bool _isLoadingChildClasses = false;
 
@@ -309,17 +315,32 @@ class _HomePageState extends State<HomePage> {
     if (!stillValid) {
       _selectedChildId = firstId;
       _childClassBundles = const {};
-      _lastScheduledChildLoadId = null;
+      _lastScheduledChildLoadKey = null;
     }
 
     final selectedId = _selectedChildId;
     if (selectedId == null || selectedId.isEmpty) return;
-    if (_lastScheduledChildLoadId == selectedId) return;
 
-    _lastScheduledChildLoadId = selectedId;
+    // 학기와 반 배정(enrollment 반영)까지 포함한 복합 키. 학기가 바뀌거나
+    // 반 배정 데이터가 갱신되면 키가 달라져 번들을 다시 로드한다.
+    final classGroupSignature = controller
+        .classGroupsForChild(selectedId)
+        .map((group) => group.id)
+        .join(',');
+    final loadKey =
+        '$selectedId::${controller.selectedTermId ?? ''}::$classGroupSignature';
+    if (_lastScheduledChildLoadKey == loadKey) return;
+
+    if (_lastScheduledChildLoadKey != null) {
+      // 다른 자녀/학기/반 구성으로 만든 번들이 남아 있으면 비워
+      // 새 학기 헤더 아래 이전 학기 시간표가 보이는 혼합 표시를 막는다.
+      _childClassBundles = const {};
+    }
+    _lastScheduledChildLoadKey = loadKey;
+    final generation = ++_childLoadGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _loadChildClassBundles(selectedId);
+      _loadChildClassBundles(selectedId, generation);
     });
   }
 
@@ -327,7 +348,8 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _selectedChildId = childId;
       _childClassBundles = const {};
-      _lastScheduledChildLoadId = null;
+      _lastScheduledChildLoadKey = null;
+      _childLoadGeneration++;
     });
     // Persist selection
     final userId = widget.controller.user?.id;
@@ -405,16 +427,20 @@ class _HomePageState extends State<HomePage> {
         label.trim() == '시간표';
   }
 
-  Future<void> _loadChildClassBundles(String childId) async {
-    if (_isLoadingChildClasses) return;
-
+  Future<void> _loadChildClassBundles(String childId, int generation) async {
     final controller = widget.controller;
+    // 이 로드가 여전히 최신 요청인지. 아니면(그 사이 학기/자녀 변경) 결과를
+    // 버려 이전 학기 데이터가 새 화면을 덮어쓰지 않게 한다.
+    bool isCurrent() => mounted && generation == _childLoadGeneration;
+    if (!isCurrent()) return;
+
     setState(() => _isLoadingChildClasses = true);
 
     try {
       // Ensure courses & timeSlots are loaded (may be empty after view switch)
       if (controller.courses.isEmpty || controller.timeSlots.isEmpty) {
         await controller.refreshAll();
+        if (!isCurrent()) return;
       }
 
       final classGroups =
@@ -426,6 +452,7 @@ class _HomePageState extends State<HomePage> {
       final bundleMap = <String, ChildClassBundle>{};
 
       for (final classGroup in classGroups) {
+        if (!isCurrent()) return;
         final sessions = await controller.fetchSessionsForClassGroup(
           classGroupId: classGroup.id,
         );
@@ -452,12 +479,14 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
-      if (!mounted) return;
+      if (!isCurrent()) return;
       setState(() => _childClassBundles = bundleMap);
     } catch (_) {
       // Keep existing data on failure.
     } finally {
-      if (mounted) setState(() => _isLoadingChildClasses = false);
+      // 최신 세대만 로딩 표시를 내린다(이전 세대의 늦은 완료가 새 로드의
+      // 스피너를 끄지 않도록).
+      if (isCurrent()) setState(() => _isLoadingChildClasses = false);
     }
   }
 
@@ -489,6 +518,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _handleTermChange(String? value) async {
     try {
+      // 학기 종속 데이터 재로드 후 _syncSelectedChild의 복합 키(자녀·학기·반)가
+      // 바뀌면서 자녀 반 묶음도 새 학기 기준으로 다시 로드된다.
       await widget.controller.changeTerm(value);
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
