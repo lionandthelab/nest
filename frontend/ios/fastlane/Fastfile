@@ -135,6 +135,20 @@ platform :ios do
     UI.success("빌드 완료: #{ipa}")
   end
 
+  desc "메타데이터/스크린샷만 업로드 (바이너리·심사 제출 없음)"
+  lane :metadata do
+    upload_to_app_store(
+      api_key: asc_key,
+      skip_binary_upload: true,
+      overwrite_screenshots: true,
+      submit_for_review: false,
+      precheck_include_in_app_purchases: false,
+      run_precheck_before_submit: false,
+      force: true,
+    )
+    UI.success("메타데이터/스크린샷 업로드 완료")
+  end
+
   desc "이미 빌드된 IPA를 TestFlight에 업로드만 (options: ipa)"
   lane :upload do |options|
     api_key = asc_key
