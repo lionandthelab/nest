@@ -23,7 +23,7 @@ import 'timetable/whole_school_overlay_board.dart';
 enum _TimetableViewMode { perClass, wholeSchool, emptyRoom }
 
 /// 교사 열람 뷰 모드: 내 수업 / 내 감독 / 빈 강의실.
-enum _ReadOnlyMode { schedule, supervision, emptyRoom }
+enum _ReadOnlyMode { mySchedule, schedule, supervision, emptyRoom }
 
 /// 뷰 토글 공용 스타일. 세그먼트 패딩/폰트를 줄여 '빈 강의실'(아이콘+4글자)
 /// 같은 라벨이 좁은 화면에서도 한 줄에 들어가게 한다.
@@ -61,7 +61,8 @@ class _TimetableTabState extends State<TimetableTab> {
 
   // Read-only view (teachers / non-admin): toggle between the schedule grid and
   // the "빈 강의실 찾기" picker.
-  _ReadOnlyMode _readOnlyMode = _ReadOnlyMode.schedule;
+  // null이면 역할 기본값(교사 프로필 보유 시 '내 수업', 아니면 '반별').
+  _ReadOnlyMode? _readOnlyMode;
 
   // Phase 2 "한눈에" view-mode toggle + whole-school pivot axis.
   _TimetableViewMode _viewMode = _TimetableViewMode.perClass;
@@ -119,20 +120,31 @@ class _TimetableTabState extends State<TimetableTab> {
   }
 
   Widget _buildReadOnlyView(NestController controller) {
-    // 교사(교사 프로필 보유)면 "내 감독" 탭을 노출한다.
+    // 교사(교사 프로필 보유)면 "내 수업"/"내 감독" 탭을 노출한다.
     final myProfileId = controller.currentUserTeacherProfiles.firstOrNull?.id;
     final canSupervise = myProfileId != null && myProfileId.isNotEmpty;
 
-    var mode = _readOnlyMode;
-    if (mode == _ReadOnlyMode.supervision && !canSupervise) {
+    // 교사는 자기 수업 시간표를 기본으로 본다. 반별 보드가 기본이면
+    // 임의의 첫 반 시간표가 떠서 '내 시간표가 안 나온다'로 보인다.
+    var mode = _readOnlyMode ??
+        (canSupervise ? _ReadOnlyMode.mySchedule : _ReadOnlyMode.schedule);
+    if (!canSupervise &&
+        (mode == _ReadOnlyMode.supervision ||
+            mode == _ReadOnlyMode.mySchedule)) {
       mode = _ReadOnlyMode.schedule;
     }
 
     final modeToggle = SegmentedButton<_ReadOnlyMode>(
       segments: [
+        if (canSupervise)
+          const ButtonSegment(
+            value: _ReadOnlyMode.mySchedule,
+            label: Text('내 수업', maxLines: 1, softWrap: false),
+            icon: Icon(Icons.person_pin_outlined, size: 16),
+          ),
         const ButtonSegment(
           value: _ReadOnlyMode.schedule,
-          label: Text('수업'),
+          label: Text('반별'),
           icon: Icon(Icons.calendar_view_week_outlined, size: 16),
         ),
         if (canSupervise)
@@ -168,10 +180,16 @@ class _TimetableTabState extends State<TimetableTab> {
           showHeader: false,
         );
         break;
+      case _ReadOnlyMode.mySchedule:
+        body = _buildMyScheduleBody(controller, myProfileId!);
+        break;
       case _ReadOnlyMode.schedule:
         body = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 어느 반의 시간표인지 보여주고 다른 반으로 전환할 수 있게 한다.
+            _buildReadOnlyClassSelector(controller),
+            const SizedBox(height: 12),
             Text(
               '현재 뷰에서는 열람만 가능합니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -185,6 +203,12 @@ class _TimetableTabState extends State<TimetableTab> {
         break;
     }
 
+    final title = switch (mode) {
+      _ReadOnlyMode.mySchedule => '내 수업 시간표',
+      _ReadOnlyMode.supervision => '내 감독 시간표',
+      _ => '시간표',
+    };
+
     return SingleChildScrollView(
       child: Card(
         child: Padding(
@@ -192,17 +216,115 @@ class _TimetableTabState extends State<TimetableTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                mode == _ReadOnlyMode.supervision ? '내 감독 시간표' : '시간표',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 10),
-              modeToggle,
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: modeToggle,
+              ),
               const SizedBox(height: 12),
               body,
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 읽기 전용 반별 보드의 반 표시/전환 카드.
+  Widget _buildReadOnlyClassSelector(NestController controller) {
+    final groups = controller.classGroups.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final selected = groups
+        .where((g) => g.id == controller.selectedClassGroupId)
+        .firstOrNull;
+
+    return SelectFieldCard(
+      label: '반 선택',
+      hintText: '반을 선택하세요',
+      icon: Icons.groups_2_outlined,
+      enabled: !controller.isBusy && groups.isNotEmpty,
+      value: selected?.name,
+      onTap: () async {
+        final picked = await showSelectSheet<String>(
+          context: context,
+          title: '반 선택',
+          helpText: '선택한 반의 주간 시간표를 보여줍니다.',
+          options: [
+            for (final group in groups)
+              SelectSheetOption<String>(
+                value: group.id,
+                title: group.name,
+                keywords: group.name,
+              ),
+          ],
+          currentValue: controller.selectedClassGroupId,
+        );
+        if (picked != null && picked != controller.selectedClassGroupId) {
+          await controller.changeClassGroup(picked);
+        }
+      },
+    );
+  }
+
+  /// 내가 배정된 수업만 모아 보여주는 주간 시간표.
+  Widget _buildMyScheduleBody(NestController controller, String myProfileId) {
+    final mySessionIds = controller.allTermSessionTeacherAssignments
+        .where((row) => row.teacherProfileId == myProfileId)
+        .map((row) => row.classSessionId)
+        .toSet();
+    final mySessions = controller.allTermSessions
+        .where((session) => mySessionIds.contains(session.id))
+        .toList();
+
+    if (mySessions.isEmpty) {
+      return Text(
+        '이 학기에 배정된 수업이 없습니다.\n다른 학기의 수업은 상단 학기 칩에서 학기를 바꿔 확인할 수 있어요.',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.72),
+            ),
+      );
+    }
+
+    final sessionsBySlot = <String, List<ClassSession>>{};
+    for (final session in mySessions) {
+      sessionsBySlot.putIfAbsent(session.timeSlotId, () => []).add(session);
+    }
+
+    // 내 수업이 있는 요일/슬롯만 남겨 모바일에서 그리드를 짧게 유지한다.
+    final usedSlotIds = sessionsBySlot.keys.toSet();
+    final sortedSlots = controller.timeSlots
+        .where((slot) => usedSlotIds.contains(slot.id))
+        .toList()
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) return day;
+        return a.startTime.compareTo(b.startTime);
+      });
+
+    final slotsByDay = <int, List<TimeSlot>>{};
+    for (final slot in sortedSlots) {
+      slotsByDay.putIfAbsent(slot.dayOfWeek, () => <TimeSlot>[]).add(slot);
+    }
+    final dayOrder = slotsByDay.keys.toList()..sort();
+    var maxPeriods = 0;
+    for (final slots in slotsByDay.values) {
+      if (slots.length > maxPeriods) maxPeriods = slots.length;
+    }
+
+    if (dayOrder.isEmpty || maxPeriods == 0) {
+      return const Text('표시할 시간표 데이터가 없습니다.');
+    }
+
+    return _buildGridScaffold(
+      dayOrder: dayOrder,
+      slotsByDay: slotsByDay,
+      maxPeriods: maxPeriods,
+      slotCellBuilder: (slot) => _ReadOnlySlotCell(
+        controller: controller,
+        slot: slot,
+        sessions: sessionsBySlot[slot.id] ?? const [],
+        showClassName: true,
       ),
     );
   }
@@ -4602,11 +4724,15 @@ class _ReadOnlySlotCell extends StatelessWidget {
     required this.controller,
     required this.slot,
     required this.sessions,
+    this.showClassName = false,
   });
 
   final NestController controller;
   final TimeSlot slot;
   final List<ClassSession> sessions;
+
+  /// 여러 반의 세션이 섞이는 보드('내 수업')에서 반 이름을 함께 보여준다.
+  final bool showClassName;
 
   @override
   Widget build(BuildContext context) {
@@ -4651,6 +4777,14 @@ class _ReadOnlySlotCell extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (showClassName)
+                        Text(
+                          controller.findClassGroupName(session.classGroupId),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: NestColors.clay,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       if ((session.location ?? '').trim().isNotEmpty)
                         Text(
                           '교실: ${session.location!.trim()}',
