@@ -921,7 +921,20 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
               children: [
                 _buildParentCompactHeader(theme, controller, displayName),
                 if (controller.isAdminLike)
-                  TermNavigatorBar(controller: controller),
+                  TermNavigatorBar(controller: controller)
+                else if (controller.isParentView || controller.isTeacherView)
+                  // 좁은 헤더 행 안에서는 학기 이름이 잘려 보이지 않으므로,
+                  // 관리자 학기 바처럼 헤더 아래 전용 줄에 학기 칩을 둔다.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TermSelectChip(
+                        controller: controller,
+                        onSelectTerm: widget.onSelectTerm,
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -1232,18 +1245,6 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                               visualDensity: VisualDensity.compact,
                             ),
                           ),
-                  ),
-                ],
-                // 학기 칩은 학부모/교사 뷰 전용 — 관리자는 바로 아래
-                // TermNavigatorBar가 있으므로 중복 노출하지 않는다.
-                if (controller.isParentView || controller.isTeacherView) ...[
-                  const SizedBox(width: 8),
-                  // 보고 있는 학기 표시/전환(기본값: 현재 학기).
-                  Flexible(
-                    child: TermSelectChip(
-                      controller: controller,
-                      onSelectTerm: widget.onSelectTerm,
-                    ),
                   ),
                 ],
               ],
