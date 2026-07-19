@@ -866,6 +866,40 @@ Term? defaultTermForToday(List<Term> terms, DateTime now) {
   return earliest ?? terms.first;
 }
 
+/// 학기 타임라인 정렬(시작일 오름차순, 시작일 없는 학기는 맨 앞) 공용 비교자.
+/// 관리자 학기 바·학부모/교사 학기 선택 시트·학기 삭제의 이웃 계산이 같은
+/// 순서를 쓰도록 한 곳에 둔다.
+int compareTermsByStartDate(Term a, Term b) {
+  final aStart = a.startDate;
+  final bStart = b.startDate;
+  if (aStart == null && bStart == null) return 0;
+  if (aStart == null) return -1;
+  if (bStart == null) return 1;
+  return aStart.compareTo(bStart);
+}
+
+/// 학기 목록을 (재)로드했을 때 유지할 학기 선택을 정한다.
+///
+/// [selectionIsExplicit]는 사용자가 이번 세션에서 직접 학기를 고른 경우에만
+/// true다. 명시적 선택이 아니면 — 예: 앱 재시작 후 기기 캐시에서 복원된 이전
+/// 학기 — [currentSelectionId]가 목록에 남아 있어도 무시하고 오늘 기준 기본
+/// 학기([defaultTermForToday])로 되돌린다. 학부모/교사가 지난 학기에 마지막으로
+/// 접속했던 기기에서 계속 이전 학기를 보게 되는 버그를 막는다.
+String? resolveTermSelection({
+  required List<Term> terms,
+  required String? currentSelectionId,
+  required bool selectionIsExplicit,
+  required DateTime now,
+}) {
+  if (terms.isEmpty) return null;
+  if (selectionIsExplicit &&
+      currentSelectionId != null &&
+      terms.any((t) => t.id == currentSelectionId)) {
+    return currentSelectionId;
+  }
+  return defaultTermForToday(terms, now)?.id;
+}
+
 class AcademicEvent {
   const AcademicEvent({
     required this.id,

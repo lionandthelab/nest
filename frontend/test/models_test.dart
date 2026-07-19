@@ -258,4 +258,162 @@ void main() {
       expect(t?.name, '2026 Spring');
     });
   });
+
+  group('resolveTermSelection', () {
+    Term term(String name, String start, String end) => Term.fromMap({
+          'id': name,
+          'homeschool_id': 's1',
+          'name': name,
+          'status': 'DRAFT',
+          'start_date': start,
+          'end_date': end,
+        });
+
+    final spring = term('spring', '2026-03-03', '2026-06-30');
+    final summer = term('summer', '2026-07-01', '2026-08-31');
+    final duringSummer = DateTime(2026, 7, 19);
+
+    test('empty terms returns null regardless of selection', () {
+      expect(
+        resolveTermSelection(
+          terms: const [],
+          currentSelectionId: 'spring',
+          selectionIsExplicit: true,
+          now: duringSummer,
+        ),
+        isNull,
+      );
+    });
+
+    test('non-explicit selection snaps to the current term (캐시 복원 버그)', () {
+      // 기기 캐시에 이전 학기(spring)가 남아 있어도, 이번 세션에서 사용자가
+      // 직접 고른 게 아니면 오늘 기준 현재 학기(summer)로 재선택한다.
+      expect(
+        resolveTermSelection(
+          terms: [spring, summer],
+          currentSelectionId: 'spring',
+          selectionIsExplicit: false,
+          now: duringSummer,
+        ),
+        'summer',
+      );
+    });
+
+    test('null selection also defaults to the current term', () {
+      expect(
+        resolveTermSelection(
+          terms: [spring, summer],
+          currentSelectionId: null,
+          selectionIsExplicit: false,
+          now: duringSummer,
+        ),
+        'summer',
+      );
+    });
+
+    test('explicit valid selection is preserved', () {
+      // 사용자가 이번 세션에서 지난 학기를 직접 골랐다면 그대로 둔다.
+      expect(
+        resolveTermSelection(
+          terms: [spring, summer],
+          currentSelectionId: 'spring',
+          selectionIsExplicit: true,
+          now: duringSummer,
+        ),
+        'spring',
+      );
+    });
+
+    test('explicit but stale(삭제된 학기) selection falls back to default', () {
+      expect(
+        resolveTermSelection(
+          terms: [spring, summer],
+          currentSelectionId: 'deleted-term',
+          selectionIsExplicit: true,
+          now: duringSummer,
+        ),
+        'summer',
+      );
+    });
+
+    test('follows defaultTermForToday in a gap between terms', () {
+      // 학기 사이 공백에서는 방금 끝난 학기가 기본값 (defaultTermForToday 규칙).
+      final fall = term('fall', '2026-09-10', '2026-11-30');
+      expect(
+        resolveTermSelection(
+          terms: [spring, fall],
+          currentSelectionId: 'spring',
+          selectionIsExplicit: false,
+          now: DateTime(2026, 7, 19),
+        ),
+        'spring',
+      );
+    });
+
+    test('explicit flag with null selection still falls back to default', () {
+      // deleteTerm이 실제로 만드는 상태: 명시 플래그가 켜진 채 선택이 비워짐.
+      // 명시 플래그만으로 null 선택을 고정하지 않고 기본 학기로 내려가야 한다.
+      expect(
+        resolveTermSelection(
+          terms: [spring, summer],
+          currentSelectionId: null,
+          selectionIsExplicit: true,
+          now: duringSummer,
+        ),
+        'summer',
+      );
+    });
+
+    test('term boundary days: end date keeps old term, next day snaps', () {
+      // 인접 학기 전환 계약: 종료일 당일까지는 그 학기가 '현재'(기간 포함),
+      // 다음 학기 시작일 아침에는 새 학기로 스냅된다.
+      expect(
+        resolveTermSelection(
+          terms: [spring, summer],
+          currentSelectionId: 'spring',
+          selectionIsExplicit: false,
+          now: DateTime(2026, 6, 30),
+        ),
+        'spring',
+      );
+      expect(
+        resolveTermSelection(
+          terms: [spring, summer],
+          currentSelectionId: 'spring',
+          selectionIsExplicit: false,
+          now: DateTime(2026, 7, 1),
+        ),
+        'summer',
+      );
+    });
+  });
+
+  group('compareTermsByStartDate', () {
+    Term term(String name, String? start) => Term.fromMap({
+          'id': name,
+          'homeschool_id': 's1',
+          'name': name,
+          'status': 'DRAFT',
+          'start_date': start,
+          'end_date': null,
+        });
+
+    test('orders by start date ascending', () {
+      final sorted = [term('b', '2026-09-01'), term('a', '2026-03-02')]
+        ..sort(compareTermsByStartDate);
+      expect(sorted.map((t) => t.name).toList(), ['a', 'b']);
+    });
+
+    test('terms without start date come first', () {
+      final sorted = [
+        term('dated', '2026-03-02'),
+        term('undated', null),
+      ]..sort(compareTermsByStartDate);
+      expect(sorted.first.name, 'undated');
+    });
+
+    test('two undated terms compare equal', () {
+      expect(compareTermsByStartDate(term('x', null), term('y', null)), 0);
+    });
+  });
 }
