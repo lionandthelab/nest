@@ -51,3 +51,4 @@ app.*.map.json
 **/fastlane/test_output
 /ios/ExportOptions.plist
 /ios/*.mobileprovision
+lib/dev/joy_*
