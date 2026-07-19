@@ -60,6 +60,11 @@ class NestController extends ChangeNotifier {
   List<Term> terms = [];
   String? selectedTermId;
 
+  /// 사용자가 이번 세션에서 학기를 직접 골랐는지. false면 학기 목록을 다시
+  /// 불러올 때마다 오늘 기준 기본 학기로 재선택한다(캐시로 복원된 이전 학기가
+  /// 눌러앉는 것을 방지). 로그아웃/홈스쿨 전환 시 초기화된다.
+  bool _termSelectionIsExplicit = false;
+
   /// 지난 학기(기간 종료)는 기본적으로 읽기 전용이지만, 관리자가 상단 학기 바에서
   /// 이 값을 켜면 편집을 허용한다. 학기를 전환하면 다시 잠긴다. ARCHIVED 학기는
   /// 이 값과 무관하게 DB 트리거가 하드 잠금한다.
@@ -635,6 +640,8 @@ class NestController extends ChangeNotifier {
   Future<void> changeHomeschool(String? homeschoolId) async {
     final hid = _normalizeNullable(homeschoolId);
     selectedHomeschoolId = hid;
+    // 홈스쿨이 바뀌면 이전 홈스쿨에서의 학기 선택은 의미가 없다.
+    _termSelectionIsExplicit = false;
     // 이 홈스쿨에서 이전에 쓰던 역할을 캐시에서 복원(재시작 후에도 최근 역할 유지).
     final uid = user?.id;
     if (hid != null && uid != null && !_viewRoleByHomeschool.containsKey(hid)) {
@@ -763,6 +770,7 @@ class NestController extends ChangeNotifier {
 
   Future<void> changeTerm(String? termId) async {
     selectedTermId = _normalizeNullable(termId);
+    _termSelectionIsExplicit = selectedTermId != null;
     scheduleOptionDrafts = [];
     selectedScheduleOptionId = null;
     // 학기를 옮기면 지난 학기 편집 잠금 해제는 초기화한다.
@@ -867,6 +875,7 @@ class NestController extends ChangeNotifier {
       }
     }
 
+    final prevTermId = selectedTermId;
     await _runBusy('학기 정보를 저장하는 중...', () async {
       await _repository.updateTerm(
         termId: id,
@@ -877,7 +886,13 @@ class NestController extends ChangeNotifier {
       );
       await _loadTerms();
     });
-    notifyListeners();
+    if (selectedTermId != prevTermId) {
+      // 기간 수정으로 오늘 기준 기본 학기가 바뀌어 선택이 옮겨진 경우,
+      // 반/시간표 등 하위 데이터도 새 학기로 재로드해 화면 불일치를 막는다.
+      await changeTerm(selectedTermId);
+    } else {
+      notifyListeners();
+    }
   }
 
   /// 학기를 삭제한다. 반/세션/시간표/교실/자습이 연쇄 삭제되는 파괴적 작업이다.
@@ -899,19 +914,12 @@ class NestController extends ChangeNotifier {
     }
 
     final wasSelected = selectedTermId == termId;
+    final prevTermId = selectedTermId;
     // 선택된 학기를 지울 때는 타임라인상 인접 학기(이전 우선, 없으면 다음)로
     // 이동한다. 최신 학기로 튀지 않도록 삭제 전에 미리 계산해 둔다.
     String? neighborId;
     if (wasSelected) {
-      final ordered = terms.toList()
-        ..sort((a, b) {
-          final aStart = a.startDate;
-          final bStart = b.startDate;
-          if (aStart == null && bStart == null) return 0;
-          if (aStart == null) return -1;
-          if (bStart == null) return 1;
-          return aStart.compareTo(bStart);
-        });
+      final ordered = terms.toList()..sort(compareTermsByStartDate);
       final idx = ordered.indexWhere((t) => t.id == termId);
       if (idx > 0) {
         neighborId = ordered[idx - 1].id;
@@ -935,8 +943,9 @@ class NestController extends ChangeNotifier {
       }
     });
 
-    // 삭제된 학기가 선택 상태였다면 새로 정해진 학기로 데이터를 다시 로드한다.
-    if (wasSelected) {
+    // 삭제된 학기가 선택 상태였다면(또는 _loadTerms 재해석으로 선택이 옮겨졌다면)
+    // 새로 정해진 학기로 하위 데이터를 다시 로드한다.
+    if (wasSelected || selectedTermId != prevTermId) {
       await changeTerm(selectedTermId);
     } else {
       notifyListeners();
@@ -1005,6 +1014,8 @@ class NestController extends ChangeNotifier {
 
       selectedHomeschoolId = result.homeschoolId;
       selectedTermId = result.termId;
+      // 방금 만든 학기를 유지해야 하므로 명시적 선택으로 취급한다.
+      _termSelectionIsExplicit = true;
       selectedClassGroupId = result.classGroupId;
 
       await loadHomeschoolContext();
@@ -1905,6 +1916,8 @@ class NestController extends ChangeNotifier {
     if (selectedHomeschoolId == null ||
         !validSchoolIds.contains(selectedHomeschoolId)) {
       selectedHomeschoolId = memberships.first.homeschoolId;
+      // 홈스쿨이 자동 전환되면 이전 홈스쿨에서의 학기 선택은 의미가 없다.
+      _termSelectionIsExplicit = false;
     }
 
     currentRole = _resolveViewRole(selectedHomeschoolId);
@@ -5783,17 +5796,20 @@ class NestController extends ChangeNotifier {
     if (homeschoolId == null || homeschoolId.isEmpty) {
       terms = [];
       selectedTermId = null;
+      _termSelectionIsExplicit = false;
       return;
     }
 
     terms = await _repository.fetchTerms(homeschoolId: homeschoolId);
 
-    final validTermIds = terms.map((term) => term.id).toSet();
-    if (selectedTermId == null || !validTermIds.contains(selectedTermId)) {
-      // 기본 선택: 현재 학기 → 없으면 직전(방금 시작/종료한) 학기 → 전부 미래면
-      // 가장 이른 예정 학기. 다음 학기를 미리 만들어도 빈 미래 학기로 튀지 않게 한다.
-      selectedTermId = defaultTermForToday(terms, DateTime.now())?.id;
-    }
+    // 이번 세션의 명시적 선택만 존중하고, 그 외(첫 로드·캐시 복원·무효 ID)는
+    // 오늘 기준 기본 학기(현재 → 직전 → 가장 이른 예정)로 선택한다.
+    selectedTermId = resolveTermSelection(
+      terms: terms,
+      currentSelectionId: selectedTermId,
+      selectionIsExplicit: _termSelectionIsExplicit,
+      now: DateTime.now(),
+    );
   }
 
   Future<void> _loadClassGroups() async {
@@ -6237,6 +6253,31 @@ class NestController extends ChangeNotifier {
           fromMap: Membership.fromMap,
         ) ??
         const [];
+
+    // 캐시에 남은 이전 학기 선택을 그대로 쓰지 않고 오늘 기준 기본 학기로
+    // 재해석한다. 오프라인 부팅(서버 _loadTerms 미도달)에서도 학부모/교사가
+    // 이전 학기를 계속 보지 않게 한다.
+    final resolvedTermId = resolveTermSelection(
+      terms: terms,
+      currentSelectionId: selectedTermId,
+      selectionIsExplicit: false,
+      now: DateTime.now(),
+    );
+    if (resolvedTermId != selectedTermId) {
+      selectedTermId = resolvedTermId;
+      // 캐시된 학기 종속 데이터는 이전 학기 것이므로 비워서
+      // '헤더=현재 학기, 본문=이전 학기' 혼합 표시를 막는다.
+      selectedClassGroupId = null;
+      classGroups = const [];
+      classrooms = const [];
+      timeSlots = const [];
+      sessions = const [];
+      proposals = const [];
+      proposalSessionsById = const {};
+      classEnrollments = const [];
+      sessionTeacherAssignments = const [];
+      teachingPlans = const [];
+    }
   }
 
   Map<String, List<ProposalSession>> _restoreProposalSessionsMap(
@@ -6440,6 +6481,7 @@ class NestController extends ChangeNotifier {
     currentRole = null;
     terms = [];
     selectedTermId = null;
+    _termSelectionIsExplicit = false;
     classGroups = [];
     selectedClassGroupId = null;
     courses = [];
