@@ -728,14 +728,11 @@ class _DesktopScaffold extends StatelessWidget {
                     horizontal: 8,
                     vertical: 6,
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.asset(
-                      'assets/logo.png',
-                      width: 68,
-                      height: 68,
-                      fit: BoxFit.cover,
-                    ),
+                  child: Image.asset(
+                    'assets/logo_mark.png',
+                    width: 68,
+                    height: 68,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),

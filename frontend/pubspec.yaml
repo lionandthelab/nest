@@ -75,6 +75,7 @@ flutter:
   assets:
     - assets/logo.png
     - assets/logo_square.png
+    - assets/logo_mark.png
     - assets/legal/privacy.md
     - assets/legal/terms.md
 

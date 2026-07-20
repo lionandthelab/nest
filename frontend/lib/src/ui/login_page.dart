@@ -182,14 +182,11 @@ class _LoginPageState extends State<LoginPage> {
                                 children: [
                                   // ── Logo + Brand ──
                                   Center(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image.asset(
-                                        'assets/logo_square.png',
-                                        width: 64,
-                                        height: 64,
-                                        fit: BoxFit.cover,
-                                      ),
+                                    child: Image.asset(
+                                      'assets/logo_mark.png',
+                                      width: 72,
+                                      height: 72,
+                                      fit: BoxFit.contain,
                                     ),
                                   ),
                                   const SizedBox(height: 16),
