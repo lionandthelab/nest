@@ -16,3 +16,18 @@ node_modules/
 
 # IDE / tools
 .omc/
+
+# One-off ops/debug scripts & render artifacts (kept local, not for history)
+# NOTE: 메시징 서브모듈 파일(main_messaging_lab.dart, lion-notify,
+#       run_messaging_lab.mjs, messaging_lab_smoke.mjs 등)은 여기서 무시하지
+#       않는다 — 추후 별도 브랜치로 편입할 예정.
+scripts/_*
+scripts/*joy*
+scripts/shots/
+scripts/*.png
+scripts/*.pdf
+frontend/shots/
+
+# Local data files (rosters, manuals, 출석부) — 원본 문서는 git에 넣지 않는다
+/*.xlsx
+/*.pdf
