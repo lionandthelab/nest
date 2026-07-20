@@ -320,11 +320,13 @@ class _TimetableTabState extends State<TimetableTab> {
       dayOrder: dayOrder,
       slotsByDay: slotsByDay,
       maxPeriods: maxPeriods,
-      slotCellBuilder: (slot) => _ReadOnlySlotCell(
+      fitToWidth: true,
+      slotCellBuilder: (slot, compact) => _ReadOnlySlotCell(
         controller: controller,
         slot: slot,
         sessions: sessionsBySlot[slot.id] ?? const [],
         showClassName: true,
+        compact: compact,
       ),
     );
   }
@@ -2614,12 +2616,14 @@ class _TimetableTabState extends State<TimetableTab> {
       dayOrder: dayOrder,
       slotsByDay: slotsByDay,
       maxPeriods: maxPeriods,
-      slotCellBuilder: (slot) {
+      fitToWidth: true,
+      slotCellBuilder: (slot, compact) {
         final sessions = controller.sessionsForSlot(slot.id);
         return _ReadOnlySlotCell(
           controller: controller,
           slot: slot,
           sessions: sessions,
+          compact: compact,
         );
       },
     );
@@ -2640,7 +2644,7 @@ class _TimetableTabState extends State<TimetableTab> {
         slotsByDay: slotsByDay,
         maxPeriods: maxPeriods,
         forExport: forExport,
-        slotCellBuilder: (slot) {
+        slotCellBuilder: (slot, compact) {
           final slotSessions = _draftSessionsForSlot(slot.id);
           // Export renders are static snapshots: no live drag feedback.
           final activeDrag = forExport ? null : _activeDrag;
@@ -2691,21 +2695,32 @@ class _TimetableTabState extends State<TimetableTab> {
     required List<int> dayOrder,
     required Map<int, List<TimeSlot>> slotsByDay,
     required int maxPeriods,
-    required Widget Function(TimeSlot slot) slotCellBuilder,
+    required Widget Function(TimeSlot slot, bool compact) slotCellBuilder,
     bool forExport = false,
+    // 읽기 전용 뷰(교사 '내 수업'/'반별')는 아이 시간표처럼 가로 스크롤 없이
+    // 화면 너비에 맞춰 한 눈에 보이도록 열을 줄인다.
+    bool fitToWidth = false,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         const gap = 6.0;
-        final periodWidth = forExport ? 102.0 : 108.0;
-        final minDayColumnWidth = forExport ? 72.0 : 188.0;
-        final maxDayColumnWidth = forExport ? 240.0 : 320.0;
-        final slotMinHeight = forExport ? 132.0 : 156.0;
+        final periodWidth =
+            forExport ? 102.0 : (fitToWidth ? 40.0 : 108.0);
+        final minDayColumnWidth =
+            forExport ? 72.0 : (fitToWidth ? 44.0 : 188.0);
+        final maxDayColumnWidth =
+            forExport ? 240.0 : (fitToWidth ? 200.0 : 320.0);
+        final slotMinHeight =
+            forExport ? 132.0 : (fitToWidth ? 52.0 : 156.0);
         final boardPadding = forExport ? 16.0 : 10.0;
 
         final availableWidth = constraints.maxWidth;
+        // 보드 Container가 좌우로 boardPadding을 먹으므로, 실제 열이 놓이는
+        // 내부 폭 기준으로 계산해야 fit 모드에서 가로 오버플로가 나지 않는다.
+        final innerWidth =
+            (availableWidth - boardPadding * 2).clamp(0.0, double.infinity);
         final usable =
-            (availableWidth - periodWidth - (dayOrder.length + 1) * gap).clamp(
+            (innerWidth - periodWidth - (dayOrder.length + 1) * gap).clamp(
               0.0,
               double.infinity,
             );
@@ -2717,11 +2732,15 @@ class _TimetableTabState extends State<TimetableTab> {
                 maxDayColumnWidth,
               );
 
+        // 좁은 열에서는 셀 폰트/패딩을 줄여 내용이 잘리지 않게 한다.
+        final compact = fitToWidth && dynamicDayWidth < 128;
+
         final gridWidth =
             periodWidth +
             (dayOrder.length * dynamicDayWidth) +
             (dayOrder.length + 1) * gap;
-        final shouldScroll = !forExport && gridWidth > availableWidth;
+        // 0.5px 여유로 부동소수 오차에 의한 불필요한 스크롤 전환을 막는다.
+        final shouldScroll = !forExport && gridWidth > innerWidth + 0.5;
         final renderWidth = forExport
             ? gridWidth + (boardPadding * 2)
             : (shouldScroll
@@ -2743,11 +2762,14 @@ class _TimetableTabState extends State<TimetableTab> {
                   _GridHeaderCell(
                     width: periodWidth,
                     title: '시간',
+                    compact: compact,
                   ),
                   ...dayOrder.map(
                     (day) => _GridHeaderCell(
                       width: dynamicDayWidth,
-                      title: '${_dayLabel(day)}요일',
+                      // 좁은 화면에서는 '월요일' 대신 '월'로 줄여 열 폭에 맞춘다.
+                      title: compact ? _dayLabel(day) : '${_dayLabel(day)}요일',
+                      compact: compact,
                     ),
                   ),
                 ],
@@ -2771,13 +2793,16 @@ class _TimetableTabState extends State<TimetableTab> {
 
                 return uniquePeriods.map((periodKey) {
                   final parts = periodKey.split('\t');
-                  final timeLabel =
-                      '${_shortTime(parts[0])}-${_shortTime(parts[1])}';
+                  // fit 모드는 아이 시간표처럼 한국어 축약("10시반")으로 좁은
+                  // 시간 열에 맞추고, 그 외에는 기존 "10:30-11:00" 범위를 쓴다.
+                  final timeLabel = fitToWidth
+                      ? _koreanClock(parts[0])
+                      : '${_shortTime(parts[0])}-${_shortTime(parts[1])}';
                   final slotsForPeriod =
                       slotByPeriodDay[periodKey] ?? const <int, TimeSlot>{};
 
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+                    padding: EdgeInsets.only(bottom: compact ? 6 : 8),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2786,7 +2811,9 @@ class _TimetableTabState extends State<TimetableTab> {
                           constraints:
                               BoxConstraints(minHeight: slotMinHeight),
                           margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.all(10),
+                          padding: EdgeInsets.all(compact ? 4 : 10),
+                          alignment:
+                              compact ? Alignment.center : Alignment.topLeft,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             color: NestColors.creamyWhite,
@@ -2794,7 +2821,17 @@ class _TimetableTabState extends State<TimetableTab> {
                           ),
                           child: Text(
                             timeLabel,
-                            style: Theme.of(context).textTheme.titleSmall,
+                            textAlign:
+                                compact ? TextAlign.center : TextAlign.start,
+                            style: compact
+                                ? Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.15,
+                                    )
+                                : Theme.of(context).textTheme.titleSmall,
                           ),
                         ),
                         ...dayOrder.map((day) {
@@ -2808,17 +2845,27 @@ class _TimetableTabState extends State<TimetableTab> {
                               margin: const EdgeInsets.only(right: 6),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                color: Colors.grey.shade100,
-                                border:
-                                    Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '해당 슬롯 없음',
-                                  style:
-                                      Theme.of(context).textTheme.bodySmall,
+                                color: compact
+                                    ? NestColors.creamyWhite
+                                        .withValues(alpha: 0.5)
+                                    : Colors.grey.shade100,
+                                border: Border.all(
+                                  color: compact
+                                      ? NestColors.roseMist
+                                          .withValues(alpha: 0.5)
+                                      : Colors.grey.shade300,
                                 ),
                               ),
+                              child: compact
+                                  ? const SizedBox.shrink()
+                                  : Center(
+                                      child: Text(
+                                        '해당 슬롯 없음',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ),
                             );
                           }
 
@@ -2827,7 +2874,7 @@ class _TimetableTabState extends State<TimetableTab> {
                             constraints:
                                 BoxConstraints(minHeight: slotMinHeight),
                             margin: const EdgeInsets.only(right: 6),
-                            child: slotCellBuilder(slot),
+                            child: slotCellBuilder(slot, compact),
                           );
                         }),
                       ],
@@ -4725,6 +4772,7 @@ class _ReadOnlySlotCell extends StatelessWidget {
     required this.slot,
     required this.sessions,
     this.showClassName = false,
+    this.compact = false,
   });
 
   final NestController controller;
@@ -4734,8 +4782,13 @@ class _ReadOnlySlotCell extends StatelessWidget {
   /// 여러 반의 세션이 섞이는 보드('내 수업')에서 반 이름을 함께 보여준다.
   final bool showClassName;
 
+  /// 좁은 화면: 아이 시간표처럼 과목만 간결히 보여주고, 탭하면 상세를 연다.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
+    if (compact) return _buildCompact(context);
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -4799,29 +4852,213 @@ class _ReadOnlySlotCell extends StatelessWidget {
       ),
     );
   }
+
+  /// 좁은 화면용: 시간 열이 이미 시각을 보여주므로 셀 안에서는 시각을 반복하지
+  /// 않고, 과목명(+반 이름)만 압축해 보여준다. 탭하면 상세 시트를 연다.
+  Widget _buildCompact(BuildContext context) {
+    if (sessions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final session in sessions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: GestureDetector(
+              onTap: () => _showDetail(context, session),
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: NestColors.roseMist.withValues(alpha: 0.26),
+                  border: Border.all(color: NestColors.roseMist),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      controller.findCourseName(session.courseId),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            height: 1.15,
+                          ),
+                    ),
+                    if (showClassName)
+                      Text(
+                        controller.findClassGroupName(session.classGroupId),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: NestColors.clay,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              height: 1.15,
+                            ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showDetail(BuildContext context, ClassSession session) {
+    final courseName = controller.findCourseName(session.courseId);
+    final className = controller.findClassGroupName(session.classGroupId);
+    final timeLabel =
+        '${_dayLabel(slot.dayOfWeek)}요일 ${_shortTime(slot.startTime)}-${_shortTime(slot.endTime)}';
+    final location = (session.location ?? '').trim();
+    final teacherNames = controller.allTermSessionTeacherAssignments
+        .where((row) => row.classSessionId == session.id)
+        .map((row) => controller.findTeacherName(row.teacherProfileId))
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.menu_book_rounded, color: NestColors.clay),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      courseName,
+                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                className,
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 16),
+              _ReadOnlyDetailRow(
+                icon: Icons.schedule_outlined,
+                label: '시간',
+                value: timeLabel,
+              ),
+              const Divider(height: 24),
+              _ReadOnlyDetailRow(
+                icon: Icons.school_outlined,
+                label: '담당 교사',
+                value: teacherNames.isEmpty
+                    ? '담당교사 미지정'
+                    : teacherNames.join(', '),
+              ),
+              const Divider(height: 24),
+              _ReadOnlyDetailRow(
+                icon: Icons.meeting_room_outlined,
+                label: '장소',
+                value: location.isEmpty ? '장소 미지정' : location,
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ReadOnlyDetailRow extends StatelessWidget {
+  const _ReadOnlyDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: NestColors.clay),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.6),
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _GridHeaderCell extends StatelessWidget {
   const _GridHeaderCell({
     required this.width,
     required this.title,
+    this.compact = false,
   });
 
   final double width;
   final String title;
+
+  /// 좁은 화면(교사 읽기 전용 뷰)에서 헤더를 가운데 정렬 + 작은 폰트로.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: width,
       margin: const EdgeInsets.only(right: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      alignment: compact ? Alignment.center : null,
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 4, vertical: 8)
+          : const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         color: NestColors.roseMist.withValues(alpha: 0.72),
         border: Border.all(color: NestColors.roseMist),
       ),
-      child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+      child: Text(
+        title,
+        textAlign: compact ? TextAlign.center : TextAlign.start,
+        style: compact
+            ? Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(fontWeight: FontWeight.w700)
+            : Theme.of(context).textTheme.titleSmall,
+      ),
     );
   }
 }
@@ -5224,4 +5461,18 @@ String _shortTime(String value) {
     return fallback == null ? value : DateFormat('HH:mm').format(fallback);
   }
   return DateFormat('HH:mm').format(parsed);
+}
+
+/// "HH:mm(:ss)" 시각을 아이 시간표와 동일한 한국어 축약으로 바꾼다.
+/// 정각은 "9시", 30분은 "9시반"(좁은 열에서 자연스럽게 두 줄로 접힘),
+/// 그 외에는 "9:20"으로 표기한다.
+String _koreanClock(String value) {
+  final hhmm = _shortTime(value);
+  final parts = hhmm.split(':');
+  if (parts.length < 2) return hhmm;
+  final h = int.tryParse(parts[0]) ?? 0;
+  final m = int.tryParse(parts[1]) ?? 0;
+  if (m == 0) return '$h시';
+  if (m == 30) return '$h시반';
+  return '$h:${m.toString().padLeft(2, '0')}';
 }
