@@ -8,6 +8,10 @@
 //   node scripts/lion_auth_setup.mjs android   # AndroidManifest.xml 패치 (멱등)
 //   node scripts/lion_auth_setup.mjs ios       # Info.plist 패치 (Nid* 키만 자동, 스킴은 안내 출력)
 //   node scripts/lion_auth_setup.mjs broker    # social-broker Edge Function 배포 (supabase CLI)
+//   node scripts/lion_auth_setup.mjs messaging  # 마이그레이션 + Solapi/FCM 시크릿 + lion-notify 배포
+//   node scripts/lion_auth_setup.mjs migrate-messaging  # push_tokens 등 마이그레이션만
+//   node scripts/lion_auth_setup.mjs messaging-secrets  # Solapi/FCM 시크릿 주입만
+//   node scripts/lion_auth_setup.mjs notify     # lion-notify Edge Function 배포만
 //
 // 값 발급 방법: packages/lion_auth/SETUP.md
 
@@ -26,6 +30,13 @@ const MANIFEST_PATH = path.join(
 );
 const PLIST_PATH = path.join(ROOT, 'frontend', 'ios', 'Runner', 'Info.plist');
 const MANAGEMENT_API = 'https://api.supabase.com/v1';
+const MESSAGING_MIGRATION_HOST = path.join(
+  ROOT, 'supabase', 'migrations', '20260707100000_lion_messaging.sql',
+);
+const MESSAGING_MIGRATION_TEMPLATE = path.join(
+  ROOT, 'packages', 'lion_auth', 'server', 'supabase', 'migrations',
+  '20260707100000_lion_messaging.sql',
+);
 
 // ---------------------------------------------------------------- env
 
@@ -259,6 +270,69 @@ function deployBroker() {
   console.log('[broker] 배포 완료');
 }
 
+// ----------------------------------------------------------- messaging
+
+const MESSAGING_SECRET_NAMES = [
+  'SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_PFID',
+  'FCM_PROJECT_ID', 'FCM_SERVICE_ACCOUNT',
+];
+
+async function configureMessagingSecrets() {
+  const ref = projectRef();
+  if (!ref) throw new Error('.env에 SUPABASE_PROJECT_REF(또는 SUPABASE_URL)가 없습니다.');
+  console.log('\n[messaging] Solapi/FCM 시크릿 주입 중...');
+  const secrets = MESSAGING_SECRET_NAMES
+    .filter((name) => env[name])
+    .map((name) => ({ name, value: env[name] }));
+  if (secrets.length === 0) {
+    console.log('[messaging] .env에 SOLAPI_*/FCM_* 값이 없습니다. 건너뜀.');
+    return;
+  }
+  await managementApi('POST', `/projects/${ref}/secrets`, secrets);
+  console.log(`[messaging] 시크릿 주입 완료: ${secrets.map((s) => s.name).join(', ')}`);
+}
+
+async function migrateMessaging() {
+  const ref = projectRef();
+  if (!ref) throw new Error('.env에 SUPABASE_PROJECT_REF(또는 SUPABASE_URL)가 없습니다.');
+  console.log('\n[messaging] lion_messaging 마이그레이션 적용 중...');
+  const file = fs.existsSync(MESSAGING_MIGRATION_HOST)
+    ? MESSAGING_MIGRATION_HOST
+    : MESSAGING_MIGRATION_TEMPLATE;
+  const sql = fs.readFileSync(file, 'utf8');
+  await managementApi('POST', `/projects/${ref}/database/query`, { query: sql });
+  await managementApi('POST', `/projects/${ref}/database/query`, {
+    query:
+      "insert into supabase_migrations.schema_migrations(version,name) " +
+      "values ('20260707100000','lion_messaging') on conflict do nothing;",
+  });
+  console.log('[messaging] 마이그레이션 적용 완료 (push_tokens/notification_log/notification_prefs)');
+}
+
+function deployNotify() {
+  const ref = projectRef();
+  console.log('\n[messaging] lion-notify Edge Function 배포 중...');
+  // 로그인된 사용자만 호출하므로 JWT 검증을 켠 채 배포한다(브로커와 반대).
+  const deployArgs = ['functions', 'deploy', 'lion-notify', '--project-ref', ref];
+  const child = spawnSync('supabase', ['--version'], { shell: true, encoding: 'utf8' });
+  const runner = child.status === 0 ? 'supabase' : 'npx --yes supabase';
+  if (runner.startsWith('npx')) {
+    console.log('[messaging] supabase CLI 미설치 → npx supabase 로 실행');
+  }
+  const result = spawnSync(`${runner} ${deployArgs.join(' ')}`, {
+    cwd: ROOT,
+    stdio: 'inherit',
+    shell: true,
+    env: { ...process.env, SUPABASE_ACCESS_TOKEN: env.SUPABASE_ACCESS_TOKEN },
+  });
+  if (result.status !== 0) {
+    console.log(`[messaging] 배포 실패. 수동 배포:
+  npx supabase functions deploy lion-notify --project-ref ${ref}`);
+    return;
+  }
+  console.log('[messaging] 배포 완료');
+}
+
 // -------------------------------------------------------------- doctor
 
 async function doctor() {
@@ -288,6 +362,12 @@ async function doctor() {
     fs.readFileSync(MANIFEST_PATH, 'utf8').includes(MANIFEST_BEGIN);
   console.log(`  ${manifestPatched ? 'O' : 'X'} lion_auth 블록 (android 명령으로 주입)`);
 
+  console.log('\n-- 메시징 .env (알림톡/푸시) --');
+  for (const name of MESSAGING_SECRET_NAMES) {
+    console.log(`  ${env[name] ? 'O' : 'X'} ${name}`);
+  }
+  console.log(`  ${env.LION_FCM_WEB_VAPID_KEY ? 'O' : 'X'} LION_FCM_WEB_VAPID_KEY (웹 푸시 공개키)`);
+
   const ref = projectRef();
   if (env.SUPABASE_ACCESS_TOKEN && ref) {
     console.log('\n-- Supabase 서버 설정 --');
@@ -303,6 +383,25 @@ async function doctor() {
       const naverSecret = Array.isArray(secrets) &&
         secrets.some((s) => s.name === 'NAVER_CLIENT_ID');
       console.log(`  ${naverSecret ? 'O' : 'X'} NAVER_CLIENT_ID 시크릿`);
+
+      const notifyDeployed = Array.isArray(functions) &&
+        functions.some((fn) => fn.slug === 'lion-notify');
+      console.log(`  ${notifyDeployed ? 'O' : 'X'} lion-notify 배포됨`);
+      const solapiSecret = Array.isArray(secrets) &&
+        secrets.some((s) => s.name === 'SOLAPI_API_KEY');
+      console.log(`  ${solapiSecret ? 'O' : 'X'} SOLAPI_API_KEY 시크릿`);
+      const fcmSecret = Array.isArray(secrets) &&
+        secrets.some((s) => s.name === 'FCM_SERVICE_ACCOUNT');
+      console.log(`  ${fcmSecret ? 'O' : 'X'} FCM_SERVICE_ACCOUNT 시크릿`);
+      try {
+        const rows = await managementApi('POST', `/projects/${ref}/database/query`, {
+          query: "select to_regclass('public.push_tokens') as t;",
+        });
+        const exists = Array.isArray(rows) && rows[0] && rows[0].t;
+        console.log(`  ${exists ? 'O' : 'X'} push_tokens 테이블 (migrate-messaging 로 생성)`);
+      } catch (tableError) {
+        console.log(`  X push_tokens 조회 실패: ${tableError.message}`);
+      }
     } catch (error) {
       ok = false;
       console.log(`  X 서버 조회 실패: ${error.message}`);
@@ -336,15 +435,36 @@ try {
     case 'broker':
       deployBroker();
       break;
+    case 'messaging':
+      await migrateMessaging();
+      await configureMessagingSecrets();
+      deployNotify();
+      await doctor();
+      break;
+    case 'migrate-messaging':
+      await migrateMessaging();
+      break;
+    case 'messaging-secrets':
+      await configureMessagingSecrets();
+      break;
+    case 'notify':
+      deployNotify();
+      break;
     case 'all':
       await configureSupabase();
       patchAndroid();
       patchIos();
       deployBroker();
+      await migrateMessaging();
+      await configureMessagingSecrets();
+      deployNotify();
       await doctor();
       break;
     default:
-      console.error(`알 수 없는 명령: ${command} (doctor|supabase|android|ios|broker|all)`);
+      console.error(
+        `알 수 없는 명령: ${command} ` +
+        `(doctor|supabase|android|ios|broker|messaging|migrate-messaging|messaging-secrets|notify|all)`,
+      );
       process.exitCode = 1;
   }
 } catch (error) {

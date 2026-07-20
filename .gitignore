@@ -5,6 +5,16 @@
 nest_client_secret_*.json
 *client_secret*.json
 
+# Firebase / OAuth 클라이언트 설정 (앱 번들 자산 · FCM 서비스계정) — git 미포함
+# google-services.json / GoogleService-Info.plist 는 앱 빌드시 각 위치에 두되 커밋하지 않는다.
+google-services*.json
+GoogleService-Info*.plist
+client_*.apps.googleusercontent.com.plist
+*.apps.googleusercontent.com.json
+*firebase-adminsdk*.json
+*serviceaccount*.json
+*service-account*.json
+
 # Supabase temp
 supabase/.temp/
 
