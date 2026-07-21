@@ -15,6 +15,13 @@
 
 default_platform(:ios)
 
+# fastlane(Ruby)는 프로세스 시작 시점의 셸 로케일로 기본 인코딩을 정한다.
+# 셸 LANG이 비어 있으면 default_external이 US-ASCII가 되어, 한국어 메타데이터를
+# 읽어 String#strip 할 때 Encoding::CompatibilityError가 난다(.env의 LANG은
+# dotenv 로딩이 인코딩 확정보다 늦어 소용없다). 여기서 UTF-8을 강제해 deliver의
+# 메타데이터 파일 읽기가 항상 UTF-8이 되게 한다.
+Encoding.default_external = Encoding::UTF_8 if Encoding.default_external != Encoding::UTF_8
+
 FLUTTER_ROOT = File.expand_path("../..", __dir__)
 BUNDLE_ID = "com.lionandthelab.nest"
 EXPORT_OPTIONS = File.join(FLUTTER_ROOT, "ios", "ExportOptions.plist")
