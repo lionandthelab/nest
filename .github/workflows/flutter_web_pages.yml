@@ -52,7 +52,15 @@ jobs:
         # Custom domain (nestapp.life) serves from the site root, so the app
         # must be built with base-href "/" — not the old "/nest/" subpath used
         # by lionandthelab.github.io/nest/.
-        run: flutter build web --release --base-href /
+        # Social login (lion_auth) public client-side identifiers are injected
+        # via --dart-define so the production web build wires Google/Kakao/Naver.
+        run: >
+          flutter build web --release --base-href /
+          --dart-define=LION_GOOGLE_WEB_CLIENT_ID=875114759372-6mkob01lrrh9r6psh0lp717up9h3litp.apps.googleusercontent.com
+          --dart-define=LION_KAKAO_NATIVE_APP_KEY=0a51d6ea6e78e3565b8a45655bca8142
+          --dart-define=LION_KAKAO_JS_KEY=db129c862ec8fab23fe7cb85089eaa79
+          --dart-define=LION_NAVER_CLIENT_ID=Z1lpn0C9AFZ3BiXgLuno
+          --dart-define=LION_NAVER_WEB_REDIRECT_URI=https://nestapp.life/
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4

@@ -1,10 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lion_auth/lion_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
 import '../services/auth_validation.dart';
 import '../state/nest_controller.dart';
 import 'nest_theme.dart';
+
+const _lionGoogleWebClientId =
+    String.fromEnvironment('LION_GOOGLE_WEB_CLIENT_ID');
+const _lionGoogleIosClientId =
+    String.fromEnvironment('LION_GOOGLE_IOS_CLIENT_ID');
+const _lionKakaoNativeAppKey =
+    String.fromEnvironment('LION_KAKAO_NATIVE_APP_KEY');
+const _lionKakaoJsKey = String.fromEnvironment('LION_KAKAO_JS_KEY');
+const _lionNaverClientId = String.fromEnvironment('LION_NAVER_CLIENT_ID');
+const _lionNaverWebRedirectUri =
+    String.fromEnvironment('LION_NAVER_WEB_REDIRECT_URI');
+
+LionAuthConfig _buildLionConfig() {
+  return LionAuthConfig(
+    appName: 'Nest',
+    google: _lionGoogleWebClientId.isEmpty
+        ? null
+        : GoogleAuthOptions(
+            webClientId: _lionGoogleWebClientId,
+            iosClientId:
+                _lionGoogleIosClientId.isEmpty ? null : _lionGoogleIosClientId,
+          ),
+    kakao: _lionKakaoNativeAppKey.isEmpty
+        ? null
+        : KakaoAuthOptions(
+            nativeAppKey: _lionKakaoNativeAppKey,
+            javaScriptAppKey: _lionKakaoJsKey,
+          ),
+    naver: _lionNaverClientId.isEmpty
+        ? null
+        : NaverAuthOptions(
+            clientId: _lionNaverClientId,
+            clientName: 'Nest',
+            webRedirectUri: _lionNaverWebRedirectUri.isEmpty
+                ? null
+                : _lionNaverWebRedirectUri,
+          ),
+    apple: const AppleAuthOptions(), // appleOnlyOnIos 기본값 → iOS에서만 노출
+  );
+}
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.controller});
@@ -26,8 +68,39 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
+  late final LionAuthController _lionAuth;
+
+  @override
+  void initState() {
+    super.initState();
+    _lionAuth = LionAuthController(
+      config: _buildLionConfig(),
+      backend: SupabaseLionAuthBackend(
+        Supabase.instance.client,
+        emailRedirectUrl: AppConfig.authEmailRedirectUrl,
+      ),
+    );
+    _lionAuth.initialize();
+    _lionAuth.addListener(_onLionAuthChanged);
+  }
+
+  void _onLionAuthChanged() {
+    final message = _lionAuth.errorMessage;
+    if (message != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _lionAuth.clearError();
+    }
+  }
+
   @override
   void dispose() {
+    _lionAuth.removeListener(_onLionAuthChanged);
+    _lionAuth.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -433,6 +506,45 @@ class _LoginPageState extends State<LoginPage> {
                                         child: const Text('비밀번호를 잊으셨나요?'),
                                       ),
                                     ),
+
+                                  // ── Social login ──
+                                  if (_lionAuth
+                                      .config.enabledProviders.isNotEmpty) ...[
+                                    const SizedBox(height: 20),
+                                    Row(
+                                      children: [
+                                        const Expanded(child: Divider()),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                          ),
+                                          child: Text(
+                                            '또는 간편 로그인',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color: NestColors.deepWood
+                                                  .withValues(alpha: 0.5),
+                                            ),
+                                          ),
+                                        ),
+                                        const Expanded(child: Divider()),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    AnimatedBuilder(
+                                      animation: _lionAuth,
+                                      builder: (context, _) =>
+                                          SocialLoginButtons(
+                                        controller: _lionAuth,
+                                        theme: const LionAuthTheme(
+                                          primary: NestColors.dustyRose,
+                                          background: NestColors.creamyWhite,
+                                          onBackground: NestColors.deepWood,
+                                          fontFamily: 'Pretendard Variable',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
 
                                   // ── Version ──
                                   const SizedBox(height: 16),
