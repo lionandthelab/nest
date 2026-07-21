@@ -37,7 +37,7 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 [bundle exec] fastlane android promote
 ```
 
-내부 테스트 트랙의 빌드를 프로덕션으로 승격
+내부 테스트 트랙의 빌드를 프로덕션으로 승격(기본 즉시 공개; options: status:draft로 초안 스테이징)
 
 ----
 
