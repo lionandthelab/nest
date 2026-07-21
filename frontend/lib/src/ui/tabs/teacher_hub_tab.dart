@@ -334,15 +334,21 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             final availableWidth = constraints.maxWidth;
             const naturalTimeCol = 60.0;
             const naturalDayCol = 140.0;
+            // 보드 Container의 Border.all(1px)이 자식을 좌우 1px씩 인셋하므로,
+            // 테두리 두께를 뺀 내부 폭에 맞춰 컬럼을 스케일한다. 그렇지 않으면
+            // 컬럼 폭 합이 내부 폭을 2px 넘겨 RenderFlex 오버플로가 난다.
+            const borderWidth = 1.0;
+            final contentWidth = availableWidth - borderWidth * 2;
             final naturalWidth =
                 naturalTimeCol + naturalDayCol * sortedDays.length;
-            final scale = naturalWidth > availableWidth
-                ? availableWidth / naturalWidth
+            final scale = naturalWidth > contentWidth
+                ? contentWidth / naturalWidth
                 : 1.0;
             final timeColWidth = naturalTimeCol * scale;
             final dayColWidth = naturalDayCol * scale;
-            final boardWidth =
+            final columnsWidth =
                 timeColWidth + dayColWidth * sortedDays.length;
+            final boardWidth = columnsWidth + borderWidth * 2;
             final compactFont = scale < 0.85;
 
             final board = Container(
