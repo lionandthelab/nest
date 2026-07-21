@@ -7,12 +7,15 @@
 //
 // 실행:
 //   flutter run -d web-server --web-port=8123 -t lib/dev/screenshot_app.dart
-// 쿼리 파라미터:
+// 쿼리 파라미터(웹):
 //   ?role=parent (기본) | ?role=teacher
+// dart-define(네이티브 시뮬레이터 캡처용, 쿼리 파라미터보다 우선):
+//   --dart-define=ROLE=parent|teacher  --dart-define=TAB=0 (초기 탭 인덱스)
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../src/models/nest_models.dart';
@@ -266,6 +269,72 @@ final _announcements = [
   }),
 ];
 
+final _academicEvents = [
+  AcademicEvent.fromMap({
+    'id': 'ae-1',
+    'homeschool_id': _hsId,
+    'term_id': 'term-summer',
+    'title': '여름학기 개강',
+    'description': '',
+    'event_date': '2026-07-01',
+  }),
+  AcademicEvent.fromMap({
+    'id': 'ae-2',
+    'homeschool_id': _hsId,
+    'term_id': 'term-summer',
+    'title': '물놀이 현장학습',
+    'description': '전교생 계곡 물놀이 — 여벌 옷과 수건을 챙겨 주세요.',
+    'event_date': '2026-07-24',
+  }),
+  AcademicEvent.fromMap({
+    'id': 'ae-3',
+    'homeschool_id': _hsId,
+    'term_id': 'term-summer',
+    'title': '여름학기 발표회',
+    'description': '',
+    'event_date': '2026-08-28',
+  }),
+];
+
+final _communityPosts = [
+  CommunityPost.fromMap({
+    'id': 'cp-1',
+    'homeschool_id': _hsId,
+    'class_group_id': null,
+    'author_user_id': 'u-sol',
+    'author_display_name': '김솔 선생님',
+    'content': '오늘 국어 시간에 아이들이 직접 쓴 짧은 동시를 발표했어요. 표현이 정말 반짝반짝합니다. 사진은 갤러리에 올려두었어요 🌱',
+    'is_hidden': false,
+    'is_pinned': true,
+    'created_at': '2026-07-20T13:20:00Z',
+    'updated_at': '2026-07-20T13:20:00Z',
+  }),
+  CommunityPost.fromMap({
+    'id': 'cp-2',
+    'homeschool_id': _hsId,
+    'class_group_id': 'cg-saessak',
+    'author_user_id': _parentUserId,
+    'author_display_name': '김하늘',
+    'content': '이번 주 물놀이 현장학습 준비물, 수건 말고 더 챙길 게 있을까요? 처음이라 여쭤봐요 :)',
+    'is_hidden': false,
+    'is_pinned': false,
+    'created_at': '2026-07-20T09:05:00Z',
+    'updated_at': '2026-07-20T09:05:00Z',
+  }),
+  CommunityPost.fromMap({
+    'id': 'cp-3',
+    'homeschool_id': _hsId,
+    'class_group_id': null,
+    'author_user_id': 'u-han',
+    'author_display_name': '박한결 선생님',
+    'content': '다음 주 미술은 여름 풍경 그리기예요. 각자 좋아하는 색연필을 가져오면 더 즐겁게 할 수 있어요!',
+    'is_hidden': false,
+    'is_pinned': false,
+    'created_at': '2026-07-19T16:40:00Z',
+    'updated_at': '2026-07-19T16:40:00Z',
+  }),
+];
+
 Membership _membership(String userId, String role) => Membership.fromMap({
       'user_id': userId,
       'homeschool_id': _hsId,
@@ -414,8 +483,13 @@ Future<void> main() async {
     NestCache.initialize().then((_) => debugPrint('[demo] cache ready')),
   );
 
-  final role = Uri.base.queryParameters['role'] ?? 'parent';
+  // dart-define(ROLE)이 있으면 우선, 없으면 웹 쿼리 파라미터, 그것도 없으면 parent.
+  const roleDefine = String.fromEnvironment('ROLE');
+  final role = roleDefine.isNotEmpty
+      ? roleDefine
+      : (Uri.base.queryParameters['role'] ?? 'parent');
   final isTeacher = role == 'teacher';
+  const initialTab = int.fromEnvironment('TAB');
 
   final controller = NestController(repository: _FakeNestRepository());
 
@@ -450,6 +524,8 @@ Future<void> main() async {
   controller.teacherProfiles = _teacherProfiles;
   controller.sessionTeacherAssignments = _assignments;
   controller.announcements = _announcements;
+  controller.academicEvents = _academicEvents;
+  controller.communityPosts = _communityPosts;
 
   debugPrint('[demo] runApp');
   runApp(
@@ -457,7 +533,18 @@ Future<void> main() async {
       title: 'Nest 데모',
       debugShowCheckedModeBanner: false,
       theme: NestTheme.light(),
-      home: HomePage(controller: controller),
+      // 프로덕션(nest_app.dart)과 동일한 로케일 설정 — 'ko' 날짜 심볼 초기화용.
+      locale: const Locale('ko', 'KR'),
+      supportedLocales: const [
+        Locale('ko', 'KR'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: HomePage(controller: controller, initialTab: initialTab),
     ),
   );
 }
