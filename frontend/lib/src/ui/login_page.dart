@@ -224,7 +224,9 @@ class _LoginPageState extends State<LoginPage> {
     final theme = Theme.of(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
+    return LionAuthBusyOverlay(
+      controller: _lionAuth,
+      child: Scaffold(
       body: Stack(
         children: [
           const _WarmBackground(),
@@ -568,6 +570,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
