@@ -25,9 +25,13 @@ import 'widgets/term_navigator_bar.dart';
 import 'widgets/term_select_chip.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.controller});
+  const HomePage({super.key, required this.controller, this.initialTab = 0});
 
   final NestController controller;
+
+  /// 데모/스크린샷 엔트리포인트에서 초기 탭을 지정하기 위한 값 (기본 0).
+  /// 범위를 벗어나면 build의 safeIndex 로직이 0으로 보정한다.
+  final int initialTab;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -35,6 +39,12 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialTab;
+  }
   bool _hasUnsavedScheduleChanges = false;
   DateTime? _lastBackPress;
   bool _homeschoolConfirmed = false;
