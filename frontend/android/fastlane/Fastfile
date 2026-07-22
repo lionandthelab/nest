@@ -84,6 +84,28 @@ platform :android do
     UI.success("내부 테스트 업로드 완료: #{version} (versionCode #{build_number})")
   end
 
+  desc "빌드 없이 기존 AAB를 내부 테스트 트랙에 업로드(도커 등 Flutter 미탑재 환경용)"
+  # 도커에서는 마운트된 컨테이너 경로를 json_key 옵션으로 넘긴다(로컬 .env의
+  # 호스트 경로 대신). 예: fastlane android internal_upload json_key:/repo/sa.json
+  lane :internal_upload do |options|
+    json_key = options[:json_key].to_s.empty? ? play_json_key : File.expand_path(options[:json_key])
+    UI.user_error!("서비스 계정 JSON이 없습니다: #{json_key}") unless File.exist?(json_key)
+    UI.user_error!(
+      "AAB가 없습니다: #{AAB_PATH}\n먼저 호스트에서 'flutter build appbundle --release'를 실행하세요.",
+    ) unless File.exist?(AAB_PATH)
+    upload_to_play_store(
+      track: "internal",
+      aab: AAB_PATH,
+      json_key: json_key,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+    )
+    version, build_number = pubspec_build_number
+    UI.success("내부 테스트 업로드 완료: #{version} (versionCode #{build_number})")
+  end
+
   desc "프로덕션 트랙에 AAB 업로드(기본 즉시 공개; options: status:draft로 초안 스테이징)"
   lane :production do |options|
     json_key = play_json_key

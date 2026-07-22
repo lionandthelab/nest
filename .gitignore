@@ -17,6 +17,9 @@ client_*.apps.googleusercontent.com.plist
 # Apple Sign In / APNs 인증 키 (.p8) — 시크릿, 절대 커밋 금지
 *.p8
 AuthKey_*.p8
+# Google Cloud / Play 서비스 계정 키 (시크릿, 절대 커밋 금지)
+nest-000-*.json
+*-*.iam.gserviceaccount.com.json
 
 # Supabase temp
 supabase/.temp/
