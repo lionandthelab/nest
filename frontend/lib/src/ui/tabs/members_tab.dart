@@ -472,7 +472,12 @@ class _MembersTabState extends State<MembersTab> {
           teacherType: matched.teacherType,
           userId: req.requesterUserId,
         );
-        _showMessage('승인 완료 · ${matched.displayName} 선생님 프로필과 연결했습니다.');
+        final roleNote = controller.hasTeacherViewRole(req.requesterUserId)
+            ? '교사 권한까지 부여했습니다.'
+            : '교사 권한은 멤버 관리에서 따로 부여해 주세요.';
+        _showMessage(
+          '승인 완료 · ${matched.displayName} 선생님 프로필과 연결했습니다. $roleNote',
+        );
       } else {
         _showMessage(controller.statusMessage);
       }

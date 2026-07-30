@@ -4056,15 +4056,90 @@ class NestController extends ChangeNotifier {
         userId: _normalizeNullable(userId),
       );
       await loadTeacherProfiles();
+
+      final linkedUserId = created.userId;
+      final needsTeacherRole = linkedUserId != null &&
+          linkedUserId.isNotEmpty &&
+          !hasTeacherViewRole(linkedUserId);
+      final grantedTeacherRole =
+          needsTeacherRole && await _grantTeacherMembershipRole(linkedUserId);
+
       await _logAudit(
         actionType: 'TEACHER_PROFILE_CREATE',
         resourceType: 'teacher_profiles',
         resourceId: created.id,
-        afterJson: {'display_name': created.displayName, 'type': teacherType},
+        afterJson: {
+          'display_name': created.displayName,
+          'type': teacherType,
+          'user_id': created.userId,
+          'granted_teacher_role': grantedTeacherRole,
+        },
       );
-      _setStatus('교사 프로필을 생성했습니다.');
+      _setStatus(_teacherProfileSavedStatus(
+        savedMessage: '교사 프로필을 생성했습니다.',
+        needsTeacherRole: needsTeacherRole,
+        grantedTeacherRole: grantedTeacherRole,
+      ));
     });
     return created;
+  }
+
+  /// 이미 교사 화면에 접근할 수 있는 멤버십 역할을 가졌는지.
+  bool hasTeacherViewRole(String userId) {
+    return homeschoolMemberships.any(
+      (row) =>
+          row.userId == userId &&
+          row.status == 'ACTIVE' &&
+          const {
+            'TEACHER',
+            'GUEST_TEACHER',
+            'HOMESCHOOL_ADMIN',
+            'STAFF',
+          }.contains(row.role),
+    );
+  }
+
+  /// 교사 프로필에 계정을 연결하면 TEACHER 멤버십도 함께 부여한다.
+  /// 뷰 역할 후보(availableViewRoles)는 멤버십 역할만 보기 때문에, 역할이 없으면
+  /// 계정이 연결돼도 담당 수업이 앱 어디에도 보이지 않는다. 멤버십 부여는 관리자만
+  /// 가능하므로(memberships_insert_admin) 스태프가 편집한 경우엔 실패를 삼키고
+  /// 안내 문구로만 남긴다.
+  Future<bool> _grantTeacherMembershipRole(String userId) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return false;
+    }
+
+    try {
+      await _repository.grantMembershipRole(
+        homeschoolId: homeschoolId,
+        userId: userId,
+        role: 'TEACHER',
+      );
+      await loadHomeschoolMemberships();
+      if (user != null && user!.id == userId) {
+        memberships = await _repository.fetchMemberships(userId: userId);
+        currentRole = _resolveViewRole(selectedHomeschoolId);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _teacherProfileSavedStatus({
+    required String savedMessage,
+    required bool needsTeacherRole,
+    required bool grantedTeacherRole,
+  }) {
+    if (grantedTeacherRole) {
+      return '$savedMessage 교사 권한도 함께 부여했습니다.';
+    }
+    if (needsTeacherRole) {
+      return '$savedMessage 다만 교사 권한을 부여하지 못했습니다. '
+          '관리자 계정으로 멤버 관리에서 교사 권한을 부여해 주세요.';
+    }
+    return savedMessage;
   }
 
   Future<TeacherProfile> updateTeacherProfile({
@@ -4096,6 +4171,14 @@ class NestController extends ChangeNotifier {
         userId: _normalizeNullable(userId),
       );
       await loadTeacherProfiles();
+
+      final linkedUserId = updated.userId;
+      final needsTeacherRole = linkedUserId != null &&
+          linkedUserId.isNotEmpty &&
+          !hasTeacherViewRole(linkedUserId);
+      final grantedTeacherRole =
+          needsTeacherRole && await _grantTeacherMembershipRole(linkedUserId);
+
       await _logAudit(
         actionType: 'TEACHER_PROFILE_UPDATE',
         resourceType: 'teacher_profiles',
@@ -4104,9 +4187,14 @@ class NestController extends ChangeNotifier {
           'display_name': updated.displayName,
           'type': updated.teacherType,
           'user_id': updated.userId,
+          'granted_teacher_role': grantedTeacherRole,
         },
       );
-      _setStatus('교사 프로필을 수정했습니다.');
+      _setStatus(_teacherProfileSavedStatus(
+        savedMessage: '교사 프로필을 수정했습니다.',
+        needsTeacherRole: needsTeacherRole,
+        grantedTeacherRole: grantedTeacherRole,
+      ));
     });
     return updated;
   }

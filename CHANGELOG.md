@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.9+11 (2026-07-30)
+
+### Fixed
+
+- 교사 프로필에 계정을 연결해도 **교사 권한(TEACHER 멤버십)이 부여되지 않아 담당 수업이 안 보이던 문제** 수정
+  - 뷰 역할 후보(`availableViewRoles`)는 멤버십 역할만 보기 때문에, 계정이 연결돼도 TEACHER 역할이 없으면 교사 뷰로 전환할 수 없었다 (자습 감독만 학부모 홈 카드로 보이고 담당 수업은 어디에도 보이지 않는 반쪽 상태)
+  - `createTeacherProfile` / `updateTeacherProfile` 이 계정을 연결할 때 TEACHER 역할을 함께 부여 (`nest_controller.dart`) — 가정 보호자 연결 시 PARENT를 자동 부여하던 처리와 대칭
+  - 멤버십 부여는 관리자만 가능하므로(`memberships_insert_admin`) 스태프가 편집한 경우엔 저장은 그대로 진행하고 안내 문구로 알린다
+  - 가입 승인 시 교사 프로필 연결 결과 메시지에 권한 부여 여부 표시 (`members_tab.dart`)
+- JOY 데이터 교정: 계정은 연결됐으나 TEACHER 역할이 없던 교사 5명(김수진·강미령·채리아·오수아·신혜미)에게 교사 권한 부여, 김수진 보호자 유형 `GUARDIAN` → `MOTHER`
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 76건 통과 (`teacher_view_role_test.dart` 3건 신규)
+
 ## 2.0.7+8 (2026-07-03)
 
 ### Added
