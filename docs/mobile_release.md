@@ -180,6 +180,8 @@ version: MAJOR.MINOR.PATCH+BUILD
 | 2026-03-13 | 2.0.0 | 1 | Android + iOS | Internal / TestFlight | Initial store submission |
 | 2026-07-19 | 2.0.7 | 8 | iOS | App Store 심사 제출 | fastlane 첫 자동 배포 (Xcode 26.5, 승인 시 자동 출시) |
 | 2026-07-19 | 2.0.7 | 8 | Android | Internal | fastlane 첫 자동 배포. 프로덕션은 콘솔 필수 신고 완료 후 promote |
+| 2026-07-22 | 2.0.8 | 10 | Android | Internal | Docker fastlane `internal_upload` 레인 도입(호스트 빌드 + 컨테이너 업로드) |
+| 2026-07-30 | 2.0.9 | 11 | Android | Internal | 교사 프로필 계정 연결 시 TEACHER 권한 자동 부여 fix. 웹(GitHub Pages) 동시 배포 |
 
 ## 7) Signing Configuration Reminders
 
