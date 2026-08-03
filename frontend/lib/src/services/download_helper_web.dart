@@ -11,6 +11,9 @@ class _DownloadHelperWeb implements DownloadHelper {
   const _DownloadHelperWeb();
 
   @override
+  bool get isSupported => true;
+
+  @override
   void downloadBytes({
     required Uint8List bytes,
     required String filename,

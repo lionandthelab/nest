@@ -1,3 +1,4 @@
+﻿import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,8 @@ import 'timetable/empty_room_finder.dart';
 import 'timetable/family_enrollment_panel.dart';
 import 'timetable/object_inspector_rail.dart';
 import 'timetable/room_normalizer.dart';
+import 'timetable/timetable_excel_export.dart';
+import 'timetable/timetable_export_board.dart';
 import 'timetable/whole_school_overlay_board.dart';
 
 /// Board view mode: per-class editable build, read-only whole-school overlay,
@@ -731,7 +734,7 @@ class _TimetableTabState extends State<TimetableTab> {
                   onPressed: controller.isBusy
                       ? null
                       : _openTimetableExportDialog,
-                  icon: const Icon(Icons.image_outlined, size: 18),
+                  icon: const Icon(Icons.file_download_outlined, size: 18),
                   label: const Text('시간표 내보내기'),
                 ),
               ],
@@ -1299,8 +1302,9 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
-  Future<void> _openTimetableExportDialog() async {
-    final controller = widget.controller;
+  /// 반 시간표 내보내기용 표 데이터. 화면에서 편집 중인 초안을 그대로 쓰므로
+  /// 미리보기·PNG·엑셀이 항상 보고 있는 상태와 일치한다.
+  TimetableExportTable _buildTimetableExportTable(NestController controller) {
     final sortedSlots = controller.timeSlots.toList()
       ..sort((a, b) {
         final day = a.dayOfWeek.compareTo(b.dayOfWeek);
@@ -1309,351 +1313,483 @@ class _TimetableTabState extends State<TimetableTab> {
         }
         return a.startTime.compareTo(b.startTime);
       });
-    final slotsByDay = <int, List<TimeSlot>>{};
+
+    final dayOrder =
+        <int>{for (final slot in sortedSlots) slot.dayOfWeek}.toList()..sort();
+
+    // 요일마다 슬롯 id가 다르므로 "시작\t종료" 조합으로 행을 맞춘다.
+    final slotByPeriodDay = <String, Map<int, TimeSlot>>{};
     for (final slot in sortedSlots) {
-      slotsByDay.putIfAbsent(slot.dayOfWeek, () => <TimeSlot>[]);
-      slotsByDay[slot.dayOfWeek]!.add(slot);
+      final key = '${slot.startTime}\t${slot.endTime}';
+      slotByPeriodDay.putIfAbsent(key, () => <int, TimeSlot>{})[slot.dayOfWeek] =
+          slot;
     }
-    final dayOrder = slotsByDay.keys.toList()..sort();
-    var maxPeriods = 0;
-    for (final slots in slotsByDay.values) {
-      if (slots.length > maxPeriods) {
-        maxPeriods = slots.length;
+    final periodKeys = slotByPeriodDay.keys.toList()..sort();
+
+    final periods = periodKeys.map((key) {
+      final parts = key.split('\t');
+      final entriesByColumn = dayOrder.map((day) {
+        final slot = slotByPeriodDay[key]?[day];
+        if (slot == null) {
+          return const <TimetableExportEntry>[];
+        }
+        return _draftSessionsForSlot(slot.id).map((session) {
+          final assignments =
+              _draftAssignments[session.id] ?? const <_EditableAssignment>[];
+          return TimetableExportEntry(
+            title: session.title.isEmpty ? '수업' : session.title,
+            location: (session.location ?? '').trim(),
+            teachers: assignments
+                .map((row) => _teacherBadge(controller, row.assignmentRole,
+                    row.teacherProfileId))
+                .toList(),
+          );
+        }).toList();
+      }).toList();
+
+      return TimetableExportPeriod(
+        start: _shortTime(parts[0]),
+        end: _shortTime(parts[1]),
+        entriesByColumn: entriesByColumn,
+      );
+    }).toList();
+
+    return TimetableExportTable(
+      title: _exportTitle(controller, '시간표'),
+      subtitle: _exportSubtitle(),
+      columnHeaderLabel: '요일',
+      columnLabels: dayOrder
+          .map((day) => '${_dayLabel(day)}요일')
+          .toList(growable: false),
+      entryTitleLabel: '과목',
+      sections: [TimetableExportSection(periods: periods)],
+    );
+  }
+
+  /// 교실 상황표(요일별 구역 × 교실 열) 내보내기용 표 데이터.
+  TimetableExportTable _buildRoomUtilizationExportTable(
+    NestController controller,
+  ) {
+    final sortedSlots = controller.timeSlots.toList()
+      ..sort((a, b) {
+        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (day != 0) {
+          return day;
+        }
+        return a.startTime.compareTo(b.startTime);
+      });
+
+    final dayOrder =
+        <int>{for (final slot in sortedSlots) slot.dayOfWeek}.toList()..sort();
+
+    final slotByPeriodDay = <String, Map<int, TimeSlot>>{};
+    for (final slot in sortedSlots) {
+      final key = '${slot.startTime}\t${slot.endTime}';
+      slotByPeriodDay.putIfAbsent(key, () => <int, TimeSlot>{})[slot.dayOfWeek] =
+          slot;
+    }
+    final periodKeys = slotByPeriodDay.keys.toList()..sort();
+
+    final sessionsBySlotId = <String, List<ClassSession>>{};
+    for (final session in controller.allTermSessions) {
+      sessionsBySlotId
+          .putIfAbsent(session.timeSlotId, () => <ClassSession>[])
+          .add(session);
+    }
+
+    // 배정된 교실 + 등록된 교실을 모두 열로 세워, 비어 있는 교실도 한눈에 보이게 한다.
+    final roomNames = <String>{};
+    for (final session in controller.allTermSessions) {
+      final location = (session.location ?? '').trim();
+      if (location.isNotEmpty) {
+        roomNames.add(location);
+      }
+    }
+    for (final classroom in controller.classrooms) {
+      final name = classroom.name.trim();
+      if (name.isNotEmpty) {
+        roomNames.add(name);
+      }
+    }
+    final roomOrder = roomNames.toList()..sort();
+
+    final sections = <TimetableExportSection>[];
+    for (final day in dayOrder) {
+      final periods = <TimetableExportPeriod>[];
+      for (final key in periodKeys) {
+        final slot = slotByPeriodDay[key]?[day];
+        if (slot == null) {
+          continue;
+        }
+
+        final sessionsByRoom = <String, List<ClassSession>>{};
+        for (final session in sessionsBySlotId[slot.id] ?? const []) {
+          final location = (session.location ?? '').trim();
+          if (location.isEmpty) {
+            continue;
+          }
+          sessionsByRoom
+              .putIfAbsent(location, () => <ClassSession>[])
+              .add(session);
+        }
+
+        final parts = key.split('\t');
+        periods.add(
+          TimetableExportPeriod(
+            start: _shortTime(parts[0]),
+            end: _shortTime(parts[1]),
+            entriesByColumn: roomOrder.map((room) {
+              return (sessionsByRoom[room] ?? const <ClassSession>[]).map((
+                session,
+              ) {
+                return TimetableExportEntry(
+                  title: controller.findClassGroupName(session.classGroupId),
+                  subtitle: controller.findCourseName(session.courseId),
+                  teachers: controller
+                      .teacherAssignmentsForSession(session.id)
+                      .map((row) => _teacherBadge(controller,
+                          row.assignmentRole, row.teacherProfileId))
+                      .toList(),
+                );
+              }).toList();
+            }).toList(),
+          ),
+        );
+      }
+
+      if (periods.isNotEmpty) {
+        sections.add(
+          TimetableExportSection(
+            title: '${_dayLabel(day)}요일',
+            periods: periods,
+          ),
+        );
       }
     }
 
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('시간표 이미지 내보내기'),
-          content: SizedBox(
-            width: 1280,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child:
-                    sortedSlots.isEmpty || dayOrder.isEmpty || maxPeriods == 0
-                    ? Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: NestColors.creamyWhite,
-                          border: Border.all(color: NestColors.roseMist),
-                        ),
-                        child: const Text('내보낼 시간표 데이터가 없습니다.'),
-                      )
-                    : _buildEditableGrid(
-                        controller: controller,
-                        dayOrder: dayOrder,
-                        slotsByDay: slotsByDay,
-                        maxPeriods: maxPeriods,
-                        forExport: true,
-                        repaintKey: _timetableExportRepaintKey,
-                      ),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-            ElevatedButton.icon(
-              onPressed: sortedSlots.isEmpty ? null : _exportTimetableImage,
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('PNG 저장'),
-            ),
-          ],
-        );
-      },
+    return TimetableExportTable(
+      title: _exportTitle(controller, '교실 상황표', includeClass: false),
+      subtitle: _exportSubtitle(),
+      columnHeaderLabel: '교실',
+      columnLabels: roomOrder,
+      sectionHeaderLabel: '요일',
+      entryTitleLabel: '반',
+      entrySubtitleLabel: '과목',
+      sections: sections,
+    );
+  }
+
+  String _teacherBadge(
+    NestController controller,
+    String assignmentRole,
+    String teacherProfileId,
+  ) {
+    final prefix = assignmentRole == 'MAIN' ? '주' : '보조';
+    return '$prefix ${controller.findTeacherName(teacherProfileId)}';
+  }
+
+  String _exportTitle(
+    NestController controller,
+    String suffix, {
+    bool includeClass = true,
+  }) {
+    final parts = <String>[];
+    final termName = controller.selectedTerm?.name.trim() ?? '';
+    if (termName.isNotEmpty) {
+      parts.add(termName);
+    }
+    if (includeClass) {
+      final classGroupId = controller.selectedClassGroupId;
+      if (classGroupId != null && classGroupId.isNotEmpty) {
+        parts.add(controller.findClassGroupName(classGroupId));
+      }
+    }
+    parts.add(suffix);
+    return parts.join(' · ');
+  }
+
+  String _exportSubtitle() =>
+      '내보낸 시각 ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}';
+
+  String _exportStamp() => DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+
+  Future<void> _openTimetableExportDialog() async {
+    await _showExportDialog(
+      dialogTitle: '시간표 내보내기',
+      table: _buildTimetableExportTable(widget.controller),
+      repaintKey: _timetableExportRepaintKey,
+      fileBaseName: 'timetable',
     );
   }
 
   Future<void> _openRoomUtilizationExportDialog(
     NestController controller,
   ) async {
+    await _showExportDialog(
+      dialogTitle: '교실 상황표 내보내기',
+      table: _buildRoomUtilizationExportTable(controller),
+      repaintKey: _roomUtilizationRepaintKey,
+      fileBaseName: 'classroom_utilization',
+    );
+  }
+
+  /// PNG·엑셀 공용 내보내기 다이얼로그.
+  ///
+  /// 미리보기에 보이는 표가 그대로 저장되므로, 옵션(빈 시간대 숨기기 /
+  /// 글자 크기)을 바꾸면 결과물도 즉시 같이 바뀐다. 저장 결과는 다이얼로그
+  /// 안에 문구로 남긴다(스낵바는 모달 뒤에 가려 보이지 않는다).
+  Future<void> _showExportDialog({
+    required String dialogTitle,
+    required TimetableExportTable table,
+    required GlobalKey repaintKey,
+    required String fileBaseName,
+  }) async {
+    var hideEmptyPeriods = true;
+    var scale = TimetableExportScale.large;
+    var isExporting = false;
+    String? status;
+
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('교실 배정 상황표'),
-          content: SizedBox(
-            width: 1280,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: RepaintBoundary(
-                  key: _roomUtilizationRepaintKey,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildRoomUtilizationBoard(
-                      controller: controller,
-                      forExport: true,
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final media = MediaQuery.sizeOf(dialogContext);
+            final canExport = table.hasEntries && !isExporting;
+
+            Future<void> runExport(Future<String> Function() task) async {
+              setDialogState(() {
+                isExporting = true;
+                status = null;
+              });
+              final message = await task();
+              if (!dialogContext.mounted) {
+                return;
+              }
+              setDialogState(() {
+                isExporting = false;
+                status = message;
+              });
+            }
+
+            return AlertDialog(
+              title: Text(dialogTitle),
+              content: SizedBox(
+                width: math.min(media.width * 0.94, 1180),
+                height: math.min(media.height * 0.74, 780),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 18,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: hideEmptyPeriods,
+                              onChanged: isExporting
+                                  ? null
+                                  : (value) => setDialogState(() {
+                                      hideEmptyPeriods = value ?? true;
+                                      status = null;
+                                    }),
+                            ),
+                            const Text('빈 시간대 숨기기'),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('글자 크기'),
+                            const SizedBox(width: 8),
+                            SegmentedButton<TimetableExportScale>(
+                              style: _kViewToggleStyle,
+                              showSelectedIcon: false,
+                              segments: TimetableExportScale.values
+                                  .map(
+                                    (value) =>
+                                        ButtonSegment<TimetableExportScale>(
+                                      value: value,
+                                      label: Text(value.label),
+                                    ),
+                                  )
+                                  .toList(),
+                              selected: <TimetableExportScale>{scale},
+                              onSelectionChanged: isExporting
+                                  ? null
+                                  : (values) => setDialogState(() {
+                                      scale = values.first;
+                                      status = null;
+                                    }),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: NestColors.creamyWhite,
+                          border: Border.all(color: NestColors.roseMist),
+                        ),
+                        child: SingleChildScrollView(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: TimetableExportBoard(
+                              table: table,
+                              scale: scale,
+                              hideEmptyPeriods: hideEmptyPeriods,
+                              repaintKey: repaintKey,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      status ??
+                          '미리보기 그대로 저장됩니다. 엑셀은 "표"·"목록" 두 시트로 저장돼 바로 편집할 수 있습니다.',
+                      style: Theme.of(dialogContext).textTheme.bodySmall
+                          ?.copyWith(
+                            color: NestColors.deepWood.withValues(alpha: 0.75),
+                          ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('닫기'),
-            ),
-            ElevatedButton.icon(
-              onPressed: _exportRoomUtilizationImage,
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('PNG 저장'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: isExporting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('닫기'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: canExport
+                      ? () => runExport(
+                          () async => _exportTableWorkbook(
+                            table: table,
+                            hideEmptyPeriods: hideEmptyPeriods,
+                            fileBaseName: fileBaseName,
+                          ),
+                        )
+                      : null,
+                  icon: const Icon(Icons.table_view_outlined),
+                  label: const Text('엑셀 저장'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: canExport
+                      ? () => runExport(
+                          () => _exportBoardImage(
+                            repaintKey: repaintKey,
+                            fileBaseName: fileBaseName,
+                          ),
+                        )
+                      : null,
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text('PNG 저장'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildRoomUtilizationBoard({
-    required NestController controller,
-    required bool forExport,
+  /// 미리보기 보드를 PNG로 저장하고, 결과 문구를 돌려준다.
+  ///
+  /// 표가 크면 캔버스 한계(웹은 한 변 8192px 안팎)에 걸려 캡처가 조용히
+  /// 실패하던 문제가 있어, 배율을 크기에 맞춰 낮추고 예외는 문구로 알린다.
+  Future<String> _exportBoardImage({
+    required GlobalKey repaintKey,
+    required String fileBaseName,
+  }) async {
+    final helper = createDownloadHelper();
+    if (!helper.isSupported) {
+      return '이 기기에서는 파일 저장을 지원하지 않습니다. 웹(브라우저)에서 내보내 주세요.';
+    }
+
+    final boundary =
+        repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) {
+      return 'PNG 저장에 실패했습니다. 미리보기를 먼저 불러와 주세요.';
+    }
+
+    try {
+      // 옵션을 바꾼 직후에는 아직 다시 그려지지 않았을 수 있어 한 프레임 기다린다.
+      await WidgetsBinding.instance.endOfFrame;
+      final size = boundary.size;
+      if (size.isEmpty) {
+        return 'PNG 저장에 실패했습니다. 내보낼 내용이 없습니다.';
+      }
+
+      final image = await boundary.toImage(
+        pixelRatio: _capturePixelRatio(size),
+      );
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (byteData == null) {
+        return 'PNG 변환에 실패했습니다. "빈 시간대 숨기기"를 켜고 다시 시도해 주세요.';
+      }
+
+      helper.downloadBytes(
+        bytes: byteData.buffer.asUint8List(),
+        filename: '${fileBaseName}_${_exportStamp()}.png',
+        mimeType: 'image/png',
+      );
+      return 'PNG 파일을 저장했습니다.';
+    } catch (error) {
+      return 'PNG 저장에 실패했습니다: $error';
+    }
+  }
+
+  /// 캡처 배율. 3배를 기본으로 하되 결과 이미지가 너무 커지면 낮춘다.
+  double _capturePixelRatio(Size size) {
+    const maxSide = 6000.0;
+    const maxPixels = 32000000.0;
+    final longest = math.max(size.width, size.height);
+    var ratio = math.min(3.0, maxSide / longest);
+    final pixels = size.width * size.height * ratio * ratio;
+    if (pixels > maxPixels) {
+      ratio *= math.sqrt(maxPixels / pixels);
+    }
+    return ratio.clamp(0.6, 3.0);
+  }
+
+  /// 미리보기와 같은 내용을 .xlsx로 저장하고, 결과 문구를 돌려준다.
+  String _exportTableWorkbook({
+    required TimetableExportTable table,
+    required bool hideEmptyPeriods,
+    required String fileBaseName,
   }) {
-    final sortedSlots = controller.timeSlots.toList()
-      ..sort((a, b) {
-        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-        if (day != 0) return day;
-        return a.startTime.compareTo(b.startTime);
-      });
+    final helper = createDownloadHelper();
+    if (!helper.isSupported) {
+      return '이 기기에서는 파일 저장을 지원하지 않습니다. 웹(브라우저)에서 내보내 주세요.';
+    }
 
-    if (sortedSlots.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: NestColors.creamyWhite,
-          border: Border.all(color: NestColors.roseMist),
-        ),
-        child: const Text('시간 슬롯이 없습니다.'),
+    try {
+      final bytes = buildTimetableWorkbook(
+        table,
+        hideEmptyPeriods: hideEmptyPeriods,
       );
-    }
-
-    // Collect all sessions and group by location
-    final sessionsBySlotId = <String, List<ClassSession>>{};
-    for (final session in controller.allTermSessions) {
-      sessionsBySlotId.putIfAbsent(session.timeSlotId, () => []);
-      sessionsBySlotId[session.timeSlotId]!.add(session);
-    }
-
-    // Collect all room names from sessions + classrooms
-    final roomNames = <String>{};
-    for (final session in controller.allTermSessions) {
-      final loc = (session.location ?? '').trim();
-      if (loc.isNotEmpty) roomNames.add(loc);
-    }
-    for (final classroom in controller.classrooms) {
-      roomNames.add(classroom.name.trim());
-    }
-    final roomOrder = roomNames.toList()..sort();
-
-    if (roomOrder.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: NestColors.creamyWhite,
-          border: Border.all(color: NestColors.roseMist),
-        ),
-        child: const Text('배정된 교실이 없습니다.'),
+      helper.downloadBytes(
+        bytes: bytes,
+        filename: '${fileBaseName}_${_exportStamp()}.xlsx',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
+      return '엑셀 파일을 저장했습니다. ("표" 시트 + "목록" 시트)';
+    } catch (error) {
+      return '엑셀 저장에 실패했습니다: $error';
     }
-
-    // Collect unique time periods across all days
-    final periodSet = <String>{};
-    final slotsByPeriodDay = <String, Map<int, TimeSlot>>{};
-    for (final slot in sortedSlots) {
-      final key = '${slot.startTime}\t${slot.endTime}';
-      periodSet.add(key);
-      slotsByPeriodDay.putIfAbsent(key, () => {});
-      slotsByPeriodDay[key]![slot.dayOfWeek] = slot;
-    }
-    final uniquePeriods = periodSet.toList()..sort();
-
-    // Collect days
-    final daySet = <int>{};
-    for (final slot in sortedSlots) {
-      daySet.add(slot.dayOfWeek);
-    }
-    final dayOrder = daySet.toList()..sort();
-
-    const timeWidth = 112.0;
-    const gap = 6.0;
-    const targetExportWidth = 1260.0;
-    final baseRoomWidth = roomOrder.isEmpty
-        ? 140.0
-        : ((targetExportWidth - timeWidth - (roomOrder.length + 1) * gap) /
-                  roomOrder.length)
-              .clamp(120.0, 180.0);
-    final roomWidth = forExport ? baseRoomWidth : 150.0;
-    final boardWidth =
-        timeWidth +
-        (roomOrder.length * roomWidth) +
-        (roomOrder.length + 1) * gap;
-    final boardPadding = forExport ? 18.0 : 10.0;
-    final renderWidth = forExport ? boardWidth + (boardPadding * 2) : null;
-
-    return Container(
-      width: renderWidth,
-      padding: EdgeInsets.all(boardPadding),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white,
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '교실 상황표',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            // Header: 시간 | 교실1 | 교실2 | ...
-            Row(
-              children: [
-                _GridHeaderCell(width: timeWidth, title: '시간'),
-                ...roomOrder.map(
-                  (room) => _GridHeaderCell(width: roomWidth, title: room),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // For each day, render a day-header row then time rows
-            ...dayOrder.expand((day) {
-              final periodsForDay = uniquePeriods.where((pk) {
-                return slotsByPeriodDay[pk]?.containsKey(day) == true;
-              }).toList();
-              if (periodsForDay.isEmpty) return <Widget>[];
-
-              return [
-                // Day label row
-                Container(
-                  width: timeWidth +
-                      roomOrder.length * roomWidth +
-                      roomOrder.length * gap,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: NestColors.roseMist.withValues(alpha: 0.35),
-                  ),
-                  child: Text(
-                    '${_dayLabel(day)}요일',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                // Time rows for this day
-                ...periodsForDay.map((periodKey) {
-                  final parts = periodKey.split('\t');
-                  final timeLabel =
-                      '${_shortTime(parts[0])}-${_shortTime(parts[1])}';
-                  final slot = slotsByPeriodDay[periodKey]![day]!;
-                  final sessions = sessionsBySlotId[slot.id] ?? [];
-
-                  // Group sessions by room for this slot
-                  final sessionsByRoom = <String, List<ClassSession>>{};
-                  for (final session in sessions) {
-                    final loc = (session.location ?? '').trim();
-                    if (loc.isEmpty) continue;
-                    sessionsByRoom.putIfAbsent(loc, () => []);
-                    sessionsByRoom[loc]!.add(session);
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: timeWidth,
-                          margin: const EdgeInsets.only(right: gap),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            color: NestColors.creamyWhite,
-                            border: Border.all(color: NestColors.roseMist),
-                          ),
-                          child: Text(
-                            timeLabel,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                        ),
-                        ...roomOrder.map((room) {
-                          final roomSessions = sessionsByRoom[room] ?? [];
-                          return Container(
-                            width: roomWidth,
-                            margin: const EdgeInsets.only(right: gap),
-                            padding: const EdgeInsets.all(6),
-                            constraints: const BoxConstraints(minHeight: 38),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              color: roomSessions.isEmpty
-                                  ? Colors.white
-                                  : NestColors.creamyWhite,
-                              border: Border.all(color: NestColors.roseMist),
-                            ),
-                            child: roomSessions.isEmpty
-                                ? (forExport
-                                    ? const SizedBox.shrink()
-                                    : Text(
-                                        '-',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: NestColors.deepWood
-                                                  .withValues(alpha: 0.3),
-                                            ),
-                                      ))
-                                : Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: roomSessions.map((session) {
-                                      final className =
-                                          controller.findClassGroupName(
-                                        session.classGroupId,
-                                      );
-                                      final courseName =
-                                          controller.findCourseName(
-                                        session.courseId,
-                                      );
-                                      return Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 2),
-                                        child: Text(
-                                          '$className\n$courseName',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                          );
-                        }),
-                      ],
-                    ),
-                  );
-                }),
-              ];
-            }),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildPalettePanel(NestController controller) {
@@ -2634,20 +2770,16 @@ class _TimetableTabState extends State<TimetableTab> {
     required List<int> dayOrder,
     required Map<int, List<TimeSlot>> slotsByDay,
     required int maxPeriods,
-    bool forExport = false,
-    GlobalKey? repaintKey,
   }) {
     return RepaintBoundary(
-      key: repaintKey ?? _timetableRepaintKey,
+      key: _timetableRepaintKey,
       child: _buildGridScaffold(
         dayOrder: dayOrder,
         slotsByDay: slotsByDay,
         maxPeriods: maxPeriods,
-        forExport: forExport,
         slotCellBuilder: (slot, compact) {
           final slotSessions = _draftSessionsForSlot(slot.id);
-          // Export renders are static snapshots: no live drag feedback.
-          final activeDrag = forExport ? null : _activeDrag;
+          final activeDrag = _activeDrag;
           final conflictState = activeDrag == null
               ? DropConflictState.none
               : _evaluateDropConflict(
@@ -2671,9 +2803,8 @@ class _TimetableTabState extends State<TimetableTab> {
             onTapSession: _openSessionSettingDialog,
             onDeleteSession: _deleteDraftSession,
             onSessionMenu: _openSessionMenu,
-            sessionMenuEnabled: !forExport &&
-                !controller.isSelectedTermReadOnly &&
-                !controller.isBusy,
+            sessionMenuEnabled:
+                !controller.isSelectedTermReadOnly && !controller.isBusy,
             onSessionDragStarted: (sessionId) => _beginDrag(
               _ActiveDrag(
                 kind: DragPayloadType.session,
@@ -2684,7 +2815,6 @@ class _TimetableTabState extends State<TimetableTab> {
             dragsLocked: _dragsLocked,
             activeDrag: activeDrag,
             conflictState: conflictState,
-            forExport: forExport,
           );
         },
       ),
@@ -2696,7 +2826,6 @@ class _TimetableTabState extends State<TimetableTab> {
     required Map<int, List<TimeSlot>> slotsByDay,
     required int maxPeriods,
     required Widget Function(TimeSlot slot, bool compact) slotCellBuilder,
-    bool forExport = false,
     // 읽기 전용 뷰(교사 '내 수업'/'반별')는 아이 시간표처럼 가로 스크롤 없이
     // 화면 너비에 맞춰 한 눈에 보이도록 열을 줄인다.
     bool fitToWidth = false,
@@ -2704,15 +2833,11 @@ class _TimetableTabState extends State<TimetableTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         const gap = 6.0;
-        final periodWidth =
-            forExport ? 102.0 : (fitToWidth ? 40.0 : 108.0);
-        final minDayColumnWidth =
-            forExport ? 72.0 : (fitToWidth ? 44.0 : 188.0);
-        final maxDayColumnWidth =
-            forExport ? 240.0 : (fitToWidth ? 200.0 : 320.0);
-        final slotMinHeight =
-            forExport ? 132.0 : (fitToWidth ? 52.0 : 156.0);
-        final boardPadding = forExport ? 16.0 : 10.0;
+        const boardPadding = 10.0;
+        final periodWidth = fitToWidth ? 40.0 : 108.0;
+        final minDayColumnWidth = fitToWidth ? 44.0 : 188.0;
+        final maxDayColumnWidth = fitToWidth ? 200.0 : 320.0;
+        final slotMinHeight = fitToWidth ? 52.0 : 156.0;
 
         final availableWidth = constraints.maxWidth;
         // 보드 Container가 좌우로 boardPadding을 먹으므로, 실제 열이 놓이는
@@ -2740,16 +2865,14 @@ class _TimetableTabState extends State<TimetableTab> {
             (dayOrder.length * dynamicDayWidth) +
             (dayOrder.length + 1) * gap;
         // 0.5px 여유로 부동소수 오차에 의한 불필요한 스크롤 전환을 막는다.
-        final shouldScroll = !forExport && gridWidth > innerWidth + 0.5;
-        final renderWidth = forExport
+        final shouldScroll = gridWidth > innerWidth + 0.5;
+        final renderWidth = shouldScroll
             ? gridWidth + (boardPadding * 2)
-            : (shouldScroll
-                ? gridWidth + (boardPadding * 2)
-                : availableWidth);
+            : availableWidth;
 
         Widget grid = Container(
           width: renderWidth,
-          padding: EdgeInsets.all(boardPadding),
+          padding: const EdgeInsets.all(boardPadding),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             color: Colors.white,
@@ -4249,55 +4372,6 @@ class _TimetableTabState extends State<TimetableTab> {
     return conflicts.toSet().toList();
   }
 
-  Future<void> _exportTimetableImage() async {
-    final boundary =
-        _timetableExportRepaintKey.currentContext?.findRenderObject()
-            as RenderRepaintBoundary?;
-    if (boundary == null) {
-      _showMessage('내보낼 시간표를 먼저 열어주세요.');
-      return;
-    }
-
-    final image = await boundary.toImage(pixelRatio: 2.0);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) {
-      return;
-    }
-
-    final bytes = byteData.buffer.asUint8List();
-    final helper = createDownloadHelper();
-    helper.downloadBytes(
-      bytes: bytes,
-      filename: 'timetable_${DateTime.now().millisecondsSinceEpoch}.png',
-      mimeType: 'image/png',
-    );
-  }
-
-  Future<void> _exportRoomUtilizationImage() async {
-    final boundary =
-        _roomUtilizationRepaintKey.currentContext?.findRenderObject()
-            as RenderRepaintBoundary?;
-    if (boundary == null) {
-      _showMessage('내보낼 교실 상황표를 먼저 열어주세요.');
-      return;
-    }
-
-    final image = await boundary.toImage(pixelRatio: 2.0);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) {
-      return;
-    }
-
-    final bytes = byteData.buffer.asUint8List();
-    final helper = createDownloadHelper();
-    helper.downloadBytes(
-      bytes: bytes,
-      filename:
-          'classroom_utilization_${DateTime.now().millisecondsSinceEpoch}.png',
-      mimeType: 'image/png',
-    );
-  }
-
   Future<bool?> _confirmDiscardDialog({
     required String title,
     required String message,
@@ -4549,7 +4623,6 @@ class _EditableSlotCell extends StatelessWidget {
     required this.dragsLocked,
     required this.activeDrag,
     required this.conflictState,
-    required this.forExport,
   });
 
   final TimeSlot slot;
@@ -4568,7 +4641,6 @@ class _EditableSlotCell extends StatelessWidget {
   final bool dragsLocked;
   final _ActiveDrag? activeDrag;
   final DropConflictState conflictState;
-  final bool forExport;
 
   /// True when the current drag-time conflict state must block the drop.
   bool get _isHardReject =>
@@ -4599,7 +4671,7 @@ class _EditableSlotCell extends StatelessWidget {
       },
       builder: (context, candidateData, rejectedData) {
         final hovering = candidateData.isNotEmpty;
-        final showFeedback = !forExport && activeDrag != null;
+        final showFeedback = activeDrag != null;
 
         Color background = Colors.white;
         Color borderColor = NestColors.roseMist;
@@ -4674,12 +4746,10 @@ class _EditableSlotCell extends StatelessWidget {
                       color: NestColors.creamyWhite,
                       border: Border.all(color: NestColors.roseMist),
                     ),
-                    child: forExport
-                        ? const SizedBox(height: 16)
-                        : Text(
-                            '과목/교사/교실을 드래그',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                    child: Text(
+                      '과목/교사/교실을 드래그',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   )
                 else
                   ...sessions.map((session) {
@@ -4697,20 +4767,16 @@ class _EditableSlotCell extends StatelessWidget {
                     final conflictRows =
                         conflictMessagesForSession(session.id);
 
-                    final canMenu = !forExport && sessionMenuEnabled;
+                    final canMenu = sessionMenuEnabled;
                     final tile = _GridSessionTile(
                       title: title,
                       subtitle: '',
                       location: session.location,
                       teacherBadges: teacherBadges,
                       conflictMessages: conflictRows,
-                      canDelete: !forExport,
-                      onDelete: forExport
-                          ? null
-                          : () => onDeleteSession(session.id),
-                      onTap: forExport
-                          ? null
-                          : () => onTapSession(session.id),
+                      canDelete: true,
+                      onDelete: () => onDeleteSession(session.id),
+                      onTap: () => onTapSession(session.id),
                       canMenu: canMenu,
                       onMenu: canMenu
                           ? (position) => onSessionMenu(session.id, position)
@@ -4732,29 +4798,26 @@ class _EditableSlotCell extends StatelessWidget {
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: forExport
-                          ? tile
-                          : Draggable<DragPayload>(
-                              data: DragPayload(
-                                type: DragPayloadType.session,
-                                id: session.id,
-                              ),
-                              maxSimultaneousDrags: dragsLocked ? 0 : null,
-                              onDragStarted: () =>
-                                  onSessionDragStarted(session.id),
-                              onDragEnd: (_) => onSessionDragEnded(),
-                              onDraggableCanceled: (velocity, offset) =>
-                                  onSessionDragEnded(),
-                              feedback: Material(
-                                color: Colors.transparent,
-                                child: feedbackTile,
-                              ),
-                              childWhenDragging: Opacity(
-                                opacity: 0.36,
-                                child: feedbackTile,
-                              ),
-                              child: tile,
-                            ),
+                      child: Draggable<DragPayload>(
+                        data: DragPayload(
+                          type: DragPayloadType.session,
+                          id: session.id,
+                        ),
+                        maxSimultaneousDrags: dragsLocked ? 0 : null,
+                        onDragStarted: () => onSessionDragStarted(session.id),
+                        onDragEnd: (_) => onSessionDragEnded(),
+                        onDraggableCanceled: (velocity, offset) =>
+                            onSessionDragEnded(),
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: feedbackTile,
+                        ),
+                        childWhenDragging: Opacity(
+                          opacity: 0.36,
+                          child: feedbackTile,
+                        ),
+                        child: tile,
+                      ),
                     );
                   }),
               ],

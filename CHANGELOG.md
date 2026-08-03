@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.0.10+12 (2026-08-03)
+
+### Fixed
+
+- **교실 상황표 `PNG 저장`이 아무 반응 없이 실패하던 문제** 수정
+  - 원인은 이미지 크기. 교실 상황표는 요일×시간대를 세로로 쌓아 100행 가까이 되는데 배율이 2배로 고정돼 있어 세로 1만 px을 넘었고, 웹 캔버스가 한 변 8192px 부근에서 실패한다 (시간표 내보내기는 6070px이라 아슬아슬하게 성공하고 있었다)
+  - `_capturePixelRatio`가 표 크기에 맞춰 배율을 계산 — 긴 변 6000px·총 3200만 px 안에서 최대 3배 (`timetable_tab.dart`)
+  - 캡처 실패를 삼키지 않고 다이얼로그 안 문구로 표시 (스낵바는 모달 뒤에 가려 보이지 않는다)
+- 웹이 아닌 빌드에서 파일 저장이 조용히 무시되던 문제 — `DownloadHelper.isSupported`로 감지해 "웹에서 내보내 주세요"로 안내 (`download_helper.dart`, 앱은 여전히 저장 미지원)
+
+### Added
+
+- **시간표 / 교실 상황표 엑셀(.xlsx) 내보내기** — 두 내보내기 다이얼로그에 `엑셀 저장` 버튼 추가
+  - **표** 시트(PNG와 같은 격자, 인쇄·배포용) + **목록** 시트(수업 한 줄씩, 정렬·필터·일괄 수정용) 2장 구성 (`timetable_excel_export.dart`)
+  - 목록 시트 열은 데이터에 따라 자동 구성 — 교실/교사/보조 이름 열은 값이 있을 때만 만든다
+  - `services/xlsx_writer.dart` — `package:archive`로 OOXML을 직접 생성(문자열 셀·열 너비·행 높이·병합·서식·틀 고정). 기성 `excel` 패키지는 `archive` 버전이 `flutter_native_splash → image`와 충돌해 사용 불가
+- 내보내기 옵션: **빈 시간대 숨기기**(기본 켜짐), **글자 크기** 보통/크게(기본)/아주 크게 — PNG·엑셀에 함께 적용되고 미리보기가 곧 저장 결과
+
+### Changed
+
+- 내보내기를 편집 보드 캡처에서 분리해 읽기 전용 표로 재작성 (`timetable_export_board.dart`)
+  - 드래그용 셀(최소 높이 132px)에 작은 글씨가 얹혀 여백만 크던 구조를 버리고, 과목명 20pt 기준에 행 높이는 내용에 맞춰 늘어나도록 변경
+  - 같은 데이터 기준 2740×6070 → 4042×4560 (빈 시간대 8줄 제거 + 배율 3배)
+  - `TimetableExportTable` 한 모델에서 미리보기·PNG·엑셀이 모두 파생되어 세 결과물이 어긋나지 않는다
+- 편집 그리드에서 쓰이지 않게 된 `forExport` 분기 제거 (`_buildEditableGrid` / `_buildGridScaffold` / `_EditableSlotCell`)
+
+### Dependencies
+
+- `archive: ^4.0.9` 추가 (xlsx 생성), `xml` dev 의존성 추가 (테스트에서 OOXML 검증용)
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 91건 통과 (`timetable_export_test.dart` 15건 신규 — OOXML 패키지 구조·관계·서식 개수·XML 이스케이프·보드 레이아웃 넘침)
+- `flutter build web --release` 통과
+- 생성된 .xlsx를 실제 Excel로 열어 확인 — 시트 2장, 한글, 셀 내 줄바꿈, 열 너비 적용
+- 표 바깥 테두리 두께가 전체 너비 계산에서 빠져 행이 2.4px 넘치던 버그 수정 + 위젯 테스트로 고정
+
 ## 2.0.9+11 (2026-07-30)
 
 ### Fixed

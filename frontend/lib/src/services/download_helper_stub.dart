@@ -8,6 +8,9 @@ class _DownloadHelperStub implements DownloadHelper {
   const _DownloadHelperStub();
 
   @override
+  bool get isSupported => false;
+
+  @override
   void downloadBytes({
     required Uint8List bytes,
     required String filename,

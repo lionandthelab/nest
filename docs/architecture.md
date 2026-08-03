@@ -251,12 +251,7 @@ Admin dashboard onboarding:
   - room management UI:
     - room palette is synced from `Term Setup > 교실 관리`
     - manual room typing is removed from timetable board flow
-  - room utilization export:
-    - all-class board by day/period showing room assignment status
-    - export to PNG from `교실 상황표 내보내기`
-  - timetable export:
-    - dedicated export dialog with fit-to-width layout and safe paddings
-    - unassigned cells render blank in export images (no drag hint text)
+  - export (시간표 / 교실 상황표) — PNG + 엑셀. 상세는 6.2.1d
 - Parent/Teacher view:
   - read-only schedule visibility (editing hidden/disabled)
   - visual session cards with icon rows for course/time/teacher/room scanning.
@@ -293,6 +288,16 @@ Admin dashboard onboarding:
 - **학기 CRUD**: `NestRepository.createTerm/updateTerm/deleteTerm` + `NestController.createTerm/updateTerm/deleteTerm`. 생성은 항상 `DRAFT`. 삭제는 반/세션/시간표/교실/자습이 `ON DELETE CASCADE`로 함께 지워지는 파괴적 작업이라, 앱단에서 **마지막 학기·ARCHIVED 삭제를 차단**하고 연쇄 삭제를 경고한다. DB단은 `terms_delete_admin_staff` RLS + `guard_delete_terms` BEFORE DELETE 트리거(ARCHIVED 차단)로 이중 방어(`20260708090000_term_delete_policy.sql`).
 - **지난 학기 읽기 전용**: `isSelectedTermReadOnly = ARCHIVED || (past && !unlock)`. `togglePastTermEditing`으로 관리자가 해제(학기 전환 시 자동 재잠금). timetable/enrollment/family-admin(반·교실)/self-study의 편집 진입점이 이 플래그로 잠기고 배너를 표시한다. self-study 뮤테이션은 컨트롤러 `_assertSelectedTermEditable()`로 백스톱(자습 테이블엔 DB 소프트락 없음). 지난 학기는 UI 소프트 잠금.
 - **ARCHIVED = 불가침 기록**: DB 트리거로 하드 잠금 — `guard_delete_terms`(삭제 금지) + `guard_update_archived_terms`(보관 상태 유지 시 이름·기간 수정 금지, 보관 해제(status 변경)만 허용) + 자습 3테이블 `guard_mutation_self_study_*`(반·수업 테이블과 동일 패턴). 앱단도 `updateTerm`/`deleteTerm`에서 동일 규칙을 선검증. 편집 다이얼로그는 보관 학기의 이름·기간 필드를 잠근다.
+
+### 6.2.1d 시간표 / 교실 상황표 내보내기 (PNG · 엑셀, 2026-08)
+
+편집 보드를 그대로 캡처하던 방식은 드래그용 셀(최소 높이 132px)에 작은 글씨가 얹혀 내보낸 이미지의 가독성이 떨어지고, 교실 상황표처럼 행이 많은 표는 캔버스 한계를 넘겨 PNG 저장이 조용히 실패했다. 내보내기를 편집 보드에서 떼어내 "읽기 위한 표"로 다시 그린다.
+
+- **공용 데이터 모델** (`ui/tabs/timetable/timetable_export_board.dart`): `TimetableExportTable`(제목/열/구역) → `TimetableExportSection`(교실 상황표는 요일별) → `TimetableExportPeriod`(시간대 행) → `TimetableExportEntry`(과목·반·교실·교사). 미리보기·PNG·엑셀이 모두 이 한 모델에서 나오므로 세 결과물이 어긋나지 않는다. `timetable_tab.dart`의 `_buildTimetableExportTable`(편집 중인 드래프트 기준) / `_buildRoomUtilizationExportTable`(`allTermSessions` 기준)이 모델을 만든다.
+- **읽기 전용 렌더러** `TimetableExportBoard`: 과목 20pt/보조 15pt 기준에 행 높이는 내용에 맞춰 늘어난다(고정 최소 높이 없음). 글자 크기 프리셋(`TimetableExportScale` 보통/크게/아주 크게, 기본 "크게")과 "빈 시간대 숨기기"(기본 켜짐)를 지원한다. 표 바깥 테두리 두께를 보드 전체 너비에 반영해야 안쪽 `Row`가 넘치지 않는다(위젯 테스트로 고정).
+- **PNG 저장**: 배율은 고정 2배가 아니라 `_capturePixelRatio`가 긴 변 6000px·총 3200만 픽셀 안에서 최대 3배까지 잡는다(웹 캔버스는 한 변 8192px 부근에서 실패). 캡처 실패는 삼켜지지 않고 다이얼로그 안 문구로 표시된다(스낵바는 모달 뒤에 가려 보이지 않음).
+- **엑셀 저장**: `services/xlsx_writer.dart`가 `package:archive`의 ZipEncoder로 OOXML을 직접 만든다(문자열 셀·열 너비·행 높이·병합·서식·틀 고정). 외부 엑셀 패키지는 `archive` 버전이 `flutter_native_splash → image`와 충돌해 쓸 수 없다. `timetable_excel_export.dart`가 워크북을 두 시트로 구성한다 — **표**(PNG와 같은 격자, 인쇄·배포용) / **목록**(수업 한 줄씩, 정렬·필터·일괄 수정용).
+- **플랫폼 제약**: 파일 저장은 웹에서만 동작한다(`download_helper_stub`은 no-op). `DownloadHelper.isSupported`로 이를 감지해, 앱에서는 "저장했습니다"라고 잘못 알리는 대신 웹에서 내보내라고 안내한다.
 
 ### 6.2.1 Session Location Compatibility
 
