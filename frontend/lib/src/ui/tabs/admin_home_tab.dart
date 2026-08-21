@@ -932,11 +932,7 @@ class _UpcomingEventsCard extends StatelessWidget {
       onAction: () =>
           onNavigate(NewTermTabs.news, section: NewTermSections.events),
       child: upcoming.isEmpty
-          ? const NestEmptyState(
-              icon: Icons.event_available_outlined,
-              title: '예정된 일정이 없습니다',
-              subtitle: '개학일과 학기 행사를 등록해 주세요.',
-            )
+          ? const _InlineEmpty(text: '예정된 일정이 없습니다. 개학일과 학기 행사를 등록해 주세요.')
           : Column(
               children: upcoming
                   .take(3)
@@ -994,11 +990,7 @@ class _RecentNoticesCard extends StatelessWidget {
       onAction: () =>
           onNavigate(NewTermTabs.news, section: NewTermSections.notices),
       child: notices.isEmpty
-          ? const NestEmptyState(
-              icon: Icons.campaign_outlined,
-              title: '등록된 공지가 없습니다',
-              subtitle: '새 학기 안내를 공지로 남겨보세요.',
-            )
+          ? const _InlineEmpty(text: '등록된 공지가 없습니다. 새 학기 안내를 남겨보세요.')
           : Column(
               children: notices
                   .map(
@@ -1042,6 +1034,28 @@ class _RecentNoticesCard extends StatelessWidget {
                   )
                   .toList(),
             ),
+    );
+  }
+}
+
+/// 요약 카드 안에서 쓰는 한 줄 빈 상태.
+/// [NestEmptyState]는 아이콘 72px + 상하 40px 여백이라, 요약 카드 두 개가 모두
+/// 비어 있으면 첫 화면이 통째로 여백이 된다.
+class _InlineEmpty extends StatelessWidget {
+  const _InlineEmpty({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: NestColors.deepWood.withValues(alpha: 0.55),
+        ),
+      ),
     );
   }
 }

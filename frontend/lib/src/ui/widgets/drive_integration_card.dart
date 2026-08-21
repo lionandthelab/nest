@@ -31,6 +31,14 @@ class _DriveIntegrationCardState extends State<DriveIntegrationCard> {
     super.initState();
     _rootFolderController.text =
         widget.controller.driveIntegration?.rootFolderId ?? '';
+    // 연결 상태 조회는 이 카드가 직접 챙긴다. 예전에는 대시보드 탭의 initState가
+    // 대신 불러줬는데, 카드를 위젯으로 분리하면서 그 호출이 사라졌었다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.controller.isAdminLike) {
+        widget.controller.loadDriveIntegration();
+      }
+    });
   }
 
   @override
