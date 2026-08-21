@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nest Google Drive 연결</title>
+    <style>
+      :root {
+        --main: #dcae96;
+        --base: #f9f7f2;
+        --wood: #5a4637;
+        --sage: #8a9a84;
+        --line: #ebdfd4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at 20% 10%, #fff7f0, var(--base));
+        font-family: "Noto Sans KR", sans-serif;
+        color: var(--wood);
+      }
+
+      .card {
+        width: min(540px, calc(100vw - 28px));
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 18px;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 24px;
+      }
+
+      p {
+        margin: 0 0 8px;
+      }
+
+      .status {
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        background: #fffdfa;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .status.ok {
+        border-color: color-mix(in srgb, var(--sage) 40%, #fff);
+        background: color-mix(in srgb, var(--sage) 10%, #fff);
+      }
+
+      .status.error {
+        border-color: color-mix(in srgb, #bc5b4a 45%, #fff);
+        background: color-mix(in srgb, #bc5b4a 9%, #fff);
+      }
+
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+      }
+
+      button,
+      a {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--wood);
+        text-decoration: none;
+        padding: 9px 12px;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button.primary {
+        border-color: transparent;
+        background: var(--main);
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <article class="card">
+      <h1>Google Drive 연결 처리</h1>
+      <p>OAuth 인증 코드를 Nest 백엔드로 전달하고 있습니다.</p>
+      <div id="status" class="status">준비 중...</div>
+      <div class="actions">
+        <button id="closeBtn" class="primary" type="button">창 닫기</button>
+        <a href="../../index.html" target="_self">앱으로 이동</a>
+      </div>
+    </article>
+
+    <script>
+      (async () => {
+        const statusEl = document.getElementById('status');
+        document.getElementById('closeBtn').addEventListener('click', () => window.close());
+
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const oauthError = params.get('error');
+        const oauthErrorDesc = params.get('error_description');
+        const stateToken = params.get('state');
+
+        if (oauthError) {
+          fail(`Google OAuth 오류: ${oauthError}\n${oauthErrorDesc || ''}`);
+          notify({ success: false, error: oauthErrorDesc || oauthError });
+          return;
+        }
+
+        if (!code) {
+          fail('OAuth code가 없습니다. 다시 시도하세요.');
+          notify({ success: false, error: 'missing_code' });
+          return;
+        }
+
+        const context = loadContext(stateToken);
+
+        if (!context.supabase_url || !context.supabase_anon_key || !context.access_token) {
+          fail('Supabase 연결 정보가 없습니다. 메인 화면에서 OAuth를 다시 시작하세요.');
+          notify({ success: false, error: 'missing_supabase_context' });
+          return;
+        }
+
+        if (!context.homeschool_id) {
+          fail('홈스쿨 컨텍스트가 없습니다. 메인 화면에서 OAuth를 다시 시작하세요.');
+          notify({ success: false, error: 'missing_homeschool' });
+          return;
+        }
+
+        setStatus('인증 코드 교환 중...');
+
+        const response = await fetch(
+          `${context.supabase_url}/functions/v1/google-drive-connect-complete`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: context.supabase_anon_key,
+              Authorization: `Bearer ${context.access_token}`,
+            },
+            body: JSON.stringify({
+              homeschool_id: context.homeschool_id,
+              code,
+              root_folder_id: context.root_folder_id || null,
+              folder_policy: context.folder_policy || 'TERM_CLASS_DATE',
+            }),
+          }
+        );
+
+        const responseText = await response.text();
+        let parsed = null;
+
+        try {
+          parsed = responseText ? JSON.parse(responseText) : null;
+        } catch (_) {
+          parsed = { raw: responseText };
+        }
+
+        if (!response.ok) {
+          fail(`연결 실패 (${response.status})\n${JSON.stringify(parsed, null, 2)}`);
+          notify({
+            success: false,
+            status: response.status,
+            error: parsed?.error || parsed?.message || 'oauth_complete_failed',
+          });
+          return;
+        }
+
+        const payload = {
+          success: true,
+          homeschool_id: context.homeschool_id,
+          root_folder_id: context.root_folder_id || null,
+          folder_policy: context.folder_policy || 'TERM_CLASS_DATE',
+          response: parsed,
+        };
+
+        try {
+          localStorage.setItem('nest.oauth.result', JSON.stringify(payload));
+        } catch (_) {
+          // ignore
+        }
+
+        ok('Google Drive 연결이 완료되었습니다.\n이 창을 닫아도 됩니다.');
+        notify(payload);
+
+        setTimeout(() => window.close(), 1200);
+      })();
+
+      function loadContext(stateToken) {
+        const context = {
+          homeschool_id: '',
+          root_folder_id: '',
+          folder_policy: 'TERM_CLASS_DATE',
+          supabase_url: '',
+          supabase_anon_key: '',
+          access_token: '',
+        };
+
+        try {
+          context.homeschool_id = localStorage.getItem('nest.oauth.homeschool_id') || '';
+          context.root_folder_id = localStorage.getItem('nest.oauth.root_folder_id') || '';
+          context.folder_policy = localStorage.getItem('nest.oauth.folder_policy') || 'TERM_CLASS_DATE';
+          context.supabase_url = localStorage.getItem('nest.oauth.supabase_url') || '';
+          context.supabase_anon_key = localStorage.getItem('nest.oauth.supabase_anon_key') || '';
+          context.access_token = localStorage.getItem('nest.oauth.access_token') || '';
+        } catch (_) {
+          // ignore
+        }
+
+        if (!stateToken) {
+          return context;
+        }
+
+        try {
+          const parsed = JSON.parse(base64UrlDecode(stateToken));
+          if (parsed?.homeschool_id) {
+            context.homeschool_id = parsed.homeschool_id;
+          }
+        } catch (_) {
+          // ignore invalid state
+        }
+
+        return context;
+      }
+
+      function base64UrlDecode(input) {
+        const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+        return atob(padded);
+      }
+
+      function setStatus(text) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = text;
+      }
+
+      function ok(text) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = text;
+        statusEl.classList.add('ok');
+        statusEl.classList.remove('error');
+      }
+
+      function fail(text) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = text;
+        statusEl.classList.add('error');
+        statusEl.classList.remove('ok');
+      }
+
+      function notify(payload) {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(
+            {
+              type: 'nest-google-oauth-complete',
+              payload,
+            },
+            window.location.origin
+          );
+        }
+      }
+    </script>
+  </body>
+</html>
