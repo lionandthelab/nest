@@ -6,6 +6,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/search_select_field.dart';
 
 class MembersTab extends StatefulWidget {
   const MembersTab({super.key, required this.controller});
@@ -309,21 +310,35 @@ class _MembersTabState extends State<MembersTab> {
         return '선생님';
       case 'GUEST_TEACHER':
         return '초청교사';
+      case 'STUDENT':
+        return '학생';
       default:
         return role;
     }
   }
 
-  /// 가입 승인: 역할 확정 + (학부모면) 연결할 가정 선택 → 한 번에 승인.
+  /// 가입 승인: 역할 확정 + (학부모면) 연결할 가정 / (학생이면) 연결할 아이 선택 →
+  /// 한 번에 승인.
   Future<void> _showApproveDialog(HomeschoolJoinRequest req) async {
     final controller = widget.controller;
-    const roleOptions = ['PARENT', 'TEACHER', 'GUEST_TEACHER'];
+    const roleOptions = ['PARENT', 'TEACHER', 'GUEST_TEACHER', 'STUDENT'];
     var role = roleOptions.contains(req.requestedRole)
         ? req.requestedRole!
         : 'PARENT';
     String? familyId;
+    String? studentChildId;
     final families = controller.families.toList()
       ..sort((a, b) => a.familyName.compareTo(b.familyName));
+
+    // 학생 승인 시 연결 가능한 아이 = 아직 계정이 연결되지 않은 아이만.
+    // 이미 연결된 아이는 서버에서도 CHILD_ALREADY_LINKED 로 막힌다.
+    final linkableChildren =
+        controller.children.where((child) => !child.hasAccount).toList()
+          ..sort((a, b) {
+            final byFamily = a.familyName.compareTo(b.familyName);
+            if (byFamily != 0) return byFamily;
+            return a.name.compareTo(b.name);
+          });
 
     // 이름이 일치하는 미연결 교사 프로필(엑셀로 미리 만든 감독 등)을 찾아, 승인과
     // 동시에 이 계정과 이어줄지 제안한다. 연결되면 학부모 뷰에서도 감독 시간표가
@@ -416,7 +431,49 @@ class _MembersTabState extends State<MembersTab> {
                           onChanged: (v) => setInner(() => familyId = v),
                         ),
                     ],
-                    if (matched != null) ...[
+                    if (role == 'STUDENT') ...[
+                      const SizedBox(height: 14),
+                      const Text('연결할 자녀'),
+                      const SizedBox(height: 6),
+                      if (linkableChildren.isEmpty)
+                        Text(
+                          '연결할 수 있는 아이가 없습니다. 학기 설정 › 가정에서 아이를 먼저 등록해 주세요.',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: NestColors.clay,
+                              ),
+                        )
+                      else
+                        SelectFieldCard(
+                          label: '자녀',
+                          hintText: '아이 선택',
+                          icon: Icons.child_care_outlined,
+                          enabled: true,
+                          value: _childLabel(linkableChildren, studentChildId),
+                          helpText: '이미 계정이 연결된 아이는 목록에 나오지 않습니다.',
+                          onTap: () async {
+                            final picked = await showSelectSheet<String>(
+                              context: ctx,
+                              title: '연결할 자녀 선택',
+                              helpText: '이 계정을 학생 본인 계정으로 이어줄 아이를 고르세요.',
+                              currentValue: studentChildId,
+                              options: [
+                                for (final child in linkableChildren)
+                                  SelectSheetOption(
+                                    value: child.id,
+                                    title: child.name,
+                                    subtitle: child.familyName,
+                                    keywords:
+                                        '${child.name} ${child.familyName}',
+                                  ),
+                              ],
+                            );
+                            if (picked != null) {
+                              setInner(() => studentChildId = picked);
+                            }
+                          },
+                        ),
+                    ],
+                    if (matched != null && role != 'STUDENT') ...[
                       const SizedBox(height: 14),
                       const Divider(height: 1),
                       CheckboxListTile(
@@ -445,7 +502,8 @@ class _MembersTabState extends State<MembersTab> {
                   child: const Text('취소'),
                 ),
                 FilledButton(
-                  onPressed: (role == 'PARENT' && familyId == null)
+                  onPressed: (role == 'PARENT' && familyId == null) ||
+                          (role == 'STUDENT' && studentChildId == null)
                       ? null
                       : () => Navigator.pop(ctx, true),
                   child: const Text('승인'),
@@ -463,9 +521,13 @@ class _MembersTabState extends State<MembersTab> {
         requestId: req.id,
         role: role,
         familyId: role == 'PARENT' ? familyId : null,
+        childId: role == 'STUDENT' ? studentChildId : null,
       );
       // 승인과 동시에 기존 교사 프로필과 계정을 연결(감독 시간표 노출용).
-      if (linkTeacher && matched != null && req.requesterUserId.isNotEmpty) {
+      if (linkTeacher &&
+          role != 'STUDENT' &&
+          matched != null &&
+          req.requesterUserId.isNotEmpty) {
         await controller.updateTeacherProfile(
           teacherProfileId: matched.id,
           displayName: matched.displayName,
@@ -484,6 +546,17 @@ class _MembersTabState extends State<MembersTab> {
     } catch (_) {
       _showMessage(controller.statusMessage);
     }
+  }
+
+  /// 학생 승인 다이얼로그의 선택된 아이 라벨(가정 이름 포함).
+  String? _childLabel(List<ChildProfile> children, String? childId) {
+    if (childId == null) return null;
+    for (final child in children) {
+      if (child.id == childId) {
+        return '${child.name} · ${child.familyName}';
+      }
+    }
+    return null;
   }
 
   Future<void> _rejectRequest(String requestId) async {
@@ -925,6 +998,7 @@ class _MembersTabState extends State<MembersTab> {
       'TEACHER' => 2,
       'GUEST_TEACHER' => 3,
       'PARENT' => 4,
+      'STUDENT' => 5,
       _ => 99,
     };
   }
@@ -936,12 +1010,14 @@ class _MembersTabState extends State<MembersTab> {
       'TEACHER' => '교사',
       'GUEST_TEACHER' => '외부교사',
       'PARENT' => '부모',
+      'STUDENT' => '학생',
       _ => role,
     };
   }
 
   static const List<DropdownMenuItem<String>> _roleItems = [
     DropdownMenuItem(value: 'PARENT', child: Text('부모')),
+    DropdownMenuItem(value: 'STUDENT', child: Text('학생')),
     DropdownMenuItem(value: 'TEACHER', child: Text('교사')),
     DropdownMenuItem(value: 'GUEST_TEACHER', child: Text('외부교사')),
     DropdownMenuItem(value: 'STAFF', child: Text('스태프')),

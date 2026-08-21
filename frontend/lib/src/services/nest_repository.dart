@@ -46,12 +46,129 @@ class TimetableBatchUnsupported implements Exception {
   const TimetableBatchUnsupported();
 }
 
+/// Marker for "the server side of this feature is not deployed yet".
+///
+/// Read paths degrade silently to empty results; write paths throw one of the
+/// subtypes so the controller can show a Korean guidance message. [feature] is
+/// a stable machine code — translation stays in the controller layer.
+abstract class NestFeatureUnsupported implements Exception {
+  const NestFeatureUnsupported();
+
+  /// Stable feature code: `student_account` | `class_session_change` |
+  /// `absence_report` | `nest_notify`.
+  String get feature;
+
+  @override
+  String toString() => 'NestFeatureUnsupported($feature)';
+}
+
+/// `children.user_id` column / `link_child_account` RPC not deployed.
+class StudentAccountUnsupported extends NestFeatureUnsupported {
+  const StudentAccountUnsupported();
+
+  @override
+  String get feature => 'student_account';
+}
+
+/// `class_session_changes` table not deployed.
+class ClassSessionChangeUnsupported extends NestFeatureUnsupported {
+  const ClassSessionChangeUnsupported();
+
+  @override
+  String get feature => 'class_session_change';
+}
+
+/// `absence_reports` table / `report_absence` RPC not deployed.
+class AbsenceReportUnsupported extends NestFeatureUnsupported {
+  const AbsenceReportUnsupported();
+
+  @override
+  String get feature => 'absence_report';
+}
+
+/// `nest-notify` edge function not deployed (or its tables are missing).
+class NestNotifyUnsupported extends NestFeatureUnsupported {
+  const NestNotifyUnsupported();
+
+  @override
+  String get feature => 'nest_notify';
+}
+
+/// Thrown by [NestRepository.updatePhoneNumber] when the given value is not a
+/// Korean mobile number. The controller turns this into a Korean message.
+class InvalidPhoneNumber implements Exception {
+  const InvalidPhoneNumber(this.input);
+
+  final String input;
+
+  @override
+  String toString() => 'InvalidPhoneNumber($input)';
+}
+
+/// Result of a `nest-notify` edge function call. Mirrors the function's 200
+/// response so callers can report honestly ("3명 발송 / 번호 없음 2명").
+class NotifyResult {
+  const NotifyResult({
+    required this.accepted,
+    required this.sent,
+    required this.skippedNoPhone,
+    required this.skippedNoAccount,
+    required this.alreadyNotified,
+    this.messageId,
+  });
+
+  factory NotifyResult.fromMap(Map<String, dynamic> map) {
+    return NotifyResult(
+      accepted: parseBool(map['accepted']),
+      sent: _asInt(map['sent']),
+      skippedNoPhone: _asInt(map['skipped_no_phone']),
+      skippedNoAccount: _asInt(map['skipped_no_account']),
+      alreadyNotified: parseBool(map['already_notified']),
+      messageId: _normalizeNullable(map['message_id'] as String?),
+    );
+  }
+
+  /// 서버가 실제로 발송을 접수했는지.
+  final bool accepted;
+
+  /// 문자를 실제로 보낸 수신자 수.
+  final int sent;
+
+  /// 계정은 있으나 유효한 휴대폰 번호가 없어 건너뛴 수신자 수.
+  final int skippedNoPhone;
+
+  /// 연결된 계정 자체가 없어 건너뛴 대상 수.
+  final int skippedNoAccount;
+
+  /// 이미 발송된 건이라 중복 발송이 차단됐는지(`force: true` 로 재발송 가능).
+  final bool alreadyNotified;
+
+  /// Solapi groupId. 미발송이면 null.
+  final String? messageId;
+
+  int get skippedTotal => skippedNoPhone + skippedNoAccount;
+
+  bool get hasSent => sent > 0;
+}
+
 class NestRepository {
   NestRepository(this.client);
 
   final SupabaseClient client;
   bool? _classSessionLocationSupported;
   bool? _applyTimetableDraftSupported;
+
+  /// 학생 계정 기능(20260814091000 마이그레이션) 배포 여부 캐시.
+  bool? _childUserIdSupported;
+
+  /// 수업 변경 공지(20260814092000) 배포 여부 캐시.
+  bool? _classSessionChangesSupported;
+
+  /// 결석 신고(20260814093000) 배포 여부 캐시.
+  bool? _absenceReportsSupported;
+
+  /// nest-notify Edge Function 배포 여부 캐시.
+  bool? _nestNotifySupported;
 
   User? get currentUser => client.auth.currentUser;
   Session? get currentSession => client.auth.currentSession;
@@ -116,10 +233,30 @@ class NestRepository {
     );
   }
 
+  /// 휴대폰 번호를 auth 메타데이터와 profiles 테이블에 함께 반영한다.
+  /// (알림 발송은 profiles.phone 을 읽으므로 dual-write 가 필수다)
+  ///
+  /// 저장 전에 서버의 `normalize_kr_phone()` 과 같은 규칙으로 정규화한다:
+  /// 숫자만 남기고 `+82`/`82` 는 `0` 으로 바꾼 뒤 `^01[016789]\d{7,8}$` 만 통과.
+  /// 형식이 맞지 않으면 [InvalidPhoneNumber] 를 던진다(빈 값은 삭제로 취급).
   Future<void> updatePhoneNumber(String phone) async {
+    final raw = phone.trim();
+    final normalized = raw.isEmpty ? null : _normalizeKoreanPhone(raw);
+    if (raw.isNotEmpty && normalized == null) {
+      throw InvalidPhoneNumber(raw);
+    }
+
     await client.auth.updateUser(
-      UserAttributes(data: {'phone_number': phone.trim()}),
+      UserAttributes(data: {'phone_number': normalized ?? ''}),
     );
+
+    final uid = client.auth.currentUser?.id;
+    if (uid != null) {
+      await client
+          .from('profiles')
+          .update({'phone': normalized})
+          .eq('id', uid);
+    }
   }
 
   /// 프로필 사진 업로드: 공개 'media' 버킷의 avatars/{userId}/ 경로에 저장하고,
@@ -257,17 +394,26 @@ class NestRepository {
     );
   }
 
-  /// 합류 요청 한 번에 승인: 멤버십 + (학부모면) 가정 연결.
+  /// 합류 요청 한 번에 승인: 멤버십 + (학부모면) 가정 연결 + (학생이면) 아이 계정 연결.
+  ///
+  /// [childId] 는 4-인자 approve_join_request(20260814091000) 가 배포된 서버에서만
+  /// 의미가 있다. null 이면 파라미터 자체를 보내지 않아, 3-인자 구버전 함수만 있는
+  /// 서버에서도 기존 승인 흐름이 그대로 동작한다.
   Future<void> approveJoinRequestWithFamily({
     required String requestId,
     required String role,
     String? familyId,
+    String? childId,
   }) async {
-    await client.rpc('approve_join_request', params: {
+    final params = <String, dynamic>{
       'p_request_id': requestId,
       'p_role': role,
       'p_family_id': familyId,
-    });
+    };
+    if (childId != null && childId.isNotEmpty) {
+      params['p_child_id'] = childId;
+    }
+    await client.rpc('approve_join_request', params: params);
   }
 
   /// 참여 코드 재발급(관리자). 새 코드 반환.
@@ -472,20 +618,101 @@ class NestRepository {
     return client.from('families').delete().eq('id', familyId);
   }
 
+  /// `children.user_id`(학생 계정 연결) 포함 select. 마이그레이션 미배포 서버에서는
+  /// 이 컬럼이 없으므로 [_childrenSelectLegacy] 로 자동 폴백한다.
+  static const String _childrenSelect =
+      'id, family_id, name, birth_date, profile_note, status, created_at, '
+      'user_id, families!inner(homeschool_id, family_name)';
+
+  static const String _childrenSelectLegacy =
+      'id, family_id, name, birth_date, profile_note, status, created_at, '
+      'families!inner(homeschool_id, family_name)';
+
   Future<List<ChildProfile>> fetchChildren({
     required String homeschoolId,
   }) async {
-    final data = await client
-        .from('children')
-        .select(
-          'id, family_id, name, birth_date, profile_note, status, created_at, '
-          'families!inner(homeschool_id, family_name)',
-        )
-        .eq('families.homeschool_id', homeschoolId)
-        .order('created_at', ascending: false)
-        .limit(600);
+    if (_childUserIdSupported == false) {
+      final legacyData = await client
+          .from('children')
+          .select(_childrenSelectLegacy)
+          .eq('families.homeschool_id', homeschoolId)
+          .order('created_at', ascending: false)
+          .limit(600);
 
-    return _asRows(data).map(ChildProfile.fromMap).toList();
+      return _asRows(legacyData).map(ChildProfile.fromMap).toList();
+    }
+
+    try {
+      final data = await client
+          .from('children')
+          .select(_childrenSelect)
+          .eq('families.homeschool_id', homeschoolId)
+          .order('created_at', ascending: false)
+          .limit(600);
+      _childUserIdSupported = true;
+      return _asRows(data).map(ChildProfile.fromMap).toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingChildUserIdColumn(error)) {
+        _childUserIdSupported = false;
+        final legacyData = await client
+            .from('children')
+            .select(_childrenSelectLegacy)
+            .eq('families.homeschool_id', homeschoolId)
+            .order('created_at', ascending: false)
+            .limit(600);
+
+        return _asRows(legacyData).map(ChildProfile.fromMap).toList();
+      }
+      rethrow;
+    }
+  }
+
+  /// 자녀에 학생 계정을 연결한다(관리자/스태프). `link_child_account` RPC 는
+  /// STUDENT 멤버십도 함께 보장한다. 미배포면 [StudentAccountUnsupported].
+  Future<ChildProfile> linkChildAccount({
+    required String childId,
+    required String userId,
+  }) async {
+    if (_childUserIdSupported == false) {
+      throw const StudentAccountUnsupported();
+    }
+
+    try {
+      final data = await client.rpc(
+        'link_child_account',
+        params: {'p_child_id': childId, 'p_user_id': userId},
+      );
+      _childUserIdSupported = true;
+      return ChildProfile.fromMap(_asMap(data));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'link_child_account')) {
+        _childUserIdSupported = false;
+        throw const StudentAccountUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  /// 자녀의 학생 계정 연결을 해제한다(관리자/스태프).
+  Future<ChildProfile> unlinkChildAccount({required String childId}) async {
+    if (_childUserIdSupported == false) {
+      throw const StudentAccountUnsupported();
+    }
+
+    try {
+      final data = await client.rpc(
+        'unlink_child_account',
+        params: {'p_child_id': childId},
+      );
+      _childUserIdSupported = true;
+      return ChildProfile.fromMap(_asMap(data));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'unlink_child_account')) {
+        _childUserIdSupported = false;
+        throw const StudentAccountUnsupported();
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, List<String>>> fetchFamilyGuardianUserIds({
@@ -614,22 +841,47 @@ class NestRepository {
     required String birthDate,
     required String profileNote,
   }) async {
-    final row = await client
-        .from('children')
-        .update({
-          'family_id': familyId,
-          'name': name.trim(),
-          'birth_date': birthDate,
-          'profile_note': profileNote.trim(),
-        })
-        .eq('id', childId)
-        .select(
-          'id, family_id, name, birth_date, profile_note, status, created_at, '
-          'families!inner(homeschool_id, family_name)',
-        )
-        .single();
+    final values = {
+      'family_id': familyId,
+      'name': name.trim(),
+      'birth_date': birthDate,
+      'profile_note': profileNote.trim(),
+    };
 
-    return ChildProfile.fromMap(_asMap(row));
+    if (_childUserIdSupported == false) {
+      final legacyRow = await client
+          .from('children')
+          .update(values)
+          .eq('id', childId)
+          .select(_childrenSelectLegacy)
+          .single();
+
+      return ChildProfile.fromMap(_asMap(legacyRow));
+    }
+
+    try {
+      final row = await client
+          .from('children')
+          .update(values)
+          .eq('id', childId)
+          .select(_childrenSelect)
+          .single();
+      _childUserIdSupported = true;
+      return ChildProfile.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingChildUserIdColumn(error)) {
+        _childUserIdSupported = false;
+        final legacyRow = await client
+            .from('children')
+            .update(values)
+            .eq('id', childId)
+            .select(_childrenSelectLegacy)
+            .single();
+
+        return ChildProfile.fromMap(_asMap(legacyRow));
+      }
+      rethrow;
+    }
   }
 
   Future<void> deleteChild({required String childId}) {
@@ -956,6 +1208,36 @@ class NestRepository {
     });
   }
 
+  Future<void> updateAnnouncement({
+    required String announcementId,
+    required String? classGroupId,
+    required String title,
+    required String body,
+    required bool pinned,
+  }) {
+    return client
+        .from('announcements')
+        .update({
+          'class_group_id': _normalizeNullable(classGroupId),
+          'title': title.trim(),
+          'body': body.trim(),
+          'pinned': pinned,
+        })
+        .eq('id', announcementId);
+  }
+
+  /// 공지 삭제. RLS delete 정책이 배포되지 않은 서버에서는 정책 미매칭으로
+  /// 0건이 지워지고도 예외가 나지 않으므로, 실제로 지워진 행을 돌려받아
+  /// 호출부가 "조용한 실패"를 구분할 수 있게 한다.
+  Future<int> deleteAnnouncement({required String announcementId}) async {
+    final data = await client
+        .from('announcements')
+        .delete()
+        .eq('id', announcementId)
+        .select('id');
+    return _asRows(data).length;
+  }
+
   // ── Academic Events (학사 일정) ──
 
   Future<List<AcademicEvent>> fetchAcademicEvents({
@@ -991,6 +1273,24 @@ class NestRepository {
       'end_date': _normalizeNullable(endDate),
       'created_by_user_id': createdByUserId,
     });
+  }
+
+  Future<void> updateAcademicEvent({
+    required String eventId,
+    required String title,
+    required String description,
+    required String eventDate,
+    String? endDate,
+  }) {
+    return client
+        .from('academic_events')
+        .update({
+          'title': title.trim(),
+          'description': description.trim(),
+          'event_date': eventDate,
+          'end_date': _normalizeNullable(endDate),
+        })
+        .eq('id', eventId);
   }
 
   Future<void> deleteAcademicEvent({required String eventId}) {
@@ -2068,6 +2368,335 @@ class NestRepository {
     await del;
   }
 
+  // ── 수업 변경 공지 (class_session_changes) ──
+  //
+  // class_sessions 는 날짜가 없는 주간 반복 템플릿이라, "이번 주만 휴강",
+  // "다음 주부터 학기 끝까지 교실 이동" 같은 공지는 이 유효기간 테이블로 표현한다.
+  // effective_to 가 null 이면 학기 끝까지, from == to 이면 그 하루만이다.
+
+  static const String _classSessionChangeSelect =
+      'id, class_session_id, change_type, effective_from, effective_to, '
+      'new_time_slot_id, new_location, substitute_teacher_id, reason, '
+      'created_by_user_id, notified_at, created_at';
+
+  /// 여러 수업의 변경 공지를 한 번에 읽는다. 서버 미배포면 빈 리스트로 degrade 한다.
+  Future<List<ClassSessionChange>> fetchClassSessionChanges({
+    required List<String> classSessionIds,
+  }) async {
+    if (classSessionIds.isEmpty || _classSessionChangesSupported == false) {
+      return const [];
+    }
+
+    try {
+      final data = await client
+          .from('class_session_changes')
+          .select(_classSessionChangeSelect)
+          .inFilter('class_session_id', classSessionIds)
+          .order('effective_from', ascending: true);
+      _classSessionChangesSupported = true;
+      return _asRows(data).map(ClassSessionChange.fromMap).toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'class_session_changes')) {
+        _classSessionChangesSupported = false;
+        return const [];
+      }
+      rethrow;
+    }
+  }
+
+  /// 수업 변경 공지를 등록한다(담당 교사/담임/ADMIN·STAFF).
+  /// 서버 미배포면 [ClassSessionChangeUnsupported].
+  Future<ClassSessionChange> createClassSessionChange({
+    required String classSessionId,
+    required String changeType,
+    required DateTime effectiveFrom,
+    DateTime? effectiveTo,
+    String? newTimeSlotId,
+    String newLocation = '',
+    String? substituteTeacherId,
+    String reason = '',
+  }) async {
+    if (_classSessionChangesSupported == false) {
+      throw const ClassSessionChangeUnsupported();
+    }
+
+    final values = <String, dynamic>{
+      'class_session_id': classSessionId,
+      'change_type': changeType,
+      'effective_from': formatDateOnly(effectiveFrom),
+      'effective_to': formatDateOnly(effectiveTo),
+      'new_time_slot_id': _normalizeNullable(newTimeSlotId),
+      'new_location': _normalizeNullable(newLocation),
+      'substitute_teacher_id': _normalizeNullable(substituteTeacherId),
+      'reason': reason.trim(),
+      'created_by_user_id': client.auth.currentUser?.id,
+    };
+
+    try {
+      final row = await client
+          .from('class_session_changes')
+          .insert(values)
+          .select(_classSessionChangeSelect)
+          .single();
+      _classSessionChangesSupported = true;
+      return ClassSessionChange.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'class_session_changes')) {
+        _classSessionChangesSupported = false;
+        throw const ClassSessionChangeUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  /// 등록된 변경 공지를 수정한다. 내용이 바뀌었으므로 notified_at 을 비워
+  /// 다시 발송할 수 있게 한다(교사는 자기가 만든 행만 수정 가능 — RLS).
+  Future<ClassSessionChange> updateClassSessionChange({
+    required String id,
+    required String changeType,
+    required DateTime effectiveFrom,
+    DateTime? effectiveTo,
+    String? newTimeSlotId,
+    String newLocation = '',
+    String? substituteTeacherId,
+    String reason = '',
+  }) async {
+    if (_classSessionChangesSupported == false) {
+      throw const ClassSessionChangeUnsupported();
+    }
+
+    final values = <String, dynamic>{
+      'change_type': changeType,
+      'effective_from': formatDateOnly(effectiveFrom),
+      'effective_to': formatDateOnly(effectiveTo),
+      'new_time_slot_id': _normalizeNullable(newTimeSlotId),
+      'new_location': _normalizeNullable(newLocation),
+      'substitute_teacher_id': _normalizeNullable(substituteTeacherId),
+      'reason': reason.trim(),
+      'notified_at': null,
+    };
+
+    try {
+      final row = await client
+          .from('class_session_changes')
+          .update(values)
+          .eq('id', id)
+          .select(_classSessionChangeSelect)
+          .single();
+      _classSessionChangesSupported = true;
+      return ClassSessionChange.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'class_session_changes')) {
+        _classSessionChangesSupported = false;
+        throw const ClassSessionChangeUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteClassSessionChange({required String id}) async {
+    if (_classSessionChangesSupported == false) {
+      throw const ClassSessionChangeUnsupported();
+    }
+
+    try {
+      await client.from('class_session_changes').delete().eq('id', id);
+      _classSessionChangesSupported = true;
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'class_session_changes')) {
+        _classSessionChangesSupported = false;
+        throw const ClassSessionChangeUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  // ── 결석 신고 (absence_reports) ──
+  //
+  // 쓰기는 report_absence() RPC 로만 한다(INSERT 정책 없음). RPC 가 수강 여부·
+  // 요일 일치·학기 범위·과거 날짜를 검증한다.
+
+  static const String _absenceReportSelect =
+      'id, class_session_id, child_id, occurrence_date, reason, '
+      'reported_by_user_id, status, acknowledged_by_user_id, acknowledged_at, '
+      'notified_at, created_at';
+
+  /// 다가오는 수업 회차의 결석을 신고한다(학생 본인 또는 보호자).
+  /// 이미 철회된 같은 회차 신고가 있으면 서버가 되살린다.
+  Future<AbsenceReport> reportAbsence({
+    required String classSessionId,
+    required String childId,
+    required DateTime occurrenceDate,
+    String reason = '',
+  }) async {
+    if (_absenceReportsSupported == false) {
+      throw const AbsenceReportUnsupported();
+    }
+
+    try {
+      final data = await client.rpc(
+        'report_absence',
+        params: {
+          'p_class_session_id': classSessionId,
+          'p_child_id': childId,
+          'p_occurrence_date': formatDateOnly(occurrenceDate),
+          'p_reason': reason.trim(),
+        },
+      );
+      _absenceReportsSupported = true;
+      return AbsenceReport.fromMap(_asMap(data));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'report_absence')) {
+        _absenceReportsSupported = false;
+        throw const AbsenceReportUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  /// 여러 수업의 결석 신고를 읽는다(RLS 가 보이는 범위로 좁힌다).
+  /// [from] 을 주면 그 날짜(포함) 이후 회차만 가져온다.
+  /// 서버 미배포면 빈 리스트로 degrade 한다.
+  Future<List<AbsenceReport>> fetchAbsenceReports({
+    required List<String> classSessionIds,
+    DateTime? from,
+  }) async {
+    if (classSessionIds.isEmpty || _absenceReportsSupported == false) {
+      return const [];
+    }
+
+    try {
+      var query = client
+          .from('absence_reports')
+          .select(_absenceReportSelect)
+          .inFilter('class_session_id', classSessionIds);
+
+      final fromDate = formatDateOnly(from);
+      if (fromDate != null) {
+        query = query.gte('occurrence_date', fromDate);
+      }
+
+      final data = await query.order('occurrence_date', ascending: true);
+      _absenceReportsSupported = true;
+      return _asRows(data).map(AbsenceReport.fromMap).toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'absence_reports')) {
+        _absenceReportsSupported = false;
+        return const [];
+      }
+      rethrow;
+    }
+  }
+
+  /// 결석 신고를 철회한다(신고자 본인 또는 담당 교사/ADMIN·STAFF).
+  Future<AbsenceReport> cancelAbsenceReport({required String id}) async {
+    if (_absenceReportsSupported == false) {
+      throw const AbsenceReportUnsupported();
+    }
+
+    try {
+      final data = await client.rpc(
+        'cancel_absence_report',
+        params: {'p_report_id': id},
+      );
+      _absenceReportsSupported = true;
+      return AbsenceReport.fromMap(_asMap(data));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'cancel_absence_report')) {
+        _absenceReportsSupported = false;
+        throw const AbsenceReportUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  /// 결석 신고를 확인 처리한다(담당 교사/ADMIN·STAFF).
+  Future<AbsenceReport> acknowledgeAbsenceReport({required String id}) async {
+    if (_absenceReportsSupported == false) {
+      throw const AbsenceReportUnsupported();
+    }
+
+    try {
+      final data = await client.rpc(
+        'acknowledge_absence_report',
+        params: {'p_report_id': id},
+      );
+      _absenceReportsSupported = true;
+      return AbsenceReport.fromMap(_asMap(data));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'acknowledge_absence_report')) {
+        _absenceReportsSupported = false;
+        throw const AbsenceReportUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  // ── 알림 발송 (nest-notify Edge Function) ──
+  //
+  // 클라이언트는 수신자를 절대 지정하지 않는다. 도메인 이벤트 {event, id} 만
+  // 보내면 서버가 수신자를 해석·인가하고 Solapi 로 발송한다.
+
+  /// 수업 변경 공지를 해당 반 학생·보호자에게 발송한다.
+  /// [force] 가 true 면 이미 발송된 건도 재발송한다.
+  Future<NotifyResult> notifyClassChange({
+    required String changeId,
+    String channel = 'sms',
+    bool force = false,
+  }) {
+    return _invokeNestNotify(
+      event: 'CLASS_CHANGE',
+      id: changeId,
+      channel: channel,
+      force: force,
+    );
+  }
+
+  /// 결석 신고를 담당 교사에게 발송한다.
+  Future<NotifyResult> notifyAbsence({
+    required String reportId,
+    String channel = 'sms',
+    bool force = false,
+  }) {
+    return _invokeNestNotify(
+      event: 'ABSENCE',
+      id: reportId,
+      channel: channel,
+      force: force,
+    );
+  }
+
+  Future<NotifyResult> _invokeNestNotify({
+    required String event,
+    required String id,
+    required String channel,
+    required bool force,
+  }) async {
+    if (_nestNotifySupported == false) {
+      throw const NestNotifyUnsupported();
+    }
+
+    try {
+      final response = await client.functions.invoke(
+        'nest-notify',
+        body: {
+          'event': event,
+          'id': id,
+          'channel': channel,
+          'force': force,
+        },
+      );
+      _nestNotifySupported = true;
+      return NotifyResult.fromMap(_asMap(response.data));
+    } on FunctionException catch (error) {
+      if (_isMissingNestNotify(error)) {
+        _nestNotifySupported = false;
+        throw const NestNotifyUnsupported();
+      }
+      rethrow;
+    }
+  }
+
   /// Atomic batch commit of a class group's timetable draft via the optional
   /// `apply_timetable_draft` RPC. The whole apply runs in a single DB
   /// transaction, so any failure (RLS denial, TEACHER_SLOT_CONFLICT, archived
@@ -2665,6 +3294,36 @@ Map<String, dynamic> _asMap(dynamic data) {
   return const {};
 }
 
+final RegExp _koreanMobilePattern = RegExp(r'^01[016789][0-9]{7,8}$');
+final RegExp _nonDigitPattern = RegExp(r'[^0-9]');
+
+/// 국내 휴대폰 번호를 하이픈 없는 `01x…` 형식으로 정규화한다.
+/// 서버의 `public.normalize_kr_phone(text)` 과 같은 규칙이며, 형식이 다르면 null.
+String? _normalizeKoreanPhone(String raw) {
+  var digits = raw.replaceAll(_nonDigitPattern, '');
+  if (digits.isEmpty) {
+    return null;
+  }
+  // 국가번호 82 → 0 (국내 휴대폰은 항상 01 로 시작하므로 오탐 없음).
+  if (digits.startsWith('82')) {
+    digits = '0${digits.substring(2)}';
+  }
+  return _koreanMobilePattern.hasMatch(digits) ? digits : null;
+}
+
+int _asInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  if (value is String) {
+    return int.tryParse(value.trim()) ?? 0;
+  }
+  return 0;
+}
+
 String? _normalizeNullable(String? value) {
   if (value == null) {
     return null;
@@ -2683,6 +3342,63 @@ bool _isMissingLocationColumn(PostgrestException error) {
 bool _isLocationNullViolation(PostgrestException error) {
   final message = error.message.toLowerCase();
   return message.contains('null value') && message.contains('location');
+}
+
+/// True when the error indicates `children.user_id` (student account link)
+/// does not exist yet — the 20260814091000 migration is not deployed.
+bool _isMissingChildUserIdColumn(PostgrestException error) {
+  if (error.code == '42703') {
+    return true;
+  }
+  final message = '${error.message} ${error.details ?? ''}'.toLowerCase();
+  return message.contains('user_id') &&
+      (message.contains('does not exist') ||
+          message.contains('not found') ||
+          message.contains('schema cache'));
+}
+
+/// True when the error means the named table/RPC is missing from the server
+/// (migration not deployed, or PostgREST schema cache does not know it) rather
+/// than a real runtime error raised inside it.
+///
+/// PGRST202 = RPC not found, PGRST205 = table not found,
+/// 42P01 = undefined_table, 42883 = undefined_function.
+bool _isMissingSchemaObject(PostgrestException error, String name) {
+  final code = error.code;
+  if (code == 'PGRST202' ||
+      code == 'PGRST205' ||
+      code == '42P01' ||
+      code == '42883') {
+    return true;
+  }
+
+  final message = '${error.message} ${error.details ?? ''}'.toLowerCase();
+  return message.contains(name.toLowerCase()) &&
+      (message.contains('not find') ||
+          message.contains('schema cache') ||
+          message.contains('does not exist') ||
+          message.contains('not found'));
+}
+
+/// True when the `nest-notify` edge function itself is unavailable: a 404 with
+/// no JSON `error` body (the function always answers with `{"error": ...}`), or
+/// the function's own 503 "기능이 아직 준비되지 않았습니다" when its tables are missing.
+bool _isMissingNestNotify(FunctionException error) {
+  if (error.status == 503) {
+    return true;
+  }
+  if (error.status != 404) {
+    return false;
+  }
+  final details = error.details;
+  if (details is Map) {
+    final body = details.map((key, value) => MapEntry('$key', value));
+    // 함수가 살아 있고 대상 행만 없는 경우 → 미배포가 아니다.
+    if (body['error'] is String) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /// True when the error indicates the optional `apply_timetable_draft` RPC is

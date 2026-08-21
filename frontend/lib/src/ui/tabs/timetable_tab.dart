@@ -13,6 +13,7 @@ import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/search_select_field.dart';
 import 'self_study/supervision_schedule_view.dart';
+import 'timetable/class_change_dialog.dart';
 import 'timetable/empty_room_finder.dart';
 import 'timetable/family_enrollment_panel.dart';
 import 'timetable/object_inspector_rail.dart';
@@ -3693,6 +3694,41 @@ class _TimetableTabState extends State<TimetableTab> {
                               )
                               .toList(),
                         ),
+                      // 휴강·시간/장소 변경·보강 교사 공지. 시간표 자체를 바꾸는
+                      // 것이 아니라 특정 날짜/기간에만 적용되는 변경 이력이라
+                      // 초안 편집과 분리해 서버에 바로 저장한다. 아직 커밋되지
+                      // 않은(tmp) 세션은 서버에 없으므로 진입할 수 없다.
+                      if (!session.isNew &&
+                          controller.canManageClassSessionChanges) ...[
+                        const Divider(height: 26),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            onPressed: () => showClassSessionChangeSheet(
+                              context: context,
+                              controller: controller,
+                              classSessionId: session.id,
+                            ),
+                            icon: const Icon(Icons.published_with_changes),
+                            label: Text(
+                              controller.changesForSession(session.id).isEmpty
+                                  ? '수업 변경 공지'
+                                  : '수업 변경 공지 '
+                                        '(${controller.changesForSession(session.id).length})',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '휴강·시간/장소 변경·보강 교사를 등록하고 학생·학부모에게 문자로 알립니다.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: NestColors.deepWood.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -4876,37 +4912,42 @@ class _ReadOnlySlotCell extends StatelessWidget {
               final courseName = controller.findCourseName(session.courseId);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.white,
-                    border: Border.all(color: NestColors.roseMist),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        courseName,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (showClassName)
+                child: GestureDetector(
+                  // 좁은 화면(compact)과 동일하게 상세 시트를 연다. 교사는 여기서
+                  // 수업 변경 공지로 진입한다.
+                  onTap: () => _showDetail(context, session),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white,
+                      border: Border.all(color: NestColors.roseMist),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          controller.findClassGroupName(session.classGroupId),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: NestColors.clay,
-                            fontWeight: FontWeight.w600,
+                          courseName,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        if (showClassName)
+                          Text(
+                            controller.findClassGroupName(session.classGroupId),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: NestColors.clay,
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
-                        ),
-                      if ((session.location ?? '').trim().isNotEmpty)
-                        Text(
-                          '교실: ${session.location!.trim()}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                    ],
+                        if ((session.location ?? '').trim().isNotEmpty)
+                          Text(
+                            '교실: ${session.location!.trim()}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -5038,6 +5079,31 @@ class _ReadOnlySlotCell extends StatelessWidget {
                 label: '장소',
                 value: location.isEmpty ? '장소 미지정' : location,
               ),
+              // 담당 교사/관리자만: 이 수업의 휴강·시간/장소 변경·보강 공지를
+              // 등록하고 학생·학부모에게 문자로 알린다.
+              if (controller.canManageClassSessionChanges) ...[
+                const Divider(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      showClassSessionChangeSheet(
+                        context: context,
+                        controller: controller,
+                        classSessionId: session.id,
+                      );
+                    },
+                    icon: const Icon(Icons.published_with_changes),
+                    label: Text(
+                      controller.changesForSession(session.id).isEmpty
+                          ? '수업 변경 공지'
+                          : '수업 변경 공지 '
+                                '(${controller.changesForSession(session.id).length})',
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
             ],
           ),

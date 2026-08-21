@@ -232,6 +232,8 @@ String _roleLabel(String role) {
       return '초청교사';
     case 'PARENT':
       return '학부모';
+    case 'STUDENT':
+      return '학생';
     default:
       return role;
   }

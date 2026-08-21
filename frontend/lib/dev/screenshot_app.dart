@@ -524,6 +524,7 @@ Future<void> main() async {
   controller.teacherProfiles = _teacherProfiles;
   controller.sessionTeacherAssignments = _assignments;
   controller.announcements = _announcements;
+  controller.allAnnouncements = _announcements;
   controller.academicEvents = _academicEvents;
   controller.communityPosts = _communityPosts;
 

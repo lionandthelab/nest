@@ -7,6 +7,29 @@ DateTime? parseDateTime(dynamic value) {
   return null;
 }
 
+/// DB `date` 컬럼('YYYY-MM-DD')을 시분초 없는 로컬 날짜로 파싱한다.
+/// 날짜 비교(포함 구간 판정)에서 시각 성분 때문에 경계가 어긋나는 것을 막는다.
+DateTime? parseDateOnly(dynamic value) {
+  final parsed = parseDateTime(value);
+  if (parsed == null) {
+    return null;
+  }
+  return DateTime(parsed.year, parsed.month, parsed.day);
+}
+
+/// [DateTime]을 DB `date` 컬럼 문자열('YYYY-MM-DD')로 직렬화한다.
+/// SelfStudyPlan 등 기존 date 컬럼 모델과 같은 표기를 쓴다.
+String? formatDateOnly(DateTime? value) {
+  if (value == null) {
+    return null;
+  }
+  return DateTime(
+    value.year,
+    value.month,
+    value.day,
+  ).toIso8601String().split('T').first;
+}
+
 bool parseBool(dynamic value, {bool fallback = false}) {
   if (value is bool) {
     return value;
@@ -388,6 +411,7 @@ class ChildProfile {
     required this.profileNote,
     required this.status,
     required this.createdAt,
+    this.userId,
   });
 
   final String id;
@@ -398,6 +422,13 @@ class ChildProfile {
   final String profileNote;
   final String status;
   final DateTime? createdAt;
+
+  /// 학생 본인 계정(auth.users.id). null 이면 아직 계정이 연결되지 않았다.
+  /// teacher_profiles.user_id 와 같은 선택적 연결 패턴이다.
+  final String? userId;
+
+  /// 학생 본인 계정이 연결돼 있는지.
+  bool get hasAccount => (userId ?? '').isNotEmpty;
 
   factory ChildProfile.fromMap(Map<String, dynamic> map) {
     final nested = map['families'];
@@ -414,6 +445,7 @@ class ChildProfile {
       profileNote: (map['profile_note'] as String?) ?? '',
       status: (map['status'] as String?) ?? 'ACTIVE',
       createdAt: parseDateTime(map['created_at']),
+      userId: map['user_id'] as String?,
     );
   }
 
@@ -426,6 +458,7 @@ class ChildProfile {
     'profile_note': profileNote,
     'status': status,
     'created_at': createdAt?.toUtc().toIso8601String(),
+    'user_id': userId,
   };
 }
 
@@ -1111,6 +1144,222 @@ class ClassSession {
     'source_type': sourceType,
     'status': status,
     'location': location,
+  };
+}
+
+/// 수업 변경 공지(class_session_changes).
+///
+/// [ClassSession] 은 "요일×교시" 주간 반복 템플릿이라 날짜 컬럼이 없다.
+/// 그래서 실제 운영상의 변경("이번 주 목요일만 휴강", "다음 주부터 학기 끝까지
+/// 교실 이동")은 이 유효기간 계층으로 표현한다.
+///   * [effectiveTo] 가 null → 학기 끝까지 계속 적용
+///   * [effectiveFrom] == [effectiveTo] → 그 날짜 하루만("이번 주만")
+class ClassSessionChange {
+  const ClassSessionChange({
+    required this.id,
+    required this.classSessionId,
+    required this.changeType,
+    required this.effectiveFrom,
+    this.effectiveTo,
+    this.newTimeSlotId,
+    this.newLocation = '',
+    this.substituteTeacherId,
+    this.reason = '',
+    this.createdByUserId,
+    this.notifiedAt,
+    this.createdAt,
+  });
+
+  final String id;
+  final String classSessionId;
+
+  /// CANCELED | TIME_MOVED | ROOM_MOVED | TEACHER_SUBSTITUTE | NOTE
+  final String changeType;
+
+  /// 적용 시작일(포함). DB `date` 컬럼이라 시분초는 항상 0이다.
+  final DateTime effectiveFrom;
+
+  /// 적용 종료일(포함). null 이면 학기 끝까지.
+  final DateTime? effectiveTo;
+
+  /// TIME_MOVED 일 때 옮겨갈 교시.
+  final String? newTimeSlotId;
+
+  /// ROOM_MOVED 일 때 옮겨갈 장소.
+  final String newLocation;
+
+  /// TEACHER_SUBSTITUTE 일 때 대체 교사(teacher_profiles.id).
+  final String? substituteTeacherId;
+
+  final String reason;
+  final String? createdByUserId;
+
+  /// nest-notify 가 발송을 마친 시각. null 이면 아직 미발송.
+  final DateTime? notifiedAt;
+  final DateTime? createdAt;
+
+  /// 학기 끝까지 적용되는 변경인지(= 종료일 없음).
+  bool get isRestOfTerm => effectiveTo == null;
+
+  /// 이미 알림이 발송됐는지.
+  bool get isNotified => notifiedAt != null;
+
+  /// [date] 에 이 변경이 적용되는지. 시분초는 무시하고 날짜만 비교한다.
+  bool appliesOn(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final from = DateTime(
+      effectiveFrom.year,
+      effectiveFrom.month,
+      effectiveFrom.day,
+    );
+    if (day.isBefore(from)) {
+      return false;
+    }
+    final to = effectiveTo;
+    if (to == null) {
+      return true;
+    }
+    final until = DateTime(to.year, to.month, to.day);
+    return !day.isAfter(until);
+  }
+
+  /// 한국어 변경 유형 라벨.
+  String get changeTypeLabel {
+    switch (changeType) {
+      case 'CANCELED':
+        return '휴강';
+      case 'TIME_MOVED':
+        return '시간 변경';
+      case 'ROOM_MOVED':
+        return '장소 변경';
+      case 'TEACHER_SUBSTITUTE':
+        return '보강 교사';
+      case 'NOTE':
+        return '안내';
+      default:
+        return changeType;
+    }
+  }
+
+  factory ClassSessionChange.fromMap(Map<String, dynamic> map) {
+    return ClassSessionChange(
+      id: (map['id'] as String?) ?? '',
+      classSessionId: (map['class_session_id'] as String?) ?? '',
+      changeType: (map['change_type'] as String?) ?? 'NOTE',
+      effectiveFrom: parseDateOnly(map['effective_from']) ?? DateTime(1970),
+      effectiveTo: parseDateOnly(map['effective_to']),
+      newTimeSlotId: map['new_time_slot_id'] as String?,
+      newLocation: (map['new_location'] as String?) ?? '',
+      substituteTeacherId: map['substitute_teacher_id'] as String?,
+      reason: (map['reason'] as String?) ?? '',
+      createdByUserId: map['created_by_user_id'] as String?,
+      notifiedAt: parseDateTime(map['notified_at']),
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'class_session_id': classSessionId,
+    'change_type': changeType,
+    'effective_from': formatDateOnly(effectiveFrom),
+    'effective_to': formatDateOnly(effectiveTo),
+    'new_time_slot_id': newTimeSlotId,
+    'new_location': newLocation,
+    'substitute_teacher_id': substituteTeacherId,
+    'reason': reason,
+    'created_by_user_id': createdByUserId,
+    'notified_at': notifiedAt?.toUtc().toIso8601String(),
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
+}
+
+/// 결석 신고(absence_reports).
+///
+/// 학생 본인 또는 그 자녀의 보호자가 다가오는 수업 하루([occurrenceDate])에
+/// 대해 미리 결석을 알린다. 담당 교사가 확인하면 ACKNOWLEDGED 로 바뀐다.
+class AbsenceReport {
+  const AbsenceReport({
+    required this.id,
+    required this.classSessionId,
+    required this.childId,
+    required this.occurrenceDate,
+    required this.reportedByUserId,
+    this.reason = '',
+    this.status = 'SUBMITTED',
+    this.acknowledgedByUserId,
+    this.acknowledgedAt,
+    this.notifiedAt,
+    this.createdAt,
+  });
+
+  final String id;
+  final String classSessionId;
+  final String childId;
+
+  /// 결석할 실제 날짜. DB `date` 컬럼이라 시분초는 항상 0이다.
+  final DateTime occurrenceDate;
+
+  final String reason;
+  final String reportedByUserId;
+
+  /// SUBMITTED | ACKNOWLEDGED | CANCELED
+  final String status;
+
+  final String? acknowledgedByUserId;
+  final DateTime? acknowledgedAt;
+
+  /// nest-notify 가 담당 교사에게 발송을 마친 시각. null 이면 아직 미발송.
+  final DateTime? notifiedAt;
+  final DateTime? createdAt;
+
+  bool get isSubmitted => status == 'SUBMITTED';
+  bool get isAcknowledged => status == 'ACKNOWLEDGED';
+  bool get isCanceled => status == 'CANCELED';
+  bool get isNotified => notifiedAt != null;
+
+  /// 한국어 상태 라벨.
+  String get statusLabel {
+    switch (status) {
+      case 'SUBMITTED':
+        return '신고됨';
+      case 'ACKNOWLEDGED':
+        return '확인됨';
+      case 'CANCELED':
+        return '취소됨';
+      default:
+        return status;
+    }
+  }
+
+  factory AbsenceReport.fromMap(Map<String, dynamic> map) {
+    return AbsenceReport(
+      id: (map['id'] as String?) ?? '',
+      classSessionId: (map['class_session_id'] as String?) ?? '',
+      childId: (map['child_id'] as String?) ?? '',
+      occurrenceDate: parseDateOnly(map['occurrence_date']) ?? DateTime(1970),
+      reason: (map['reason'] as String?) ?? '',
+      reportedByUserId: (map['reported_by_user_id'] as String?) ?? '',
+      status: (map['status'] as String?) ?? 'SUBMITTED',
+      acknowledgedByUserId: map['acknowledged_by_user_id'] as String?,
+      acknowledgedAt: parseDateTime(map['acknowledged_at']),
+      notifiedAt: parseDateTime(map['notified_at']),
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'class_session_id': classSessionId,
+    'child_id': childId,
+    'occurrence_date': formatDateOnly(occurrenceDate),
+    'reason': reason,
+    'reported_by_user_id': reportedByUserId,
+    'status': status,
+    'acknowledged_by_user_id': acknowledgedByUserId,
+    'acknowledged_at': acknowledgedAt?.toUtc().toIso8601String(),
+    'notified_at': notifiedAt?.toUtc().toIso8601String(),
+    'created_at': createdAt?.toUtc().toIso8601String(),
   };
 }
 

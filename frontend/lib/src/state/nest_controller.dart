@@ -45,9 +45,22 @@ class NestController extends ChangeNotifier {
   List<SessionTeacherAssignment> sessionTeacherAssignments = [];
   List<TeachingPlan> teachingPlans = [];
   List<StudentActivityLog> studentActivityLogs = [];
+  /// 선택된 반 기준으로 걸러진 공지(학부모·학생·교사 화면용).
   List<Announcement> announcements = [];
+
+  /// 반 필터를 적용하기 전의 홈스쿨 전체 공지.
+  /// 관리자 소식 탭은 반을 골라둔 상태에서도 모든 공지를 관리해야 하므로 이쪽을 본다.
+  List<Announcement> allAnnouncements = [];
   List<AcademicEvent> academicEvents = [];
   List<AuditLog> auditLogs = [];
+
+  /// 학기 전체 세션에 걸린 수업 변경 공지(휴강/시간·장소 변경/보강/안내).
+  /// [loadClassSessionChanges] 가 채운다. 서버에 마이그레이션이 없으면 빈 목록.
+  List<ClassSessionChange> classSessionChanges = [];
+
+  /// 학기 전체 세션에 대한 결석 신고(최근 30일 이후 회차만).
+  /// [loadAbsenceReports] 가 채운다. 서버에 마이그레이션이 없으면 빈 목록.
+  List<AbsenceReport> absenceReports = [];
   String? selectedHomeschoolId;
   String? currentRole;
   final Map<String, String> _viewRoleByHomeschool = <String, String>{};
@@ -57,6 +70,9 @@ class NestController extends ChangeNotifier {
   final Set<String> _sessionViewRoleSelections = <String>{};
   final Map<String, String> _parentViewTargetByHomeschool = <String, String>{};
   final Map<String, String> _teacherViewTargetByHomeschool = <String, String>{};
+  // 학생 뷰 미리보기 대상(관리자/스태프 전용). 실제 STUDENT 계정은 본인에게
+  // 연결된 아이만 보므로 이 맵을 쓰지 않는다. 캐시(meta)에는 저장하지 않는다.
+  final Map<String, String> _studentViewTargetByHomeschool = <String, String>{};
 
   List<Term> terms = [];
   String? selectedTermId;
@@ -223,6 +239,8 @@ class NestController extends ChangeNotifier {
       'TEACHER',
       'GUEST_TEACHER',
       'PARENT',
+      // 학생 계정은 가장 낮은 우선순위(다른 역할을 겸하면 그쪽 뷰로 부팅한다).
+      'STUDENT',
     ];
 
     final ordered = rolePriority.where(roles.contains).toList();
@@ -262,6 +280,7 @@ class NestController extends ChangeNotifier {
       'TEACHER',
       'GUEST_TEACHER',
       'PARENT',
+      'STUDENT',
     ];
     final ordered = rolePriority.where(roles.contains).toList();
     return ordered.isNotEmpty ? ordered : roles.toList();
@@ -355,6 +374,21 @@ class NestController extends ChangeNotifier {
     return rows;
   }
 
+  String? get selectedStudentViewTargetChildId {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return null;
+    }
+    return _studentViewTargetByHomeschool[homeschoolId];
+  }
+
+  /// 관리자/스태프가 학생 뷰를 미리볼 때 고를 수 있는 아이들(= 계정 연결된 아이).
+  List<ChildProfile> get studentViewCandidateChildren {
+    final rows = children.where((child) => child.hasAccount).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return rows;
+  }
+
   String? get activeParentViewTargetUserId {
     final currentUserId = user?.id;
     if (!isParentView || !hasAdminLikeMembershipInSelectedHomeschool) {
@@ -403,6 +437,60 @@ class NestController extends ChangeNotifier {
     return candidates.first.id;
   }
 
+  /// 현재 사용자 계정에 연결된 아이들(children.user_id = 내 uid).
+  /// 관리자 미리보기와 무관하게 항상 "진짜 내 계정"만 본다.
+  List<ChildProfile> get currentUserChildProfiles {
+    final currentUserId = user?.id;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return const [];
+    }
+    final rows = children
+        .where((child) => child.userId == currentUserId)
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return rows;
+  }
+
+  /// 학생 뷰에서 화면의 주인공이 되는 아이 id.
+  /// 관리자/스태프가 학생 뷰를 미리보는 경우에는 선택한 미리보기 대상,
+  /// 그 외에는 내 계정에 연결된 아이(여러 명이면 선택값 → 첫 번째).
+  String? get activeStudentChildId {
+    if (isStudentView && hasAdminLikeMembershipInSelectedHomeschool) {
+      final candidates = studentViewCandidateChildren;
+      if (candidates.isEmpty) {
+        return null;
+      }
+      final selected = selectedStudentViewTargetChildId;
+      if (selected != null && candidates.any((child) => child.id == selected)) {
+        return selected;
+      }
+      final mine = currentUserChildProfiles.firstOrNull;
+      if (mine != null && candidates.any((child) => child.id == mine.id)) {
+        return mine.id;
+      }
+      return candidates.first.id;
+    }
+
+    final mine = currentUserChildProfiles;
+    if (mine.isEmpty) {
+      return null;
+    }
+    final selected = selectedStudentViewTargetChildId;
+    if (selected != null && mine.any((child) => child.id == selected)) {
+      return selected;
+    }
+    return mine.first.id;
+  }
+
+  /// [activeStudentChildId] 에 해당하는 아이 프로필(없으면 null).
+  ChildProfile? get activeStudentChild {
+    final id = activeStudentChildId;
+    if (id == null) {
+      return null;
+    }
+    return children.where((child) => child.id == id).firstOrNull;
+  }
+
   bool get isAdminLike =>
       currentRole == 'HOMESCHOOL_ADMIN' || currentRole == 'STAFF';
 
@@ -411,6 +499,11 @@ class NestController extends ChangeNotifier {
   bool get isTeacherView =>
       currentRole == 'TEACHER' || currentRole == 'GUEST_TEACHER';
 
+  /// 학생 본인 계정 뷰. 자기 시간표/결석 신고만 다루는 최소 권한 뷰다.
+  bool get isStudentView => currentRole == 'STUDENT';
+
+  // STUDENT는 아래 집합에 일부러 넣지 않는다. 미성년자 계정이 다른 아이가 찍힌
+  // 사진을 올리거나 커뮤니티에 글을 쓰는 경로를 만들지 않기 위함이다(읽기는 허용).
   bool get canUploadMedia => const {
     'HOMESCHOOL_ADMIN',
     'STAFF',
@@ -427,12 +520,26 @@ class NestController extends ChangeNotifier {
     'PARENT',
   }.contains(currentRole);
 
+  /// 커뮤니티 읽기는 학생에게도 허용한다(공지·반 소식 확인 용도).
+  bool get canReadCommunity => currentRole != null && currentRole!.isNotEmpty;
+
   bool get canModerateCommunity => isAdminLike;
   bool get canManageFamilies => isAdminLike;
   bool get canManageTeacherAssignments => isAdminLike;
   bool get canWriteTeachingPlan => isTeacherView || isAdminLike;
   bool get canWriteActivityLog => isTeacherView || isAdminLike;
   bool get canWriteAnnouncement => isTeacherView || isAdminLike;
+
+  /// 수업 변경 공지 등록/수정/삭제·발송 권한(교사 또는 관리자/스태프).
+  /// 실제 인가는 RLS(`class_session_changes_insert_teacher_admin`)가 담당하고,
+  /// 이 값은 UI 노출과 조기 실패 안내를 위한 1차 가드다.
+  bool get canManageClassSessionChanges => isTeacherView || isAdminLike;
+
+  /// 결석 신고 권한(학부모·학생 본인 또는 관리자/스태프).
+  bool get canReportAbsence => isParentView || isStudentView || isAdminLike;
+
+  /// 결석 신고 확인(ACKNOWLEDGED) 처리 권한.
+  bool get canAcknowledgeAbsence => isTeacherView || isAdminLike;
 
   Future<void> initialize() async {
     if (_isBootstrapped) {
@@ -527,11 +634,19 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  /// 휴대폰 번호를 저장한다(auth 메타 + profiles.phone 동시 갱신).
+  /// 빈 문자열은 삭제로 취급한다. 형식이 맞지 않으면 한국어 안내로 던진다.
   Future<void> updatePhoneNumber(String phone) async {
     final trimmed = phone.trim();
     await _runBusy('연락처 변경 중...', () async {
-      await _repository.updatePhoneNumber(trimmed);
-      _setStatus('연락처가 변경되었습니다.');
+      try {
+        await _repository.updatePhoneNumber(trimmed);
+      } on InvalidPhoneNumber {
+        throw StateError('휴대폰 번호 형식이 올바르지 않습니다. 예: 01012345678');
+      }
+      _setStatus(
+        trimmed.isEmpty ? '연락처를 삭제했습니다.' : '연락처가 변경되었습니다.',
+      );
     });
   }
 
@@ -769,6 +884,36 @@ class NestController extends ChangeNotifier {
     unawaited(_persistToCache());
   }
 
+  /// 학생 뷰 미리보기 대상 전환(관리자/스태프 전용).
+  /// 실제 학생 계정은 자기 아이만 보므로 이 진입점을 쓰지 않는다.
+  Future<void> selectStudentViewTargetChildId(String? childId) async {
+    if (!hasAdminLikeMembershipInSelectedHomeschool) {
+      throw StateError('관리자/스태프만 학생 뷰 대상을 전환할 수 있습니다.');
+    }
+
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final normalized = _normalizeNullable(childId);
+    final candidates = studentViewCandidateChildren
+        .map((child) => child.id)
+        .toSet();
+    if (normalized != null && !candidates.contains(normalized)) {
+      throw StateError('선택할 수 없는 학생 계정입니다.');
+    }
+
+    if (normalized == null) {
+      _studentViewTargetByHomeschool.remove(homeschoolId);
+    } else {
+      _studentViewTargetByHomeschool[homeschoolId] = normalized;
+    }
+    _ensureRoleViewTargetSelection(roleOverride: currentRole);
+    _setStatus('학생 뷰 대상: ${activeStudentChild?.name ?? '-'}');
+    notifyListeners();
+  }
+
   Future<void> changeTerm(String? termId) async {
     selectedTermId = _normalizeNullable(termId);
     _termSelectionIsExplicit = selectedTermId != null;
@@ -787,6 +932,7 @@ class NestController extends ChangeNotifier {
       await _loadProposals();
       await loadTeachingPlans();
       await loadAnnouncements();
+      await _loadNewScheduleFeaturesTolerantly();
       await loadGalleryItems();
       await loadCommunityFeed();
     });
@@ -1892,6 +2038,7 @@ class NestController extends ChangeNotifier {
       teachingPlans = [];
       studentActivityLogs = [];
       announcements = [];
+      allAnnouncements = [];
       auditLogs = [];
       selfStudyPlans = [];
       selectedSelfStudyPlanId = null;
@@ -2035,6 +2182,7 @@ class NestController extends ChangeNotifier {
     String? requesterUserId, // 하위호환용(현재 RPC는 요청 행에서 직접 조회)
     String role = 'PARENT',
     String? familyId,
+    String? childId, // STUDENT 승인 시 계정을 연결할 아이(children.id)
   }) async {
     if (!canManageMemberships) {
       throw StateError('홈스쿨 관리자 권한이 필요합니다.');
@@ -2045,21 +2193,57 @@ class NestController extends ChangeNotifier {
     if (role == 'PARENT' && familyId == null) {
       throw StateError('학부모는 연결할 가정을 선택해야 합니다.');
     }
+    if (role == 'STUDENT' && _normalizeNullable(childId) == null) {
+      throw StateError('학생은 연결할 자녀를 선택해야 합니다.');
+    }
 
     await _runBusy('가입 요청을 승인하는 중...', () async {
-      await _repository.approveJoinRequestWithFamily(
-        requestId: requestId,
-        role: role,
-        familyId: familyId,
-      );
+      try {
+        await _repository.approveJoinRequestWithFamily(
+          requestId: requestId,
+          role: role,
+          familyId: familyId,
+          childId: _normalizeNullable(childId),
+        );
+      } on PostgrestException catch (error) {
+        final translated = _approveJoinRequestErrorMessage(error);
+        if (translated == null) {
+          rethrow;
+        }
+        throw StateError(translated);
+      }
       await Future.wait([
         loadJoinRequests(),
         loadHomeschoolMemberships(),
         loadHomeschoolMemberDirectory(),
         loadFamilies(),
+        loadChildren(),
       ]);
       _setStatus('가입 요청을 승인했습니다.');
     });
+  }
+
+  /// approve_join_request RPC 의 에러 코드를 한국어 안내로 바꾼다.
+  /// 모르는 코드는 null 을 돌려주고 원래 예외를 그대로 올린다.
+  String? _approveJoinRequestErrorMessage(PostgrestException error) {
+    switch (error.message.trim()) {
+      case 'CHILD_REQUIRED':
+        return '학생은 연결할 자녀를 선택해야 합니다.';
+      case 'CHILD_HOMESCHOOL_MISMATCH':
+        return '다른 홈스쿨의 아이는 연결할 수 없습니다.';
+      case 'CHILD_ALREADY_LINKED':
+        return '이미 다른 계정과 연결된 아이입니다.';
+      case 'FAMILY_NOT_IN_HOMESCHOOL':
+        return '다른 홈스쿨의 가정은 연결할 수 없습니다.';
+      case 'INVALID_ROLE':
+        return '승인할 수 없는 역할입니다.';
+      case 'REQUEST_NOT_FOUND':
+        return '가입 요청을 찾을 수 없습니다.';
+      case 'FORBIDDEN':
+        return '가입 요청을 승인할 권한이 없습니다.';
+      default:
+        return null;
+    }
   }
 
   // ── 참여 코드로 간편 합류 ──
@@ -2095,7 +2279,12 @@ class NestController extends ChangeNotifier {
     if (trimmed.isEmpty) {
       throw StateError('참여 코드를 입력하세요.');
     }
-    if (!const {'PARENT', 'TEACHER', 'GUEST_TEACHER'}.contains(role)) {
+    if (!const {
+      'PARENT',
+      'TEACHER',
+      'GUEST_TEACHER',
+      'STUDENT',
+    }.contains(role)) {
       throw StateError('역할을 선택하세요.');
     }
 
@@ -2325,6 +2514,7 @@ class NestController extends ChangeNotifier {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       announcements = [];
+      allAnnouncements = [];
       _notifyIfIdle();
       return;
     }
@@ -2334,6 +2524,7 @@ class NestController extends ChangeNotifier {
     );
     final selectedClassId = selectedClassGroupId;
 
+    allAnnouncements = rows;
     announcements = selectedClassId == null
         ? rows
         : rows
@@ -2387,10 +2578,642 @@ class NestController extends ChangeNotifier {
     await loadAcademicEvents();
   }
 
+  Future<void> updateAcademicEvent({
+    required String eventId,
+    required String title,
+    required String description,
+    required String eventDate,
+    String? endDate,
+  }) async {
+    final trimmedTitle = title.trim();
+    if (trimmedTitle.isEmpty) {
+      throw StateError('일정 제목을 입력하세요.');
+    }
+    await _repository.updateAcademicEvent(
+      eventId: eventId,
+      title: trimmedTitle,
+      description: description,
+      eventDate: eventDate,
+      endDate: endDate,
+    );
+    _setStatus('학사 일정을 수정했습니다.');
+    await loadAcademicEvents();
+  }
+
   Future<void> deleteAcademicEvent({required String eventId}) async {
     await _repository.deleteAcademicEvent(eventId: eventId);
     _setStatus('학사 일정이 삭제되었습니다.');
     await loadAcademicEvents();
+  }
+
+  // ── 학생 계정 연결 (children.user_id) ──
+
+  /// 아이에게 학생 계정을 연결한다(관리자/스태프). STUDENT 멤버십은 서버 RPC가
+  /// 함께 만든다. 마이그레이션 미배포 서버에서는 한국어 안내로 던진다.
+  Future<ChildProfile> linkChildAccount({
+    required String childId,
+    required String userId,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final normalizedChildId = _normalizeNullable(childId);
+    final normalizedUserId = _normalizeNullable(userId);
+    if (normalizedChildId == null) {
+      throw StateError('연결할 아이를 선택하세요.');
+    }
+    if (normalizedUserId == null) {
+      throw StateError('연결할 계정을 선택하세요.');
+    }
+
+    late ChildProfile updated;
+    await _runBusy('학생 계정을 연결하는 중...', () async {
+      try {
+        updated = await _repository.linkChildAccount(
+          childId: normalizedChildId,
+          userId: normalizedUserId,
+        );
+      } on StudentAccountUnsupported {
+        throw StateError('학생 계정 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      } on PostgrestException catch (error) {
+        final translated = _linkChildAccountErrorMessage(error);
+        if (translated == null) {
+          rethrow;
+        }
+        throw StateError(translated);
+      }
+      await Future.wait([loadChildren(), loadHomeschoolMemberships()]);
+      _setStatus('학생 계정을 연결했습니다.');
+    });
+    return updated;
+  }
+
+  /// 아이에 연결된 학생 계정을 해제한다(관리자/스태프).
+  /// STUDENT 멤버십은 남으므로 필요하면 멤버 관리에서 별도로 회수한다.
+  Future<ChildProfile> unlinkChildAccount({required String childId}) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final normalizedChildId = _normalizeNullable(childId);
+    if (normalizedChildId == null) {
+      throw StateError('연결을 해제할 아이를 선택하세요.');
+    }
+
+    late ChildProfile updated;
+    await _runBusy('학생 계정 연결을 해제하는 중...', () async {
+      try {
+        updated = await _repository.unlinkChildAccount(
+          childId: normalizedChildId,
+        );
+      } on StudentAccountUnsupported {
+        throw StateError('학생 계정 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      }
+      await loadChildren();
+      _setStatus('학생 계정 연결을 해제했습니다.');
+    });
+    return updated;
+  }
+
+  String? _linkChildAccountErrorMessage(PostgrestException error) {
+    switch (error.message.trim()) {
+      case 'CHILD_NOT_FOUND':
+        return '아이를 찾을 수 없습니다.';
+      case 'USER_REQUIRED':
+        return '연결할 계정을 선택하세요.';
+      case 'USER_NOT_MEMBER':
+        return '이 홈스쿨 멤버가 아닌 계정입니다. 먼저 합류 승인을 진행하세요.';
+      case 'USER_ALREADY_LINKED':
+        return '이미 다른 아이와 연결된 계정입니다.';
+      case 'FORBIDDEN':
+        return '학생 계정을 연결할 권한이 없습니다.';
+      default:
+        return null;
+    }
+  }
+
+  // ── 수업 변경 공지 (class_session_changes) ──
+
+  /// 학기 전체 세션 id(교차 반 포함). 변경 공지·결석 신고 조회의 기준.
+  List<String> get _termSessionIds {
+    final rows = allTermSessions.isNotEmpty ? allTermSessions : sessions;
+    return rows
+        .map((session) => session.id)
+        .where((id) => id.isNotEmpty)
+        .toList();
+  }
+
+  /// 부트/학기 전환 경로 전용. 수업 변경·결석 신고는 신규 기능이므로 이 두 읽기가
+  /// 실패해도 기존 5개 역할의 화면(반/시간표/갤러리/커뮤니티)까지 함께 죽으면 안 된다.
+  /// 레포지토리가 잡지 못하는 형태의 실패(부분 배포, PostgREST 스키마 캐시 지연,
+  /// 권한 오류 등)는 여기서 빈 목록으로 degrade 한다. 사용자가 직접 트리거하는
+  /// 재조회(뮤테이션 직후 등)는 계속 예외를 그대로 올린다.
+  Future<void> _loadNewScheduleFeaturesTolerantly() async {
+    try {
+      await loadClassSessionChanges();
+    } catch (_) {
+      classSessionChanges = [];
+    }
+    try {
+      await loadAbsenceReports();
+    } catch (_) {
+      absenceReports = [];
+    }
+    _notifyIfIdle();
+  }
+
+  Future<void> loadClassSessionChanges() async {
+    final sessionIds = _termSessionIds;
+    if (sessionIds.isEmpty) {
+      classSessionChanges = [];
+      _notifyIfIdle();
+      return;
+    }
+
+    classSessionChanges = await _repository.fetchClassSessionChanges(
+      classSessionIds: sessionIds,
+    );
+    _notifyIfIdle();
+  }
+
+  /// 세션에 걸린 변경 공지(적용 시작일 순).
+  List<ClassSessionChange> changesForSession(String sessionId) {
+    final rows = classSessionChanges
+        .where((row) => row.classSessionId == sessionId)
+        .toList()
+      ..sort((a, b) => a.effectiveFrom.compareTo(b.effectiveFrom));
+    return rows;
+  }
+
+  /// 특정 날짜에 실제로 적용되는 변경 하나를 고른다.
+  /// 우선순위: 단일 날짜(이번 주만) → 유한 기간(짧은 기간 우선) → 학기 끝까지.
+  /// 같은 순위면 나중에 등록한 것이 이긴다.
+  ClassSessionChange? effectiveChangeFor({
+    required String sessionId,
+    required DateTime date,
+  }) {
+    final matches = classSessionChanges
+        .where(
+          (row) => row.classSessionId == sessionId && row.appliesOn(date),
+        )
+        .toList();
+    if (matches.isEmpty) {
+      return null;
+    }
+
+    matches.sort((a, b) {
+      final byScope = _changeScopeRank(a).compareTo(_changeScopeRank(b));
+      if (byScope != 0) {
+        return byScope;
+      }
+      final bySpan = _changeSpanDays(a).compareTo(_changeSpanDays(b));
+      if (bySpan != 0) {
+        return bySpan;
+      }
+      final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return right.compareTo(left);
+    });
+    return matches.first;
+  }
+
+  /// 0 = 단일 날짜, 1 = 유한 기간, 2 = 학기 끝까지.
+  int _changeScopeRank(ClassSessionChange change) {
+    final to = change.effectiveTo;
+    if (to == null) {
+      return 2;
+    }
+    final from = change.effectiveFrom;
+    if (to.year == from.year && to.month == from.month && to.day == from.day) {
+      return 0;
+    }
+    return 1;
+  }
+
+  /// 적용 기간 길이(일). 무기한은 매우 큰 값으로 취급해 항상 뒤로 밀린다.
+  int _changeSpanDays(ClassSessionChange change) {
+    final to = change.effectiveTo;
+    if (to == null) {
+      return 1 << 30;
+    }
+    return to.difference(change.effectiveFrom).inDays.abs();
+  }
+
+  void _assertCanManageClassSessionChanges() {
+    if (!canManageClassSessionChanges) {
+      throw StateError('수업 변경은 담당 교사 또는 관리자/스태프만 등록할 수 있습니다.');
+    }
+  }
+
+  Future<ClassSessionChange> createClassSessionChange({
+    required String classSessionId,
+    required String changeType,
+    required DateTime effectiveFrom,
+    DateTime? effectiveTo,
+    String? newTimeSlotId,
+    String newLocation = '',
+    String? substituteTeacherId,
+    String reason = '',
+  }) async {
+    _assertCanManageClassSessionChanges();
+    final normalizedSessionId = _normalizeNullable(classSessionId);
+    if (normalizedSessionId == null) {
+      throw StateError('변경할 수업을 선택하세요.');
+    }
+    if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
+      throw StateError('종료일은 시작일보다 빠를 수 없습니다.');
+    }
+
+    late ClassSessionChange created;
+    await _runBusy('수업 변경을 등록하는 중...', () async {
+      try {
+        created = await _repository.createClassSessionChange(
+          classSessionId: normalizedSessionId,
+          changeType: changeType,
+          effectiveFrom: effectiveFrom,
+          effectiveTo: effectiveTo,
+          newTimeSlotId: _normalizeNullable(newTimeSlotId),
+          newLocation: newLocation.trim(),
+          substituteTeacherId: _normalizeNullable(substituteTeacherId),
+          reason: reason.trim(),
+        );
+      } on ClassSessionChangeUnsupported {
+        throw StateError('수업 변경 공지 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      }
+      await loadClassSessionChanges();
+      _setStatus('수업 변경을 등록했습니다. 알림 보내기로 학생·학부모에게 전달하세요.');
+    });
+    return created;
+  }
+
+  Future<ClassSessionChange> updateClassSessionChange({
+    required String id,
+    required String changeType,
+    required DateTime effectiveFrom,
+    DateTime? effectiveTo,
+    String? newTimeSlotId,
+    String newLocation = '',
+    String? substituteTeacherId,
+    String reason = '',
+  }) async {
+    _assertCanManageClassSessionChanges();
+    final normalizedId = _normalizeNullable(id);
+    if (normalizedId == null) {
+      throw StateError('수정할 수업 변경을 선택하세요.');
+    }
+    if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
+      throw StateError('종료일은 시작일보다 빠를 수 없습니다.');
+    }
+
+    late ClassSessionChange updated;
+    await _runBusy('수업 변경을 수정하는 중...', () async {
+      try {
+        updated = await _repository.updateClassSessionChange(
+          id: normalizedId,
+          changeType: changeType,
+          effectiveFrom: effectiveFrom,
+          effectiveTo: effectiveTo,
+          newTimeSlotId: _normalizeNullable(newTimeSlotId),
+          newLocation: newLocation.trim(),
+          substituteTeacherId: _normalizeNullable(substituteTeacherId),
+          reason: reason.trim(),
+        );
+      } on ClassSessionChangeUnsupported {
+        throw StateError('수업 변경 공지 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      }
+      await loadClassSessionChanges();
+      // 내용이 바뀌면 서버가 notified_at 을 지우므로 다시 발송할 수 있다.
+      _setStatus('수업 변경을 수정했습니다. 알림을 다시 보낼 수 있습니다.');
+    });
+    return updated;
+  }
+
+  Future<void> deleteClassSessionChange({required String id}) async {
+    _assertCanManageClassSessionChanges();
+    final normalizedId = _normalizeNullable(id);
+    if (normalizedId == null) {
+      throw StateError('삭제할 수업 변경을 선택하세요.');
+    }
+
+    await _runBusy('수업 변경을 삭제하는 중...', () async {
+      try {
+        await _repository.deleteClassSessionChange(id: normalizedId);
+      } on ClassSessionChangeUnsupported {
+        throw StateError('수업 변경 공지 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      }
+      await loadClassSessionChanges();
+      _setStatus('수업 변경을 삭제했습니다.');
+    });
+  }
+
+  /// 수업 변경을 해당 반 학생·학부모에게 문자로 알린다.
+  /// 이미 보낸 공지는 [force] 없이는 다시 보내지 않는다.
+  Future<NotifyResult> notifyClassChange({
+    required String changeId,
+    bool force = false,
+  }) async {
+    _assertCanManageClassSessionChanges();
+    final normalizedId = _normalizeNullable(changeId);
+    if (normalizedId == null) {
+      throw StateError('알림을 보낼 수업 변경을 선택하세요.');
+    }
+
+    late NotifyResult result;
+    await _runBusy('수업 변경 알림을 보내는 중...', () async {
+      try {
+        result = await _repository.notifyClassChange(
+          changeId: normalizedId,
+          force: force,
+        );
+      } on NestNotifyUnsupported {
+        throw StateError('알림 발송 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      }
+      await loadClassSessionChanges();
+      _setStatus(_notifyStatusMessage(result, audience: '학생·학부모'));
+    });
+    return result;
+  }
+
+  /// 발송 결과를 부풀리지 않고 있는 그대로 문장으로 만든다.
+  /// 한 명도 못 보냈으면 성공처럼 말하지 않는다.
+  String _notifyStatusMessage(
+    NotifyResult result, {
+    required String audience,
+  }) {
+    if (result.sent <= 0) {
+      if (result.alreadyNotified) {
+        return '이미 발송한 알림입니다. 다시 보내려면 재발송을 선택하세요.';
+      }
+      if (result.skippedNoAccount > 0 && result.skippedNoPhone <= 0) {
+        return '앱에 가입한 수신자가 없어 보내지 못했습니다.';
+      }
+      return '발송 가능한 전화번호가 없어 보내지 못했습니다.';
+    }
+
+    final buffer = StringBuffer('$audience ${result.sent}명에게 문자를 보냈습니다.');
+    final skipped = <String>[];
+    if (result.skippedNoPhone > 0) {
+      skipped.add('전화번호 미등록 ${result.skippedNoPhone}명');
+    }
+    if (result.skippedNoAccount > 0) {
+      skipped.add('앱 미가입 ${result.skippedNoAccount}명');
+    }
+    if (skipped.isNotEmpty) {
+      buffer.write(' (${skipped.join(', ')} 제외)');
+    }
+    return buffer.toString();
+  }
+
+  // ── 결석 신고 (absence_reports) ──
+
+  /// 결석 신고 조회 시작일. 지난 회차 이력도 조금은 보이도록 30일 전부터 읽는다.
+  DateTime get _absenceReportWindowStart {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day).subtract(
+      const Duration(days: 30),
+    );
+  }
+
+  Future<void> loadAbsenceReports() async {
+    final sessionIds = _termSessionIds;
+    if (sessionIds.isEmpty) {
+      absenceReports = [];
+      _notifyIfIdle();
+      return;
+    }
+
+    absenceReports = await _repository.fetchAbsenceReports(
+      classSessionIds: sessionIds,
+      from: _absenceReportWindowStart,
+    );
+    _notifyIfIdle();
+  }
+
+  /// 아이별 결석 신고(최근 회차 순).
+  List<AbsenceReport> absencesForChild(String childId) {
+    final rows = absenceReports
+        .where((row) => row.childId == childId)
+        .toList()
+      ..sort((a, b) => b.occurrenceDate.compareTo(a.occurrenceDate));
+    return rows;
+  }
+
+  /// 수업별 결석 신고(최근 회차 순).
+  List<AbsenceReport> absencesForSession(String sessionId) {
+    final rows = absenceReports
+        .where((row) => row.classSessionId == sessionId)
+        .toList()
+      ..sort((a, b) => b.occurrenceDate.compareTo(a.occurrenceDate));
+    return rows;
+  }
+
+  /// 특정 회차(수업 + 날짜)의 유효한 결석 신고. 철회(CANCELED)는 무시한다.
+  ///
+  /// [childId] 를 주면 그 아이의 신고만 본다. 한 반에 형제가 함께 있으면 같은
+  /// (수업, 날짜)에 신고가 여러 건 존재할 수 있어서, 아이를 특정해 보여주는
+  /// 화면(학생 뷰·학부모 시간표)은 반드시 [childId] 를 넘겨야 한다. 넘기지 않으면
+  /// 그 회차의 아무 신고나 하나 돌려주므로 형제의 신고를 본인 것으로 오인한다.
+  AbsenceReport? absenceFor({
+    required String sessionId,
+    required DateTime date,
+    String? childId,
+  }) {
+    final targetChildId = _normalizeNullable(childId);
+    return absenceReports
+        .where(
+          (row) =>
+              row.classSessionId == sessionId &&
+              !row.isCanceled &&
+              (targetChildId == null || row.childId == targetChildId) &&
+              row.occurrenceDate.year == date.year &&
+              row.occurrenceDate.month == date.month &&
+              row.occurrenceDate.day == date.day,
+        )
+        .firstOrNull;
+  }
+
+  /// 현재 사용자가 담당인 수업에 접수된, 아직 확인하지 않은 결석 신고.
+  /// 관리자/스태프 뷰에서는 홈스쿨 전체 신고를 본다.
+  List<AbsenceReport> pendingAbsencesForTeacher() {
+    final pending = absenceReports.where((row) => row.isSubmitted).toList();
+    if (isAdminLike) {
+      pending.sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
+      return pending;
+    }
+
+    final myProfileIds = currentUserTeacherProfiles
+        .map((profile) => profile.id)
+        .toSet();
+    if (myProfileIds.isEmpty) {
+      return const [];
+    }
+
+    final mySessionIds = <String>{
+      for (final assignment in allTermSessionTeacherAssignments)
+        if (myProfileIds.contains(assignment.teacherProfileId))
+          assignment.classSessionId,
+      for (final assignment in sessionTeacherAssignments)
+        if (myProfileIds.contains(assignment.teacherProfileId))
+          assignment.classSessionId,
+    };
+
+    final rows = pending
+        .where((row) => mySessionIds.contains(row.classSessionId))
+        .toList()
+      ..sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
+    return rows;
+  }
+
+  Future<AbsenceReport> reportAbsence({
+    required String classSessionId,
+    required String childId,
+    required DateTime occurrenceDate,
+    String reason = '',
+  }) async {
+    if (!canReportAbsence) {
+      throw StateError('결석 신고는 학부모·학생 본인 또는 관리자만 할 수 있습니다.');
+    }
+    final normalizedSessionId = _normalizeNullable(classSessionId);
+    final normalizedChildId = _normalizeNullable(childId);
+    if (normalizedSessionId == null) {
+      throw StateError('결석할 수업을 선택하세요.');
+    }
+    if (normalizedChildId == null) {
+      throw StateError('결석을 신고할 학생을 선택하세요.');
+    }
+
+    late AbsenceReport created;
+    await _runBusy('결석을 신고하는 중...', () async {
+      try {
+        created = await _repository.reportAbsence(
+          classSessionId: normalizedSessionId,
+          childId: normalizedChildId,
+          occurrenceDate: occurrenceDate,
+          reason: reason.trim(),
+        );
+      } on AbsenceReportUnsupported {
+        throw StateError('결석 신고 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      } on PostgrestException catch (error) {
+        final translated = _absenceErrorMessage(error);
+        if (translated == null) {
+          rethrow;
+        }
+        throw StateError(translated);
+      }
+      await loadAbsenceReports();
+      _setStatus('결석을 신고했습니다. 담당 교사에게 알림을 보낼 수 있습니다.');
+    });
+    return created;
+  }
+
+  Future<AbsenceReport> cancelAbsenceReport({required String id}) async {
+    final normalizedId = _normalizeNullable(id);
+    if (normalizedId == null) {
+      throw StateError('철회할 결석 신고를 선택하세요.');
+    }
+
+    late AbsenceReport updated;
+    await _runBusy('결석 신고를 철회하는 중...', () async {
+      try {
+        updated = await _repository.cancelAbsenceReport(id: normalizedId);
+      } on AbsenceReportUnsupported {
+        throw StateError('결석 신고 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      } on PostgrestException catch (error) {
+        final translated = _absenceErrorMessage(error);
+        if (translated == null) {
+          rethrow;
+        }
+        throw StateError(translated);
+      }
+      await loadAbsenceReports();
+      _setStatus('결석 신고를 철회했습니다.');
+    });
+    return updated;
+  }
+
+  Future<AbsenceReport> acknowledgeAbsenceReport({required String id}) async {
+    if (!canAcknowledgeAbsence) {
+      throw StateError('결석 신고 확인은 담당 교사 또는 관리자/스태프만 할 수 있습니다.');
+    }
+    final normalizedId = _normalizeNullable(id);
+    if (normalizedId == null) {
+      throw StateError('확인할 결석 신고를 선택하세요.');
+    }
+
+    late AbsenceReport updated;
+    await _runBusy('결석 신고를 확인 처리하는 중...', () async {
+      try {
+        updated = await _repository.acknowledgeAbsenceReport(id: normalizedId);
+      } on AbsenceReportUnsupported {
+        throw StateError('결석 신고 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      } on PostgrestException catch (error) {
+        final translated = _absenceErrorMessage(error);
+        if (translated == null) {
+          rethrow;
+        }
+        throw StateError(translated);
+      }
+      await loadAbsenceReports();
+      _setStatus('결석 신고를 확인했습니다.');
+    });
+    return updated;
+  }
+
+  /// 결석 신고를 담당 교사에게 문자로 알린다.
+  Future<NotifyResult> notifyAbsence({
+    required String reportId,
+    bool force = false,
+  }) async {
+    if (!canReportAbsence && !canAcknowledgeAbsence) {
+      throw StateError('결석 알림을 보낼 권한이 없습니다.');
+    }
+    final normalizedId = _normalizeNullable(reportId);
+    if (normalizedId == null) {
+      throw StateError('알림을 보낼 결석 신고를 선택하세요.');
+    }
+
+    late NotifyResult result;
+    await _runBusy('결석 알림을 보내는 중...', () async {
+      try {
+        result = await _repository.notifyAbsence(
+          reportId: normalizedId,
+          force: force,
+        );
+      } on NestNotifyUnsupported {
+        throw StateError('알림 발송 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      }
+      await loadAbsenceReports();
+      _setStatus(_notifyStatusMessage(result, audience: '담당 교사'));
+    });
+    return result;
+  }
+
+  /// report_absence / cancel / acknowledge RPC 의 에러 코드를 한국어로 바꾼다.
+  /// 모르는 코드는 null 을 돌려주고 원래 예외를 그대로 올린다.
+  String? _absenceErrorMessage(PostgrestException error) {
+    switch (error.message.trim()) {
+      case 'NOT_ENROLLED':
+        return '해당 수업을 듣는 학생이 아닙니다.';
+      case 'DATE_WEEKDAY_MISMATCH':
+        return '선택한 날짜의 요일이 수업 요일과 다릅니다.';
+      case 'DATE_OUT_OF_TERM':
+        return '학기 기간 밖의 날짜입니다.';
+      case 'PAST_DATE':
+        return '지난 날짜는 신고할 수 없습니다.';
+      case 'DATE_REQUIRED':
+        return '결석 날짜를 선택하세요.';
+      case 'SESSION_NOT_FOUND':
+        return '수업을 찾을 수 없습니다.';
+      case 'REPORT_NOT_FOUND':
+        return '결석 신고를 찾을 수 없습니다.';
+      case 'REPORT_CANCELED':
+        return '이미 철회된 결석 신고입니다.';
+      case 'FORBIDDEN':
+        return '이 학생의 결석을 신고할 권한이 없습니다.';
+      case 'AUTH_REQUIRED':
+        return '로그인이 필요합니다.';
+      default:
+        return null;
+    }
   }
 
   Future<void> loadAuditLogs() async {
@@ -4099,6 +4922,17 @@ class NestController extends ChangeNotifier {
     );
   }
 
+  /// 이미 학생 화면에 접근할 수 있는 멤버십 역할을 가졌는지.
+  /// (아이 계정 연결 시 STUDENT 멤버십이 필요한지 판단하는 용도)
+  bool hasStudentViewRole(String userId) {
+    return homeschoolMemberships.any(
+      (row) =>
+          row.userId == userId &&
+          row.status == 'ACTIVE' &&
+          row.role == 'STUDENT',
+    );
+  }
+
   /// 교사 프로필에 계정을 연결하면 TEACHER 멤버십도 함께 부여한다.
   /// 뷰 역할 후보(availableViewRoles)는 멤버십 역할만 보기 때문에, 역할이 없으면
   /// 계정이 연결돼도 담당 수업이 앱 어디에도 보이지 않는다. 멤버십 부여는 관리자만
@@ -4481,6 +5315,67 @@ class NestController extends ChangeNotifier {
         resourceId: trimmedTitle,
       );
       _setStatus('공지사항을 등록했습니다.');
+    });
+  }
+
+  Future<void> updateAnnouncement({
+    required String announcementId,
+    required String title,
+    required String body,
+    required String? classGroupId,
+    required bool pinned,
+  }) async {
+    if (!canWriteAnnouncement || user == null) {
+      throw StateError('교사/관리자 권한이 필요합니다.');
+    }
+
+    final trimmedTitle = title.trim();
+    final trimmedBody = body.trim();
+    if (trimmedTitle.isEmpty || trimmedBody.isEmpty) {
+      throw StateError('공지 제목과 본문을 모두 입력하세요.');
+    }
+
+    await _runBusy('공지사항을 수정하는 중...', () async {
+      await _repository.updateAnnouncement(
+        announcementId: announcementId,
+        classGroupId: _normalizeNullable(classGroupId),
+        title: trimmedTitle,
+        body: trimmedBody,
+        pinned: pinned,
+      );
+      await loadAnnouncements();
+      await _logAudit(
+        actionType: 'ANNOUNCEMENT_UPDATE',
+        resourceType: 'announcements',
+        resourceId: announcementId,
+      );
+      _setStatus('공지사항을 수정했습니다.');
+    });
+  }
+
+  Future<void> deleteAnnouncement({required String announcementId}) async {
+    if (!canWriteAnnouncement || user == null) {
+      throw StateError('교사/관리자 권한이 필요합니다.');
+    }
+
+    await _runBusy('공지사항을 삭제하는 중...', () async {
+      final deleted = await _repository.deleteAnnouncement(
+        announcementId: announcementId,
+      );
+      if (deleted == 0) {
+        // RLS delete 정책(20260821090000)이 아직 배포되지 않았거나 권한이 없으면
+        // 예외 없이 0건이 지워진다. 삭제된 척하지 않고 이유를 알린다.
+        throw StateError(
+          '공지를 삭제하지 못했습니다. 서버에 삭제 권한이 아직 적용되지 않았을 수 있습니다.',
+        );
+      }
+      await loadAnnouncements();
+      await _logAudit(
+        actionType: 'ANNOUNCEMENT_DELETE',
+        resourceType: 'announcements',
+        resourceId: announcementId,
+      );
+      _setStatus('공지사항을 삭제했습니다.');
     });
   }
 
@@ -5387,6 +6282,9 @@ class NestController extends ChangeNotifier {
     // timetableAssets only needs termId, so it can run in parallel with classGroups.
     await Future.wait([_loadClassGroups(), _loadTimetableAssets()]);
     await Future.wait([_loadSessions(), _loadProposals(), _loadSelfStudy()]);
+    // 세션 id 가 필요하므로 _loadSessions 이후에 실행한다.
+    // 신규 기능이므로 실패해도 학기 로딩 전체를 중단시키지 않는다.
+    await _loadNewScheduleFeaturesTolerantly();
   }
 
   Future<void> _loadSelfStudy() async {
@@ -6057,6 +6955,7 @@ class NestController extends ChangeNotifier {
     if (!hasAdminLikeMembershipInSelectedHomeschool) {
       _parentViewTargetByHomeschool.remove(homeschoolId);
       _teacherViewTargetByHomeschool.remove(homeschoolId);
+      _studentViewTargetByHomeschool.remove(homeschoolId);
       return;
     }
 
@@ -6094,6 +6993,23 @@ class NestController extends ChangeNotifier {
               .firstOrNull;
           _teacherViewTargetByHomeschool[homeschoolId] =
               myProfile?.id ?? teacherCandidates.first.id;
+        }
+      }
+    }
+
+    if (role == 'STUDENT') {
+      final studentCandidates = studentViewCandidateChildren;
+      if (studentCandidates.isEmpty) {
+        _studentViewTargetByHomeschool.remove(homeschoolId);
+      } else {
+        final selected = _studentViewTargetByHomeschool[homeschoolId];
+        final isValidSelection =
+            selected != null &&
+            studentCandidates.any((child) => child.id == selected);
+        if (!isValidSelection) {
+          final myChild = currentUserChildProfiles.firstOrNull;
+          _studentViewTargetByHomeschool[homeschoolId] =
+              myChild?.id ?? studentCandidates.first.id;
         }
       }
     }
@@ -6143,6 +7059,7 @@ class NestController extends ChangeNotifier {
       'TEACHER',
       'GUEST_TEACHER',
       'PARENT',
+      'STUDENT',
     ];
 
     for (final role in rolePriority) {
@@ -6343,6 +7260,22 @@ class NestController extends ChangeNotifier {
           fromMap: Membership.fromMap,
         ) ??
         const [];
+    classSessionChanges =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'classSessionChanges',
+          fromMap: ClassSessionChange.fromMap,
+        ) ??
+        const [];
+    absenceReports =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'absenceReports',
+          fromMap: AbsenceReport.fromMap,
+        ) ??
+        const [];
 
     // 캐시에 남은 이전 학기 선택을 그대로 쓰지 않고 오늘 기준 기본 학기로
     // 재해석한다. 오프라인 부팅(서버 _loadTerms 미도달)에서도 학부모/교사가
@@ -6367,6 +7300,8 @@ class NestController extends ChangeNotifier {
       classEnrollments = const [];
       sessionTeacherAssignments = const [];
       teachingPlans = const [];
+      classSessionChanges = const [];
+      absenceReports = const [];
     }
   }
 
@@ -6541,6 +7476,20 @@ class NestController extends ChangeNotifier {
         items: homeschoolMemberships,
         toMap: (m) => m.toMap(),
       ),
+      NestCache.saveCollection(
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'classSessionChanges',
+        items: classSessionChanges,
+        toMap: (c) => c.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'absenceReports',
+        items: absenceReports,
+        toMap: (r) => r.toMap(),
+      ),
     ]);
   }
 
@@ -6562,11 +7511,15 @@ class NestController extends ChangeNotifier {
     teachingPlans = [];
     studentActivityLogs = [];
     announcements = [];
+    allAnnouncements = [];
     auditLogs = [];
+    classSessionChanges = [];
+    absenceReports = [];
     _viewRoleByHomeschool.clear();
     _sessionViewRoleSelections.clear();
     _parentViewTargetByHomeschool.clear();
     _teacherViewTargetByHomeschool.clear();
+    _studentViewTargetByHomeschool.clear();
     selectedHomeschoolId = null;
     currentRole = null;
     terms = [];

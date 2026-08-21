@@ -1,3 +1,6 @@
+// Flutter 3.47 stable moved CupertinoPageTransitionsBuilder out of material and
+// into cupertino/route.dart, so material.dart alone no longer resolves it.
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 class NestColors {

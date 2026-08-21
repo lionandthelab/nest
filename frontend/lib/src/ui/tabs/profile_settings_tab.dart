@@ -69,6 +69,7 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
       'TEACHER' => '교사',
       'GUEST_TEACHER' => '게스트 교사',
       'STAFF' => '스태프',
+      'STUDENT' => '학생',
       _ => role ?? '-',
     };
   }
@@ -149,6 +150,62 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
         ),
         const SizedBox(height: 32),
 
+        // ── 전화번호 미등록 안내 ──
+        // 수업 변경·결석 알림은 등록된 번호로만 나가므로, 미설정 상태를 강하게 알린다.
+        if (phone.isEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: NestColors.dustyRose.withValues(alpha: 0.18),
+              border: Border.all(color: NestColors.dustyRose),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.sms_failed_outlined,
+                      size: 22,
+                      color: NestColors.clay,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '전화번호를 등록해 주세요',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: NestColors.clay,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '수업 변경·결석 안내 문자는 등록된 전화번호로만 발송됩니다.\n'
+                  '번호가 없으면 알림을 받을 수 없어요.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.8),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: controller.isBusy ? null : () => _editPhone(''),
+                    icon: const Icon(Icons.add_ic_call_outlined, size: 18),
+                    label: const Text('등록하기'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+
         // ── Profile Settings Section ──
         Text(
           '프로필 설정',
@@ -196,21 +253,10 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
         ),
         _SettingsTile(
           icon: Icons.phone_outlined,
-          label: '연락처',
-          value: phone.isEmpty ? '미설정' : phone,
-          valueColor: phone.isEmpty
-              ? NestColors.deepWood.withValues(alpha: 0.4)
-              : null,
-          onTap: () => _editField(
-            title: '연락처 변경',
-            currentValue: phone,
-            hint: '010-0000-0000',
-            keyboardType: TextInputType.phone,
-            onSave: (value) async {
-              await controller.updatePhoneNumber(value);
-              if (mounted) _showMessage('연락처가 변경되었습니다.');
-            },
-          ),
+          label: '연락처 (알림 문자 수신)',
+          value: phone.isEmpty ? '미설정 · 문자 알림을 받을 수 없어요' : phone,
+          valueColor: phone.isEmpty ? NestColors.clay : null,
+          onTap: () => _editPhone(phone),
         ),
         _SettingsTile(
           icon: Icons.shield_outlined,
@@ -623,6 +669,20 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
     return DateFormat('HH:mm').format(parsed);
   }
 
+  /// 연락처 입력. 형식 오류는 컨트롤러가 던지는 한국어 StateError 를 그대로 보여준다.
+  Future<void> _editPhone(String currentPhone) {
+    return _editField(
+      title: '연락처 입력',
+      currentValue: currentPhone,
+      hint: '01012345678 (- 없이)',
+      keyboardType: TextInputType.phone,
+      onSave: (value) async {
+        await widget.controller.updatePhoneNumber(value);
+        if (mounted) _showMessage('연락처를 저장했습니다. 이제 알림 문자를 받을 수 있어요.');
+      },
+    );
+  }
+
   Future<void> _editField({
     required String title,
     required String currentValue,
@@ -660,8 +720,14 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
     try {
       await onSave(result);
       setState(() {});
-    } catch (_) {
-      if (mounted) _showMessage(widget.controller.statusMessage);
+    } catch (error) {
+      // 컨트롤러 가드가 던진 StateError 는 statusMessage 에 그대로 담기지 않으므로
+      // 메시지를 직접 꺼내 보여준다(레포 공통 규칙).
+      if (mounted) {
+        _showMessage(
+          error is StateError ? error.message : widget.controller.statusMessage,
+        );
+      }
     }
   }
 

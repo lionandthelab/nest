@@ -6,7 +6,8 @@ class NestCache {
   NestCache._();
 
   static SharedPreferences? _prefs;
-  static const int _schemaVersion = 1;
+  // v2: ChildProfile 캐시에 user_id(학생 계정 연결) 추가.
+  static const int _schemaVersion = 2;
 
   static Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();

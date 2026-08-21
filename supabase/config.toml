@@ -364,6 +364,11 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# nest-notify — 수업 변경/결석 신고 알림 발송.
+# 로그인 사용자만 호출하므로 JWT 검증을 켠 채 배포한다.
+[functions.nest-notify]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

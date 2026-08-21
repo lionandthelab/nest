@@ -388,6 +388,241 @@ void main() {
     });
   });
 
+  group('ChildProfile 학생 계정 연결', () {
+    test('user_id 가 있으면 hasAccount 가 true', () {
+      final child = ChildProfile.fromMap({
+        'id': 'child-1',
+        'family_id': 'fam-1',
+        'name': '민서',
+        'birth_date': '2014-03-02',
+        'profile_note': '',
+        'status': 'ACTIVE',
+        'created_at': '2026-03-01T00:00:00+00:00',
+        'user_id': '11111111-2222-3333-4444-555555555555',
+        'families': {'family_name': '김 가정'},
+      });
+
+      expect(child.userId, '11111111-2222-3333-4444-555555555555');
+      expect(child.hasAccount, isTrue);
+    });
+
+    test('user_id 가 null 이거나 키가 없으면 hasAccount 가 false', () {
+      final explicitNull = ChildProfile.fromMap({
+        'id': 'child-2',
+        'family_id': 'fam-1',
+        'name': '하준',
+        'birth_date': '2016-08-11',
+        'status': 'ACTIVE',
+        'user_id': null,
+        'families': {'family_name': '김 가정'},
+      });
+      final missingKey = ChildProfile.fromMap({
+        'id': 'child-3',
+        'family_id': 'fam-1',
+        'name': '서윤',
+        'birth_date': '2018-01-20',
+        'families': {'family_name': '이 가정'},
+      });
+
+      expect(explicitNull.userId, isNull);
+      expect(explicitNull.hasAccount, isFalse);
+      expect(missingKey.userId, isNull);
+      expect(missingKey.hasAccount, isFalse);
+    });
+
+    test('toMap 왕복이 user_id 와 중첩 families 를 모두 보존한다', () {
+      final child = ChildProfile.fromMap({
+        'id': 'child-4',
+        'family_id': 'fam-2',
+        'name': '지호',
+        'birth_date': '2015-06-30',
+        'profile_note': '견과류 알레르기',
+        'status': 'ACTIVE',
+        'user_id': 'user-9',
+        'families': {'family_name': '박 가정'},
+      });
+
+      final roundTripped = ChildProfile.fromMap(child.toMap());
+
+      expect(roundTripped.userId, 'user-9');
+      expect(roundTripped.hasAccount, isTrue);
+      expect(roundTripped.familyName, '박 가정');
+      expect(roundTripped.profileNote, '견과류 알레르기');
+    });
+  });
+
+  group('ClassSessionChange', () {
+    Map<String, dynamic> row({
+      String changeType = 'CANCELED',
+      String from = '2026-09-03',
+      String? to = '2026-09-03',
+    }) {
+      return {
+        'id': 'chg-1',
+        'class_session_id': 'sess-1',
+        'change_type': changeType,
+        'effective_from': from,
+        'effective_to': to,
+        'new_time_slot_id': null,
+        'new_location': '',
+        'substitute_teacher_id': null,
+        'reason': '교사 출장',
+        'created_by_user_id': 'user-1',
+        'notified_at': null,
+        'created_at': '2026-08-30T01:00:00+00:00',
+      };
+    }
+
+    test('fromMap 이 PostgREST snake_case 행을 파싱한다', () {
+      final change = ClassSessionChange.fromMap({
+        ...row(changeType: 'ROOM_MOVED', from: '2026-09-07', to: null),
+        'new_location': '2층 미술실',
+        'substitute_teacher_id': 'teacher-2',
+        'new_time_slot_id': 'slot-3',
+      });
+
+      expect(change.id, 'chg-1');
+      expect(change.classSessionId, 'sess-1');
+      expect(change.changeType, 'ROOM_MOVED');
+      expect(change.effectiveFrom, DateTime(2026, 9, 7));
+      expect(change.effectiveTo, isNull);
+      expect(change.newLocation, '2층 미술실');
+      expect(change.newTimeSlotId, 'slot-3');
+      expect(change.substituteTeacherId, 'teacher-2');
+      expect(change.reason, '교사 출장');
+      expect(change.isRestOfTerm, isTrue);
+      expect(change.isNotified, isFalse);
+    });
+
+    test('notified_at 이 있으면 isNotified 가 true', () {
+      final change = ClassSessionChange.fromMap({
+        ...row(),
+        'notified_at': '2026-09-01T05:00:00+00:00',
+      });
+      expect(change.isNotified, isTrue);
+    });
+
+    test('changeTypeLabel 이 한국어 라벨을 준다', () {
+      String label(String type) =>
+          ClassSessionChange.fromMap(row(changeType: type)).changeTypeLabel;
+
+      expect(label('CANCELED'), '휴강');
+      expect(label('TIME_MOVED'), '시간 변경');
+      expect(label('ROOM_MOVED'), '장소 변경');
+      expect(label('TEACHER_SUBSTITUTE'), '보강 교사');
+      expect(label('NOTE'), '안내');
+    });
+
+    test('appliesOn: "이번 주만"(from == to) 은 그 하루만 적용', () {
+      final change = ClassSessionChange.fromMap(row());
+
+      expect(change.appliesOn(DateTime(2026, 9, 2)), isFalse);
+      expect(change.appliesOn(DateTime(2026, 9, 3)), isTrue);
+      expect(change.appliesOn(DateTime(2026, 9, 4)), isFalse);
+    });
+
+    test('appliesOn: 구간 경계(시작일·종료일)는 포함', () {
+      final change = ClassSessionChange.fromMap(
+        row(from: '2026-09-03', to: '2026-09-24'),
+      );
+
+      expect(change.appliesOn(DateTime(2026, 9, 2)), isFalse);
+      expect(change.appliesOn(DateTime(2026, 9, 3)), isTrue);
+      expect(change.appliesOn(DateTime(2026, 9, 10)), isTrue);
+      expect(change.appliesOn(DateTime(2026, 9, 24)), isTrue);
+      expect(change.appliesOn(DateTime(2026, 9, 25)), isFalse);
+    });
+
+    test('appliesOn: effective_to 가 null 이면 이후 전부 적용', () {
+      final change = ClassSessionChange.fromMap(
+        row(from: '2026-09-03', to: null),
+      );
+
+      expect(change.appliesOn(DateTime(2026, 9, 2)), isFalse);
+      expect(change.appliesOn(DateTime(2026, 9, 3)), isTrue);
+      expect(change.appliesOn(DateTime(2027, 1, 1)), isTrue);
+    });
+
+    test('appliesOn: 시분초는 무시하고 날짜만 비교', () {
+      final change = ClassSessionChange.fromMap(row());
+
+      expect(change.appliesOn(DateTime(2026, 9, 3, 23, 59, 59)), isTrue);
+      expect(change.appliesOn(DateTime(2026, 9, 2, 23, 59, 59)), isFalse);
+    });
+  });
+
+  group('AbsenceReport', () {
+    Map<String, dynamic> row({String status = 'SUBMITTED'}) {
+      return {
+        'id': 'abs-1',
+        'class_session_id': 'sess-1',
+        'child_id': 'child-1',
+        'occurrence_date': '2026-09-10',
+        'reason': '병원 진료',
+        'reported_by_user_id': 'user-7',
+        'status': status,
+        'acknowledged_by_user_id': null,
+        'acknowledged_at': null,
+        'notified_at': null,
+        'created_at': '2026-09-08T02:30:00+00:00',
+      };
+    }
+
+    test('fromMap 이 PostgREST snake_case 행을 파싱한다', () {
+      final report = AbsenceReport.fromMap(row());
+
+      expect(report.id, 'abs-1');
+      expect(report.classSessionId, 'sess-1');
+      expect(report.childId, 'child-1');
+      expect(report.occurrenceDate, DateTime(2026, 9, 10));
+      expect(report.reason, '병원 진료');
+      expect(report.reportedByUserId, 'user-7');
+      expect(report.acknowledgedByUserId, isNull);
+      expect(report.acknowledgedAt, isNull);
+      expect(report.isNotified, isFalse);
+      expect(report.createdAt, isNotNull);
+    });
+
+    test('status 플래그와 statusLabel', () {
+      final submitted = AbsenceReport.fromMap(row());
+      expect(submitted.isSubmitted, isTrue);
+      expect(submitted.isAcknowledged, isFalse);
+      expect(submitted.isCanceled, isFalse);
+      expect(submitted.statusLabel, '신고됨');
+
+      final acknowledged = AbsenceReport.fromMap({
+        ...row(status: 'ACKNOWLEDGED'),
+        'acknowledged_by_user_id': 'teacher-user-1',
+        'acknowledged_at': '2026-09-09T00:10:00+00:00',
+        'notified_at': '2026-09-08T02:31:00+00:00',
+      });
+      expect(acknowledged.isAcknowledged, isTrue);
+      expect(acknowledged.isSubmitted, isFalse);
+      expect(acknowledged.statusLabel, '확인됨');
+      expect(acknowledged.acknowledgedByUserId, 'teacher-user-1');
+      expect(acknowledged.acknowledgedAt, isNotNull);
+      expect(acknowledged.isNotified, isTrue);
+
+      final canceled = AbsenceReport.fromMap(row(status: 'CANCELED'));
+      expect(canceled.isCanceled, isTrue);
+      expect(canceled.statusLabel, '취소됨');
+    });
+
+    test('status 기본값은 SUBMITTED', () {
+      final report = AbsenceReport.fromMap({
+        'id': 'abs-2',
+        'class_session_id': 'sess-2',
+        'child_id': 'child-2',
+        'occurrence_date': '2026-09-11',
+        'reported_by_user_id': 'user-8',
+      });
+
+      expect(report.status, 'SUBMITTED');
+      expect(report.statusLabel, '신고됨');
+      expect(report.reason, '');
+    });
+  });
+
   group('compareTermsByStartDate', () {
     Term term(String name, String? start) => Term.fromMap({
           'id': name,

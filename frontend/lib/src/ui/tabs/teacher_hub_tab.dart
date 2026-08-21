@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -7,6 +9,7 @@ import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/search_select_field.dart';
+import 'timetable/class_change_dialog.dart';
 
 class TeacherHubTab extends StatefulWidget {
   const TeacherHubTab({super.key, required this.controller});
@@ -71,6 +74,16 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
           _buildSessionBoard(controller, selectedBundle),
           const SizedBox(height: 12),
         ],
+        // Absence inbox (teacher/admin only)
+        if (controller.canAcknowledgeAbsence) ...[
+          _buildAbsenceInboxCard(controller, selectedBundle),
+          const SizedBox(height: 12),
+        ],
+        // Class change notices (teacher/admin only)
+        if (controller.canManageClassSessionChanges) ...[
+          _buildClassChangeCard(controller, selectedBundle),
+          const SizedBox(height: 12),
+        ],
         // Teaching plan
         _buildTeachingPlanCard(controller, selectedBundle),
         const SizedBox(height: 12),
@@ -131,6 +144,11 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     setState(() {
       _isLoadingManagedClasses = true;
     });
+
+    // 수업 변경/결석 신고는 학기 로드 때 이미 채워지지만, 탭을 오래 열어둔
+    // 뒤 돌아온 경우를 위해 여기서 한 번 더 갱신한다. 서버에 아직 마이그레이션이
+    // 반영되지 않은 환경에서는 조용히 빈 목록이 되므로 실패를 노출하지 않는다.
+    unawaited(_refreshChangeAndAbsenceData(controller));
 
     try {
       final announcements = await controller.fetchAnnouncementsForHomeschool();
@@ -205,6 +223,20 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
           _isLoadingManagedClasses = false;
         });
       }
+    }
+  }
+
+  /// 수업 변경/결석 신고 목록만 조용히 다시 읽는다. 실패해도 화면을 막지 않는다.
+  Future<void> _refreshChangeAndAbsenceData(NestController controller) async {
+    try {
+      await controller.loadClassSessionChanges();
+    } catch (_) {
+      // 서버 미배포 등: 읽기 실패는 빈 목록으로 흘려보낸다.
+    }
+    try {
+      await controller.loadAbsenceReports();
+    } catch (_) {
+      // 같음.
     }
   }
 
@@ -578,6 +610,30 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               _sessionDetailRow(Icons.school_outlined, '담당 교사', teacherLabel),
               const Divider(height: 24),
               _sessionDetailRow(Icons.meeting_room_outlined, '장소', locationLabel),
+              // 담당 교사/관리자만: 이 수업의 휴강·시간/장소 변경·보강 공지 등록.
+              if (controller.canManageClassSessionChanges) ...[
+                const Divider(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      showClassSessionChangeSheet(
+                        context: context,
+                        controller: controller,
+                        classSessionId: session.id,
+                      );
+                    },
+                    icon: const Icon(Icons.published_with_changes),
+                    label: Text(
+                      controller.changesForSession(session.id).isEmpty
+                          ? '수업 변경 공지'
+                          : '수업 변경 공지 '
+                                '(${controller.changesForSession(session.id).length})',
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
             ],
           ),
@@ -1023,6 +1079,359 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         ),
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 수업 변경 공지 / 결석 신고 인박스
+  // ---------------------------------------------------------------------------
+
+  /// 이 반에서 내가 변경 공지를 등록할 수 있는 세션 id 집합.
+  ///
+  /// 교사는 자기 배정 수업만, 관리자/스태프는 배정이 없어도 반 전체를 다룬다.
+  /// (서버 RLS 도 같은 기준이라 여기서 더 넓게 보여주면 저장 때 실패한다.)
+  Set<String> _manageableSessionIds(
+    NestController controller,
+    _TeacherClassBundle? bundle,
+  ) {
+    final sessions = bundle?.sessions ?? const <ClassSession>[];
+    if (sessions.isEmpty) {
+      return const <String>{};
+    }
+    final myTeacherIds = controller.currentUserTeacherProfiles
+        .map((profile) => profile.id)
+        .toSet();
+    final assigned =
+        (bundle?.assignments ?? const <SessionTeacherAssignment>[])
+            .where((row) => myTeacherIds.contains(row.teacherProfileId))
+            .map((row) => row.classSessionId)
+            .toSet();
+    if (assigned.isNotEmpty) {
+      return assigned;
+    }
+    if (controller.isAdminLike) {
+      return sessions.map((session) => session.id).toSet();
+    }
+    return const <String>{};
+  }
+
+  Widget _buildClassChangeCard(
+    NestController controller,
+    _TeacherClassBundle? selectedBundle,
+  ) {
+    final manageableIds = _manageableSessionIds(controller, selectedBundle);
+    final changes = <ClassSessionChange>[
+      for (final sessionId in manageableIds)
+        ...controller.changesForSession(sessionId),
+    ]..sort((a, b) => b.effectiveFrom.compareTo(a.effectiveFrom));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('수업 변경 공지', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (selectedBundle == null)
+              _buildEmptyHint('반을 먼저 선택하세요.')
+            else if (manageableIds.isEmpty)
+              _buildEmptyHint('담당으로 배정된 수업이 없습니다.')
+            else ...[
+              Text(
+                '휴강·시간 변경·장소 변경·보강 교사를 등록하고, 확인 후 학생·학부모에게 문자로 알립니다.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.66),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _startClassSessionChange(
+                        controller,
+                        selectedBundle,
+                        manageableIds,
+                      ),
+                icon: const Icon(Icons.published_with_changes),
+                label: const Text('수업 변경 등록'),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text('등록된 변경', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (changes.isEmpty)
+              _buildEmptyHint('등록된 수업 변경이 없습니다.')
+            else
+              ...changes
+                  .take(20)
+                  .map(
+                    (change) => ClassSessionChangeTile(
+                      controller: controller,
+                      change: change,
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 변경을 등록할 수업을 먼저 고르고 등록 다이얼로그를 연다.
+  /// 후보가 하나뿐이면 선택 단계를 건너뛴다.
+  Future<void> _startClassSessionChange(
+    NestController controller,
+    _TeacherClassBundle bundle,
+    Set<String> manageableIds,
+  ) async {
+    final sessions = bundle.sessions
+        .where((session) => manageableIds.contains(session.id))
+        .toList();
+    if (sessions.isEmpty) {
+      _showMessage('담당으로 배정된 수업이 없습니다.');
+      return;
+    }
+
+    String? sessionId = sessions.first.id;
+    if (sessions.length > 1) {
+      sessionId = await showSelectSheet<String>(
+        context: context,
+        title: '변경할 수업 선택',
+        helpText: '변경 공지를 등록할 수업을 고르세요.',
+        options: sessions
+            .map(
+              (session) => SelectSheetOption<String>(
+                value: session.id,
+                title: _sessionTitle(controller, session),
+                subtitle: timeSlotLabel(
+                  controller.findTimeSlot(session.timeSlotId),
+                ),
+                keywords:
+                    '${_sessionTitle(controller, session)} '
+                    '${controller.findCourseName(session.courseId)}',
+              ),
+            )
+            .toList(),
+        currentValue: null,
+      );
+    }
+    if (!mounted || sessionId == null) {
+      return;
+    }
+
+    await showClassSessionChangeEditor(
+      context: context,
+      controller: controller,
+      classSessionId: sessionId,
+    );
+  }
+
+  Widget _buildAbsenceInboxCard(
+    NestController controller,
+    _TeacherClassBundle? selectedBundle,
+  ) {
+    // 담당 수업 목록(선택한 반)과 컨트롤러가 계산한 미확인 신고를 합친다.
+    // 관리자 뷰에서는 pendingAbsencesForTeacher() 가 홈스쿨 전체를 돌려준다.
+    final merged = <String, AbsenceReport>{
+      for (final report in controller.pendingAbsencesForTeacher())
+        report.id: report,
+      for (final sessionId in _manageableSessionIds(controller, selectedBundle))
+        for (final report in controller.absencesForSession(sessionId))
+          report.id: report,
+    };
+
+    final reports = merged.values.toList()
+      ..sort((a, b) {
+        final rank = _absenceStatusRank(a).compareTo(_absenceStatusRank(b));
+        if (rank != 0) {
+          return rank;
+        }
+        return a.occurrenceDate.compareTo(b.occurrenceDate);
+      });
+    final pendingCount = reports.where((row) => row.isSubmitted).length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '결석 신고',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                if (pendingCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: NestColors.clay.withValues(alpha: 0.14),
+                      border: Border.all(
+                        color: NestColors.clay.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      '미확인 $pendingCount건',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.clay,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (reports.isEmpty)
+              _buildEmptyHint('접수된 결석 신고가 없습니다.')
+            else
+              ...reports.take(30).map(
+                (report) => _buildAbsenceRow(controller, report),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _absenceStatusRank(AbsenceReport report) {
+    if (report.isSubmitted) {
+      return 0;
+    }
+    if (report.isAcknowledged) {
+      return 1;
+    }
+    return 2;
+  }
+
+  Widget _buildAbsenceRow(NestController controller, AbsenceReport report) {
+    final childName =
+        controller.children
+            .where((child) => child.id == report.childId)
+            .map((child) => child.name)
+            .firstOrNull ??
+        '학생';
+    final session = findClassSessionById(controller, report.classSessionId);
+    final sessionLabel = session == null
+        ? '수업 정보 없음'
+        : classSessionHeadline(controller, session);
+    final statusColor = report.isSubmitted
+        ? NestColors.clay
+        : (report.isAcknowledged ? NestColors.mutedSage : NestColors.deepWood);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          EntityAvatar(label: childName, icon: Icons.event_busy_outlined),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        childName,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        color: statusColor.withValues(alpha: 0.14),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Text(
+                        report.statusLabel,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _absenceDateLabel(report.occurrenceDate),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  sessionLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.7),
+                  ),
+                ),
+                if (report.reason.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(report.reason.trim()),
+                ],
+                if (report.isSubmitted) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: controller.isBusy
+                          ? null
+                          : () => _acknowledgeAbsence(controller, report),
+                      icon: const Icon(Icons.check, size: 18),
+                      label: const Text('확인'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _acknowledgeAbsence(
+    NestController controller,
+    AbsenceReport report,
+  ) async {
+    try {
+      await controller.acknowledgeAbsenceReport(id: report.id);
+      if (!mounted) {
+        return;
+      }
+      _showMessage(controller.statusMessage);
+    } catch (e) {
+      _showMessage(e is StateError ? e.message : controller.statusMessage);
+    }
+  }
+
+  String _absenceDateLabel(DateTime date) {
+    return '${DateFormat('yyyy-MM-dd').format(date)}'
+        '(${dayLabel(date.weekday % 7)})';
   }
 
   String _teacherLabelForSession({

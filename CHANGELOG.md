@@ -1,5 +1,71 @@
 # Changelog
 
+## 2.0.11+13 (2026-08-13)
+
+### Added
+
+- **학생 계정** — 아이가 직접 가입해 본인 시간표를 보고 결석을 신고한다
+  - `children.user_id` + 부분 유니크 인덱스로 자녀 ↔ 계정 1:1 연결 (`teacher_profiles.user_id`와 같은 패턴)
+  - 합류는 기존 참여 코드 흐름 재사용 — 학생이 `STUDENT` 역할로 요청하면 관리자가 승인하면서 **어느 자녀인지** 고른다. `approve_join_request`에 `p_child_id` 추가(3-인자 시그니처는 제거 — default 인자만 늘리면 "function is not unique" 모호성이 생긴다)
+  - 관리자용 `link_child_account` / `unlink_child_account` RPC — 승인 밖에서도 붙이고 뗄 수 있다
+  - 학생 전용 탭 `student_home_tab.dart` / `student_timetable_tab.dart`
+- **수업 변경 공지** — 교사가 "이번 주만" 또는 "학기 남은 기간" 변경을 등록하고 반 전체에 문자로 알린다
+  - `class_session_changes` 테이블: `change_type`(휴강/시간이동/교실이동/대체교사/안내) + `effective_from`~`effective_to`. `effective_to`가 null이면 학기 끝까지, `from = to`면 그 날짜 하루만
+  - `class_sessions`에는 날짜 컬럼이 없다(주간 반복 템플릿). `self_study_supervisions`의 날짜 오버라이드와 같은 계층 구조를 따랐다
+  - 등록 권한: 담당 교사(MAIN/ASSISTANT) 또는 담임 또는 ADMIN/STAFF. 시간표 테이블 쓰기는 여전히 ADMIN/STAFF 전용이므로 교사는 이 계층으로만 변경을 알린다
+  - 공용 다이얼로그 `ui/tabs/timetable/class_change_dialog.dart`
+- **결석 신고** — 학생 본인 또는 보호자가 다가오는 회차의 결석을 미리 알리고 담당 교사에게 문자가 간다
+  - `absence_reports` 테이블 + `report_absence` / `cancel_absence_report` / `acknowledge_absence_report` RPC
+  - INSERT 정책을 두지 않고 RPC로만 생성한다 — 수강 여부·요일 일치·학기 범위·과거 날짜 검증을 우회할 수 없게 하기 위함
+  - 살아있는 신고는 회차당 1건(`uq_absence_active` 부분 유니크). 철회했다 다시 신고하면 기존 행을 되살린다
+- **알림 발송 `nest-notify` Edge Function** (Solapi 문자, 알림톡 전환 대비)
+  - 클라이언트는 **수신자를 지정하지 않는다.** 도메인 이벤트 `{event, id}`만 보내고 서버가 수신자를 해석·인가한다
+  - service_role은 RLS를 우회하므로 인가를 함수 안에서 직접 검증한다 — 변경 공지는 담당 교사/담임/ADMIN·STAFF, 결석은 학생 본인/보호자/ADMIN·STAFF
+  - 수신자 uuid dedupe + 1회 300명 상한(초과 시 413), `notified_at` 기반 중복 발송 방지(`force`로 재발송)
+  - 발송 결과를 부풀리지 않는다 — `sent == 0`이면 성공 문구를 쓰지 않고 "전화번호 미등록 N명 / 앱 미가입 N명"을 그대로 노출한다
+  - `_shared/solapi.ts` 신설. `lion-notify`는 lion_auth 벤더링 원본이라 **수정하지 않고** 서명 방식·엔드포인트만 동일하게 맞췄다
+- `profiles.phone` 실제 채우기 — 가입 트리거 · 메타데이터 동기화 트리거 · 기존 사용자 백필의 세 경로. `normalize_kr_phone()` 정규화에 실패한 값은 저장하지 않는다(형식이 깨진 번호는 엉뚱한 사람에게 문자가 간다)
+
+### Security
+
+- `is_session_teacher()`에 **ACTIVE 멤버십 조건 추가** — `teacher_profiles.user_id`는 멤버십을 지워도 남기 때문에(정리 트리거 없음), 이 조건이 없으면 홈스쿨을 떠난 교사가 여전히 담당 교사로 판정돼 수업 변경 공지를 등록하고 그 반 전체 학부모에게 문자를 발송할 수 있었다. `nest-notify`의 `callerTeacherProfileIds`에도 같은 확인을 넣어 DB/함수 판정을 일치시켰다
+- 수신자 해석 RPC(`recipients_for_class_session` / `recipients_for_absence_report`)를 `authenticated`에서 회수하고 **`service_role` 전용**으로 변경 — security definer라 RLS를 우회해 반 전체 계정 uuid를 돌려주므로, 열어두면 STUDENT 계정이 직접 호출해 다른 가정의 보호자·학생 계정을 수집할 수 있었다(학생 격리 무력화). 프론트엔드는 이 RPC를 호출하지 않는다. Supabase 기본 권한이 anon/authenticated에도 EXECUTE를 주므로 PUBLIC뿐 아니라 두 역할에서 명시적으로 회수한다
+- `absence_reports` 신고자 UPDATE의 WITH CHECK에 자녀 관계 조건 추가 — WITH CHECK는 OLD를 볼 수 없어, 조건이 없으면 신고자가 자기 신고의 `child_id`를 남의 자녀로 바꿔치기해(status는 `CANCELED`로 맞추고) 다른 가정에 유령 결석 이력을 심을 수 있었다
+
+### Changed
+
+- `membership_role`에 `STUDENT` 추가(단독 마이그레이션 — `alter type ... add value`로 추가한 값은 같은 트랜잭션에서 참조할 수 없다)
+- `children` / `families` / `family_guardians`의 SELECT 정책 재작성. **기존 5개 역할의 가시성은 그대로다** — 원래 술어 `is_*_member(...)`는 "ACTIVE 구성원"이고 `STUDENT` 추가 전에는 역할이 정확히 5개였으므로, 그 5개를 나열한 `has_*_role(...)`과 동치다. 좁아진 것은 STUDENT 뿐이다. RESTRICTIVE 정책은 쓰지 않았다(다른 permissive 정책과 AND로 묶여 관리자 조회가 깨진다)
+- 시간표 계열(`class_sessions` / `time_slots` / `class_groups` / `class_enrollments`)은 기존대로 전교 공개 유지 — 학생도 시간표는 그대로 본다
+
+### Fixed
+
+- `home_page.dart`의 `_roleLabel`에 `STUDENT`가 없어 학생 계정 사용자에게 날것의 `STUDENT` 문자열이 노출되던 문제
+- **부트 경로가 신규 기능 실패에 학기 로딩 전체를 같이 죽이던 문제** — `_loadTermAndBelow` / `changeTerm`이 `loadClassSessionChanges()` / `loadAbsenceReports()`를 무방비로 await 했다. 부분 배포·PostgREST 스키마 캐시 지연·권한 오류처럼 "테이블 없음" 휴리스틱이 못 잡는 실패가 나면 기존 5개 역할의 반/시간표/갤러리/커뮤니티가 통째로 깨진다. `_loadNewScheduleFeaturesTolerantly()`로 감싸 빈 목록으로 degrade시켰다. **뮤테이션 직후의 재조회는 그대로 예외를 올린다** — 사용자가 직접 트리거한 동작의 실패까지 삼키면 안 된다
+- **같은 반에 형제가 있을 때 결석 신고 오탐** — `absenceFor(sessionId:, date:)`가 childId를 구분하지 않고 `firstOrNull`을 돌려줘, 학생 홈은 형제의 결석을 본인 것으로 표시했고 학생 시간표는 본인 신고가 없는 것처럼 보여 중복 신고로 이어졌다. optional `childId` 파라미터 추가(기존 호출부 무영향)
+
+### Deployment
+
+**반드시 이 순서로 배포한다.** 앱을 먼저 올려도 화면은 깨지지 않지만(기능이 조용히 비활성), 마이그레이션은 파일명 순서를 지켜야 한다.
+
+1. **마이그레이션 6개를 순서대로 적용** (`supabase db push`)
+   1. `20260814089000_profiles_phone_sync.sql` — 전화번호 정규화·백필 (발송의 전제조건)
+   2. `20260814090000_membership_role_student.sql` — `STUDENT` enum 값만 단독으로. **다음 파일과 반드시 분리 실행**(같은 트랜잭션에서 새 enum 값을 참조할 수 없다)
+   3. `20260814091000_student_accounts.sql` — `children.user_id`, RLS 재작성, 승인/연결 RPC
+   4. `20260814092000_class_session_changes.sql`
+   5. `20260814093000_absence_reports.sql`
+   6. `20260814094000_notification_recipients.sql`
+2. **Edge Function 배포** — `supabase functions deploy nest-notify` (`scripts/deploy_supabase.sh`에 포함). 시크릿 `SOLAPI_API_KEY` / `SOLAPI_API_SECRET` / `SOLAPI_SENDER`가 먼저 설정돼 있어야 한다
+3. **앱 배포** — `main` push → GitHub Pages / 스토어 빌드
+
+**알림톡은 아직 쓸 수 없다.** 현재 채널은 문자(`sms`) 고정이며, 알림톡으로 전환하려면 (1) 카카오 비즈메시지 **템플릿 심사·승인**, (2) 발신프로필 `SOLAPI_PFID` 시크릿 설정, (3) `nest-notify/index.ts`의 `ALIMTALK_TEMPLATE_IDS`에 승인된 템플릿 코드 입력, (4) `DEFAULT_CHANNEL`을 `'auto'`로 변경(알림톡 실패 시 문자 자동 대체)이 모두 필요하다. `SOLAPI_PFID` 없이 `alimtalk`/`auto`를 요청하면 함수가 400으로 거절한다.
+
+### Verification
+
+- `flutter analyze` 통과
+- `flutter test` 119건 통과 (`student_view_role_test.dart` 신규 — 형제 결석 신고 오탐 회귀 포함)
+- `flutter build web --release` 통과
+
 ## 2.0.10+12 (2026-08-03)
 
 ### Fixed

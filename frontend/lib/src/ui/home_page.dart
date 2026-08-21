@@ -7,8 +7,12 @@ import '../config/app_config.dart';
 import '../services/nest_cache.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
+import 'models/new_term_checklist.dart';
+import 'models/tab_section_request.dart';
 import 'nest_theme.dart';
 import 'homeschool_select_page.dart';
+import 'tabs/admin_home_tab.dart';
+import 'tabs/admin_news_tab.dart';
 import 'tabs/community_feed_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/family_admin_tab.dart';
@@ -16,10 +20,12 @@ import 'tabs/gallery_tab.dart';
 import 'tabs/parent_home_tab.dart';
 import 'tabs/parent_timetable_tab.dart';
 import 'tabs/profile_settings_tab.dart';
-import 'tabs/self_study/self_study_tab.dart';
+import 'tabs/student_home_tab.dart';
+import 'tabs/student_timetable_tab.dart';
 import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
+import 'tabs/timetable_workspace_tab.dart';
 import 'widgets/nest_motion.dart';
 import 'widgets/term_navigator_bar.dart';
 import 'widgets/term_select_chip.dart';
@@ -48,6 +54,13 @@ class _HomePageState extends State<HomePage> {
   bool _hasUnsavedScheduleChanges = false;
   DateTime? _lastBackPress;
   bool _homeschoolConfirmed = false;
+
+  // ── Section deep-link state ──
+  // 관리자 홈에서 "반 편성"처럼 탭 안쪽 섹션까지 지정해 이동할 때, 대상 탭 라벨과
+  // 요청을 잠시 들고 있다가 해당 탭에만 전달한다.
+  String? _pendingSectionTab;
+  TabSectionRequest? _pendingSection;
+  int _sectionRequestNonce = 0;
 
   // ── Parent child selector state (shared across parent tabs) ──
   String? _selectedChildId;
@@ -93,7 +106,8 @@ class _HomePageState extends State<HomePage> {
       animation: widget.controller,
       builder: (context, _) {
         // Keep child selector in sync when controller data changes.
-        if (widget.controller.isParentView) {
+        if (widget.controller.isParentView ||
+            widget.controller.isStudentView) {
           _syncSelectedChild(widget.controller);
         }
 
@@ -199,40 +213,49 @@ class _HomePageState extends State<HomePage> {
       return [
         _TabSpec(
           label: '대시보드',
-          page: DashboardTab(
-            controller: controller,
-            onRequestTabChange: _navigateToTabLabel,
-          ),
+          page: DashboardTab(controller: controller),
         ),
       ];
     }
 
+    // ── Admin view ──
+    // 홈(신학기 준비) · 학기 설정 · 시간표(+자습) · 소식(공지·학사일정) · 시스템.
+    // 하단 네비게이션 5칸 안에 신학기 운영 동선을 담기 위해 자습은 시간표 탭의
+    // 세그먼트로 합치고, 대시보드 카드에 묻혀 있던 공지·학사일정을 전용 탭으로
+    // 끌어올렸다.
     if (controller.isAdminLike) {
       return [
         _TabSpec(
-          label: '대시보드',
-          page: DashboardTab(
+          label: NewTermTabs.home,
+          page: AdminHomeTab(
             controller: controller,
-            onRequestTabChange: _navigateToTabLabel,
+            onNavigate: _navigateToTabLabel,
           ),
         ),
         _TabSpec(
-          label: '학기 설정',
-          page: FamilyAdminTab(controller: controller),
+          label: NewTermTabs.termSetup,
+          page: FamilyAdminTab(
+            controller: controller,
+            sectionRequest: _sectionRequestFor(NewTermTabs.termSetup),
+          ),
         ),
         _TabSpec(
-          label: '시간표',
-          page: TimetableTab(
+          label: NewTermTabs.timetable,
+          page: TimetableWorkspaceTab(
             controller: controller,
             onDirtyChanged: _handleScheduleDirtyChanged,
+            sectionRequest: _sectionRequestFor(NewTermTabs.timetable),
           ),
         ),
         _TabSpec(
-          label: '자습',
-          page: SelfStudyTab(controller: controller),
+          label: NewTermTabs.news,
+          page: AdminNewsTab(
+            controller: controller,
+            sectionRequest: _sectionRequestFor(NewTermTabs.news),
+          ),
         ),
         _TabSpec(
-          label: '시스템',
+          label: NewTermTabs.system,
           page: SystemAdminTab(controller: controller),
         ),
       ];
@@ -269,25 +292,60 @@ class _HomePageState extends State<HomePage> {
       ];
     }
 
+    // ── Student view: 홈 + 시간표 + 커뮤니티 (읽기 중심 최소 권한 뷰) ──
+    if (controller.isStudentView) {
+      return [
+        _TabSpec(
+          label: '홈',
+          page: StudentHomeTab(
+            controller: controller,
+            selectedChildId: _selectedChildId,
+            childClassBundles: _childClassBundles,
+            isLoadingChildClasses: _isLoadingChildClasses,
+          ),
+        ),
+        _TabSpec(
+          label: '시간표',
+          page: StudentTimetableTab(
+            controller: controller,
+            selectedChildId: _selectedChildId,
+            childClassBundles: _childClassBundles,
+            isLoadingChildClasses: _isLoadingChildClasses,
+          ),
+        ),
+        _TabSpec(
+          label: '커뮤니티',
+          page: CommunityFeedTab(
+            controller: controller,
+            title: '커뮤니티',
+          ),
+        ),
+      ];
+    }
+
     // ── Teacher / other non-admin view ──
+    // 시간표(편집 도구)와 갤러리(업로드)는 교사 뷰 전용이다. 이 가드가 없으면
+    // 위 분기에 걸리지 않은 알 수 없는 역할까지 관리 도구를 그대로 받는다.
+    // 폴백으로 남는 최소 구성은 아래에서 추가하는 커뮤니티 하나다.
     final tabs = <_TabSpec>[
-      if (controller.isTeacherView)
+      if (controller.isTeacherView) ...[
         _TabSpec(
           label: '홈',
           page: TeacherHubTab(controller: controller),
         ),
-      _TabSpec(
-        label: '시간표',
-        page: TimetableTab(
-          controller: controller,
-          onDirtyChanged: _handleScheduleDirtyChanged,
-        ),
-      ),
-      if (!isMobileLike)
         _TabSpec(
-          label: '갤러리',
-          page: GalleryTab(controller: controller),
+          label: '시간표',
+          page: TimetableTab(
+            controller: controller,
+            onDirtyChanged: _handleScheduleDirtyChanged,
+          ),
         ),
+        if (!isMobileLike)
+          _TabSpec(
+            label: '갤러리',
+            page: GalleryTab(controller: controller),
+          ),
+      ],
     ];
     tabs.add(
       _TabSpec(
@@ -305,28 +363,40 @@ class _HomePageState extends State<HomePage> {
   // ── Parent child selector helpers ──
 
   void _syncSelectedChild(NestController controller) {
-    final children = controller.myChildren.toList();
-    final previous = _selectedChildId;
+    if (controller.isStudentView) {
+      // 학생 뷰에는 아이 선택기가 없다. 화면의 주인공은 항상 컨트롤러가 정한
+      // 대상(내 계정에 연결된 아이, 관리자 미리보기면 미리보기 대상)이다.
+      // 캐시된 학부모 선택값은 의도적으로 무시한다.
+      final targetId = controller.activeStudentChildId;
+      if (_selectedChildId != targetId) {
+        _selectedChildId = targetId;
+        _childClassBundles = const {};
+        _lastScheduledChildLoadKey = null;
+      }
+    } else {
+      final children = controller.myChildren.toList();
+      final previous = _selectedChildId;
 
-    // On first load, try to restore from cache
-    if (previous == null && children.isNotEmpty) {
-      final userId = controller.user?.id;
-      if (userId != null) {
-        final saved = NestCache.loadSelectedChildId(userId: userId);
-        if (saved != null && children.any((c) => c.id == saved)) {
-          _selectedChildId = saved;
+      // On first load, try to restore from cache
+      if (previous == null && children.isNotEmpty) {
+        final userId = controller.user?.id;
+        if (userId != null) {
+          final saved = NestCache.loadSelectedChildId(userId: userId);
+          if (saved != null && children.any((c) => c.id == saved)) {
+            _selectedChildId = saved;
+          }
         }
       }
-    }
 
-    final firstId = children.firstOrNull?.id;
-    final stillValid =
-        _selectedChildId != null && children.any((child) => child.id == _selectedChildId);
+      final firstId = children.firstOrNull?.id;
+      final stillValid = _selectedChildId != null &&
+          children.any((child) => child.id == _selectedChildId);
 
-    if (!stillValid) {
-      _selectedChildId = firstId;
-      _childClassBundles = const {};
-      _lastScheduledChildLoadKey = null;
+      if (!stillValid) {
+        _selectedChildId = firstId;
+        _childClassBundles = const {};
+        _lastScheduledChildLoadKey = null;
+      }
     }
 
     final selectedId = _selectedChildId;
@@ -338,8 +408,12 @@ class _HomePageState extends State<HomePage> {
         .classGroupsForChild(selectedId)
         .map((group) => group.id)
         .join(',');
+    // 변경 공지/결석 신고가 뒤늦게(학기 로드 마지막 단계) 채워지므로, 그 개수도
+    // 키에 넣어 번들이 빈 상태로 굳지 않게 한다.
+    final notifySignature =
+        '${controller.classSessionChanges.length}/${controller.absenceReports.length}';
     final loadKey =
-        '$selectedId::${controller.selectedTermId ?? ''}::$classGroupSignature';
+        '$selectedId::${controller.selectedTermId ?? ''}::$classGroupSignature::$notifySignature';
     if (_lastScheduledChildLoadKey == loadKey) return;
 
     if (_lastScheduledChildLoadKey != null) {
@@ -482,11 +556,24 @@ class _HomePageState extends State<HomePage> {
             )
             .toList();
 
+        // 변경 공지·결석 신고는 컨트롤러가 학기 단위로 이미 들고 있다(RLS가
+        // 가시 범위를 정한다). 여기서는 이 반 수업들 것만 추려 담는다.
+        final sessionIdSet = sessionIds.toSet();
+        final classChanges = sessionIds
+            .expand(controller.changesForSession)
+            .toList(growable: false);
+        final classAbsences = controller
+            .absencesForChild(childId)
+            .where((report) => sessionIdSet.contains(report.classSessionId))
+            .toList(growable: false);
+
         bundleMap[classGroup.id] = ChildClassBundle(
           classGroup: classGroup,
           sessions: sessions,
           assignments: assignments,
           announcements: classAnnouncements,
+          changes: classChanges,
+          absences: classAbsences,
         );
       }
 
@@ -615,7 +702,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _navigateToTabLabel(String label) {
+  /// 지정한 탭으로 이동한다. [section]을 주면 그 탭 안의 세그먼트/설정 단위까지
+  /// 함께 연다(예: 소식 탭의 '학사일정', 학기 설정 탭의 '반').
+  void _navigateToTabLabel(String label, {String? section}) {
     final tabs = _buildTabs(
       widget.controller,
       isMobileLike: MediaQuery.sizeOf(context).width < 1080,
@@ -629,8 +718,27 @@ class _HomePageState extends State<HomePage> {
     }
 
     setState(() {
+      if (section != null && section.isNotEmpty) {
+        // 같은 섹션을 연달아 요청해도 탭이 반응하도록 nonce를 올린다.
+        _pendingSectionTab = normalizedTarget;
+        _pendingSection = TabSectionRequest(
+          section: section,
+          nonce: ++_sectionRequestNonce,
+        );
+      } else {
+        _pendingSectionTab = null;
+        _pendingSection = null;
+      }
       _currentIndex = targetIndex;
     });
+  }
+
+  /// [tabLabel] 탭에 전달할 섹션 요청. 다른 탭 대상이면 null.
+  TabSectionRequest? _sectionRequestFor(String tabLabel) {
+    if (_pendingSectionTab == null) return null;
+    return _pendingSectionTab == _normalizeTabLabel(tabLabel)
+        ? _pendingSection
+        : null;
   }
 
   void _openParentAnnouncementsTab() {
@@ -929,7 +1037,9 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 _buildParentCompactHeader(theme, controller, displayName),
                 if (controller.isAdminLike)
                   TermNavigatorBar(controller: controller)
-                else if (controller.isParentView || controller.isTeacherView)
+                else if (controller.isParentView ||
+                    controller.isTeacherView ||
+                    controller.isStudentView)
                   // 좁은 헤더 행 안에서는 학기 이름이 잘려 보이지 않으므로,
                   // 관리자 학기 바처럼 헤더 아래 전용 줄에 학기 칩을 둔다.
                   Padding(
@@ -1066,6 +1176,14 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     final showTeacherTarget = isAdminAsTeacher && teacherCandidates.isNotEmpty;
     final activeTeacherId = controller.activeTeacherViewTargetProfileId;
 
+    // Admin viewing as student: 어느 아이의 학생 화면을 보는지 고를 수 있게 한다.
+    // (학생 본인 계정에는 후보가 1명뿐이므로 이 칩이 뜨지 않는다.)
+    final isAdminAsStudent = controller.isStudentView &&
+        controller.hasAdminLikeMembershipInSelectedHomeschool;
+    final studentCandidates = controller.studentViewCandidateChildren;
+    final showStudentTarget = isAdminAsStudent && studentCandidates.isNotEmpty;
+    final activeStudentId = controller.activeStudentChildId;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1180,6 +1298,54 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         avatar: const Icon(Icons.school_outlined, size: 14),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  )
+                else if (showStudentTarget)
+                  Flexible(
+                    child: PopupMenuButton<String>(
+                      tooltip: '학생 대상 전환',
+                      onSelected: (childId) async {
+                        try {
+                          await controller
+                              .selectStudentViewTargetChildId(childId);
+                        } catch (_) {}
+                      },
+                      itemBuilder: (context) => studentCandidates
+                          .map(
+                            (child) => PopupMenuItem<String>(
+                              value: child.id,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    child.id == activeStudentId
+                                        ? Icons.check_circle
+                                        : Icons.circle_outlined,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      child.name,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      child: Chip(
+                        label: Text(
+                          controller.activeStudentChild?.name ?? '학생 선택',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        avatar: const Icon(
+                          Icons.child_care_outlined,
+                          size: 14,
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
@@ -1417,6 +1583,8 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
         return '게스트 교사';
       case 'STAFF':
         return '스태프';
+      case 'STUDENT':
+        return '학생';
       default:
         return role ?? '-';
     }
@@ -2422,7 +2590,10 @@ class _MainPanelState extends State<_MainPanel> {
     final displayName = _displayName(controller);
     final isParent = controller.isParentView;
     final isTeacher = controller.isTeacherView;
-    final useCompactHeader = isParent || isTeacher;
+    final isStudent = controller.isStudentView;
+    // 데스크톱의 학기 칩(TermSelectChip)은 이 컴팩트 헤더 안에 있다. 학생 뷰가
+    // 기본 헤더로 떨어지면 학기를 바꿀 수단이 아예 없어지므로 함께 포함한다.
+    final useCompactHeader = isParent || isTeacher || isStudent;
 
     return Card(
       child: Column(
@@ -2796,6 +2967,7 @@ String _labelForRole(String role) {
     'TEACHER' => '교사',
     'GUEST_TEACHER' => '외부교사',
     'PARENT' => '부모',
+    'STUDENT' => '학생',
     _ => role,
   };
 }

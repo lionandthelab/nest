@@ -62,8 +62,14 @@ frontend/
           hub_scaffold.dart
           nest_motion.dart
           search_select_field.dart
+        models/
+          new_term_checklist.dart
+          tab_section_request.dart
         tabs/
           dashboard_tab.dart
+          admin_home_tab.dart
+          admin_news_tab.dart
+          timetable_workspace_tab.dart
           parent_timetable_tab.dart
           parent_progress_tab.dart
           parent_news_tab.dart
@@ -111,6 +117,7 @@ supabase/
 - `TEACHER`
 - `GUEST_TEACHER`
 - `PARENT`
+- `STUDENT` (2026-08 추가, 마이그레이션 `20260814090000_membership_role_student.sql`) — 아이 본인 계정. 다른 5개 역할과 달리 **가정 데이터 가시성이 본인/본인 가정으로 제한**된다 (§6.15, §7.4).
 
 ### 4.2 View Role Resolution
 
@@ -503,6 +510,104 @@ Admin dashboard onboarding:
   - `system_admin_tab.dart`: 화면 폭별 세그먼트/칩 전환
   - `nest_theme.dart`: 버튼/세그먼트/네비/스낵바/바텀시트 스타일 통일
 
+### 6.15 학생 계정 (Student Accounts, 2026-08)
+
+아이가 직접 가입한 계정을 `children` 레코드에 연결해, 학부모를 거치지 않고 본인 시간표를 보고 결석을 신고할 수 있게 한다.
+
+- **연결 모델**: `children.user_id uuid null references auth.users(id) on delete set null` + `uq_children_user_id` 부분 유니크 인덱스(`where user_id is not null`). `teacher_profiles.user_id`와 완전히 같은 패턴이며, 계정 1개는 자녀 1명에만 붙는다. 마이그레이션 `20260814091000_student_accounts.sql`.
+- **합류 흐름**: 기존 참여 코드 온보딩(`request_join_with_code`)을 그대로 재사용한다. 학생은 역할 `STUDENT`로 요청하고, 관리자가 승인 화면에서 **어느 자녀인지** 고른다. `approve_join_request`는 4번째 인자 `p_child_id`를 받도록 교체됐다(기존 3-인자 시그니처는 `drop` — default 인자만 늘리면 "function is not unique" 모호성이 생긴다). 승인 시 멤버십 생성 **전에** 자녀의 홈스쿨 일치 여부를 먼저 검증하고, 이미 다른 계정이 연결된 자녀면 `CHILD_ALREADY_LINKED`로 거절한다.
+- **관리자 수동 연결**: `link_child_account(child_id, user_id)` / `unlink_child_account(child_id)` RPC. 승인 밖에서(이미 멤버인 아이, 잘못 연결한 경우) 붙이고 뗀다. `link_child_account`는 STUDENT 멤버십이 없으면 함께 부여하되 기존 역할은 건드리지 않는다.
+- **학생 전용 탭**: `student_home_tab.dart`(오늘 수업 + 변경 공지 + 결석 신고), `student_timetable_tab.dart`(주간 시간표 + 회차별 결석 신고). `HomePage._buildTabs()`에서 `STUDENT` 뷰 역할일 때 등록된다.
+- **하위 호환**: `NestRepository`의 children select 는 `user_id`를 포함하되, 42703(컬럼 없음)을 만나면 레거시 select 로 폴백하고 `_childUserIdSupported=false`를 캐시한다. 마이그레이션 미배포 서버에서도 기존 화면이 그대로 뜬다.
+
+### 6.16 수업 변경 공지 (Class Session Changes, 2026-08)
+
+`class_sessions`는 "요일 × 교시" **주간 반복 템플릿**이라 날짜 컬럼이 없다. 그래서 "이번 주 목요일만 휴강", "다음 주부터 학기 끝까지 교실 이동" 같은 실제 운영 공지를 표현할 계층이 없었다. 마이그레이션 `20260814092000_class_session_changes.sql`.
+
+- **테이블** `class_session_changes`: `change_type in ('CANCELED','TIME_MOVED','ROOM_MOVED','TEACHER_SUBSTITUTE','NOTE')` + 유효기간 `effective_from date not null` / `effective_to date null`.
+  - `effective_to is null` → 학기 끝까지 계속 적용
+  - `effective_from = effective_to` → 그 날짜 하루만 ("이번 주만")
+  - `self_study_supervisions`의 `occurrence_date` 오버라이드와 같은 계층 구조다.
+- **권한**: 그 수업의 담당 교사(`session_teacher_assignments` MAIN/ASSISTANT) 또는 반 담임(`class_groups.main_teacher_id`) 또는 ADMIN/STAFF. 시간표 테이블 자체의 쓰기 정책은 여전히 ADMIN/STAFF 전용이므로, **교사는 이 "변경 공지" 계층을 통해서만** 학생·학부모에게 변경을 알린다. 교사는 자기가 등록한 행만 수정/삭제할 수 있고 ADMIN/STAFF는 전부 가능하다.
+- **헬퍼** `is_session_teacher(class_session_id)`: 배정 교사 ∪ 담임. `teacher_profiles.user_id`는 멤버십을 지워도 남기 때문에 **ACTIVE 멤버십을 함께 요구**한다(떠난 교사가 반 전체에 문자를 쏘는 것을 막는다).
+- **UI**: `ui/tabs/timetable/class_change_dialog.dart` (등록 다이얼로그 + `ClassSessionChangeTile`). 교사 허브·시간표·학생/학부모 시간표에서 공유한다.
+- `notified_at`: `nest-notify`가 발송을 마치면 채운다. 중복 발송 방지 및 "발송됨" 표시용.
+
+### 6.17 결석 신고 (Absence Reports, 2026-08)
+
+학생 본인 또는 보호자가 **다가오는** 특정 회차의 결석을 미리 알린다. 마이그레이션 `20260814093000_absence_reports.sql`.
+
+- **회차 지정**: `(class_session_id, occurrence_date)` 조합. 세션에 날짜가 없으므로 RPC가 정합성을 검증한다 — 요일 일치(`extract(dow from date)`와 `time_slots.day_of_week`는 둘 다 0=일요일이라 오프셋 보정이 없다), 학기 기간 내, 과거 날짜 아님, 그리고 `class_enrollments` 수강 여부.
+- **쓰기 경로**: INSERT 정책을 두지 않고 `report_absence()` security-definer RPC로만 생성한다. 검증을 우회할 수 없게 하기 위함이다. 같은 회차에 대해 살아있는 신고는 `uq_absence_active` 부분 유니크 인덱스로 1건만 유지하고, 철회했다 다시 신고하면 기존 행을 되살린다.
+- **상태**: `SUBMITTED` → `ACKNOWLEDGED`(담당 교사 확인, `acknowledge_absence_report`) 또는 `CANCELED`(신고자 철회, `cancel_absence_report`).
+- **가시성**: 그 자녀의 보호자 / 학생 본인 / 담당 교사 / ADMIN·STAFF. 신고자 본인의 UPDATE는 "철회"만 허용하며, WITH CHECK가 철회 후에도 행이 **여전히 본인과 관계된 자녀**를 가리키도록 강제한다(WITH CHECK는 OLD를 못 보므로 `child_id` 바꿔치기를 이 조건으로 막는다).
+- **UI**: 학생은 `student_timetable_tab.dart` / `student_home_tab.dart`, 학부모는 `parent_timetable_tab.dart`. `NestController.absenceFor(sessionId:, date:, childId:)`는 **같은 반에 형제가 있을 때 오탐을 막으려면 반드시 `childId`를 넘겨야 한다.**
+
+### 6.18 알림 발송 — `nest-notify` + Solapi (2026-08)
+
+수업 변경과 결석 신고를 문자(추후 알림톡)로 통지한다. Edge Function `supabase/functions/nest-notify/index.ts`.
+
+- **핵심 계약(D3)**: 클라이언트는 **수신자를 절대 지정하지 않는다.** 도메인 이벤트 `{ event: 'CLASS_CHANGE' | 'ABSENCE', id, channel?, force? }`만 보내고, 서버가 수신자를 해석하고 인가한다. "임의의 전화번호로 문자를 쏘는" 오남용 경로가 원천적으로 없다.
+- **인가는 함수 안에서 직접 한다.** service_role 클라이언트는 RLS를 우회하므로 RLS에 기댈 수 없다.
+  - `CLASS_CHANGE` → 담당 교사(ACTIVE 멤버십 필수) 또는 담임 또는 ADMIN/STAFF
+  - `ABSENCE` → 학생 본인 / 그 자녀의 보호자 / ADMIN·STAFF
+- **수신자 해석**: `recipients_for_class_session()` / `recipients_for_absence_report()` (마이그레이션 `20260814094000_notification_recipients.sql`). 두 함수 모두 **`service_role` 전용**이다 — `authenticated`에 열어두면 STUDENT 계정이 직접 호출해 같은 반 다른 가정의 계정 uuid를 수집할 수 있어 §7.4의 격리가 무너진다. RPC 호출이 실패하면 Edge Function이 동등한 인라인 조인으로 폴백한다.
+  - 수업 변경 → 그 반 수강생의 학생 계정 + 가정 보호자 계정
+  - 결석 신고 → 그 수업의 배정 교사 + 담임
+- **상한과 중복 제거**: 수신자 uuid를 `Set`으로 dedupe한 뒤 `MAX_RECIPIENTS = 300` 초과 시 413으로 거절한다. `notified_at`이 있으면 `force: true` 없이는 재발송하지 않는다.
+- **전화번호 해석**: `profiles.phone`을 1차로 보고 비어 있으면 `auth.users.raw_user_meta_data->>'phone_number'`로 폴백한다. `profiles.phone`은 컬럼만 있고 사실상 비어 있었으므로, `20260814089000_profiles_phone_sync.sql`이 가입 트리거 · 메타데이터 동기화 트리거 · 기존 사용자 백필의 세 경로에서 채운다. `normalize_kr_phone()` 정규화에 실패한 값은 **저장하지 않는다** (형식이 깨진 번호를 넣으면 엉뚱한 사람에게 문자가 간다).
+- **정직한 결과 보고**: 응답은 `{ accepted, sent, skipped_no_phone, skipped_no_account, already_notified, message_id }`. `sent == 0`이면 UI가 절대 "보냈습니다"라고 말하지 않고, 전화번호 미등록 / 앱 미가입 인원 수를 그대로 노출한다 (`NestController._notifyStatusMessage`). 수신자 1명당 `notification_log` 1행을 남긴다.
+- **채널**: 기본값은 `index.ts`의 `DEFAULT_CHANNEL = 'sms'` 상수 하나다. 카카오 알림톡 템플릿이 승인되고 `SOLAPI_PFID`가 설정되면 이 값을 `'auto'`로 바꾸고 `ALIMTALK_TEMPLATE_IDS`에 템플릿 코드만 채우면 전환된다(알림톡 시도 후 실패 시 문자 대체).
+- **Solapi 모듈** `supabase/functions/_shared/solapi.ts`: HMAC-SHA256 서명 + `messages/v4/send-many`. `lion-notify`와 로직이 사실상 같지만 **의도된 중복**이다 — `lion-notify`는 lion_auth 모듈의 벤더링된 템플릿 원본이라 수정하지 않는 것이 규칙이다. 서명 방식과 엔드포인트는 두 함수가 같은 Solapi 계정을 쓰도록 동일하게 유지한다.
+- 배포 시 `verify_jwt = true` (`supabase/config.toml`). 로그인 사용자만 호출할 수 있다.
+
+### 6.19 관리자 뷰 개편 — 신학기 운영 (2026-08)
+
+관리자 대시보드는 초대 · 가입 요청 · 세팅 가이드 · 지표 4칸 · 학사일정 · Drive · 공지 · 초기 세팅이 한 줄로 이어진 긴 스크롤이었다. 신학기에 가장 자주 하는 작업(공지 작성, 학사일정 등록)이 카드 안에 묻혀 있었고, 학사일정 날짜는 `yyyy-MM-dd` 직접 타이핑이라 모바일에서 특히 나빴다. 관리자 동선을 신학기 기준으로 다시 짰다.
+
+**탭 구성 변경** (`HomePage._buildTabs`)
+
+| 이전 | 이후 |
+|---|---|
+| 대시보드 · 학기 설정 · 시간표 · 자습 · 시스템 | 홈 · 학기 설정 · 시간표(+자습) · **소식** · 시스템 |
+
+- 하단 네비게이션은 5칸이 한계다. 자습은 같은 학기 시간표 데이터를 다루는 이웃 작업이라 `timetable_workspace_tab.dart`의 세그먼트로 합치고, 그 자리에 공지·학사일정 전용 **소식** 탭을 넣었다.
+- `TimetableWorkspaceTab`은 두 화면을 `IndexedStack`으로 유지한다(시간표 드래프트·자습 계획 선택 같은 편집 중 상태가 세그먼트 전환으로 날아가면 안 된다). 아직 열지 않은 쪽은 만들지 않아 첫 진입 비용은 그대로다.
+- 미저장 시간표 경고(`_isScheduleTabLabel`)는 탭 라벨이 여전히 `시간표`라 그대로 동작한다.
+
+**관리자 홈** (`tabs/admin_home_tab.dart`)
+
+- 학기 상태 줄 — 기간과 `개학까지 D-14` 카운트다운. 학기 이름/전환은 바로 위 `TermNavigatorBar`가 이미 하므로 중복을 피해 한 줄로만 덧붙인다.
+- **신학기 준비 체크리스트** — 진행률 + `다음 단계: …` 버튼. 단계 목록은 **기본으로 접혀 있다**. 9단계를 모두 펼치면 360px 폭에서 '빠른 작업'이 접히는 선 아래로 밀려난다.
+- **빠른 작업** 8칸 그리드(공지 / 학사일정 / 가정·아이 / 선생님 / 반 / 과목 / 시간표 / 멤버). 타일 최소 폭 150px 기준으로 열 수를 계산해 모바일 2열 · 데스크톱 4열.
+- 지표는 4칸 카드 그리드 → 한 줄 칩 스트립으로 축소하고, 자주 쓰지 않는 Drive 연결은 접힌 카드로 맨 아래.
+- `dashboard_tab.dart`는 **소속 없는 사용자의 온보딩 전용**으로 축소됐다. 기존 `_DriveIntegrationCard` → `widgets/drive_integration_card.dart`, `빠른 초기 세팅` → `widgets/quick_bootstrap_card.dart`로 승격 이동.
+
+**소식 탭** (`tabs/admin_news_tab.dart`)
+
+- 세그먼트 2개(공지사항 / 학사일정). 목록 위 전폭 48px 기본 동작 버튼 → 바텀시트 편집기.
+- 날짜는 `showDatePicker`로 고른다(`_DatePickerField`). 여러 날 일정은 스위치 하나로 종료일 필드를 연다.
+- 카드마다 오버플로 메뉴(수정 / 상단 고정 / 삭제) — 좁은 폭에서 버튼이 제목을 밀어내지 않게 한 곳에 모았다.
+
+**섹션 딥링크** (`ui/models/tab_section_request.dart`)
+
+- 체크리스트/빠른 작업은 탭뿐 아니라 **탭 안의 섹션**까지 지정해 이동한다(예: 학기 설정 탭의 `반`, 소식 탭의 `학사일정`).
+- `HomePage`가 대상 탭 라벨 + `TabSectionRequest{section, nonce}`를 들고 있다가 해당 탭에만 넘긴다. `_buildTabs`는 매 빌드마다 새 위젯 인스턴스를 만들지만 State는 유지되므로, 같은 섹션을 연달아 요청해도 반응하도록 `nonce`로 요청을 구분하고 `didUpdateWidget`에서 처리한다.
+- 섹션 키는 `ui/models/new_term_checklist.dart`의 `NewTermSections`에 모여 있고, `FamilyAdminTab`의 설정 단위 키와 같은 값을 쓴다.
+
+**체크리스트 모델** (`ui/models/new_term_checklist.dart`)
+
+- 컨트롤러를 참조하지 않고 개수/플래그만 받는 순수 함수 `buildNewTermChecklist(...)`. 단위 테스트는 `test/new_term_checklist_test.dart`.
+- 반 · 시간표 · 학사일정은 학기 종속이라 `hasTerm`이 false면 잠긴다. 가정 · 선생님 · 과목 · 교실은 홈스쿨 단위라 학기가 없어도 미리 준비할 수 있다.
+- 교실은 `optional: true` — 진행률 분모에서 빠진다. 교실을 안 쓰는 홈스쿨에서 체크리스트가 영원히 미완료로 남지 않게 한다.
+
+**공지 수정/삭제**
+
+- `NestController.updateAnnouncement` / `deleteAnnouncement`, `updateAcademicEvent` 추가.
+- `announcements`에는 select/insert/update 정책만 있었다. RLS가 켜진 테이블에서 **정책이 없는 명령은 0건 매칭으로 조용히 성공**하므로 삭제가 아무 일도 안 하는 것처럼 보인다. `20260821090000_announcements_delete_policy.sql`이 update와 같은 조건(작성자 본인 또는 ADMIN/STAFF)으로 delete를 연다.
+- 마이그레이션 배포 전에도 삭제된 척하지 않는다 — 리포지토리가 `.select('id')`로 실제 삭제 행 수를 돌려받고, 0건이면 컨트롤러가 한국어 안내로 던진다.
+- `NestController.allAnnouncements` 추가 — 기존 `announcements`는 선택된 반으로 걸러진 목록(학부모·학생·교사 화면용)이라, 반을 골라둔 관리자가 다른 반 공지를 관리할 수 없었다.
+
 ## 7. Database and RLS Notes
 
 ### 7.1 Core Membership Security
@@ -608,6 +713,30 @@ Migration `20260309020000_teacher_profiles_delete_policy.sql`:
 - adds `teacher_profiles_delete_admin_staff` RLS policy
 - enables teacher delete flow used by schedule palette quick actions
 
+### 7.4 Student Isolation (2026-08)
+
+`STUDENT` 역할을 추가하면서 가정 데이터 3개 테이블의 SELECT 정책을 다시 만들었다 (`20260814091000_student_accounts.sql`).
+
+**기존 5개 역할의 가시성은 그대로다.** 원래 술어는 `is_*_member(...)` = "그 홈스쿨의 ACTIVE 구성원"이었고, `STUDENT` 추가 이전에는 `membership_role`에 정확히 5개 값만 있었으므로 그 5개를 나열한 `has_*_role(...)`은 원래 술어와 동치다. 좁아진 것은 STUDENT 뿐이다.
+
+| 테이블 | 이전 술어 | 현재 술어 |
+|---|---|---|
+| `children` | `is_child_member(id)` | `is_child_self(id)` OR `is_child_guardian(id)` OR `has_child_role(id, [5개 역할])` |
+| `families` | `is_homeschool_member(homeschool_id)` | `is_family_of_current_user(id)` OR `has_homeschool_role(homeschool_id, [5개 역할])` |
+| `family_guardians` | `is_family_member(family_id)` | `user_id = auth.uid()` OR `is_family_of_current_user(family_id)` OR `has_family_role(family_id, [5개 역할])` |
+
+- **RESTRICTIVE 정책은 쓰지 않는다.** 다른 permissive 정책과 AND로 묶여 관리자 조회가 깨진다. 전부 permissive OR 술어여야 한다.
+- 시간표 계열(`class_sessions` / `time_slots` / `class_groups` / `class_enrollments`)은 **기존대로 전교 공개를 유지**한다. 학생도 시간표는 그대로 본다.
+- `children`의 INSERT/UPDATE/DELETE 정책은 손대지 않았다.
+- 신규 헬퍼: `is_child_self` / `is_child_guardian` / `is_family_of_current_user` / `current_user_child_ids`.
+- 수신자 해석 RPC(§6.18)를 `authenticated`가 아닌 `service_role`에만 부여하는 이유가 여기에 있다 — security definer 함수가 반 전체 계정 uuid를 돌려주므로, 클라이언트에 열면 이 격리가 무의미해진다.
+
+### 7.5 `RETURNS TABLE` 42702 함정 (재발 주의)
+
+`returns table (user_id uuid, ...)`는 `user_id`를 OUT 파라미터(=변수)로 만들기 때문에, 본문에서 같은 이름을 미한정으로 참조하면 `42702 ambiguous column reference`가 난다. 이 레포에서 이미 두 번 재발했다(`20260709120000`, `20260709130000`).
+
+**규칙: 모든 `RETURNS TABLE` plpgsql 함수는 본문 첫 줄에 `#variable_conflict use_column`을 넣고 지역변수에 `v_` 접두사를 쓴다.** 적용 대상: `request_join_with_code`, `recipients_for_class_session`, `recipients_for_absence_report`.
+
 ## 8. Environment Variables
 
 Required `dart-define` values:
@@ -627,6 +756,13 @@ flutter run \
   --dart-define=SUPABASE_URL=https://<project>.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=<anon-key>
 ```
+
+Edge Function 시크릿 (`supabase secrets set`, 프론트엔드에는 절대 넣지 않는다):
+
+- `SOLAPI_API_KEY` / `SOLAPI_API_SECRET` — Solapi 인증 (nest-notify, lion-notify 공용)
+- `SOLAPI_SENDER` — 등록된 발신번호. 없으면 nest-notify가 500으로 거절한다.
+- `SOLAPI_PFID` — 카카오 발신프로필. **알림톡으로 전환할 때만** 필요하며, 미설정 상태에서 `channel`을 `alimtalk`/`auto`로 부르면 400으로 거절된다(문자 발송에는 영향 없음).
+- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — Supabase가 자동 주입한다.
 
 ## 9. Build, Test, and Deploy
 
