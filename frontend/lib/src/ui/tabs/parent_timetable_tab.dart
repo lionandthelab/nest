@@ -8,6 +8,7 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import 'timetable/course_lesson_sheet.dart';
 
 class ParentTimetableTab extends StatefulWidget {
   const ParentTimetableTab({
@@ -623,6 +624,14 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                 icon: Icons.meeting_room_outlined,
                 label: '장소',
                 value: locationLabel,
+              ),
+              // 날짜별 진도 내용. 학부모 뷰에서는 읽기 전용이지만, 관리자가
+              // 학부모 뷰로 미리보는 경우에는 입력 버튼이 함께 보인다.
+              const Divider(height: 24),
+              CourseLessonSummary(
+                controller: controller,
+                courseId: entry.session.courseId,
+                referenceDate: refDate,
               ),
               if (upcomingChanges.isNotEmpty) ...[
                 const Divider(height: 24),

@@ -10,6 +10,7 @@ import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/search_select_field.dart';
 import 'timetable/class_change_dialog.dart';
+import 'timetable/course_lesson_sheet.dart';
 
 class TeacherHubTab extends StatefulWidget {
   const TeacherHubTab({super.key, required this.controller});
@@ -573,8 +574,16 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
 
     showModalBottomSheet<void>(
       context: context,
+      // 회차 내용 블록이 붙어 세로가 길어졌다. 작은 화면에서 잘리지 않게
+      // 스크롤 가능한 시트로 띄운다.
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) {
-        return Padding(
+        // 회차 내용 블록은 컨트롤러 상태를 읽는다. 이 시트 위에서 회차를 저장하고
+        // 돌아왔을 때 옛 스냅샷이 남아 "저장이 안 됐다"고 보이지 않도록 구독한다.
+        return AnimatedBuilder(
+          animation: controller,
+          builder: (innerContext, _) => SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -610,6 +619,14 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               _sessionDetailRow(Icons.school_outlined, '담당 교사', teacherLabel),
               const Divider(height: 24),
               _sessionDetailRow(Icons.meeting_room_outlined, '장소', locationLabel),
+              // 날짜별 진도 내용. 회차는 과목에 매달려 있으므로 같은 과목을
+              // 쓰는 다른 반에도 같은 내용이 함께 보인다.
+              const Divider(height: 24),
+              CourseLessonSummary(
+                controller: controller,
+                courseId: session.courseId,
+                referenceDate: courseLessonReferenceDate(controller, slot),
+              ),
               // 담당 교사/관리자만: 이 수업의 휴강·시간/장소 변경·보강 공지 등록.
               if (controller.canManageClassSessionChanges) ...[
                 const Divider(height: 24),
@@ -636,6 +653,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               ],
               const SizedBox(height: 16),
             ],
+          ),
           ),
         );
       },

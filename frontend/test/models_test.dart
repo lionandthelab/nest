@@ -551,6 +551,99 @@ void main() {
     });
   });
 
+  group('CourseLesson', () {
+    Map<String, dynamic> row({
+      String date = '2026-09-15',
+      String title = '창세기 36장',
+      String subtitle = '에서의 자손',
+      String presenter = '리아',
+      String content = '',
+      bool confirmed = true,
+    }) {
+      return {
+        'id': 'lesson-1',
+        'course_id': 'course-1',
+        'lesson_date': date,
+        'title': title,
+        'subtitle': subtitle,
+        'presenter': presenter,
+        'content': content,
+        'is_confirmed': confirmed,
+        'created_by_user_id': 'user-1',
+        'created_at': '2026-08-24T01:00:00+00:00',
+        'updated_at': '2026-08-24T01:00:00+00:00',
+      };
+    }
+
+    test('fromMap 이 PostgREST snake_case 행을 파싱한다', () {
+      final lesson = CourseLesson.fromMap(
+        row(content: '성경 지참, 노트 준비'),
+      );
+
+      expect(lesson.id, 'lesson-1');
+      expect(lesson.courseId, 'course-1');
+      expect(lesson.lessonDate, DateTime(2026, 9, 15));
+      expect(lesson.title, '창세기 36장');
+      expect(lesson.subtitle, '에서의 자손');
+      expect(lesson.presenter, '리아');
+      expect(lesson.content, '성경 지참, 노트 준비');
+      expect(lesson.isConfirmed, isTrue);
+    });
+
+    test('lesson_date 는 시분초 없는 날짜로 파싱된다', () {
+      final lesson = CourseLesson.fromMap(row(date: '2026-12-15'));
+
+      expect(lesson.lessonDate.hour, 0);
+      expect(lesson.lessonDate.minute, 0);
+      expect(lesson.lessonDate, DateTime(2026, 12, 15));
+    });
+
+    test('headline 이 제목과 부제를 합친다', () {
+      expect(CourseLesson.fromMap(row()).headline, '창세기 36장 · 에서의 자손');
+      expect(
+        CourseLesson.fromMap(row(subtitle: '')).headline,
+        '창세기 36장',
+      );
+      expect(
+        CourseLesson.fromMap(row(title: '', subtitle: '')).headline,
+        '',
+      );
+    });
+
+    test('isBlank: 제목·부제·담당·내용이 모두 비면 true', () {
+      final blank = CourseLesson.fromMap(
+        row(title: '', subtitle: '', presenter: '', content: ''),
+      );
+      expect(blank.isBlank, isTrue);
+
+      final filled = CourseLesson.fromMap(
+        row(title: '', subtitle: '', presenter: '오미령', content: ''),
+      );
+      expect(filled.isBlank, isFalse);
+    });
+
+    test('isOn: 시분초는 무시하고 날짜만 비교', () {
+      final lesson = CourseLesson.fromMap(row(date: '2026-09-15'));
+
+      expect(lesson.isOn(DateTime(2026, 9, 15, 23, 59, 59)), isTrue);
+      expect(lesson.isOn(DateTime(2026, 9, 14, 23, 59, 59)), isFalse);
+      expect(lesson.isOn(DateTime(2026, 9, 16)), isFalse);
+    });
+
+    test('toMap 이 date 컬럼을 YYYY-MM-DD 로 직렬화한다', () {
+      final lesson = CourseLesson.fromMap(row(date: '2026-10-06'));
+      final map = lesson.toMap();
+
+      expect(map['lesson_date'], '2026-10-06');
+      expect(map['course_id'], 'course-1');
+      expect(map['is_confirmed'], isTrue);
+
+      final roundTripped = CourseLesson.fromMap(map);
+      expect(roundTripped.lessonDate, DateTime(2026, 10, 6));
+      expect(roundTripped.headline, '창세기 36장 · 에서의 자손');
+    });
+  });
+
   group('AbsenceReport', () {
     Map<String, dynamic> row({String status = 'SUBMITTED'}) {
       return {

@@ -1274,6 +1274,106 @@ class ClassSessionChange {
   };
 }
 
+/// 수업 회차 내용(course_lessons).
+///
+/// 시간표(class_sessions)는 "요일×교시" 주간 반복 템플릿이라 회차 개념이 없다.
+/// 회차의 주인은 과목([courseId]) + 날짜([lessonDate])다. 전교생이 함께 모이는
+/// 통합QT/주중예배처럼 한 과목이 여러 반·교시에 걸려 있어도 진도는 날짜당 하나이므로,
+/// 세션마다 따로 입력하지 않고 그 과목의 모든 시간표 셀이 같은 회차를 읽는다.
+class CourseLesson {
+  const CourseLesson({
+    required this.id,
+    required this.courseId,
+    required this.lessonDate,
+    this.title = '',
+    this.subtitle = '',
+    this.presenter = '',
+    this.content = '',
+    this.isConfirmed = false,
+    this.createdByUserId,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String courseId;
+
+  /// 그 회차를 진행하는 날짜. DB `date` 컬럼이라 시분초는 항상 0이다.
+  final DateTime lessonDate;
+
+  /// 본문 제목. 예: '창세기 36장'
+  final String title;
+
+  /// 부제. 예: '에서의 자손'
+  final String subtitle;
+
+  /// 담당(발표자). 교사 계정이 없는 사람도 담당이 되므로 자유 텍스트다.
+  final String presenter;
+
+  /// 준비물·상세 안내 등 여러 줄 본문.
+  final String content;
+
+  /// 원본 진도표의 ✔️ 표시. 담당/내용이 확정됐다는 뜻.
+  final bool isConfirmed;
+
+  final String? createdByUserId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  /// 제목·부제를 한 줄로. 예: '창세기 36장 · 에서의 자손'
+  String get headline {
+    final parts = <String>[
+      if (title.trim().isNotEmpty) title.trim(),
+      if (subtitle.trim().isNotEmpty) subtitle.trim(),
+    ];
+    return parts.join(' · ');
+  }
+
+  /// 제목/부제/담당/본문이 모두 비어 있는지(자리만 만들어 둔 회차).
+  bool get isBlank =>
+      title.trim().isEmpty &&
+      subtitle.trim().isEmpty &&
+      presenter.trim().isEmpty &&
+      content.trim().isEmpty;
+
+  /// [date] 와 같은 날짜인지. 시분초는 무시한다.
+  bool isOn(DateTime date) {
+    return lessonDate.year == date.year &&
+        lessonDate.month == date.month &&
+        lessonDate.day == date.day;
+  }
+
+  factory CourseLesson.fromMap(Map<String, dynamic> map) {
+    return CourseLesson(
+      id: (map['id'] as String?) ?? '',
+      courseId: (map['course_id'] as String?) ?? '',
+      lessonDate: parseDateOnly(map['lesson_date']) ?? DateTime(1970),
+      title: (map['title'] as String?) ?? '',
+      subtitle: (map['subtitle'] as String?) ?? '',
+      presenter: (map['presenter'] as String?) ?? '',
+      content: (map['content'] as String?) ?? '',
+      isConfirmed: parseBool(map['is_confirmed']),
+      createdByUserId: map['created_by_user_id'] as String?,
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'course_id': courseId,
+    'lesson_date': formatDateOnly(lessonDate),
+    'title': title,
+    'subtitle': subtitle,
+    'presenter': presenter,
+    'content': content,
+    'is_confirmed': isConfirmed,
+    'created_by_user_id': createdByUserId,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+    'updated_at': updatedAt?.toUtc().toIso8601String(),
+  };
+}
+
 /// 결석 신고(absence_reports).
 ///
 /// 학생 본인 또는 그 자녀의 보호자가 다가오는 수업 하루([occurrenceDate])에

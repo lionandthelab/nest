@@ -8,6 +8,7 @@ import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
 import 'student_home_tab.dart' show StudentAbsenceBadge, StudentChangeBadge;
+import 'timetable/course_lesson_sheet.dart';
 
 /// 학생 본인 계정의 시간표 탭.
 ///
@@ -648,6 +649,14 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
           icon: Icons.meeting_room_outlined,
           label: '장소',
           value: locationLabel,
+        ),
+        // 날짜별 진도 내용(읽기 전용). 회차는 과목 단위라 통합QT처럼 전교생이
+        // 함께 듣는 수업도 모든 반에서 같은 내용을 본다.
+        const Divider(height: 24),
+        CourseLessonSummary(
+          controller: controller,
+          courseId: entry.session.courseId,
+          referenceDate: courseLessonReferenceDate(controller, slot),
         ),
         if (changes.isNotEmpty) ...[
           const Divider(height: 24),

@@ -78,6 +78,14 @@ class ClassSessionChangeUnsupported extends NestFeatureUnsupported {
   String get feature => 'class_session_change';
 }
 
+/// `course_lessons` table not deployed.
+class CourseLessonUnsupported extends NestFeatureUnsupported {
+  const CourseLessonUnsupported();
+
+  @override
+  String get feature => 'course_lesson';
+}
+
 /// `absence_reports` table / `report_absence` RPC not deployed.
 class AbsenceReportUnsupported extends NestFeatureUnsupported {
   const AbsenceReportUnsupported();
@@ -166,6 +174,9 @@ class NestRepository {
 
   /// 결석 신고(20260814093000) 배포 여부 캐시.
   bool? _absenceReportsSupported;
+
+  /// 수업 회차 내용(20260824090000) 배포 여부 캐시.
+  bool? _courseLessonsSupported;
 
   /// nest-notify Edge Function 배포 여부 캐시.
   bool? _nestNotifySupported;
@@ -2506,6 +2517,169 @@ class NestRepository {
       if (_isMissingSchemaObject(error, 'class_session_changes')) {
         _classSessionChangesSupported = false;
         throw const ClassSessionChangeUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  // ── 수업 회차 내용 (course_lessons) ──
+  //
+  // 회차의 주인은 세션이 아니라 과목(course)이다. 통합QT/주중예배처럼 한 과목이
+  // 반 14개 × 교시 4개 = 56개 세션에 걸려 있어도 진도는 날짜당 하나이기 때문이다.
+
+  static const String _courseLessonSelect =
+      'id, course_id, lesson_date, title, subtitle, presenter, content, '
+      'is_confirmed, created_by_user_id, created_at, updated_at';
+
+  /// 회차 조회 안전 상한. `course_lessons` 에는 term_id 가 없어서 날짜 창을 넓게
+  /// 잡으면 몇 해치가 한 번에 딸려올 수 있다. 이 목록은 그대로 로컬 캐시에
+  /// 직렬화되므로(웹 저장소는 용량이 작다) 상한을 둔다.
+  static const int _courseLessonFetchLimit = 2000;
+
+  /// 여러 과목의 회차를 한 번에 읽는다. 서버 미배포면 빈 리스트로 degrade 한다.
+  /// [from]/[to] 로 날짜 창을 좁힌다(지난 학기 진도까지 전부 끌어오지 않기 위함).
+  Future<List<CourseLesson>> fetchCourseLessons({
+    required List<String> courseIds,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    if (courseIds.isEmpty || _courseLessonsSupported == false) {
+      return const [];
+    }
+
+    try {
+      var query = client
+          .from('course_lessons')
+          .select(_courseLessonSelect)
+          .inFilter('course_id', courseIds);
+      final fromDate = formatDateOnly(from);
+      if (fromDate != null) {
+        query = query.gte('lesson_date', fromDate);
+      }
+      final toDate = formatDateOnly(to);
+      if (toDate != null) {
+        query = query.lte('lesson_date', toDate);
+      }
+      final data = await query
+          .order('lesson_date', ascending: true)
+          .limit(_courseLessonFetchLimit);
+      _courseLessonsSupported = true;
+      return _asRows(data).map(CourseLesson.fromMap).toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'course_lessons')) {
+        _courseLessonsSupported = false;
+        return const [];
+      }
+      rethrow;
+    }
+  }
+
+  /// 회차를 등록한다(담당 교사/담임/ADMIN·STAFF). 서버 미배포면 [CourseLessonUnsupported].
+  Future<CourseLesson> createCourseLesson({
+    required String courseId,
+    required DateTime lessonDate,
+    String title = '',
+    String subtitle = '',
+    String presenter = '',
+    String content = '',
+    bool isConfirmed = false,
+  }) async {
+    if (_courseLessonsSupported == false) {
+      throw const CourseLessonUnsupported();
+    }
+
+    final values = <String, dynamic>{
+      'course_id': courseId,
+      'lesson_date': formatDateOnly(lessonDate),
+      'title': title.trim(),
+      'subtitle': subtitle.trim(),
+      'presenter': presenter.trim(),
+      'content': content.trim(),
+      'is_confirmed': isConfirmed,
+      'created_by_user_id': client.auth.currentUser?.id,
+    };
+
+    try {
+      final row = await client
+          .from('course_lessons')
+          .insert(values)
+          .select(_courseLessonSelect)
+          .single();
+      _courseLessonsSupported = true;
+      return CourseLesson.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'course_lessons')) {
+        _courseLessonsSupported = false;
+        throw const CourseLessonUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  Future<CourseLesson> updateCourseLesson({
+    required String id,
+    required DateTime lessonDate,
+    String title = '',
+    String subtitle = '',
+    String presenter = '',
+    String content = '',
+    bool isConfirmed = false,
+  }) async {
+    if (_courseLessonsSupported == false) {
+      throw const CourseLessonUnsupported();
+    }
+
+    final values = <String, dynamic>{
+      'lesson_date': formatDateOnly(lessonDate),
+      'title': title.trim(),
+      'subtitle': subtitle.trim(),
+      'presenter': presenter.trim(),
+      'content': content.trim(),
+      'is_confirmed': isConfirmed,
+    };
+
+    try {
+      final row = await client
+          .from('course_lessons')
+          .update(values)
+          .eq('id', id)
+          .select(_courseLessonSelect)
+          .single();
+      _courseLessonsSupported = true;
+      return CourseLesson.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'course_lessons')) {
+        _courseLessonsSupported = false;
+        throw const CourseLessonUnsupported();
+      }
+      rethrow;
+    }
+  }
+
+  /// 회차 삭제. 실제로 지워진 행 수를 돌려준다.
+  ///
+  /// UI 게이트(`canManageCourseLessons`)는 홈스쿨 단위인데 RLS
+  /// (`course_lessons_delete_teacher_admin`)는 과목 단위(`is_course_teacher`)라
+  /// 간극이 있다. 그 간극에 걸리면 DELETE 는 0행에 성공하고 예외도 나지 않으므로,
+  /// `deleteAnnouncement` 와 같이 지워진 행을 돌려받아 호출부가 "조용한 실패"를
+  /// 구분할 수 있게 한다.
+  Future<int> deleteCourseLesson({required String id}) async {
+    if (_courseLessonsSupported == false) {
+      throw const CourseLessonUnsupported();
+    }
+
+    try {
+      final data = await client
+          .from('course_lessons')
+          .delete()
+          .eq('id', id)
+          .select('id');
+      _courseLessonsSupported = true;
+      return _asRows(data).length;
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'course_lessons')) {
+        _courseLessonsSupported = false;
+        throw const CourseLessonUnsupported();
       }
       rethrow;
     }

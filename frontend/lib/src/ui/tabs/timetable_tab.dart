@@ -14,6 +14,7 @@ import '../nest_theme.dart';
 import '../widgets/search_select_field.dart';
 import 'self_study/supervision_schedule_view.dart';
 import 'timetable/class_change_dialog.dart';
+import 'timetable/course_lesson_sheet.dart';
 import 'timetable/empty_room_finder.dart';
 import 'timetable/family_enrollment_panel.dart';
 import 'timetable/object_inspector_rail.dart';
@@ -3729,6 +3730,40 @@ class _TimetableTabState extends State<TimetableTab> {
                               ),
                         ),
                       ],
+                      // 회차별 진도 내용. 회차는 세션이 아니라 과목에 매달려 있으므로
+                      // 아직 커밋되지 않은(tmp) 세션에서도 바로 입력할 수 있다.
+                      if (controller.canManageCourseLessons) ...[
+                        const Divider(height: 26),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            onPressed: () => showCourseLessonSheet(
+                              context: context,
+                              controller: controller,
+                              courseId: session.courseId,
+                            ),
+                            icon: const Icon(Icons.auto_stories_outlined),
+                            label: Text(
+                              controller
+                                      .lessonsForCourse(session.courseId)
+                                      .isEmpty
+                                  ? '수업 회차 내용'
+                                  : '수업 회차 내용 '
+                                        '(${controller.lessonsForCourse(session.courseId).length})',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '날짜별 진도(제목·담당·준비물)를 입력합니다. 같은 과목의 모든 반 시간표에 함께 보입니다.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: NestColors.deepWood.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -5027,8 +5062,16 @@ class _ReadOnlySlotCell extends StatelessWidget {
 
     showModalBottomSheet<void>(
       context: context,
+      // 회차 내용 블록이 붙어 세로가 길어졌다. 작은 화면에서 잘리지 않게
+      // 스크롤 가능한 시트로 띄운다.
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) {
-        return Padding(
+        // 회차 내용 블록은 컨트롤러 상태를 읽는다. 이 시트 위에서 회차를 저장하고
+        // 돌아왔을 때 옛 스냅샷이 남아 "저장이 안 됐다"고 보이지 않도록 구독한다.
+        return AnimatedBuilder(
+          animation: controller,
+          builder: (innerContext, _) => SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -5079,6 +5122,14 @@ class _ReadOnlySlotCell extends StatelessWidget {
                 label: '장소',
                 value: location.isEmpty ? '장소 미지정' : location,
               ),
+              // 날짜별 진도 내용. 읽기는 전원, 입력은 담당 교사/관리자만
+              // (CourseLessonSummary 가 권한에 따라 문구를 바꾼다).
+              const Divider(height: 24),
+              CourseLessonSummary(
+                controller: controller,
+                courseId: session.courseId,
+                referenceDate: courseLessonReferenceDate(controller, slot),
+              ),
               // 담당 교사/관리자만: 이 수업의 휴강·시간/장소 변경·보강 공지를
               // 등록하고 학생·학부모에게 문자로 알린다.
               if (controller.canManageClassSessionChanges) ...[
@@ -5106,6 +5157,7 @@ class _ReadOnlySlotCell extends StatelessWidget {
               ],
               const SizedBox(height: 16),
             ],
+          ),
           ),
         );
       },

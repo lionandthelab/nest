@@ -61,6 +61,10 @@ class NestController extends ChangeNotifier {
   /// 학기 전체 세션에 대한 결석 신고(최근 30일 이후 회차만).
   /// [loadAbsenceReports] 가 채운다. 서버에 마이그레이션이 없으면 빈 목록.
   List<AbsenceReport> absenceReports = [];
+
+  /// 홈스쿨 과목별 회차 내용(진도표). [loadCourseLessons] 가 채운다.
+  /// 서버에 마이그레이션이 없으면 빈 목록.
+  List<CourseLesson> courseLessons = [];
   String? selectedHomeschoolId;
   String? currentRole;
   final Map<String, String> _viewRoleByHomeschool = <String, String>{};
@@ -534,6 +538,11 @@ class NestController extends ChangeNotifier {
   /// 실제 인가는 RLS(`class_session_changes_insert_teacher_admin`)가 담당하고,
   /// 이 값은 UI 노출과 조기 실패 안내를 위한 1차 가드다.
   bool get canManageClassSessionChanges => isTeacherView || isAdminLike;
+
+  /// 수업 회차 내용(진도표) 등록/수정/삭제 권한(교사 또는 관리자/스태프).
+  /// 실제 인가는 RLS(`course_lessons_insert_teacher_admin`)가 담당하고,
+  /// 이 값은 UI 노출과 조기 실패 안내를 위한 1차 가드다.
+  bool get canManageCourseLessons => isTeacherView || isAdminLike;
 
   /// 결석 신고 권한(학부모·학생 본인 또는 관리자/스태프).
   bool get canReportAbsence => isParentView || isStudentView || isAdminLike;
@@ -2691,6 +2700,311 @@ class NestController extends ChangeNotifier {
     }
   }
 
+  // ── 수업 회차 내용 (course_lessons) ──
+  //
+  // 회차의 주인은 세션이 아니라 과목이다. 통합QT/주중예배처럼 한 과목이 반 14개 ×
+  // 교시 4개 = 세션 56개에 걸려 있어도 진도는 날짜당 하나이므로, 과목+날짜로 한 번만
+  // 입력하고 그 과목의 모든 시간표 셀이 같은 회차를 읽는다.
+
+  /// 진도표 조회 날짜 창의 앞뒤 여유.
+  ///
+  /// 앞: 학기 시작 전에 등록하는 오리엔테이션·사전 모임을 덮는다.
+  /// 뒤: 학기 종료일을 넘겨 미리 짜둔 회차(예: 종료 11/30, 진도표 12/15까지)를 덮는다.
+  ///
+  /// ⚠️ 앞쪽 여유는 회차 등록 다이얼로그의 날짜 선택 하한
+  /// (`course_lesson_sheet.dart` 의 `courseLessonPickerLeadDays`)과 **같아야 한다.**
+  /// 고를 수는 있는데 다시 읽어오지 않는 날짜가 생기면, 저장 직후 그 회차가
+  /// 목록에서 사라지고 같은 날짜로 재시도하면 unique 위반이 난다.
+  static const int courseLessonWindowLeadDays = 30;
+  static const int courseLessonWindowTrailDays = 180;
+
+  /// 진도표를 읽어 오는 하한 날짜. 선택 학기가 없으면 null(= 제한 없음).
+  DateTime? get _courseLessonWindowStart {
+    final start = selectedTerm?.startDate;
+    if (start == null) {
+      return null;
+    }
+    return DateTime(
+      start.year,
+      start.month,
+      start.day,
+    ).subtract(const Duration(days: courseLessonWindowLeadDays));
+  }
+
+  /// 진도표를 읽어 오는 상한 날짜. 선택 학기가 없으면 null(= 제한 없음).
+  DateTime? get _courseLessonWindowEnd {
+    final end = selectedTerm?.endDate;
+    if (end == null) {
+      return null;
+    }
+    return DateTime(
+      end.year,
+      end.month,
+      end.day,
+    ).add(const Duration(days: courseLessonWindowTrailDays));
+  }
+
+  Future<void> loadCourseLessons() async {
+    final courseIds = courses
+        .map((course) => course.id)
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (courseIds.isEmpty) {
+      courseLessons = [];
+      _notifyIfIdle();
+      return;
+    }
+
+    final loaded = await _repository.fetchCourseLessons(
+      courseIds: courseIds,
+      from: _courseLessonWindowStart,
+      to: _courseLessonWindowEnd,
+    );
+    // 학기 창 밖이라 이번 조회에 안 잡히지만 이미 메모리에 있는 회차
+    // ([loadCourseLessonsForCourse] 가 통째로 읽어온 과목)는 남긴다. 그러지 않으면
+    // 지난 학기 진도표를 보다가 다른 조회가 한 번 돌면 목록이 비어 버린다.
+    final loadedIds = loaded.map((row) => row.id).toSet();
+    final courseIdSet = courseIds.toSet();
+    final kept = courseLessons.where(
+      (row) =>
+          !loadedIds.contains(row.id) &&
+          courseIdSet.contains(row.courseId) &&
+          _fullyLoadedCourseLessonIds.contains(row.courseId),
+    );
+    courseLessons = [...loaded, ...kept]
+      ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
+    _notifyIfIdle();
+  }
+
+  /// 날짜 창 없이 한 과목의 회차를 통째로 읽어 [courseLessons] 에 합친다.
+  ///
+  /// 회차 시트는 학기 설정 → 과목 관리에서도 열리는데 그쪽은 학기 맥락이 없고,
+  /// 과목은 학기가 아니라 홈스쿨에 매달려 있어 지난/다음 학기 회차가 같은 과목에
+  /// 섞여 있다. 창으로 걸러진 회차를 숨기면 시트가 비어 보이면서도 같은 날짜로
+  /// 등록하면 unique 위반이 나는 상태가 된다. 그래서 시트를 열 때 그 과목만
+  /// 전부 읽어 온다. 실패하면 조용히 무시한다(이미 있는 목록으로 계속 쓴다).
+  Future<void> loadCourseLessonsForCourse(String courseId) async {
+    final normalized = _normalizeNullable(courseId);
+    if (normalized == null) {
+      return;
+    }
+
+    try {
+      final rows = await _repository.fetchCourseLessons(
+        courseIds: [normalized],
+      );
+      _fullyLoadedCourseLessonIds.add(normalized);
+      final merged = courseLessons
+          .where((row) => row.courseId != normalized)
+          .toList()
+        ..addAll(rows)
+        ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
+      courseLessons = merged;
+      _notifyIfIdle();
+    } catch (_) {
+      // 서버 미배포·일시 오류: 창 안의 목록만으로 계속 동작한다.
+    }
+  }
+
+  /// [loadCourseLessonsForCourse] 로 창 없이 전부 읽어둔 과목.
+  final Set<String> _fullyLoadedCourseLessonIds = <String>{};
+
+  /// 한 과목의 회차 목록(날짜 순).
+  List<CourseLesson> lessonsForCourse(String courseId) {
+    if (courseId.isEmpty) {
+      return const [];
+    }
+    final rows = courseLessons
+        .where((row) => row.courseId == courseId)
+        .toList()
+      ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
+    return rows;
+  }
+
+  /// 특정 날짜의 회차. 없으면 null.
+  CourseLesson? courseLessonOn({
+    required String courseId,
+    required DateTime date,
+  }) {
+    return courseLessons
+        .where((row) => row.courseId == courseId && row.isOn(date))
+        .firstOrNull;
+  }
+
+  /// [from](기본 오늘) 이후 가장 가까운 회차. 시간표 셀 상세에서 "다음 회차"로 쓴다.
+  CourseLesson? upcomingCourseLesson({
+    required String courseId,
+    DateTime? from,
+  }) {
+    final base = from ?? DateTime.now();
+    final pivot = DateTime(base.year, base.month, base.day);
+    return lessonsForCourse(
+      courseId,
+    ).where((row) => !row.lessonDate.isBefore(pivot)).firstOrNull;
+  }
+
+  /// 시간표에 걸린 과목의 수업 요일 집합(앱 규약 0=일).
+  /// 회차 날짜 후보를 만들 때 쓴다. 학기 전체 세션을 본다(교차 반 포함).
+  Set<int> courseWeekdays(String courseId) {
+    if (courseId.isEmpty) {
+      return const {};
+    }
+    final rows = allTermSessions.isNotEmpty ? allTermSessions : sessions;
+    final days = <int>{};
+    for (final session in rows) {
+      if (session.courseId != courseId) {
+        continue;
+      }
+      final slot = findTimeSlot(session.timeSlotId);
+      if (slot != null) {
+        days.add(slot.dayOfWeek);
+      }
+    }
+    return days;
+  }
+
+  void _assertCanManageCourseLessons() {
+    if (!canManageCourseLessons) {
+      throw StateError('수업 회차 내용은 담당 교사 또는 관리자/스태프만 입력할 수 있습니다.');
+    }
+  }
+
+  /// 회차 쓰기에서 나오는 Postgres 오류를 한국어 안내로 바꾼다.
+  ///
+  /// UI 게이트(`canManageCourseLessons`)는 홈스쿨 단위인데 RLS 는 과목 단위라,
+  /// 담당하지 않는 과목의 셀에서 입력을 시도하면 42501 이 그대로 올라온다.
+  /// 그대로 두면 한국어 화면에 영어 SQL 원문이 스낵바로 뜬다.
+  Never _throwCourseLessonWriteError(
+    PostgrestException error, {
+    required DateTime lessonDate,
+  }) {
+    switch (error.code) {
+      case '23505':
+        throw StateError(
+          '${formatDateOnly(lessonDate)} 회차는 이미 있습니다. 목록에서 그 회차를 눌러 수정하세요.',
+        );
+      case '42501':
+        throw StateError('이 과목의 담당 교사 또는 관리자/스태프만 회차를 입력할 수 있습니다.');
+      default:
+        throw error;
+    }
+  }
+
+  Future<CourseLesson> createCourseLesson({
+    required String courseId,
+    required DateTime lessonDate,
+    String title = '',
+    String subtitle = '',
+    String presenter = '',
+    String content = '',
+    bool isConfirmed = false,
+  }) async {
+    _assertCanManageCourseLessons();
+    final normalizedCourseId = _normalizeNullable(courseId);
+    if (normalizedCourseId == null) {
+      throw StateError('회차를 등록할 과목을 선택하세요.');
+    }
+
+    late CourseLesson created;
+    await _runBusy('수업 회차를 저장하는 중...', () async {
+      try {
+        created = await _repository.createCourseLesson(
+          courseId: normalizedCourseId,
+          lessonDate: lessonDate,
+          title: title,
+          subtitle: subtitle,
+          presenter: presenter,
+          content: content,
+          isConfirmed: isConfirmed,
+        );
+      } on CourseLessonUnsupported {
+        throw StateError('수업 회차 내용 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      } on PostgrestException catch (error) {
+        _throwCourseLessonWriteError(error, lessonDate: lessonDate);
+      }
+      await loadCourseLessonsForCourse(normalizedCourseId);
+      _setStatus('수업 회차 내용을 저장했습니다.');
+    });
+    return created;
+  }
+
+  Future<CourseLesson> updateCourseLesson({
+    required String id,
+    required DateTime lessonDate,
+    String title = '',
+    String subtitle = '',
+    String presenter = '',
+    String content = '',
+    bool isConfirmed = false,
+  }) async {
+    _assertCanManageCourseLessons();
+    final normalizedId = _normalizeNullable(id);
+    if (normalizedId == null) {
+      throw StateError('수정할 회차를 선택하세요.');
+    }
+    final courseId = courseLessons
+        .where((row) => row.id == normalizedId)
+        .map((row) => row.courseId)
+        .firstOrNull;
+
+    late CourseLesson updated;
+    await _runBusy('수업 회차를 수정하는 중...', () async {
+      try {
+        updated = await _repository.updateCourseLesson(
+          id: normalizedId,
+          lessonDate: lessonDate,
+          title: title,
+          subtitle: subtitle,
+          presenter: presenter,
+          content: content,
+          isConfirmed: isConfirmed,
+        );
+      } on CourseLessonUnsupported {
+        throw StateError('수업 회차 내용 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      } on PostgrestException catch (error) {
+        _throwCourseLessonWriteError(error, lessonDate: lessonDate);
+      }
+      if (courseId != null) {
+        await loadCourseLessonsForCourse(courseId);
+      } else {
+        await loadCourseLessons();
+      }
+      _setStatus('수업 회차 내용을 수정했습니다.');
+    });
+    return updated;
+  }
+
+  Future<void> deleteCourseLesson({required String id}) async {
+    _assertCanManageCourseLessons();
+    final normalizedId = _normalizeNullable(id);
+    if (normalizedId == null) {
+      throw StateError('삭제할 회차를 선택하세요.');
+    }
+    final courseId = courseLessons
+        .where((row) => row.id == normalizedId)
+        .map((row) => row.courseId)
+        .firstOrNull;
+
+    await _runBusy('수업 회차를 삭제하는 중...', () async {
+      late int deleted;
+      try {
+        deleted = await _repository.deleteCourseLesson(id: normalizedId);
+      } on CourseLessonUnsupported {
+        throw StateError('수업 회차 내용 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
+      }
+      // RLS 가 막으면 DELETE 는 0행에 "성공" 한다(예외 없음). 지워진 척하지 않는다.
+      if (deleted == 0) {
+        throw StateError('이 회차를 삭제할 권한이 없거나 이미 삭제되었습니다.');
+      }
+      if (courseId != null) {
+        await loadCourseLessonsForCourse(courseId);
+      } else {
+        await loadCourseLessons();
+      }
+      _setStatus('수업 회차를 삭제했습니다.');
+    });
+  }
+
   // ── 수업 변경 공지 (class_session_changes) ──
 
   /// 학기 전체 세션 id(교차 반 포함). 변경 공지·결석 신고 조회의 기준.
@@ -2717,6 +3031,11 @@ class NestController extends ChangeNotifier {
       await loadAbsenceReports();
     } catch (_) {
       absenceReports = [];
+    }
+    try {
+      await loadCourseLessons();
+    } catch (_) {
+      courseLessons = [];
     }
     _notifyIfIdle();
   }
@@ -7276,6 +7595,14 @@ class NestController extends ChangeNotifier {
           fromMap: AbsenceReport.fromMap,
         ) ??
         const [];
+    courseLessons =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'courseLessons',
+          fromMap: CourseLesson.fromMap,
+        ) ??
+        const [];
 
     // 캐시에 남은 이전 학기 선택을 그대로 쓰지 않고 오늘 기준 기본 학기로
     // 재해석한다. 오프라인 부팅(서버 _loadTerms 미도달)에서도 학부모/교사가
@@ -7302,6 +7629,7 @@ class NestController extends ChangeNotifier {
       teachingPlans = const [];
       classSessionChanges = const [];
       absenceReports = const [];
+      courseLessons = const [];
     }
   }
 
@@ -7490,6 +7818,13 @@ class NestController extends ChangeNotifier {
         items: absenceReports,
         toMap: (r) => r.toMap(),
       ),
+      NestCache.saveCollection(
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'courseLessons',
+        items: courseLessons,
+        toMap: (l) => l.toMap(),
+      ),
     ]);
   }
 
@@ -7515,6 +7850,7 @@ class NestController extends ChangeNotifier {
     auditLogs = [];
     classSessionChanges = [];
     absenceReports = [];
+    courseLessons = [];
     _viewRoleByHomeschool.clear();
     _sessionViewRoleSelections.clear();
     _parentViewTargetByHomeschool.clear();

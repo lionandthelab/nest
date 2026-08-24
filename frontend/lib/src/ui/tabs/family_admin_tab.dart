@@ -7,6 +7,7 @@ import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
+import 'timetable/course_lesson_sheet.dart';
 
 class FamilyAdminTab extends StatefulWidget {
   const FamilyAdminTab({
@@ -3181,28 +3182,67 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 title: Text(initial == null ? '과목 추가' : '과목 수정'),
                 content: SizedBox(
                   width: 480,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: '과목 이름'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: durationController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: '기본 수업 시간(분)',
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: nameController,
+                          decoration: const InputDecoration(
+                            labelText: '과목 이름',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (usedInCurrentClass)
-                        _buildEmptyHint(
-                          '현재 선택된 반의 시간표에서 사용 중인 과목입니다. 삭제는 불가능하며 이름/시간 수정만 가능합니다.',
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: durationController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: '기본 수업 시간(분)',
+                          ),
                         ),
-                    ],
+                        const SizedBox(height: 8),
+                        if (usedInCurrentClass)
+                          _buildEmptyHint(
+                            '현재 선택된 반의 시간표에서 사용 중인 과목입니다. 삭제는 불가능하며 이름/시간 수정만 가능합니다.',
+                          ),
+                        // 회차별 진도 내용. 회차는 과목+날짜로 저장되므로 이 과목을
+                        // 쓰는 모든 반/교시 시간표에 같은 내용이 함께 보인다.
+                        if (initial != null &&
+                            controller.canManageCourseLessons) ...[
+                          const Divider(height: 26),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: isSaving
+                                  ? null
+                                  : () => showCourseLessonSheet(
+                                      context: context,
+                                      controller: controller,
+                                      courseId: initial.id,
+                                    ),
+                              icon: const Icon(Icons.auto_stories_outlined),
+                              label: Text(
+                                controller.lessonsForCourse(initial.id).isEmpty
+                                    ? '수업 회차 내용'
+                                    : '수업 회차 내용 '
+                                          '(${controller.lessonsForCourse(initial.id).length})',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '날짜별 진도(제목·담당·준비물)를 입력합니다. 학생·학부모 시간표에도 함께 보입니다.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: NestColors.deepWood.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
                 actions: [
