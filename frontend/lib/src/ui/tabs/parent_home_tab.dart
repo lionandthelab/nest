@@ -6,6 +6,8 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_skeleton.dart';
+import 'lessons_today_section.dart';
 import 'self_study/supervision_schedule_view.dart';
 
 class ParentHomeTab extends StatefulWidget {
@@ -79,6 +81,24 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
         _buildAnnouncementBanner(controller),
 
         const SizedBox(height: 16),
+
+        // ── 오늘(또는 다음) 수업 + 그 날 진도 ──
+        // 학부모 홈에는 지금까지 시간표가 없어서, 아이가 무슨 수업을 무슨 내용으로
+        // 하는지 보려면 시간표 탭의 작은 격자 셀을 눌러야 했다.
+        //
+        // 로딩 중에는 섹션을 띄우지 않는다. 번들이 아직 비어 있는 상태로 그리면
+        // "반이 배정되면 …" 안내가 잠깐 떴다가 사라져 배정이 없는 것처럼 보인다.
+        if (widget.isLoadingChildClasses && bundles.isEmpty) ...[
+          const NestSkeletonCard(lines: 3),
+          const SizedBox(height: 16),
+        ] else if (!noEnrollments && bundles.isNotEmpty) ...[
+          LessonsTodaySection(
+            controller: controller,
+            childId: widget.selectedChildId,
+            bundles: bundles,
+          ),
+          const SizedBox(height: 16),
+        ],
 
         // ── 내 감독 시간표 (감독을 맡은 학부모만) ──
         _buildMySupervision(controller),

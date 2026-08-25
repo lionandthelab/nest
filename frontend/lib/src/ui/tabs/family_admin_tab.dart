@@ -2853,6 +2853,126 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     );
   }
 
+  /// 다이얼로그 안에 넣는 한 줄 안내.
+  ///
+  /// [_buildEmptyHint]는 큰 아이콘이 붙은 빈 목록용 컴포넌트라, 좁은 화면의
+  /// 다이얼로그에 넣으면 화면 절반을 안내문이 먹는다. 그 자리에는 이걸 쓴다.
+  Widget _buildInlineNotice(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: NestColors.roseMist.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline, size: 16, color: NestColors.clay),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 과목 수정 다이얼로그의 "수업 회차 내용" 진입 카드.
+  ///
+  /// 회차 수와 다음 회차를 미리 보여줘서, 열어 보지 않아도 진도가 있는지 알 수 있다.
+  Widget _buildCourseLessonEntryTile({
+    required NestController controller,
+    required Course course,
+    required bool enabled,
+    required VoidCallback onChanged,
+  }) {
+    final lessons = controller.lessonsForCourse(course.id);
+    // ⚠️ 다가오는 회차가 없으면 upcomingCourseLesson 은 null 이다. 그때 마지막
+    // 회차로 폴백하면서 "다음"이라고 부르면, 이미 지난 진도를 예정된 것처럼
+    // 안내하게 된다(회차 요약 블록에서 이미 한 번 겪은 함정).
+    final upcoming = controller.upcomingCourseLesson(courseId: course.id);
+    final fallback = lessons.isEmpty ? null : lessons.last;
+    final shown = upcoming ?? fallback;
+
+    final String subtitle;
+    if (shown == null) {
+      subtitle = '아직 등록된 회차가 없습니다. 날짜별 진도를 입력해 보세요.';
+    } else {
+      final headline = shown.headline;
+      final label = DateFormat('M월 d일').format(shown.lessonDate);
+      final relation = upcoming != null ? '다음' : '마지막';
+      subtitle = headline.isEmpty
+          ? '${lessons.length}회차 · $relation $label'
+          : '${lessons.length}회차 · $relation $label $headline';
+    }
+
+    return Material(
+      color: NestColors.roseMist.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: enabled
+            ? () async {
+                await showCourseLessonSheet(
+                  context: context,
+                  controller: controller,
+                  courseId: course.id,
+                );
+                // 시트에서 회차를 넣고 돌아오면 이 타일의 개수·미리보기도 갱신한다.
+                // (다이얼로그는 컨트롤러를 구독하지 않는 StatefulBuilder 다.)
+                onChanged();
+              }
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.auto_stories_outlined,
+                color: NestColors.clay,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '수업 회차 내용',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.72),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: NestColors.deepWood.withValues(alpha: 0.45),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSetupSummaryGrid({required List<_SetupStat> stats}) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -3264,6 +3384,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
               return AlertDialog(
                 title: Text(initial == null ? '과목 추가' : '과목 수정'),
+                // 모바일에서 기본 여백(40)이면 다이얼로그가 좁아 입력 필드와
+                // 회차 진입점이 답답하게 눌린다.
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 24,
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 content: SizedBox(
                   width: 480,
                   child: SingleChildScrollView(
@@ -3285,46 +3412,27 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             labelText: '기본 수업 시간(분)',
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        if (usedInTerm)
-                          _buildEmptyHint(
-                            '이 학기 시간표에서 사용 중인 과목입니다. 삭제는 불가능하며 이름/시간 수정만 가능합니다.',
-                          ),
                         // 회차별 진도 내용. 회차는 과목+날짜로 저장되므로 이 과목을
                         // 쓰는 모든 반/교시 시간표에 같은 내용이 함께 보인다.
+                        // 이 다이얼로그에서 가장 자주 쓰는 동작이라 맨 위로 올리고
+                        // 카드 형태로 키웠다(작은 아웃라인 버튼은 눈에 띄지 않았다).
                         if (initial != null &&
                             controller.canManageCourseLessons) ...[
-                          const Divider(height: 26),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: OutlinedButton.icon(
-                              onPressed: isSaving
-                                  ? null
-                                  : () => showCourseLessonSheet(
-                                      context: context,
-                                      controller: controller,
-                                      courseId: initial.id,
-                                    ),
-                              icon: const Icon(Icons.auto_stories_outlined),
-                              label: Text(
-                                controller.lessonsForCourse(initial.id).isEmpty
-                                    ? '수업 회차 내용'
-                                    : '수업 회차 내용 '
-                                          '(${controller.lessonsForCourse(initial.id).length})',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '날짜별 진도(제목·담당·준비물)를 입력합니다. 학생·학부모 시간표에도 함께 보입니다.',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: NestColors.deepWood.withValues(
-                                    alpha: 0.6,
-                                  ),
-                                ),
+                          const SizedBox(height: 14),
+                          _buildCourseLessonEntryTile(
+                            controller: controller,
+                            course: initial,
+                            enabled: !isSaving,
+                            onChanged: () => setDialogState(() {}),
                           ),
                         ],
+                        if (usedInTerm) ...[
+                          const SizedBox(height: 10),
+                          _buildInlineNotice(
+                            '이 학기 시간표에서 사용 중이라 삭제할 수 없습니다. 이름·시간 수정은 가능합니다.',
+                          ),
+                        ],
+                        const SizedBox(height: 4),
                       ],
                     ),
                   ),

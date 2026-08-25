@@ -34,6 +34,12 @@ class CourseLessonRow {
   final bool isInTerm;
 
   bool get isFilled => lesson != null && !lesson!.isBlank;
+
+  /// [other] 와 같은 날짜인지. 시분초는 무시한다.
+  bool isOnDate(DateTime other) =>
+      date.year == other.year &&
+      date.month == other.month &&
+      date.day == other.day;
 }
 
 /// 안전 상한. 요일 5개 × 1년이면 260줄이라 실사용에서는 걸리지 않는다.
@@ -123,11 +129,18 @@ Future<void> showCourseLessonSheet({
   required BuildContext context,
   required NestController controller,
   required String courseId,
+  DateTime? focusDate,
 }) async {
   if (courseId.trim().isEmpty) {
     _showMessage(context, '과목 정보를 찾을 수 없습니다.');
     return;
   }
+
+  // 특정 날짜를 보려고 들어온 경우(시간표 셀·홈 카드 탭) 그 회차로 스크롤한다.
+  // 진도표가 20회차를 넘어가면 맨 위 1회차부터 손으로 찾아 내려가야 하는데,
+  // 그건 이 기능이 없애려던 바로 그 수고다.
+  final focusKey = GlobalKey();
+  var didFocus = false;
 
   // 회차 시트는 학기 맥락 없이도 열린다(학기 설정 → 과목 관리). 그 과목의 회차를
   // 날짜 창 없이 통째로 읽어, 창 밖 회차가 안 보이면서 같은 날짜로 등록하면
@@ -146,6 +159,21 @@ Future<void> showCourseLessonSheet({
           final rows = buildCourseLessonRows(controller, courseId);
           final filled = rows.where((row) => row.isFilled).length;
           final theme = Theme.of(innerContext);
+
+          // 목록이 그려진 뒤 한 번만 대상 회차로 스크롤한다.
+          if (!didFocus && focusDate != null && rows.isNotEmpty) {
+            didFocus = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final target = focusKey.currentContext;
+              if (target != null) {
+                Scrollable.ensureVisible(
+                  target,
+                  alignment: 0.1,
+                  duration: const Duration(milliseconds: 250),
+                );
+              }
+            });
+          }
 
           return Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -241,11 +269,18 @@ Future<void> showCourseLessonSheet({
                         children: [
                           for (var i = 0; i < rows.length; i++)
                             _CourseLessonRowTile(
+                              // 대상 날짜 줄에만 키를 달아 두고 그 줄로 스크롤한다.
+                              key: focusDate != null && rows[i].isOnDate(focusDate)
+                                  ? focusKey
+                                  : null,
                               controller: controller,
                               courseId: courseId,
                               row: rows[i],
                               index: i + 1,
                               canManage: canManage,
+                              highlight:
+                                  focusDate != null &&
+                                  rows[i].isOnDate(focusDate),
                             ),
                         ],
                       ),
@@ -695,6 +730,8 @@ class CourseLessonSummary extends StatelessWidget {
               context: context,
               controller: controller,
               courseId: courseId,
+              // 지금 보고 있는 회차로 열어 준다.
+              focusDate: refDate ?? lesson?.lessonDate,
             ),
             icon: Icon(
               canManage
@@ -801,11 +838,13 @@ class _LessonLine extends StatelessWidget {
 /// 회차 목록의 한 줄 타일.
 class _CourseLessonRowTile extends StatelessWidget {
   const _CourseLessonRowTile({
+    super.key,
     required this.controller,
     required this.courseId,
     required this.row,
     required this.index,
     required this.canManage,
+    this.highlight = false,
   });
 
   final NestController controller;
@@ -813,6 +852,9 @@ class _CourseLessonRowTile extends StatelessWidget {
   final CourseLessonRow row;
   final int index;
   final bool canManage;
+
+  /// 시간표/홈에서 그 날짜를 보려고 들어왔을 때 눈에 띄게 표시한다.
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -834,11 +876,16 @@ class _CourseLessonRowTile extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: isToday ? NestColors.roseMist.withValues(alpha: 0.35) : null,
+        color: highlight || isToday
+            ? NestColors.roseMist.withValues(alpha: 0.35)
+            : null,
         border: Border.all(
-          color: row.isFilled
-              ? NestColors.roseMist
-              : NestColors.roseMist.withValues(alpha: 0.5),
+          width: highlight ? 2 : 1,
+          color: highlight
+              ? NestColors.dustyRose
+              : (row.isFilled
+                    ? NestColors.roseMist
+                    : NestColors.roseMist.withValues(alpha: 0.5)),
         ),
       ),
       child: Row(

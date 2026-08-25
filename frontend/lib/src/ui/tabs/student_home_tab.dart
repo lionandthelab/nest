@@ -7,6 +7,8 @@ import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_skeleton.dart';
+import '../widgets/schedule_badges.dart';
+import 'lessons_today_section.dart';
 
 /// 학생 본인 계정의 홈 탭.
 ///
@@ -93,7 +95,11 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
         _buildAnnouncementBanner(controller),
         const SizedBox(height: 16),
         if (!noEnrollments) ...[
-          _buildTodayClasses(context, controller, childId, bundles),
+          LessonsTodaySection(
+            controller: controller,
+            childId: childId,
+            bundles: bundles,
+          ),
           const SizedBox(height: 16),
           _buildUpcomingChanges(context, controller, bundles),
           const SizedBox(height: 16),
@@ -150,9 +156,6 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
     if (session == null) return '수업';
     return controller.findCourseName(session.courseId);
   }
-
-  /// 앱 요일 규약(0=일 .. 6=토).
-  int _appDay(DateTime date) => date.weekday % 7;
 
   DateTime _today() {
     final now = DateTime.now();
@@ -248,158 +251,6 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
   }
 
   // ── 오늘의 수업 ──
-
-  Widget _buildTodayClasses(
-    BuildContext context,
-    NestController controller,
-    String childId,
-    Map<String, ChildClassBundle> bundles,
-  ) {
-    final today = _today();
-    final todayDay = _appDay(today);
-
-    final rows = <_StudentSessionRow>[];
-    var weeklyCount = 0;
-    for (final bundle in bundles.values) {
-      for (final session in bundle.sessions) {
-        final slot = controller.findTimeSlot(session.timeSlotId);
-        if (slot == null) continue;
-        weeklyCount += 1;
-        if (slot.dayOfWeek != todayDay) continue;
-        rows.add(
-          _StudentSessionRow(
-            className: bundle.classGroup.name,
-            session: session,
-            slot: slot,
-          ),
-        );
-      }
-    }
-    rows.sort((a, b) => a.slot.startTime.compareTo(b.slot.startTime));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(
-          context,
-          icon: Icons.today_outlined,
-          title: '오늘의 수업',
-          trailing: '이번 주 수업 $weeklyCount개',
-        ),
-        const SizedBox(height: 10),
-        if (rows.isEmpty)
-          _buildQuietCard(context, '오늘은 수업이 없어요.')
-        else
-          ...rows.map(
-            (row) => _buildSessionCard(context, controller, childId, row, today),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSessionCard(
-    BuildContext context,
-    NestController controller,
-    String childId,
-    _StudentSessionRow row,
-    DateTime date,
-  ) {
-    final courseName = controller.findCourseName(row.session.courseId);
-    final timeLabel =
-        '${_shortTime(row.slot.startTime)} - ${_shortTime(row.slot.endTime)}';
-    final change = controller.effectiveChangeFor(
-      sessionId: row.session.id,
-      date: date,
-    );
-    // 같은 반에 형제가 있을 수 있으므로 반드시 이 아이의 신고만 본다.
-    final absence = controller.absenceFor(
-      sessionId: row.session.id,
-      date: date,
-      childId: childId,
-    );
-    final location = (row.session.location ?? '').trim();
-    final resolvedLocation = change != null && change.newLocation.trim().isNotEmpty
-        ? change.newLocation.trim()
-        : location;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: NestColors.mutedSage.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _shortTime(row.slot.startTime),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: NestColors.deepWood,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          courseName,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                decoration: change?.changeType == 'CANCELED'
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                        ),
-                      ),
-                      if (change != null) ...[
-                        const SizedBox(width: 6),
-                        StudentChangeBadge(label: change.changeTypeLabel),
-                      ],
-                      if (absence != null) ...[
-                        const SizedBox(width: 6),
-                        const StudentAbsenceBadge(),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    resolvedLocation.isEmpty
-                        ? '${row.className} · $timeLabel'
-                        : '${row.className} · $timeLabel · $resolvedLocation',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.6),
-                        ),
-                  ),
-                  if (change != null && change.reason.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      change.reason.trim(),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── 다가오는 수업 변경 안내 ──
 
@@ -1034,99 +885,4 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
 
 // ── 공유 위젯 ──
 
-class _StudentSessionRow {
-  const _StudentSessionRow({
-    required this.className,
-    required this.session,
-    required this.slot,
-  });
 
-  final String className;
-  final ClassSession session;
-  final TimeSlot slot;
-}
-
-/// 수업 변경 배지. 학생 시간표 탭에서도 같은 표현을 쓴다.
-class StudentChangeBadge extends StatelessWidget {
-  const StudentChangeBadge({super.key, required this.label, this.compact = false});
-
-  final String label;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 4 : 6,
-        vertical: compact ? 1 : 2,
-      ),
-      decoration: BoxDecoration(
-        color: NestColors.clay.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: compact ? 9 : 11,
-          fontWeight: FontWeight.w800,
-          color: NestColors.clay,
-        ),
-      ),
-    );
-  }
-}
-
-/// 결석 신고 배지.
-class StudentAbsenceBadge extends StatelessWidget {
-  const StudentAbsenceBadge({super.key, this.compact = false});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 4 : 6,
-        vertical: compact ? 1 : 2,
-      ),
-      decoration: BoxDecoration(
-        color: NestColors.mutedSage.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        '결석',
-        style: TextStyle(
-          fontSize: compact ? 9 : 11,
-          fontWeight: FontWeight.w800,
-          color: NestColors.mutedSage,
-        ),
-      ),
-    );
-  }
-}
-
-/// 결석 신고 상태 칩.
-class StudentStatusChip extends StatelessWidget {
-  const StudentStatusChip({super.key, required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: NestColors.roseMist.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: NestColors.deepWood,
-        ),
-      ),
-    );
-  }
-}

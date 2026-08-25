@@ -7,7 +7,7 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
-import 'student_home_tab.dart' show StudentAbsenceBadge, StudentChangeBadge;
+import '../widgets/schedule_badges.dart';
 import 'timetable/course_lesson_sheet.dart';
 
 /// 학생 본인 계정의 시간표 탭.
