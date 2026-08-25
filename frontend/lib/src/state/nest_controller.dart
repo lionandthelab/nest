@@ -2843,6 +2843,34 @@ class NestController extends ChangeNotifier {
     ).where((row) => !row.lessonDate.isBefore(pivot)).firstOrNull;
   }
 
+  // ── 학기별 사용 현황 (과목·선생님) ──
+  //
+  // courses 와 teacher_profiles 는 홈스쿨에 매달려 있고 학기 컬럼이 없다. 학기마다
+  // 재사용하는 것이 정상이므로 스키마는 그대로 두고, "이 학기에 실제로 쓰는 것"을
+  // 학기 전체 시간표(allTermSessions / allTermSessionTeacherAssignments)에서 뽑아
+  // 화면에서 걸러 준다. 지난 학기에만 쓰던 과목·선생님이 학기 설정에 계속 섞여
+  // 나오는 문제를 스키마 변경 없이 없앤다.
+
+  /// 선택된 학기의 시간표가 실제로 쓰는 과목 id.
+  Set<String> get courseIdsInSelectedTerm {
+    final rows = allTermSessions.isNotEmpty ? allTermSessions : sessions;
+    return rows
+        .map((session) => session.courseId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+  }
+
+  /// 선택된 학기의 시간표에 배정된 선생님(teacher_profiles.id).
+  Set<String> get teacherIdsInSelectedTerm {
+    final rows = allTermSessionTeacherAssignments.isNotEmpty
+        ? allTermSessionTeacherAssignments
+        : sessionTeacherAssignments;
+    return rows
+        .map((row) => row.teacherProfileId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+  }
+
   /// 시간표에 걸린 과목의 수업 요일 집합(앱 규약 0=일).
   /// 회차 날짜 후보를 만들 때 쓴다. 학기 전체 세션을 본다(교차 반 포함).
   Set<int> courseWeekdays(String courseId) {
@@ -4149,12 +4177,23 @@ class NestController extends ChangeNotifier {
     if (normalizedId == null) {
       throw StateError('삭제할 과목을 선택하세요.');
     }
-    if (sessions.any((session) => session.courseId == normalizedId)) {
-      throw StateError('현재 반 시간표에서 사용 중인 과목은 삭제할 수 없습니다.');
+    // 선택된 반이 아니라 학기 전체 시간표를 봐야 한다. 현재 반만 보면 다른 반이
+    // 쓰는 과목의 삭제가 통과해 DB 의 on delete restrict 까지 내려가고, 거기서
+    // 올라오는 영문 FK 오류가 그대로 화면에 뜬다.
+    if (courseIdsInSelectedTerm.contains(normalizedId)) {
+      throw StateError('이 학기 시간표에서 사용 중인 과목은 삭제할 수 없습니다.');
     }
 
     await _runBusy('과목을 삭제하는 중...', () async {
-      await _repository.deleteCourse(courseId: normalizedId);
+      try {
+        await _repository.deleteCourse(courseId: normalizedId);
+      } on PostgrestException catch (error) {
+        // 23503 = foreign_key_violation. 다른 학기 시간표가 아직 이 과목을 쓴다.
+        if (error.code == '23503') {
+          throw StateError('다른 학기 시간표에서 사용 중인 과목이라 삭제할 수 없습니다.');
+        }
+        rethrow;
+      }
       await _loadTimetableAssets();
       await _logAudit(
         actionType: 'COURSE_DELETE',

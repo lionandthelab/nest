@@ -866,6 +866,13 @@ class Term {
 /// 단순히 start_date 최신순 첫 학기를 고르면, 다음 학기를 미리 만들어 둔 순간
 /// 아직 시작도 안 한 빈 학기가 선택돼 학부모/교사 뷰가 "반 배정 대기 중"으로
 /// 잘못 뜨는 문제가 생긴다(그 버그를 막기 위한 로직).
+/// 개학이 이만큼 안 남았으면, 방금 끝난 학기 대신 다가오는 학기를 기본으로 고른다.
+///
+/// 학기 사이 공백에서 "방금 끝난 학기"를 고르는 규칙(아래 2번)은 짧은 방학에는
+/// 맞지만, 다음 학기를 이미 다 짜둔 개학 직전에는 틀린다. 그때는 모두가 새 학기를
+/// 보고 있는데 앱만 지난 학기를 펴 준다. 6주 남짓이면 학교는 이미 새 학기 모드다.
+const int termLookaheadDays = 45;
+
 Term? defaultTermForToday(List<Term> terms, DateTime now) {
   if (terms.isEmpty) return null;
   final today = DateTime(now.year, now.month, now.day);
@@ -873,12 +880,41 @@ Term? defaultTermForToday(List<Term> terms, DateTime now) {
   DateTime? day(DateTime? d) =>
       d == null ? null : DateTime(d.year, d.month, d.day);
 
-  // 1) 현재 학기.
+  // 1) 현재 학기. 기간이 겹치는 학기가 여럿이면 먼저 끝나는 쪽을 고른다.
+  //    (다음 학기를 앞 학기 종료일보다 이르게 만들어 두는 실수가 흔한데, 목록
+  //    순서에 기대면 아직 반도 없는 미래 학기로 학기 중에 튀어 버린다.)
+  Term? current;
   for (final t in terms) {
-    if (t.phaseAt(now) == TermPhase.current) return t;
+    if (t.phaseAt(now) != TermPhase.current) continue;
+    if (current == null) {
+      current = t;
+      continue;
+    }
+    final candidateEnd = day(t.endDate);
+    final bestEnd = day(current.endDate);
+    if (bestEnd == null) continue;
+    if (candidateEnd != null && candidateEnd.isBefore(bestEnd)) {
+      current = t;
+    }
+  }
+  if (current != null) return current;
+
+  // 2) 가장 이른 예정 학기가 코앞이면 그 학기. 개학 직전에 지난 학기를 펴 주지 않는다.
+  Term? earliestUpcoming;
+  for (final t in terms) {
+    final s = day(t.startDate);
+    if (s == null || !s.isAfter(today)) continue;
+    final best = day(earliestUpcoming?.startDate);
+    if (best == null || s.isBefore(best)) earliestUpcoming = t;
+  }
+  final upcomingStart = day(earliestUpcoming?.startDate);
+  if (earliestUpcoming != null &&
+      upcomingStart != null &&
+      today.difference(upcomingStart).inDays.abs() <= termLookaheadDays) {
+    return earliestUpcoming;
   }
 
-  // 2) 이미 시작한 학기(start <= today) 중 가장 최근 시작.
+  // 3) 이미 시작한 학기(start <= today) 중 가장 최근 시작.
   Term? recentStarted;
   for (final t in terms) {
     final s = day(t.startDate);
@@ -888,15 +924,8 @@ Term? defaultTermForToday(List<Term> terms, DateTime now) {
   }
   if (recentStarted != null) return recentStarted;
 
-  // 3) 전부 미래 → 가장 이른 예정 학기.
-  Term? earliest;
-  for (final t in terms) {
-    final s = day(t.startDate);
-    if (s == null) continue;
-    final best = day(earliest?.startDate);
-    if (best == null || s.isBefore(best)) earliest = t;
-  }
-  return earliest ?? terms.first;
+  // 4) 전부 미래(아직 멀다) → 가장 이른 예정 학기.
+  return earliestUpcoming ?? terms.first;
 }
 
 /// 학기 타임라인 정렬(시작일 오름차순, 시작일 없는 학기는 맨 앞) 공용 비교자.

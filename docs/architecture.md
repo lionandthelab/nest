@@ -660,6 +660,30 @@ Admin dashboard onboarding:
 
 **시드**: `scripts/seed_joy_qt_lessons.mjs` — JOY 화요일 전교생 모임의 2026 가을 진도표(9/1 개강예배 ~ 12/15) 14회차. 충돌 시 기본은 `do nothing`이라 **이미 있는 회차는 건드리지 않는다** — 앱에서 선생님이 고친 내용을 하드코딩 배열이 되돌리면 안 되기 때문이다(되돌리려면 `--overwrite`). `--apply` 없이 돌리면 미리보기만 출력한다. 실제 학생·교사 이름이 들어 있어 `.gitignore`의 `scripts/*joy*` 규칙에 걸리는 **로컬 스크립트**다(커밋되지 않는다).
 
+### 6.21 학기 기본 선택과 학기별 스코핑 (2026-08)
+
+**기본 학기 선택** (`defaultTermForToday`, `nest_models.dart`)
+
+순서: ① 현재 학기 → ② 45일 이내로 다가오는 학기 → ③ 이미 시작한 학기 중 가장 최근 → ④ 가장 이른 예정 학기.
+
+- ②가 없던 시절, 학기 사이 공백에서는 항상 "방금 끝난 학기"가 선택됐다. 짧은 방학에는 맞지만 **개학 직전에는 틀린다** — 2026-08-25(개학 7일 전)에 7월 31일 종료된 학기가 열렸고, 지난 학기는 읽기 전용이라 시간표 셀을 눌러도 반응이 없어 신규 기능이 통째로 없는 것처럼 보였다. `termLookaheadDays = 45`가 그 구간을 메운다. 원래 규칙(빈 미래 학기로 튀지 않는다 — "예승 버그")은 회귀 테스트로 그대로 지킨다.
+- ①에서 **기간이 겹치는 현재 학기가 여럿이면 먼저 끝나는 쪽**을 고른다. 다음 학기 시작일을 앞 학기 종료일보다 이르게 만들어 두는 실수가 흔한데(JOY: 2027 가을 11-26 시작 vs 2026 가을 11-30 종료), 목록 순서에 기대면 반이 하나도 없는 학기로 학기 중에 튄다.
+
+**학기별 스코핑 — 무엇이 학기에 매달려 있고 무엇이 아닌가**
+
+| 학기 종속 | 홈스쿨 종속(학기마다 재사용) |
+|---|---|
+| `class_groups`, `time_slots`, `classrooms`, `class_sessions` | `courses`, `teacher_profiles`, `families`, `children` |
+
+- `courses`는 `unique (homeschool_id, name)`, `teacher_profiles`도 홈스쿨 단위다. **재사용이 정상**이므로 `term_id`를 붙이면 안 된다 — 같은 과목을 학기마다 복제하게 되고 `course_lessons`가 학기 경계에서 갈라진다.
+- 대신 화면에서 "이 학기에 실제로 쓰는 것"으로 걸러 준다: `NestController.courseIdsInSelectedTerm` / `teacherIdsInSelectedTerm`이 학기 전체 시간표(`allTermSessions`, `allTermSessionTeacherAssignments`)에서 뽑는다. 학기 설정의 과목·선생님 카드는 `이 학기 / 전체` 칩을 달고 기본은 이 학기다.
+- **시간표 팔레트는 일부러 걸러지지 않는다.** 새 학기를 짤 때는 전체 카탈로그가 필요하고, 초안 세션은 아직 커밋 전이라 "사용중" 판정에 잡히지 않아 방금 배치한 과목이 목록에서 사라지는 역효과가 난다.
+- 학기 시간표가 비어 있으면(신학기 세팅) 좁힐 대상이 없으므로 자동으로 전체를 보여준다. 빈 화면에 갇히지 않게 하는 안전장치다.
+
+**삭제 가드는 반이 아니라 학기 전체를 본다**
+
+과목 삭제 가드가 `controller.sessions`(선택된 반 하나)만 보면, 다른 반이 쓰는 과목에도 삭제 버튼이 열리고 DB의 `on delete restrict`가 뒤늦게 막으면서 영문 FK 오류가 화면에 뜬다. `courseIdsInSelectedTerm`으로 막고, 다른 학기가 쓰는 경우의 `23503`은 한국어로 변환한다. 그리고 `course_lessons`는 `on delete cascade`라 과목과 함께 조용히 지워지므로, 확인 문구에 회차 손실 건수를 반드시 노출한다.
+
 ## 7. Database and RLS Notes
 
 ### 7.1 Core Membership Security

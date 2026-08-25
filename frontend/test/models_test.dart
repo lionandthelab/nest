@@ -237,8 +237,8 @@ void main() {
     });
 
     test('gap between terms picks the most recently started (예승 버그)', () {
-      // 오늘이 Spring 종료(06-30)와 가을 시작(09-01) 사이 → 빈 미래 학기가 아니라
-      // 방금 끝난 Spring을 골라야 한다.
+      // 오늘이 Spring 종료(06-30)와 가을 시작(09-01) 사이이고 개학까지 56일 남았다
+      // → 아직 먼 미래 학기가 아니라 방금 끝난 Spring을 골라야 한다.
       final t = defaultTermForToday([spring, fall], DateTime(2026, 7, 7));
       expect(t?.name, '2026 Spring');
     });
@@ -246,6 +246,56 @@ void main() {
     test('order-independent: fall-first list still picks Spring in the gap', () {
       final t = defaultTermForToday([fall, spring], DateTime(2026, 7, 7));
       expect(t?.name, '2026 Spring');
+    });
+
+    test('개학이 코앞이면 지난 학기가 아니라 다가오는 학기를 고른다', () {
+      // 실제로 겪은 문제: 2026-08-25 에 로그인하면 7월 31일에 끝난 학기가 열렸다.
+      // 개학(09-01)까지 7일이면 학교는 이미 새 학기 모드다.
+      final t = defaultTermForToday([spring, fall], DateTime(2026, 8, 25));
+      expect(t?.name, '2026 가을');
+    });
+
+    test('lookahead 경계: 45일 이내는 다가오는 학기, 그보다 멀면 지난 학기', () {
+      // 09-01 기준 45일 전 = 07-18 (경계 포함), 46일 전 = 07-17.
+      expect(
+        defaultTermForToday([spring, fall], DateTime(2026, 7, 18))?.name,
+        '2026 가을',
+      );
+      expect(
+        defaultTermForToday([spring, fall], DateTime(2026, 7, 17))?.name,
+        '2026 Spring',
+      );
+    });
+
+    test('실제 JOY 학기 구성으로 2026-08-25 에 2026 가을이 열린다', () {
+      // 운영 데이터 그대로. 사용자가 "회차 정보를 어디서 보는지 모르겠다"고 한 날,
+      // 앱이 7월 31일에 끝난 학기를 열어 준 것이 원인이었다.
+      final joySpring = term('2026 Spring', '2026-03-03', '2026-07-31');
+      final joyFall = term('2026 가을', '2026-09-01', '2026-11-30');
+      final joyNext = term('2027 가을', '2026-11-26', '2027-06-28');
+
+      final t = defaultTermForToday(
+        [joyNext, joyFall, joySpring],
+        DateTime(2026, 8, 25),
+      );
+      expect(t?.name, '2026 가을');
+    });
+
+    test('기간이 겹치는 현재 학기가 둘이면 먼저 끝나는 쪽을 고른다', () {
+      // 다음 학기 시작일을 앞 학기 종료일보다 이르게 만들어 둔 실수(JOY 실제 데이터).
+      // 목록 순서에 기대면 아직 반이 없는 미래 학기로 학기 중에 튀어 버린다.
+      final nextYear = term('2027 가을', '2026-11-26', '2027-06-28');
+      final t = defaultTermForToday(
+        [nextYear, fall],
+        DateTime(2026, 11, 27),
+      );
+      expect(t?.name, '2026 가을');
+
+      final reversed = defaultTermForToday(
+        [fall, nextYear],
+        DateTime(2026, 11, 27),
+      );
+      expect(reversed?.name, '2026 가을');
     });
 
     test('during the fall term picks fall', () {

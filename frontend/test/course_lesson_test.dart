@@ -243,6 +243,50 @@ void main() {
     });
   });
 
+  group('학기별 과목·선생님 스코핑', () {
+    test('courseIdsInSelectedTerm 은 이 학기 시간표가 쓰는 과목만 준다', () {
+      final controller = _wholeSchoolTuesdayCourse();
+
+      // allTermSessions 에는 c-qt(화요일 4세션)와 c-kor(목요일 1세션)만 있다.
+      // 홈스쿨 전체 과목 목록에는 지난 학기에만 쓰던 과목이 더 들어 있다.
+      controller.courses = [
+        Course.fromMap({'id': 'c-qt', 'name': '주중예배', 'default_duration_min': 30}),
+        Course.fromMap({'id': 'c-kor', 'name': '국어', 'default_duration_min': 50}),
+        Course.fromMap({'id': 'c-old', 'name': '통합QT', 'default_duration_min': 30}),
+      ];
+
+      expect(controller.courseIdsInSelectedTerm, {'c-qt', 'c-kor'});
+      expect(controller.courseIdsInSelectedTerm.contains('c-old'), isFalse);
+      expect(controller.courses.length, 3);
+    });
+
+    test('teacherIdsInSelectedTerm 은 이 학기에 배정된 선생님만 준다', () {
+      final controller = _wholeSchoolTuesdayCourse();
+      controller.allTermSessionTeacherAssignments = [
+        SessionTeacherAssignment.fromMap({
+          'id': 'a1',
+          'class_session_id': 'cs1',
+          'teacher_profile_id': 't-now',
+          'assignment_role': 'MAIN',
+        }),
+      ];
+
+      expect(controller.teacherIdsInSelectedTerm, {'t-now'});
+      expect(controller.teacherIdsInSelectedTerm.contains('t-past'), isFalse);
+    });
+
+    test('시간표가 비어 있으면 스코프 집합도 비어 있다(신학기 세팅)', () {
+      final controller = _wholeSchoolTuesdayCourse();
+      controller.allTermSessions = [];
+      controller.sessions = [];
+      controller.allTermSessionTeacherAssignments = [];
+      controller.sessionTeacherAssignments = [];
+
+      expect(controller.courseIdsInSelectedTerm, isEmpty);
+      expect(controller.teacherIdsInSelectedTerm, isEmpty);
+    });
+  });
+
   group('buildCourseLessonRows', () {
     test('학기 기간의 수업 요일을 모두 펼쳐 빈 회차 자리를 만든다', () {
       final controller = _wholeSchoolTuesdayCourse();

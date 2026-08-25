@@ -38,6 +38,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   String? _selectedClassGroupId;
   String? _selectedCourseId;
   String? _selectedClassroomId;
+
+  // 과목·선생님은 홈스쿨에 매달려 있어 학기를 바꿔도 목록이 그대로다(지난 학기에만
+  // 쓰던 것까지 전부 섞여 나온다). 기본은 "이 학기"로 좁혀 보여주고, 전체 보관 목록은
+  // 토글로 연다. 학기에 시간표가 아직 없으면 좁힐 대상이 없으므로 자동으로 전체를
+  // 보여준다(신학기 세팅에서 빈 화면이 되는 것을 막는다).
+  bool _courseShowAll = false;
+  bool _teacherShowAll = false;
   bool _familyInitialized = false;
   bool _classInitialized = false;
   bool _courseInitialized = false;
@@ -2199,9 +2206,44 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     }
   }
 
+  /// "이 학기 / 전체" 범위 토글. 과목·선생님 카드가 같은 모양을 쓴다.
+  Widget _buildTermScopeToggle({
+    required bool showAll,
+    required int termCount,
+    required int totalCount,
+    required String unit,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        ChoiceChip(
+          label: Text('이 학기 $termCount$unit'),
+          selected: !showAll,
+          onSelected: (_) => onChanged(false),
+        ),
+        ChoiceChip(
+          label: Text('전체 $totalCount$unit'),
+          selected: showAll,
+          onSelected: (_) => onChanged(true),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTeacherManagementCard(NestController controller) {
-    final teachers = controller.teacherProfiles.toList()
+    final all = controller.teacherProfiles.toList()
       ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    final assignedIds = controller.teacherIdsInSelectedTerm;
+    final inTerm = all
+        .where((teacher) => assignedIds.contains(teacher.id))
+        .toList();
+    // 이 학기에 배정된 선생님이 아직 없으면(신학기 세팅) 좁힐 대상이 없다.
+    final canScope = inTerm.isNotEmpty;
+    final showAll = _teacherShowAll || !canScope;
+    final teachers = showAll ? all : inTerm;
 
     return Card(
       child: Padding(
@@ -2240,11 +2282,24 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             ),
             const SizedBox(height: 6),
             Text(
-              '카드를 클릭하면 선생님 정보 수정, 기존 계정 연결/해제, 불가 시간 설정을 한 번에 처리할 수 있습니다.',
+              canScope
+                  ? '이 학기 시간표에 배정된 선생님만 보여줍니다. 지난 학기에만 맡았던 선생님은 "전체"에서 볼 수 있습니다.'
+                  : '카드를 클릭하면 선생님 정보 수정, 기존 계정 연결/해제, 불가 시간 설정을 한 번에 처리할 수 있습니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
+            if (canScope) ...[
+              const SizedBox(height: 10),
+              _buildTermScopeToggle(
+                showAll: showAll,
+                termCount: inTerm.length,
+                totalCount: all.length,
+                unit: '명',
+                onChanged: (value) =>
+                    setState(() => _teacherShowAll = value),
+              ),
+            ],
             const SizedBox(height: 10),
             if (teachers.isEmpty)
               _buildEmptyHint('등록된 선생님이 없습니다. 선생님 추가로 시작하세요.')
@@ -2939,8 +2994,14 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }
 
   Widget _buildCourseManageCard(NestController controller) {
-    final courses = controller.courses.toList()
+    final all = controller.courses.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
+    final usedIds = controller.courseIdsInSelectedTerm;
+    final inTerm = all.where((course) => usedIds.contains(course.id)).toList();
+    // 이 학기 시간표가 아직 비어 있으면(신학기 세팅) 좁힐 대상이 없다.
+    final canScope = inTerm.isNotEmpty;
+    final showAll = _courseShowAll || !canScope;
+    final courses = showAll ? all : inTerm;
 
     return Card(
       child: Padding(
@@ -2979,11 +3040,23 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             ),
             const SizedBox(height: 6),
             Text(
-              '과목 카드를 클릭하면 기본 수업 시간 수정과 삭제를 한 번에 처리할 수 있습니다.',
+              canScope
+                  ? '이 학기 시간표에 쓰는 과목만 보여줍니다. 지난 학기에만 쓰던 과목은 "전체"에서 볼 수 있습니다.'
+                  : '과목 카드를 클릭하면 기본 수업 시간 수정과 삭제를 한 번에 처리할 수 있습니다.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
+            if (canScope) ...[
+              const SizedBox(height: 10),
+              _buildTermScopeToggle(
+                showAll: showAll,
+                termCount: inTerm.length,
+                totalCount: all.length,
+                unit: '개',
+                onChanged: (value) => setState(() => _courseShowAll = value),
+              ),
+            ],
             const SizedBox(height: 10),
             if (courses.isEmpty)
               _buildEmptyHint('등록된 과목이 없습니다. 과목 추가로 시작하세요.')
@@ -2993,9 +3066,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 runSpacing: 10,
                 children: courses
                     .map((course) {
-                      final usedInCurrentClass = controller.sessions.any(
-                        (session) => session.courseId == course.id,
-                      );
+                      final usedInTerm = usedIds.contains(course.id);
+                      final lessonCount = controller
+                          .lessonsForCourse(course.id)
+                          .length;
                       final selected = _selectedCourseId == course.id;
                       return InkWell(
                         borderRadius: BorderRadius.circular(12),
@@ -3014,8 +3088,11 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           width: 290,
                           child: LabeledEntityTile(
                             title: course.name,
-                            subtitle:
-                                '기본 ${course.defaultDurationMin}분${usedInCurrentClass ? ' · 현재 반 시간표 사용중' : ''}',
+                            subtitle: [
+                              '기본 ${course.defaultDurationMin}분',
+                              if (usedInTerm) '이 학기 시간표 사용중',
+                              if (lessonCount > 0) '회차 $lessonCount건',
+                            ].join(' · '),
                             icon: Icons.menu_book_outlined,
                             trailing: Icon(
                               selected
@@ -3054,11 +3131,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         builder: (context) {
           return StatefulBuilder(
             builder: (context, setDialogState) {
-              final usedInCurrentClass =
+              // ⚠️ 삭제 가드는 "선택된 반"이 아니라 **학기 전체 시간표**를 봐야 한다.
+              // 현재 반만 보면, 다른 반이 쓰는 과목에 삭제 버튼이 열리고 DB의
+              // on delete restrict 가 뒤늦게 막으면서 영문 FK 오류가 그대로 뜬다.
+              final usedInTerm =
                   initial != null &&
-                  controller.sessions.any(
-                    (session) => session.courseId == initial.id,
-                  );
+                  controller.courseIdsInSelectedTerm.contains(initial.id);
+              // 과목을 지우면 course_lessons 가 cascade 로 함께 지워진다.
+              // 확인 문구에서 이 손실을 반드시 알린다.
+              final lessonCount = initial == null
+                  ? 0
+                  : controller.lessonsForCourse(initial.id).length;
 
               Future<void> saveCourse() async {
                 if (isSaving) {
@@ -3126,7 +3209,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
               Future<void> deleteCourse() async {
                 final target = initial;
-                if (target == null || isSaving || usedInCurrentClass) {
+                if (target == null || isSaving || usedInTerm) {
                   return;
                 }
                 final confirmed = await showDialog<bool>(
@@ -3135,7 +3218,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     title: const Text('과목 삭제'),
                     content: Text(
                       '"${target.name}" 과목을 삭제할까요?\n'
-                      '시간표에서 사용 중인 과목은 삭제할 수 없습니다.',
+                      '${lessonCount > 0 ? '이 과목의 수업 회차 내용 $lessonCount건도 함께 삭제되며 되돌릴 수 없습니다.\n' : ''}'
+                      '다른 학기 시간표에서 사용 중이면 삭제되지 않습니다.',
                     ),
                     actions: [
                       TextButton(
@@ -3202,9 +3286,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        if (usedInCurrentClass)
+                        if (usedInTerm)
                           _buildEmptyHint(
-                            '현재 선택된 반의 시간표에서 사용 중인 과목입니다. 삭제는 불가능하며 이름/시간 수정만 가능합니다.',
+                            '이 학기 시간표에서 사용 중인 과목입니다. 삭제는 불가능하며 이름/시간 수정만 가능합니다.',
                           ),
                         // 회차별 진도 내용. 회차는 과목+날짜로 저장되므로 이 과목을
                         // 쓰는 모든 반/교시 시간표에 같은 내용이 함께 보인다.
@@ -3248,8 +3332,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 actions: [
                   if (initial != null)
                     TextButton.icon(
-                      onPressed:
-                          isSaving || controller.isBusy || usedInCurrentClass
+                      onPressed: isSaving || controller.isBusy || usedInTerm
                           ? null
                           : deleteCourse,
                       style: TextButton.styleFrom(
