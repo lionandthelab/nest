@@ -369,6 +369,10 @@ deno_version = 2
 [functions.nest-notify]
 verify_jwt = true
 
+# nest-remind — 아침 일정 / 수업 30분 전. cron 시크릿으로 보호하므로 JWT 없음.
+[functions.nest-remind]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

@@ -1,0 +1,40 @@
+name: nest-remind
+
+# pg_cron 이 없는 프로젝트를 위한 백업. 30분 전 윈도우는 5분 주기라
+# Actions 지연이 있을 수 있다. 가능하면 DB cron 을 우선한다.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+    - cron: "30 22 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "MORNING_DIGEST 또는 CLASS_REMINDER"
+        required: false
+        default: "CLASS_REMINDER"
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call nest-remind
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEST_CRON_SECRET: ${{ secrets.NEST_CRON_SECRET }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$NEST_CRON_SECRET" ]; then
+            echo "SUPABASE_URL / NEST_CRON_SECRET 시크릿이 없어 건너뜁니다."
+            exit 0
+          fi
+          JOB="${{ github.event.inputs.job }}"
+          if [ -z "$JOB" ]; then
+            if [ "${{ github.event.schedule }}" = "30 22 * * *" ]; then
+              JOB="MORNING_DIGEST"
+            else
+              JOB="CLASS_REMINDER"
+            fi
+          fi
+          curl -fsS -X POST "${SUPABASE_URL}/functions/v1/nest-remind" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${NEST_CRON_SECRET}" \
+            -d "{\"job\":\"${JOB}\"}"

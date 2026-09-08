@@ -1,6 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../nest_theme.dart';
+
+/// 탭·저장·시트에 쓰는 짧은 햅틱. 호출이 실패해도 화면은 그대로 동작한다.
+class NestHaptics {
+  const NestHaptics._();
+
+  static void selection() {
+    HapticFeedback.selectionClick();
+  }
+
+  static void light() {
+    HapticFeedback.lightImpact();
+  }
+
+  static void success() {
+    HapticFeedback.mediumImpact();
+  }
+}
 
 Widget nestFadeSlideTransition(
   Widget child,

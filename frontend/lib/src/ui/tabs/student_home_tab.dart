@@ -6,8 +6,10 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
 import '../widgets/schedule_badges.dart';
+import '../widgets/today_schedule_card.dart';
 import 'lessons_today_section.dart';
 
 /// 학생 본인 계정의 홈 탭.
@@ -23,12 +25,16 @@ class StudentHomeTab extends StatefulWidget {
     required this.selectedChildId,
     required this.childClassBundles,
     required this.isLoadingChildClasses,
+    this.onOpenTimetable,
+    this.onRefresh,
   });
 
   final NestController controller;
   final String? selectedChildId;
   final Map<String, ChildClassBundle> childClassBundles;
   final bool isLoadingChildClasses;
+  final VoidCallback? onOpenTimetable;
+  final Future<void> Function()? onRefresh;
 
   @override
   State<StudentHomeTab> createState() => _StudentHomeTabState();
@@ -78,11 +84,33 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
 
     final noEnrollments = bundles.isEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
+    final occurrences = controller.occurrencesOn(
+      DateTime.now(),
+      forSessions: bundles.values.expand((bundle) => bundle.sessions),
+    );
+
+    final list = ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         _buildGreeting(context, child),
         const SizedBox(height: 12),
+        TodayScheduleCard(
+          occurrences: occurrences,
+          courseNameOf: controller.findCourseName,
+          classNameOf: controller.findClassGroupName,
+          onOpenTimetable: widget.onOpenTimetable,
+        ),
+        const SizedBox(height: 10),
+        if (widget.onOpenTimetable != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: widget.onOpenTimetable,
+              icon: const Icon(Icons.event_busy_outlined, size: 18),
+              label: const Text('결석 신고 · 시간표'),
+            ),
+          ),
         if (noEnrollments) ...[
           _buildNoticeCard(
             context,
@@ -109,6 +137,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
         _buildHomeschoolSchedule(context, controller),
       ],
     );
+    if (widget.onRefresh == null) return list;
+    return NestRefreshable(onRefresh: widget.onRefresh!, child: list);
   }
 
   // ── 데이터 해석 헬퍼 ──

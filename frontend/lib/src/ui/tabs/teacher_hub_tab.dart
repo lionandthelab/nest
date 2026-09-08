@@ -8,14 +8,23 @@ import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_refresh.dart';
 import '../widgets/search_select_field.dart';
+import '../widgets/today_schedule_card.dart';
 import 'timetable/class_change_dialog.dart';
 import 'timetable/course_lesson_sheet.dart';
 
 class TeacherHubTab extends StatefulWidget {
-  const TeacherHubTab({super.key, required this.controller});
+  const TeacherHubTab({
+    super.key,
+    required this.controller,
+    this.onOpenTimetable,
+    this.onRefresh,
+  });
 
   final NestController controller;
+  final VoidCallback? onOpenTimetable;
+  final Future<void> Function()? onRefresh;
 
   @override
   State<TeacherHubTab> createState() => _TeacherHubTabState();
@@ -62,22 +71,31 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         : _managedClassBundles[_selectedManagedClassGroupId!];
     _syncDefaults(controller, selectedBundle);
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
+    final list = ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        // Class selector
+        TodayScheduleCard(
+          occurrences: controller.occurrencesOn(
+            DateTime.now(),
+            forSessions: controller.assignedSessionsForCurrentTeacher,
+          ),
+          courseNameOf: controller.findCourseName,
+          classNameOf: controller.findClassGroupName,
+          onOpenTimetable: widget.onOpenTimetable,
+          emptyLabel: '오늘 담당 수업이 없어요',
+        ),
+        const SizedBox(height: 12),
+        if (controller.canAcknowledgeAbsence) ...[
+          _buildAbsenceInboxCard(controller, selectedBundle),
+          const SizedBox(height: 12),
+        ],
         if (_managedClassBundles.isNotEmpty) ...[
           _buildClassSelector(controller),
           const SizedBox(height: 12),
         ],
-        // Timetable
         if (selectedBundle != null) ...[
           _buildSessionBoard(controller, selectedBundle),
-          const SizedBox(height: 12),
-        ],
-        // Absence inbox (teacher/admin only)
-        if (controller.canAcknowledgeAbsence) ...[
-          _buildAbsenceInboxCard(controller, selectedBundle),
           const SizedBox(height: 12),
         ],
         // Class change notices (teacher/admin only)
@@ -95,6 +113,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         _buildChildStatusSection(controller, selectedBundle),
       ],
     );
+    if (widget.onRefresh == null) return list;
+    return NestRefreshable(onRefresh: widget.onRefresh!, child: list);
   }
 
   void _syncManagedClassLoad(NestController controller) {

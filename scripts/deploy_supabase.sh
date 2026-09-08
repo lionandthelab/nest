@@ -38,5 +38,6 @@ supabase functions deploy google-drive-upload --project-ref "$PROJECT_REF"
 supabase functions deploy google-drive-connect-start --project-ref "$PROJECT_REF"
 supabase functions deploy google-drive-connect-complete --project-ref "$PROJECT_REF"
 supabase functions deploy nest-notify --project-ref "$PROJECT_REF"
+supabase functions deploy nest-remind --project-ref "$PROJECT_REF"
 
 echo "Done."

@@ -2183,3 +2183,96 @@ class SelfStudySlotExclusion {
     'child_id': childId,
   };
 }
+
+class NotificationPrefs {
+  const NotificationPrefs({
+    this.pushEnabled = true,
+    this.morningDigestEnabled = true,
+    this.classReminderEnabled = true,
+    this.quietHoursStart,
+    this.quietHoursEnd,
+  });
+
+  final bool pushEnabled;
+  final bool morningDigestEnabled;
+  final bool classReminderEnabled;
+  final String? quietHoursStart;
+  final String? quietHoursEnd;
+
+  factory NotificationPrefs.fromMap(Map<String, dynamic> map) {
+    return NotificationPrefs(
+      pushEnabled: parseBool(map['push_enabled'], fallback: true),
+      morningDigestEnabled: parseBool(map['morning_digest_enabled'], fallback: true),
+      classReminderEnabled: parseBool(map['class_reminder_enabled'], fallback: true),
+      quietHoursStart: map['quiet_hours_start'] as String?,
+      quietHoursEnd: map['quiet_hours_end'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'push_enabled': pushEnabled,
+    'morning_digest_enabled': morningDigestEnabled,
+    'class_reminder_enabled': classReminderEnabled,
+    if (quietHoursStart != null) 'quiet_hours_start': quietHoursStart,
+    if (quietHoursEnd != null) 'quiet_hours_end': quietHoursEnd,
+  };
+
+  NotificationPrefs copyWith({
+    bool? pushEnabled,
+    bool? morningDigestEnabled,
+    bool? classReminderEnabled,
+  }) {
+    return NotificationPrefs(
+      pushEnabled: pushEnabled ?? this.pushEnabled,
+      morningDigestEnabled: morningDigestEnabled ?? this.morningDigestEnabled,
+      classReminderEnabled: classReminderEnabled ?? this.classReminderEnabled,
+      quietHoursStart: quietHoursStart,
+      quietHoursEnd: quietHoursEnd,
+    );
+  }
+}
+
+class NotificationInboxItem {
+  const NotificationInboxItem({
+    required this.id,
+    this.eventType = '',
+    this.title = '',
+    this.body = '',
+    this.payload = const {},
+    this.createdAt,
+  });
+
+  final String id;
+  final String eventType;
+  final String title;
+  final String body;
+  final Map<String, String> payload;
+  final DateTime? createdAt;
+
+  String get deepLinkTab {
+    final tab = payload['tab'] ?? '';
+    if (tab.isNotEmpty) return tab;
+    return switch (eventType) {
+      'CLASS_REMINDER' || 'MORNING_DIGEST' || 'CLASS_CHANGE' => '시간표',
+      _ => '홈',
+    };
+  }
+
+  factory NotificationInboxItem.fromMap(Map<String, dynamic> map) {
+    final rawPayload = map['payload'];
+    final payload = <String, String>{};
+    if (rawPayload is Map) {
+      rawPayload.forEach((key, value) {
+        if (value != null) payload['$key'] = '$value';
+      });
+    }
+    return NotificationInboxItem(
+      id: (map['id'] as String?) ?? '',
+      eventType: (map['event_type'] as String?) ?? '',
+      title: (map['title'] as String?) ?? '',
+      body: (map['body'] as String?) ?? '',
+      payload: payload,
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+}

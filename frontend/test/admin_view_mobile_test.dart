@@ -8,8 +8,10 @@ import 'package:nest_frontend/src/services/nest_repository.dart';
 import 'package:nest_frontend/src/state/nest_controller.dart';
 import 'package:nest_frontend/src/ui/models/new_term_checklist.dart';
 import 'package:nest_frontend/src/ui/models/tab_section_request.dart';
+import 'package:nest_frontend/src/ui/home_page.dart';
 import 'package:nest_frontend/src/ui/tabs/admin_home_tab.dart';
 import 'package:nest_frontend/src/ui/tabs/admin_news_tab.dart';
+import 'package:nest_frontend/src/ui/tabs/profile_settings_tab.dart';
 
 /// 네트워크를 타지 않는 위젯 테스트용 관리자 컨트롤러.
 /// autoRefreshToken을 꺼야 GoTrue의 주기 타이머가 생기지 않아 pending-timer
@@ -24,6 +26,19 @@ NestController _adminController() {
   controller.currentRole = 'HOMESCHOOL_ADMIN';
   controller.selectedHomeschoolId = 'hs-1';
   controller.selectedTermId = 't-1';
+  controller.memberships = [
+    Membership.fromMap({
+      'user_id': 'u-1',
+      'homeschool_id': 'hs-1',
+      'role': 'HOMESCHOOL_ADMIN',
+      'status': 'ACTIVE',
+      'homeschools': {
+        'id': 'hs-1',
+        'name': '테스트스쿨',
+        'timezone': 'Asia/Seoul',
+      },
+    }),
+  ];
   controller.terms = [
     Term.fromMap({
       'id': 't-1',
@@ -108,6 +123,9 @@ void main() {
       await tester.pump();
 
       expect(find.text('신학기 준비'), findsOneWidget);
+      expect(find.text('가입 요청'), findsOneWidget);
+      expect(find.text('아이 등록'), findsOneWidget);
+      expect(find.text('미배정'), findsOneWidget);
       expect(find.text('빠른 작업'), findsOneWidget);
       expect(find.text('공지 작성'), findsOneWidget);
       expect(find.text('학사일정'), findsOneWidget);
@@ -229,6 +247,70 @@ void main() {
       // 날짜는 타이핑이 아니라 눌러서 고르는 필드여야 한다.
       expect(find.text('날짜'), findsOneWidget);
       expect(find.text('여러 날 진행'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('HomePage 모바일 셸', () {
+    testWidgets('헤더 벨·설정과 하단 탭이 360폭에서 보인다', (tester) async {
+      await _setMobileSize(tester);
+      final controller = _adminController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ko', 'KR'),
+          supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: HomePage(controller: controller),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byTooltip('알림'), findsOneWidget);
+      expect(find.text('테스트스쿨'), findsWidgets);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(NavigationBar), matching: find.text('홈')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('시간표'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      // IndexedStack 자식에 반복 애니메이션이 있을 수 있어 pumpAndSettle은 쓰지 않는다.
+      await tester.tap(find.byTooltip('알림'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('아직 받은 알림이 없어요'), findsOneWidget);
+      expect(find.text('수업 변경·결석·오늘 일정·수업 30분 전 알림'), findsOneWidget);
+    });
+
+    testWidgets('설정 화면에 푸시·아침 일정·30분 전 토글이 있다', (tester) async {
+      await _setMobileSize(tester);
+      final controller = _adminController();
+
+      await tester.pumpWidget(
+        _mobileApp(ProfileSettingsTab(controller: controller)),
+      );
+      await tester.pump();
+
+      await tester.scrollUntilVisible(
+        find.text('수업 30분 전'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('푸시 알림', skipOffstage: false), findsOneWidget);
+      expect(find.text('아침 오늘 일정'), findsOneWidget);
+      expect(find.text('수업 30분 전'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

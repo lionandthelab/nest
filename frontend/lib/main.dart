@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/config/app_config.dart';
 import 'src/services/nest_cache.dart';
+import 'src/services/nest_push.dart';
 import 'src/ui/nest_app.dart';
 
 Future<void> main() async {
@@ -39,6 +40,7 @@ Future<void> main() async {
       ),
       NestCache.initialize(),
     ]);
+    await NestPush.initialize();
 
     runApp(const NestAppRoot());
   }, (error, stack) {

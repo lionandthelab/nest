@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
+import '../models/nest_models.dart';
 import '../services/nest_cache.dart';
 import '../state/nest_controller.dart';
 import 'models/child_class_bundle.dart';
@@ -27,6 +28,7 @@ import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'tabs/timetable_workspace_tab.dart';
 import 'widgets/nest_motion.dart';
+import 'widgets/notification_inbox_sheet.dart';
 import 'widgets/term_navigator_bar.dart';
 import 'widgets/term_select_chip.dart';
 
@@ -145,12 +147,21 @@ class _HomePageState extends State<HomePage> {
         }
 
         final activeTab = _wrapWithRolePreviewBanner(tabs[safeIndex].page);
+        final mobileTabs = [
+          for (var i = 0; i < tabs.length; i++)
+            KeyedSubtree(
+              key: ValueKey<String>('mobile-tab-${tabs[i].label}'),
+              child: _wrapWithRolePreviewBanner(tabs[i].page),
+            ),
+        ];
 
         return Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: desktopLike
+              ? Colors.transparent
+              : NestColors.creamyWhite,
           body: Stack(
             children: [
-              const _WarmScenery(),
+              if (desktopLike) const _WarmScenery(),
               desktopLike
                   ? SafeArea(
                       child: _DesktopScaffold(
@@ -184,8 +195,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       labels: labels,
                       controller: widget.controller,
-                      tabLabel: tabs[safeIndex].label,
-                      tab: activeTab,
+                      tabs: mobileTabs,
                       onLogout: _handleLogout,
                       onRefresh: _handleRefresh,
                       onSelectHomeschool: _handleHomeschoolChange,
@@ -195,6 +205,7 @@ class _HomePageState extends State<HomePage> {
                       selectedChildId: _selectedChildId,
                       onSelectChild: _handleChildChange,
                       onOpenParentAnnouncements: _openParentAnnouncementsTab,
+                      onOpenInboxItem: _openInboxItem,
                     ),
             ],
           ),
@@ -271,6 +282,8 @@ class _HomePageState extends State<HomePage> {
             selectedChildId: _selectedChildId,
             childClassBundles: _childClassBundles,
             isLoadingChildClasses: _isLoadingChildClasses,
+            onOpenTimetable: () => _navigateToTabLabel('시간표'),
+            onRefresh: _handleRefresh,
           ),
         ),
         _TabSpec(
@@ -302,6 +315,8 @@ class _HomePageState extends State<HomePage> {
             selectedChildId: _selectedChildId,
             childClassBundles: _childClassBundles,
             isLoadingChildClasses: _isLoadingChildClasses,
+            onOpenTimetable: () => _navigateToTabLabel('시간표'),
+            onRefresh: _handleRefresh,
           ),
         ),
         _TabSpec(
@@ -331,7 +346,11 @@ class _HomePageState extends State<HomePage> {
       if (controller.isTeacherView) ...[
         _TabSpec(
           label: '홈',
-          page: TeacherHubTab(controller: controller),
+          page: TeacherHubTab(
+            controller: controller,
+            onOpenTimetable: () => _navigateToTabLabel('시간표'),
+            onRefresh: _handleRefresh,
+          ),
         ),
         _TabSpec(
           label: '시간표',
@@ -499,7 +518,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    HapticFeedback.selectionClick();
+    NestHaptics.selection();
     setState(() {
       _currentIndex = nextIndex;
     });
@@ -745,6 +764,10 @@ class _HomePageState extends State<HomePage> {
     _navigateToTabLabel('소식');
   }
 
+  void _openInboxItem(NotificationInboxItem item) {
+    _navigateToTabLabel(item.deepLinkTab);
+  }
+
   String _normalizeTabLabel(String label) {
     final trimmed = label.trim();
     return switch (trimmed) {
@@ -896,8 +919,7 @@ class _MobileScaffold extends StatefulWidget {
     required this.onSelectIndex,
     required this.labels,
     required this.controller,
-    required this.tabLabel,
-    required this.tab,
+    required this.tabs,
     required this.onLogout,
     required this.onRefresh,
     required this.onSelectHomeschool,
@@ -907,14 +929,14 @@ class _MobileScaffold extends StatefulWidget {
     required this.selectedChildId,
     required this.onSelectChild,
     required this.onOpenParentAnnouncements,
+    required this.onOpenInboxItem,
   });
 
   final int currentIndex;
   final ValueChanged<int> onSelectIndex;
   final List<String> labels;
   final NestController controller;
-  final String tabLabel;
-  final Widget tab;
+  final List<Widget> tabs;
   final Future<void> Function() onLogout;
   final Future<void> Function() onRefresh;
   final Future<void> Function(String? value) onSelectHomeschool;
@@ -924,6 +946,7 @@ class _MobileScaffold extends StatefulWidget {
   final String? selectedChildId;
   final ValueChanged<String?> onSelectChild;
   final VoidCallback onOpenParentAnnouncements;
+  final void Function(NotificationInboxItem item) onOpenInboxItem;
 
   @override
   State<_MobileScaffold> createState() => _MobileScaffoldState();
@@ -1040,10 +1063,8 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 else if (controller.isParentView ||
                     controller.isTeacherView ||
                     controller.isStudentView)
-                  // 좁은 헤더 행 안에서는 학기 이름이 잘려 보이지 않으므로,
-                  // 관리자 학기 바처럼 헤더 아래 전용 줄에 학기 칩을 둔다.
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: TermSelectChip(
@@ -1053,56 +1074,27 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                     ),
                   ),
                 Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: NestColors.roseMist),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: (child, animation) =>
-                                  nestFadeSlideTransition(
-                                    child,
-                                    animation,
-                                    beginOffset: const Offset(0.02, 0),
-                                  ),
-                              child: KeyedSubtree(
-                                key: ValueKey<String>(
-                                  'mobile-tab-${widget.tabLabel}',
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(10),
-                                  child: widget.tab,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: NestBusyOverlay(visible: controller.isBusy),
-                          ),
-                        ],
+                  child: Stack(
+                    children: [
+                      IndexedStack(
+                        index: widget.currentIndex < widget.tabs.length
+                            ? widget.currentIndex
+                            : 0,
+                        children: widget.tabs,
                       ),
-                    ),
+                      Positioned.fill(
+                        child: NestBusyOverlay(visible: controller.blocksUi),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
               ],
             ),
           ),
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.94),
+            color: Colors.white,
             border: Border(
               top: BorderSide(
                 color: NestColors.roseMist.withValues(alpha: 0.9),
@@ -1114,7 +1106,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
             child: NavigationBar(
               selectedIndex: widget.currentIndex,
               onDestinationSelected: widget.onSelectIndex,
-              height: 68,
+              height: 62,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               destinations: widget.labels
                   .map(
@@ -1184,14 +1176,8 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     final showStudentTarget = isAdminAsStudent && studentCandidates.isNotEmpty;
     final activeStudentId = controller.activeStudentChildId;
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NestColors.roseMist),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 4),
       child: Row(
         children: [
           _buildHomeschoolBadge(controller),
@@ -1423,8 +1409,29 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
               ],
             ),
           ),
-          const SizedBox(width: 4),
-          // Profile avatar with role switch / settings / logout
+          const SizedBox(width: 2),
+          IconButton(
+            tooltip: '알림',
+            visualDensity: VisualDensity.compact,
+            onPressed: () async {
+              controller.markInboxOpened();
+              unawaited(controller.loadNotificationInbox());
+              await showNotificationInboxSheet(
+                context: context,
+                controller: controller,
+                onOpenItem: widget.onOpenInboxItem,
+              );
+            },
+            icon: Badge(
+              isLabelVisible: controller.inboxBadgeCount > 0,
+              label: Text(
+                controller.inboxBadgeCount > 9
+                    ? '9+'
+                    : '${controller.inboxBadgeCount}',
+              ),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+          ),
           PopupMenuButton<String>(
             tooltip: displayName,
             icon: CircleAvatar(
@@ -2631,7 +2638,7 @@ class _MainPanelState extends State<_MainPanel> {
                   ),
                 ),
                 Positioned.fill(
-                  child: NestBusyOverlay(visible: controller.isBusy),
+                  child: NestBusyOverlay(visible: controller.blocksUi),
                 ),
               ],
             ),

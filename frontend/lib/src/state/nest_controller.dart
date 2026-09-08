@@ -8,7 +8,9 @@ import '../models/nest_models.dart';
 import '../services/auth_validation.dart';
 import '../services/local_planner.dart';
 import '../services/nest_cache.dart';
+import '../services/nest_push.dart';
 import '../services/nest_repository.dart';
+import '../services/schedule_occurrence.dart';
 import '../services/self_study_planner.dart';
 import '../services/web_oauth_bridge.dart';
 
@@ -23,8 +25,14 @@ class NestController extends ChangeNotifier {
 
   bool _isBootstrapped = false;
   bool _isBusy = false;
+  bool _blocksUi = true;
   bool _isExplicitAuthInProgress = false;
+  bool _communityLoaded = false;
+  bool _galleryLoaded = false;
   String _statusMessage = 'Ready';
+  bool inboxOpenedThisSession = false;
+  NotificationPrefs notificationPrefs = const NotificationPrefs();
+  List<NotificationInboxItem> notificationInbox = [];
 
   User? user;
   Session? session;
@@ -145,6 +153,9 @@ class NestController extends ChangeNotifier {
   }
 
   bool get isBusy => _isBusy;
+  bool get blocksUi => _isBusy && _blocksUi;
+  int get inboxBadgeCount =>
+      inboxOpenedThisSession ? 0 : notificationInbox.length;
   bool get isLoggedIn => user != null;
   bool get isBootstrapped => _isBootstrapped;
   String get statusMessage => _statusMessage;
@@ -569,6 +580,7 @@ class NestController extends ChangeNotifier {
     });
 
     if (isLoggedIn) {
+      unawaited(NestPush.onSignedIn(user!.id));
       // If cache was restored, show UI immediately, then refresh in background.
       if (memberships.isNotEmpty) {
         _isBootstrapped = true;
@@ -745,6 +757,7 @@ class NestController extends ChangeNotifier {
     _isExplicitAuthInProgress = true;
     try {
       await _runBusy('로그아웃 중...', () async {
+        await NestPush.onSignedOut();
         await NestCache.clearAll();
         await _repository.signOut();
         await _onAuthStateChanged(null);
@@ -781,20 +794,14 @@ class NestController extends ChangeNotifier {
     _ensureRoleViewTargetSelection();
     notifyListeners();
 
+    _communityLoaded = false;
+    _galleryLoaded = false;
     await _runBusy('학기/반 정보를 불러오는 중...', () async {
       await _loadTermAndBelow();
-      await Future.wait([
-        loadHomeschoolMemberships(),
-        loadHomeschoolInvites(),
-        loadJoinRequests(),
-        loadChildRegistrationRequests(),
-        _loadOperationalData(),
-        loadGalleryItems(),
-        loadCommunityFeed(),
-        loadAcademicEvents(),
-      ]);
+      await _loadRoleScopedContext();
       _ensureRoleViewTargetSelection();
     });
+    unawaited(_loadDeferredContext());
     unawaited(_persistToCache());
   }
 
@@ -816,17 +823,13 @@ class NestController extends ChangeNotifier {
     _ensureRoleViewTargetSelection(roleOverride: nextRole);
     notifyListeners();
 
+    _communityLoaded = false;
     await _runBusy('뷰 전환 중...', () async {
-      await Future.wait([
-        loadHomeschoolMemberships(),
-        loadHomeschoolInvites(),
-        loadJoinRequests(),
-        _loadOperationalData(),
-        loadCommunityFeed(),
-      ]);
+      await _loadRoleScopedContext();
       _ensureRoleViewTargetSelection(roleOverride: nextRole);
       _setStatus('현재 뷰: $nextRole');
     });
+    unawaited(_loadDeferredContext());
     // 방금 고른 역할을 이 홈스쿨의 '최근 역할'로 영속화(재시작 후에도 유지).
     unawaited(_persistToCache());
   }
@@ -2081,16 +2084,7 @@ class NestController extends ChangeNotifier {
 
     try {
       await _loadTermAndBelow();
-      await Future.wait([
-        loadHomeschoolMemberships(),
-        loadHomeschoolInvites(),
-        loadJoinRequests(),
-        loadChildRegistrationRequests(),
-        _loadOperationalData(),
-        loadGalleryItems(),
-        loadCommunityFeed(),
-        loadAcademicEvents(),
-      ]);
+      await _loadRoleScopedContext();
       _ensureRoleViewTargetSelection();
 
       _setStatus('운영 컨텍스트 로드 완료');
@@ -2100,6 +2094,113 @@ class NestController extends ChangeNotifier {
 
     notifyListeners();
     unawaited(_persistToCache());
+    unawaited(_loadDeferredContext());
+  }
+
+  /// 홈을 바로 그릴 수 있는 역할별 필수 데이터만 로드한다.
+  Future<void> _loadRoleScopedContext() async {
+    await Future.wait([
+      if (isAdminLike) loadHomeschoolMemberships(),
+      if (isAdminLike) loadHomeschoolInvites(),
+      if (isAdminLike) loadJoinRequests(),
+      if (isAdminLike) loadChildRegistrationRequests(),
+      _loadOperationalData(),
+      loadAcademicEvents(),
+      loadNotificationPrefs(),
+      loadNotificationInbox(),
+    ]);
+  }
+
+  Future<void> _loadDeferredContext() async {
+    try {
+      await Future.wait([
+        if (isAdminLike || isTeacherView) loadGalleryItems(),
+        if (isAdminLike) loadAuditLogs(),
+        if (isAdminLike || isTeacherView) loadTeachingPlans(),
+        if (isAdminLike || isTeacherView) loadStudentActivityLogs(),
+        if (isAdminLike || isTeacherView) _loadSelfStudy(),
+      ]);
+      if (isAdminLike || isTeacherView) {
+        _galleryLoaded = true;
+      }
+    } catch (_) {
+      // 지연 로드 실패는 홈을 막지 않는다. 해당 탭에서 다시 시도한다.
+    }
+    _notifyIfIdle();
+  }
+
+  Future<void> ensureCommunityFeed() async {
+    if (_communityLoaded) return;
+    await loadCommunityFeed();
+    _communityLoaded = true;
+  }
+
+  Future<void> ensureGalleryItems() async {
+    if (_galleryLoaded) return;
+    await loadGalleryItems();
+    _galleryLoaded = true;
+  }
+
+  Future<void> loadNotificationPrefs() async {
+    if (user == null) {
+      notificationPrefs = const NotificationPrefs();
+      return;
+    }
+    try {
+      notificationPrefs = await _repository.fetchNotificationPrefs();
+    } catch (_) {
+      notificationPrefs = const NotificationPrefs();
+    }
+    _notifyIfIdle();
+  }
+
+  Future<void> loadNotificationInbox() async {
+    if (user == null) {
+      notificationInbox = [];
+      return;
+    }
+    try {
+      notificationInbox = await _repository.fetchNotificationInbox();
+    } catch (_) {
+      notificationInbox = [];
+    }
+    _notifyIfIdle();
+  }
+
+  Future<void> updateNotificationPrefs(NotificationPrefs prefs) async {
+    await _runBusy('알림 설정을 저장하는 중...', () async {
+      await _repository.upsertNotificationPrefs(prefs);
+      notificationPrefs = prefs;
+      _setStatus('알림 설정을 저장했습니다.');
+    }, blockUi: false);
+  }
+
+  void markInboxOpened() {
+    inboxOpenedThisSession = true;
+    notifyListeners();
+  }
+
+  List<ResolvedOccurrence> occurrencesOn(
+    DateTime date, {
+    Iterable<ClassSession>? forSessions,
+  }) {
+    final slots = {for (final slot in timeSlots) slot.id: slot};
+    return resolveOccurrencesOn(
+      date: date,
+      sessions: forSessions ?? sessions,
+      slotsById: slots,
+      changes: classSessionChanges,
+    );
+  }
+
+  Iterable<ClassSession> get assignedSessionsForCurrentTeacher {
+    final profileIds = currentUserTeacherProfiles.map((p) => p.id).toSet();
+    if (profileIds.isEmpty) return const [];
+    final sessionIds = sessionTeacherAssignments
+        .where((row) => profileIds.contains(row.teacherProfileId))
+        .map((row) => row.classSessionId)
+        .toSet();
+    return sessions.where((session) => sessionIds.contains(session.id));
   }
 
   String? mediaPublicUrl(String? storagePath) {
@@ -3582,24 +3683,20 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> _loadOperationalData() async {
-    // Phase 1 – independent loads (families & children needed by phase 2).
+    final admin = isAdminLike;
     await Future.wait([
-      loadHomeschoolMemberDirectory(),
-      loadFamilies(),
+      if (admin) loadHomeschoolMemberDirectory(),
+      if (admin) loadFamilies(),
       loadChildren(),
       loadClassEnrollments(),
       loadTeacherProfiles(),
-      loadMemberUnavailabilityBlocks(),
+      if (admin) loadMemberUnavailabilityBlocks(),
       loadSessionTeacherAssignments(),
-      loadTeachingPlans(),
       loadAnnouncements(),
-      loadAuditLogs(),
     ]);
-    // Phase 2 – depend on families / children loaded above.
-    await Future.wait([
-      loadFamilyGuardians(),
-      loadStudentActivityLogs(),
-    ]);
+    if (admin) {
+      await loadFamilyGuardians();
+    }
   }
 
   Future<void> loadCommunityFeed() async {
@@ -6639,7 +6736,10 @@ class NestController extends ChangeNotifier {
     // classGroups sets selectedClassGroupId needed by _loadSessions.
     // timetableAssets only needs termId, so it can run in parallel with classGroups.
     await Future.wait([_loadClassGroups(), _loadTimetableAssets()]);
-    await Future.wait([_loadSessions(), _loadProposals(), _loadSelfStudy()]);
+    await Future.wait([
+      _loadSessions(),
+      if (isAdminLike) _loadProposals(),
+    ]);
     // 세션 id 가 필요하므로 _loadSessions 이후에 실행한다.
     // 신규 기능이므로 실패해도 학기 로딩 전체를 중단시키지 않는다.
     await _loadNewScheduleFeaturesTolerantly();
@@ -7264,20 +7364,24 @@ class NestController extends ChangeNotifier {
     user = nextSession?.user;
 
     if (user == null) {
+      unawaited(NestPush.onSignedOut());
       _clearDomainState();
       _setStatus('세션 없음');
       notifyListeners();
       return;
     }
 
+    unawaited(NestPush.onSignedIn(user!.id));
     await loadHomeschoolContext();
   }
 
   Future<void> _runBusy(
     String progressMessage,
-    Future<void> Function() task,
-  ) async {
+    Future<void> Function() task, {
+    bool blockUi = true,
+  }) async {
     _isBusy = true;
+    _blocksUi = blockUi;
     _setStatus(progressMessage);
     notifyListeners();
 
@@ -7301,6 +7405,7 @@ class NestController extends ChangeNotifier {
       rethrow;
     } finally {
       _isBusy = false;
+      _blocksUi = true;
       notifyListeners();
     }
   }
@@ -7868,6 +7973,11 @@ class NestController extends ChangeNotifier {
   }
 
   void _clearDomainState() {
+    _communityLoaded = false;
+    _galleryLoaded = false;
+    inboxOpenedThisSession = false;
+    notificationPrefs = const NotificationPrefs();
+    notificationInbox = [];
     memberships = [];
     homeschoolMemberships = [];
     homeschoolInvites = [];

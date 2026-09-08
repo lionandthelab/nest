@@ -1,6 +1,6 @@
 # Nest Flutter Architecture
 
-Last updated: 2026-03-10
+Last updated: 2026-09-08
 
 ## 1. Goals
 
@@ -684,6 +684,32 @@ Admin dashboard onboarding:
 
 과목 삭제 가드가 `controller.sessions`(선택된 반 하나)만 보면, 다른 반이 쓰는 과목에도 삭제 버튼이 열리고 DB의 `on delete restrict`가 뒤늦게 막으면서 영문 FK 오류가 화면에 뜬다. `courseIdsInSelectedTerm`으로 막고, 다른 학기가 쓰는 경우의 `23503`은 한국어로 변환한다. 그리고 `course_lessons`는 `on delete cascade`라 과목과 함께 조용히 지워지므로, 확인 문구에 회차 손실 건수를 반드시 노출한다.
 
+### 6.22 모바일 네이티브 셸 · 역할별 부트 · 푸시 리마인더 (2026-09)
+
+모바일(폭 < 1080)은 웹 카드 프레임을 벗고 `creamyWhite` 풀블리드 + `IndexedStack` 탭 유지를 쓴다. 헤더에 알림 벨이 있고, 전역 오버레이는 `NestController.blocksUi`일 때만 뜬다(캐시 히트 후 백그라운드 갱신은 화면을 막지 않는다).
+
+**역할별 부트** (`_loadRoleScopedContext` / `_loadDeferredContext`)
+
+- 시작 시: 학기·반·세션·아이/배정·공지·학사일정·알림함. 관리자만 가입/초대/아이등록 카운트.
+- 탭 진입 시: 커뮤니티(`ensureCommunityFeed`), 갤러리(`ensureGalleryItems`). 감사로그·자습·교수계획·활동기록은 교사/관리자 지연 로드.
+
+**푸시**
+
+- 클라이언트: `NestPush`가 `initLionFirebase` + `LionMessagingController.registerPush`로 `push_tokens`에 등록. 미설정이면 no-op.
+- 도메인 이벤트: `nest-notify` `dispatch()`가 SMS와 병행해 FCM을 보낸다(`CLASS_CHANGE`, `ABSENCE`). `lion-notify`는 벤더라 수정하지 않고 `_shared/fcm.ts`에 전송 로직을 복사했다.
+- 인박스: `notification_log`의 `event_type` / `title` / `body` / `payload`. 벨에서 열어 시간표/홈으로 보낸다.
+
+**리마인더** (`nest-remind`, 마이그레이션 `20260908120000_schedule_reminders.sql`)
+
+- 아침 07:30 KST `MORNING_DIGEST`: 학부모·학생·교사에게 오늘 수업 요약. 수업 0개면 미발송. 방해금지 존중.
+- 수업 30분 전 `CLASS_REMINDER`: 시작이 now+25~35분인 세션. 학생+보호자+담당 교사. 방해금지여도 발송.
+- 주간 템플릿 + `class_session_changes`를 서버에서 해석한다. `CANCELED` 스킵, `TIME_MOVED`는 새 교시 시각.
+- 중복 방지: `schedule_reminder_sends`. 설정: `notification_prefs.morning_digest_enabled` / `class_reminder_enabled`.
+- 호출은 `x-cron-secret == NEST_CRON_SECRET`. `verify_jwt = false`. pg_cron이 없으면 `.github/workflows/nest_remind.yml`이 백업한다.
+- 리마인더는 푸시만 보낸다. 문자는 수업변경·결석만.
+
+순수 해석 로직은 `frontend/lib/src/services/schedule_occurrence.dart` (단위 테스트 `test/schedule_occurrence_test.dart`).
+
 ## 7. Database and RLS Notes
 
 ### 7.1 Core Membership Security
@@ -813,6 +839,15 @@ Migration `20260309020000_teacher_profiles_delete_policy.sql`:
 
 **규칙: 모든 `RETURNS TABLE` plpgsql 함수는 본문 첫 줄에 `#variable_conflict use_column`을 넣고 지역변수에 `v_` 접두사를 쓴다.** 적용 대상: `request_join_with_code`, `recipients_for_class_session`, `recipients_for_absence_report`.
 
+### 7.6 Schedule reminders (2026-09)
+
+Migration `20260908120000_schedule_reminders.sql`:
+
+- `notification_prefs.morning_digest_enabled` / `class_reminder_enabled` (default true)
+- `notification_log.event_type` / `title` / `body` / `payload` — 인박스와 리마인더 로그가 같은 행을 쓴다
+- `schedule_reminder_sends` — 아침 요약은 `(event_type, occurrence_date, user_id)`, 수업 리마인더는 여기에 `class_session_id`를 더해 unique. 클라이언트 RLS는 막고 Edge Function(service role)만 기록한다
+- `pg_cron` + `pg_net`이 있으면 5분(`CLASS_REMINDER`) / 22:30 UTC=`07:30` KST(`MORNING_DIGEST`). 확장이 없으면 마이그레이션이 조용히 건너뛰고 `.github/workflows/nest_remind.yml`이 백업한다
+
 ## 8. Environment Variables
 
 Required `dart-define` values:
@@ -839,6 +874,8 @@ Edge Function 시크릿 (`supabase secrets set`, 프론트엔드에는 절대 �
 - `SOLAPI_SENDER` — 등록된 발신번호. 없으면 nest-notify가 500으로 거절한다.
 - `SOLAPI_PFID` — 카카오 발신프로필. **알림톡으로 전환할 때만** 필요하며, 미설정 상태에서 `channel`을 `alimtalk`/`auto`로 부르면 400으로 거절된다(문자 발송에는 영향 없음).
 - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — Supabase가 자동 주입한다.
+- `FCM_SERVICE_ACCOUNT` / `FCM_PROJECT_ID` — `nest-notify`·`nest-remind` 푸시. 없으면 푸시는 no-op이고 문자는 그대로 나간다.
+- `NEST_CRON_SECRET` — `nest-remind`가 `x-cron-secret`과 비교한다. GitHub Actions 백업 워크플로(`.github/workflows/nest_remind.yml`)에도 같은 값을 넣는다.
 
 ## 9. Build, Test, and Deploy
 
@@ -855,6 +892,7 @@ flutter build ios --release --no-codesign
 - GitHub Pages workflow: `.github/workflows/flutter_web_pages.yml`
 - Artifact: `frontend/build/web` to `gh-pages`
 - Remote integration workflow: `.github/workflows/remote_e2e.yml`
+- Schedule reminder backup: `.github/workflows/nest_remind.yml` (`SUPABASE_URL`, `NEST_CRON_SECRET`)
   - workflow condition guards use `env.*` (not direct `secrets.*` in `if`) to avoid GitHub Actions workflow validation failures.
   - `scripts/e2e_remote.mjs` callback file validation is repo-root relative to run on both local and CI environments.
 

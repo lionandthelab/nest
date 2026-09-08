@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -34,6 +36,12 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
 
   String? _targetClassGroupId;
   bool _composerClassInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.controller.ensureCommunityFeed());
+  }
 
   @override
   void dispose() {

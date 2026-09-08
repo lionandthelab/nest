@@ -73,6 +73,26 @@ class AdminHomeTab extends StatelessWidget {
         children: [
           _TermStatusHeader(controller: controller),
           const SizedBox(height: 12),
+          _OpsPulseRow(
+            joinCount: pendingJoinRequests,
+            childRequestCount: pendingChildRequests,
+            unassignedCount: controller.children
+                .where(
+                  (child) =>
+                      !controller.classEnrollments.any((e) => e.childId == child.id),
+                )
+                .length,
+            onJoin: () => onNavigate(NewTermTabs.system),
+            onChildRequest: () => onNavigate(
+              NewTermTabs.termSetup,
+              section: NewTermSections.family,
+            ),
+            onUnassigned: () => onNavigate(
+              NewTermTabs.termSetup,
+              section: NewTermSections.family,
+            ),
+          ),
+          const SizedBox(height: 12),
           if (controller.pendingInvites.isNotEmpty) ...[
             PendingInvitesCard(controller: controller),
             const SizedBox(height: 12),
@@ -125,6 +145,98 @@ class AdminHomeTab extends StatelessWidget {
           DriveIntegrationCard(controller: controller),
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+}
+
+class _OpsPulseRow extends StatelessWidget {
+  const _OpsPulseRow({
+    required this.joinCount,
+    required this.childRequestCount,
+    required this.unassignedCount,
+    required this.onJoin,
+    required this.onChildRequest,
+    required this.onUnassigned,
+  });
+
+  final int joinCount;
+  final int childRequestCount;
+  final int unassignedCount;
+  final VoidCallback onJoin;
+  final VoidCallback onChildRequest;
+  final VoidCallback onUnassigned;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _PulseCard(
+            label: '가입 요청',
+            count: joinCount,
+            onTap: onJoin,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PulseCard(
+            label: '아이 등록',
+            count: childRequestCount,
+            onTap: onChildRequest,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PulseCard(
+            label: '미배정',
+            count: unassignedCount,
+            onTap: onUnassigned,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PulseCard extends StatelessWidget {
+  const _PulseCard({
+    required this.label,
+    required this.count,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: count > 0
+          ? NestColors.roseMist.withValues(alpha: 0.55)
+          : Colors.white,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          child: Column(
+            children: [
+              Text(
+                '$count',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

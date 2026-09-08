@@ -2871,6 +2871,44 @@ class NestRepository {
     }
   }
 
+  Future<NotificationPrefs> fetchNotificationPrefs() async {
+    try {
+      final row = await client.from('notification_prefs').select().maybeSingle();
+      if (row == null) return const NotificationPrefs();
+      return NotificationPrefs.fromMap(row);
+    } on PostgrestException {
+      return const NotificationPrefs();
+    }
+  }
+
+  Future<void> upsertNotificationPrefs(NotificationPrefs prefs) async {
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) {
+      throw StateError('로그인이 필요합니다.');
+    }
+    await client.from('notification_prefs').upsert({
+      'user_id': userId,
+      ...prefs.toMap(),
+    });
+  }
+
+  Future<List<NotificationInboxItem>> fetchNotificationInbox({int limit = 40}) async {
+    try {
+      final data = await client
+          .from('notification_log')
+          .select('id, event_type, title, body, payload, created_at, channel, status')
+          .eq('channel', 'push')
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return (data as List)
+          .whereType<Map<String, dynamic>>()
+          .map(NotificationInboxItem.fromMap)
+          .toList();
+    } on PostgrestException {
+      return const [];
+    }
+  }
+
   /// Atomic batch commit of a class group's timetable draft via the optional
   /// `apply_timetable_draft` RPC. The whole apply runs in a single DB
   /// transaction, so any failure (RLS denial, TEACHER_SLOT_CONFLICT, archived

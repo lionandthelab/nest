@@ -24,6 +24,7 @@
 // verify_jwt = true 로 배포한다(로그인 사용자만 호출).
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { sendFcmToTokens } from "../_shared/fcm.ts";
 import { createAdminClient, json, requireUser } from "../_shared/supabase.ts";
 import {
   buildSolapiMessages,
@@ -105,6 +106,7 @@ interface SessionContext {
 
 interface MessagePayload {
   text: string;
+  title?: string;
   templateId?: string;
   variables: Record<string, string>;
 }
@@ -254,7 +256,8 @@ async function handleClassChange(
     recipients,
     message,
     table: "class_session_changes",
-    rowId: changeId
+    rowId: changeId,
+    eventType: "CLASS_CHANGE"
   });
 }
 
@@ -344,7 +347,8 @@ async function handleAbsence(
     recipients,
     message,
     table: "absence_reports",
-    rowId: reportId
+    rowId: reportId,
+    eventType: "ABSENCE"
   });
 }
 
@@ -357,10 +361,11 @@ interface DispatchArgs {
   message: MessagePayload;
   table: string;
   rowId: string;
+  eventType: string;
 }
 
 async function dispatch(admin: Admin, args: DispatchArgs): Promise<Response> {
-  const { callerId, channel, recipients, message, table, rowId } = args;
+  const { callerId, channel, recipients, message, table, rowId, eventType } = args;
 
   // 계정이 아예 없는 대상(학생 미가입, 교사 계정 미연결 등).
   const skippedNoAccount = recipients.noAccount;
@@ -385,13 +390,24 @@ async function dispatch(admin: Admin, args: DispatchArgs): Promise<Response> {
 
   const skippedNoPhone = userIds.length - targets.length;
 
-  // 보낼 번호가 하나도 없으면 "성공"으로 위장하지 않는다.
+  const pushTitle = message.title ?? message.text.split("\n")[0] ?? "네스트 알림";
+  const pushSent = await sendDomainPush(admin, {
+    callerId,
+    userIds,
+    title: pushTitle,
+    body: message.text,
+    eventType,
+    rowId
+  });
+
+  // 번호가 없어도 푸시가 나갔으면 성공으로 본다.
   if (targets.length === 0) {
     return json(
       200,
       {
-        accepted: false,
+        accepted: pushSent > 0,
         sent: 0,
+        push_sent: pushSent,
         skipped_no_phone: skippedNoPhone,
         skipped_no_account: skippedNoAccount,
         message_id: null
@@ -438,7 +454,10 @@ async function dispatch(admin: Admin, args: DispatchArgs): Promise<Response> {
     template_id: templateId ?? null,
     status: result.ok ? "accepted" : "failed",
     provider_message_id: result.messageId ?? null,
-    error: result.error ?? null
+    error: result.error ?? null,
+    event_type: eventType,
+    title: pushTitle,
+    body: message.text
   }));
   const logResult = await admin.from("notification_log").insert(logs);
   if (logResult.error) {
@@ -465,12 +484,74 @@ async function dispatch(admin: Admin, args: DispatchArgs): Promise<Response> {
     {
       accepted: true,
       sent: targets.length,
+      push_sent: pushSent,
       skipped_no_phone: skippedNoPhone,
       skipped_no_account: skippedNoAccount,
       message_id: result.messageId ?? null
     },
     corsHeaders
   );
+}
+
+async function sendDomainPush(
+  admin: Admin,
+  args: {
+    callerId: string;
+    userIds: string[];
+    title: string;
+    body: string;
+    eventType: string;
+    rowId: string;
+  }
+): Promise<number> {
+  if (args.userIds.length === 0) return 0;
+  try {
+    const { data: prefs } = await admin
+      .from("notification_prefs")
+      .select("user_id, push_enabled")
+      .in("user_id", args.userIds);
+    const disabled = new Set(
+      (prefs ?? [])
+        .filter((row) => row.push_enabled === false)
+        .map((row) => row.user_id as string)
+    );
+    const allowed = args.userIds.filter((id) => !disabled.has(id));
+    if (allowed.length === 0) return 0;
+
+    const { data: tokens } = await admin
+      .from("push_tokens")
+      .select("user_id, token, platform")
+      .in("user_id", allowed)
+      .is("revoked_at", null);
+    if (!tokens || tokens.length === 0) return 0;
+
+    const results = await sendFcmToTokens({
+      tokens: tokens as Array<{ user_id: string; token: string; platform: string }>,
+      payload: {
+        title: args.title,
+        body: args.body,
+        data: { event: args.eventType, id: args.rowId, tab: "시간표" }
+      }
+    });
+    const logs = results.map((result) => ({
+      requested_by: args.callerId,
+      to_user_id: result.userId,
+      channel: "push",
+      status: result.ok ? "accepted" : "failed",
+      provider_message_id: result.name ?? null,
+      error: result.error ?? null,
+      event_type: args.eventType,
+      title: args.title,
+      body: args.body,
+      payload: { event: args.eventType, id: args.rowId, tab: "시간표" }
+    }));
+    const { error } = await admin.from("notification_log").insert(logs);
+    if (error) console.error("[nest-notify] push log", error.message);
+    return results.filter((result) => result.ok).length;
+  } catch (error) {
+    console.error("[nest-notify] push", error);
+    return 0;
+  }
 }
 
 // ─────────────────────────────────────────────── 수신자 해석

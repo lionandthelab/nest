@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -35,6 +37,12 @@ class GalleryTab extends StatefulWidget {
 class _GalleryTabState extends State<GalleryTab> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.controller.ensureGalleryItems());
+  }
 
   @override
   void dispose() {

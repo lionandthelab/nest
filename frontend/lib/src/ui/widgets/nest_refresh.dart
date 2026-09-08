@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../nest_theme.dart';
+import 'nest_motion.dart';
 
 /// Branded pull-to-refresh wrapper using Nest color scheme.
 class NestRefreshable extends StatelessWidget {
@@ -16,7 +17,10 @@ class NestRefreshable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: onRefresh,
+      onRefresh: () async {
+        NestHaptics.light();
+        await onRefresh();
+      },
       color: NestColors.dustyRose,
       backgroundColor: Colors.white,
       displacement: 40,

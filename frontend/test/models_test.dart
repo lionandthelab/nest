@@ -794,4 +794,25 @@ void main() {
       expect(compareTermsByStartDate(term('x', null), term('y', null)), 0);
     });
   });
+
+  group('NotificationPrefs / inbox', () {
+    test('NotificationPrefs.fromMap uses true defaults', () {
+      final prefs = NotificationPrefs.fromMap({});
+      expect(prefs.pushEnabled, isTrue);
+      expect(prefs.morningDigestEnabled, isTrue);
+      expect(prefs.classReminderEnabled, isTrue);
+    });
+
+    test('NotificationInboxItem.deepLinkTab falls back by event', () {
+      final reminder = NotificationInboxItem.fromMap({
+        'id': 'n-1',
+        'event_type': 'CLASS_REMINDER',
+        'title': '수학 30분 전',
+        'body': '2반',
+        'created_at': '2026-09-08T00:00:00Z',
+      });
+      expect(reminder.deepLinkTab, '시간표');
+      expect(reminder.title, '수학 30분 전');
+    });
+  });
 }

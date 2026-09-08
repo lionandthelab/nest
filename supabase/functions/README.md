@@ -6,7 +6,8 @@
 - `google-drive-upload`
 - `google-drive-connect-start`
 - `google-drive-connect-complete`
-- `nest-notify` — 수업 변경 / 결석 신고 알림 발송 (문자, 추후 알림톡)
+- `nest-notify` — 수업 변경 / 결석 신고 알림 발송 (문자 + 푸시)
+- `nest-remind` — 아침 오늘 일정 / 수업 30분 전 푸시 (cron 시크릿)
 - `lion-notify` — lion_auth 모듈 템플릿(벤더링 원본, **수정 금지**)
 - `social-broker` — lion_auth 소셜 로그인 브로커
 
@@ -40,6 +41,7 @@ supabase functions deploy google-drive-upload --project-ref avursvhmilcsssabqtkx
 supabase functions deploy google-drive-connect-start --project-ref avursvhmilcsssabqtkx
 supabase functions deploy google-drive-connect-complete --project-ref avursvhmilcsssabqtkx
 supabase functions deploy nest-notify --project-ref avursvhmilcsssabqtkx
+supabase functions deploy nest-remind --project-ref avursvhmilcsssabqtkx
 ```
 
 `scripts/deploy_supabase.sh` 가 위 목록을 한 번에 배포한다.
