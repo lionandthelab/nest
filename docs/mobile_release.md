@@ -1,6 +1,6 @@
 # Mobile Release Checklist (Android/iOS)
 
-Last updated: 2026-07-19
+Last updated: 2026-09-08
 
 ## 0) Fastlane 배포 (권장)
 
@@ -34,6 +34,37 @@ Last updated: 2026-07-19
 
 첫 자동화 배포는 `internal`/`beta`로 올려 확인한 뒤 `promote`/`submit`을
 권장한다. 이하 §1~§7은 수동 절차 및 스토어 요건 체크리스트다.
+
+### Google Play: 내부테스트 → 프로덕션
+
+Play는 개인 개발자/새 앱이면 **프로덕션 직행보다 내부테스트가 먼저**다.
+닫힌 테스트(내부)에서 앱을 설치·실행한 기록이 있어야 프로덕션 출시가
+열리거나, 검토가 훨씬 수월하다. Nest는 이미 내부 트랙을 쓰고 있다.
+
+1. **내부테스트 업로드** (이미 한 경우 생략)
+   ```bash
+   cd frontend/android
+   fastlane android internal
+   ```
+2. **Play Console** → Nest → 테스트 → 내부 테스트
+   - 테스터 이메일(본인 Google 계정)이 목록에 있는지 확인
+   - 없으면 이메일 목록 또는 Google 그룹을 추가
+3. **테스트 링크**를 그 계정으로 연다  
+   `https://play.google.com/apps/internaltest/...`  
+   참여 → Play 스토어에서 설치
+4. 앱을 한 번 실행한다 (로그인까지). 이 설치/실행이 “테스트 완료” 조건이다.
+5. 프로덕션으로 올리기 — 콘솔 필수 항목이 끝났으면:
+   ```bash
+   cd frontend/android
+   fastlane android promote
+   ```
+   데이터 안전·콘텐츠 등급·스토어 등록정보가 비어 있으면 promote가
+   거절된다. 그때는 콘솔에서 신고를 채운 뒤
+   `fastlane android promote status:draft` 로 초안만 올리고
+   **출시** 버튼을 누른다.
+
+프로덕션 트랙에 아직 출시가 없으면, 첫 프로덕션은 Google 검토(보통 수일)를
+기다린다. 내부테스트는 검토 없이 테스터에게 바로 배포된다.
 
 ## 1) Auth Redirect Setup (Supabase Dashboard)
 
@@ -182,6 +213,8 @@ version: MAJOR.MINOR.PATCH+BUILD
 | 2026-07-19 | 2.0.7 | 8 | Android | Internal | fastlane 첫 자동 배포. 프로덕션은 콘솔 필수 신고 완료 후 promote |
 | 2026-07-22 | 2.0.8 | 10 | Android | Internal | Docker fastlane `internal_upload` 레인 도입(호스트 빌드 + 컨테이너 업로드) |
 | 2026-07-30 | 2.0.9 | 11 | Android | Internal | 교사 프로필 계정 연결 시 TEACHER 권한 자동 부여 fix. 웹(GitHub Pages) 동시 배포 |
+| 2026-09-08 | 2.0.16 | 18 | Android | Internal | 모바일 셸·푸시 리마인더. 프로덕션은 내부테스트 확인 후 promote |
+| 2026-09-08 | 2.0.16 | 18 | iOS | App Store 심사 제출 | 승인 시 자동 출시. `whatsNew` 필수라 release_notes 업로드 후 submit |
 
 ## 7) Signing Configuration Reminders
 
