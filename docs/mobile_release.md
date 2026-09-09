@@ -214,6 +214,7 @@ version: MAJOR.MINOR.PATCH+BUILD
 | 2026-07-22 | 2.0.8 | 10 | Android | Internal | Docker fastlane `internal_upload` 레인 도입(호스트 빌드 + 컨테이너 업로드) |
 | 2026-07-30 | 2.0.9 | 11 | Android | Internal | 교사 프로필 계정 연결 시 TEACHER 권한 자동 부여 fix. 웹(GitHub Pages) 동시 배포 |
 | 2026-09-08 | 2.0.16 | 18 | Android | Internal | 모바일 셸·푸시 리마인더. 프로덕션은 내부테스트 확인 후 promote |
+| 2026-09-09 | 2.0.16 | 18 | Android | Closed (alpha) | 내부 18을 비공개 트랙으로 승격. 프로덕션 12명/14일 조건용 |
 | 2026-09-08 | 2.0.16 | 18 | iOS | App Store 심사 제출 | 승인 시 자동 출시. `whatsNew` 필수라 release_notes 업로드 후 submit |
 
 ## 7) Signing Configuration Reminders

@@ -106,6 +106,23 @@ platform :android do
     UI.success("내부 테스트 업로드 완료: #{version} (versionCode #{build_number})")
   end
 
+  desc "내부테스트 최신 빌드를 비공개(Closed) 트랙(alpha)으로 승격"
+  lane :closed do
+    json_key = play_json_key
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "alpha",
+      json_key: json_key,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+    )
+    version, build_number = pubspec_build_number
+    UI.success("비공개 테스트 승격 완료: #{version} (versionCode #{build_number})")
+  end
+
   desc "프로덕션 트랙에 AAB 업로드(기본 즉시 공개; options: status:draft로 초안 스테이징)"
   lane :production do |options|
     json_key = play_json_key
