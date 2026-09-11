@@ -11,6 +11,7 @@ import '../services/browser_social_auth.dart';
 import '../state/nest_controller.dart';
 import 'nest_theme.dart';
 import 'widgets/nest_motion.dart';
+import 'widgets/nest_social_login_buttons.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.controller});
@@ -71,11 +72,10 @@ class _LoginPageState extends State<LoginPage> {
     // 카카오: 공식 loginWithKakaoAccount (Safari/Custom Tabs, 카카오톡 앱투앱 없음).
     // 네이버: 브라우저 인가 코드 + social-broker.
     // 구글: iOS GIDClientID가 있을 때만 네이티브 시트, 없으면 브라우저 OAuth.
-    final useBrowserGoogle = !kIsWeb &&
-        id == LionAuthProviderId.google &&
-        !_canUseNativeGoogle;
-    final useBrowser = !kIsWeb &&
-        (id == LionAuthProviderId.naver || useBrowserGoogle);
+    final useBrowserGoogle =
+        !kIsWeb && id == LionAuthProviderId.google && !_canUseNativeGoogle;
+    final useBrowser =
+        !kIsWeb && (id == LionAuthProviderId.naver || useBrowserGoogle);
     try {
       if (useBrowser) {
         await BrowserSocialAuth.start(id);
@@ -642,18 +642,12 @@ class _LoginPageState extends State<LoginPage> {
                                       AnimatedBuilder(
                                         animation: _lionAuth,
                                         builder: (context, _) =>
-                                            SocialLoginButtons(
-                                              controller: _lionAuth,
+                                            NestSocialLoginButtons(
+                                              providers: _lionAuth
+                                                  .config
+                                                  .enabledProviders,
+                                              enabled: !_lionAuth.isBusy,
                                               onSelect: _onSocial,
-                                              theme: const LionAuthTheme(
-                                                primary: NestColors.dustyRose,
-                                                background:
-                                                    NestColors.creamyWhite,
-                                                onBackground:
-                                                    NestColors.deepWood,
-                                                fontFamily:
-                                                    'Pretendard Variable',
-                                              ),
                                             ),
                                       ),
                                     ],
