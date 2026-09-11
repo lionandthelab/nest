@@ -11,6 +11,7 @@ abstract class WebOauthBridge {
     required String supabaseUrl,
     required String supabaseAnonKey,
     required String accessToken,
+    String intent = 'drive',
   });
 
   Future<void> openPopup(String url);

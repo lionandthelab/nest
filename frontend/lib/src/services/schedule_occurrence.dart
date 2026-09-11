@@ -27,6 +27,21 @@ class ResolvedOccurrence {
 
 DateTime nestDateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 
+/// 그 주 월요일(로컬 날짜, 시분초 없음).
+DateTime nestMondayOf(DateTime date) {
+  final day = nestDateOnly(date);
+  return day.subtract(Duration(days: day.weekday - 1));
+}
+
+/// [weekMonday] 가 월요일일 때, Nest 요일(0=일 … 6=토)에 해당하는 날짜.
+DateTime nestDateForWeekday(DateTime weekMonday, int nestDow) {
+  final monday = nestDateOnly(weekMonday);
+  if (nestDow == 0) {
+    return monday.add(const Duration(days: 6));
+  }
+  return monday.add(Duration(days: nestDow - 1));
+}
+
 /// 앱 규약: 0 = 일요일 (`DateTime.weekday` 는 1 = 월요일).
 int nestDayOfWeek(DateTime date) => date.weekday % 7;
 

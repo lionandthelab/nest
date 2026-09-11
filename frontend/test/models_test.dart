@@ -216,13 +216,13 @@ void main() {
 
   group('defaultTermForToday', () {
     Term term(String name, String start, String end) => Term.fromMap({
-          'id': name,
-          'homeschool_id': 's1',
-          'name': name,
-          'status': 'DRAFT',
-          'start_date': start,
-          'end_date': end,
-        });
+      'id': name,
+      'homeschool_id': 's1',
+      'name': name,
+      'status': 'DRAFT',
+      'start_date': start,
+      'end_date': end,
+    });
 
     final spring = term('2026 Spring', '2026-03-03', '2026-06-30');
     final fall = term('2026 가을', '2026-09-01', '2026-11-30');
@@ -243,10 +243,13 @@ void main() {
       expect(t?.name, '2026 Spring');
     });
 
-    test('order-independent: fall-first list still picks Spring in the gap', () {
-      final t = defaultTermForToday([fall, spring], DateTime(2026, 7, 7));
-      expect(t?.name, '2026 Spring');
-    });
+    test(
+      'order-independent: fall-first list still picks Spring in the gap',
+      () {
+        final t = defaultTermForToday([fall, spring], DateTime(2026, 7, 7));
+        expect(t?.name, '2026 Spring');
+      },
+    );
 
     test('개학이 코앞이면 지난 학기가 아니라 다가오는 학기를 고른다', () {
       // 실제로 겪은 문제: 2026-08-25 에 로그인하면 7월 31일에 끝난 학기가 열렸다.
@@ -274,10 +277,11 @@ void main() {
       final joyFall = term('2026 가을', '2026-09-01', '2026-11-30');
       final joyNext = term('2027 가을', '2026-11-26', '2027-06-28');
 
-      final t = defaultTermForToday(
-        [joyNext, joyFall, joySpring],
-        DateTime(2026, 8, 25),
-      );
+      final t = defaultTermForToday([
+        joyNext,
+        joyFall,
+        joySpring,
+      ], DateTime(2026, 8, 25));
       expect(t?.name, '2026 가을');
     });
 
@@ -285,16 +289,13 @@ void main() {
       // 다음 학기 시작일을 앞 학기 종료일보다 이르게 만들어 둔 실수(JOY 실제 데이터).
       // 목록 순서에 기대면 아직 반이 없는 미래 학기로 학기 중에 튀어 버린다.
       final nextYear = term('2027 가을', '2026-11-26', '2027-06-28');
-      final t = defaultTermForToday(
-        [nextYear, fall],
-        DateTime(2026, 11, 27),
-      );
+      final t = defaultTermForToday([nextYear, fall], DateTime(2026, 11, 27));
       expect(t?.name, '2026 가을');
 
-      final reversed = defaultTermForToday(
-        [fall, nextYear],
-        DateTime(2026, 11, 27),
-      );
+      final reversed = defaultTermForToday([
+        fall,
+        nextYear,
+      ], DateTime(2026, 11, 27));
       expect(reversed?.name, '2026 가을');
     });
 
@@ -311,13 +312,13 @@ void main() {
 
   group('resolveTermSelection', () {
     Term term(String name, String start, String end) => Term.fromMap({
-          'id': name,
-          'homeschool_id': 's1',
-          'name': name,
-          'status': 'DRAFT',
-          'start_date': start,
-          'end_date': end,
-        });
+      'id': name,
+      'homeschool_id': 's1',
+      'name': name,
+      'status': 'DRAFT',
+      'start_date': start,
+      'end_date': end,
+    });
 
     final spring = term('spring', '2026-03-03', '2026-06-30');
     final summer = term('summer', '2026-07-01', '2026-08-31');
@@ -626,9 +627,7 @@ void main() {
     }
 
     test('fromMap 이 PostgREST snake_case 행을 파싱한다', () {
-      final lesson = CourseLesson.fromMap(
-        row(content: '성경 지참, 노트 준비'),
-      );
+      final lesson = CourseLesson.fromMap(row(content: '성경 지참, 노트 준비'));
 
       expect(lesson.id, 'lesson-1');
       expect(lesson.courseId, 'course-1');
@@ -650,14 +649,8 @@ void main() {
 
     test('headline 이 제목과 부제를 합친다', () {
       expect(CourseLesson.fromMap(row()).headline, '창세기 36장 · 에서의 자손');
-      expect(
-        CourseLesson.fromMap(row(subtitle: '')).headline,
-        '창세기 36장',
-      );
-      expect(
-        CourseLesson.fromMap(row(title: '', subtitle: '')).headline,
-        '',
-      );
+      expect(CourseLesson.fromMap(row(subtitle: '')).headline, '창세기 36장');
+      expect(CourseLesson.fromMap(row(title: '', subtitle: '')).headline, '');
     });
 
     test('isBlank: 제목·부제·담당·내용이 모두 비면 true', () {
@@ -768,13 +761,13 @@ void main() {
 
   group('compareTermsByStartDate', () {
     Term term(String name, String? start) => Term.fromMap({
-          'id': name,
-          'homeschool_id': 's1',
-          'name': name,
-          'status': 'DRAFT',
-          'start_date': start,
-          'end_date': null,
-        });
+      'id': name,
+      'homeschool_id': 's1',
+      'name': name,
+      'status': 'DRAFT',
+      'start_date': start,
+      'end_date': null,
+    });
 
     test('orders by start date ascending', () {
       final sorted = [term('b', '2026-09-01'), term('a', '2026-03-02')]
@@ -783,10 +776,8 @@ void main() {
     });
 
     test('terms without start date come first', () {
-      final sorted = [
-        term('dated', '2026-03-02'),
-        term('undated', null),
-      ]..sort(compareTermsByStartDate);
+      final sorted = [term('dated', '2026-03-02'), term('undated', null)]
+        ..sort(compareTermsByStartDate);
       expect(sorted.first.name, 'undated');
     });
 
@@ -813,6 +804,79 @@ void main() {
       });
       expect(reminder.deepLinkTab, '시간표');
       expect(reminder.title, '수학 30분 전');
+    });
+
+    test('AcademicEvent.fromMap reads kind, times, and coversDate', () {
+      final event = AcademicEvent.fromMap({
+        'id': 'ae-1',
+        'homeschool_id': 'hs-1',
+        'term_id': 't-1',
+        'title': '현장학습',
+        'description': '운동화',
+        'event_date': '2026-09-15',
+        'end_date': '2026-09-16',
+        'kind': 'FIELD_TRIP',
+        'start_time': '10:00:00',
+        'end_time': '15:00:00',
+        'publish_announcement': true,
+        'show_on_timetable': true,
+      });
+      expect(event.kind, 'FIELD_TRIP');
+      expect(event.isAllDay, isFalse);
+      expect(event.coversDate(DateTime(2026, 9, 15)), isTrue);
+      expect(event.coversDate(DateTime(2026, 9, 17)), isFalse);
+    });
+
+    test('PersonalEvent.fromMap and overlap helpers', () {
+      final event = PersonalEvent.fromMap({
+        'id': 'pe-1',
+        'homeschool_id': 'hs-1',
+        'owner_user_id': 'u-1',
+        'child_id': 'c-1',
+        'title': '피아노',
+        'notes': '',
+        'starts_at': '2026-09-14T09:10:00+09:00',
+        'ends_at': '2026-09-14T10:00:00+09:00',
+        'conflict_policy': 'PRIORITIZE_PERSONAL',
+        'source': 'NEST',
+      });
+      expect(event.prioritizesPersonal, isTrue);
+      expect(event.coversDate(DateTime(2026, 9, 14)), isTrue);
+      expect(event.toMap()['child_id'], 'c-1');
+    });
+
+    test('TermSchedulePack.fromMap parses sessions and assignments', () {
+      final pack = TermSchedulePack.fromMap({
+        'sessions': [
+          {
+            'id': 's-1',
+            'class_group_id': 'g-1',
+            'course_id': 'c-1',
+            'time_slot_id': 't-1',
+            'title': '국어',
+            'source_type': 'MANUAL',
+            'status': 'PLANNED',
+            'location': '거실',
+          },
+        ],
+        'assignments': [
+          {
+            'id': 'a-1',
+            'class_session_id': 's-1',
+            'teacher_profile_id': 'tp-1',
+            'assignment_role': 'MAIN',
+          },
+        ],
+      });
+      expect(pack.sessions, hasLength(1));
+      expect(pack.sessions.first.location, '거실');
+      expect(pack.assignments.single.isMain, isTrue);
+    });
+
+    test('TermSchedulePack.fromMap handles empty payloads', () {
+      final pack = TermSchedulePack.fromMap({});
+      expect(pack.sessions, isEmpty);
+      expect(pack.assignments, isEmpty);
     });
   });
 }

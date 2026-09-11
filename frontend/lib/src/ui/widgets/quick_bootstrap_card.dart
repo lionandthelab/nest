@@ -27,6 +27,7 @@ class _QuickBootstrapCardState extends State<QuickBootstrapCard> {
   late final TextEditingController _startDateController;
   late final TextEditingController _endDateController;
   bool _expanded = false;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -43,7 +44,8 @@ class _QuickBootstrapCardState extends State<QuickBootstrapCard> {
           (row) => row.homeschoolId == widget.controller.selectedHomeschoolId,
         )
         .firstOrNull;
-    _homeschoolController.text = membership?.homeschool.name ?? 'Nest Warm Home';
+    _homeschoolController.text =
+        membership?.homeschool.name ?? 'Nest Warm Home';
     _termController.text = '${now.year} ${now.month <= 6 ? '봄' : '가을'}학기';
   }
 
@@ -83,7 +85,9 @@ class _QuickBootstrapCardState extends State<QuickBootstrapCard> {
   }
 
   Future<void> _submit() async {
+    if (_submitting || widget.controller.isBusy) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _submitting = true);
     try {
       await widget.controller.bootstrapFrame(
         homeschoolName: _homeschoolController.text,
@@ -97,9 +101,10 @@ class _QuickBootstrapCardState extends State<QuickBootstrapCard> {
       // 상태 메시지는 컨트롤러가 채워두므로 아래에서 그대로 노출한다.
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(widget.controller.statusMessage)),
-    );
+    setState(() => _submitting = false);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
   }
 
   @override
@@ -230,9 +235,23 @@ class _QuickBootstrapCardState extends State<QuickBootstrapCard> {
                             width: double.infinity,
                             height: 46,
                             child: FilledButton.icon(
-                              onPressed: controller.isBusy ? null : _submit,
-                              icon: const Icon(Icons.auto_awesome, size: 18),
-                              label: const Text('운영 틀 만들기'),
+                              onPressed: _submitting || controller.isBusy
+                                  ? null
+                                  : _submit,
+                              icon: _submitting || controller.isBusy
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.auto_awesome, size: 18),
+                              label: Text(
+                                _submitting || controller.isBusy
+                                    ? '만들고 있어요'
+                                    : '운영 틀 만들기',
+                              ),
                             ),
                           ),
                         ],

@@ -373,6 +373,23 @@ verify_jwt = true
 [functions.nest-remind]
 verify_jwt = false
 
+[functions.google-calendar-connect-start]
+verify_jwt = true
+
+[functions.google-calendar-connect-complete]
+verify_jwt = true
+
+[functions.google-calendar-sync]
+verify_jwt = true
+
+# Google 이 브라우저로 code 를 넘기므로 JWT 없음.
+[functions.google-calendar-oauth]
+verify_jwt = false
+
+# 네이버 브라우저 로그인: HTTPS callback → nestnaverlogin://callback
+[functions.naver-oauth-bridge]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

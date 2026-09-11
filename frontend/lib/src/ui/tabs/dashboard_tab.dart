@@ -5,11 +5,13 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/homeschool_create_dialog.dart';
+import '../widgets/homeschool_tips_card.dart';
+import '../widgets/nest_motion.dart';
 
 /// 소속 홈스쿨이 없는 사용자를 위한 온보딩 화면.
 ///
-/// 관리자 대시보드였던 부분은 [AdminHomeTab]으로 옮겼고, 여기에는 초대 수락 ·
-/// 참여 코드 · 홈스쿨 검색/가입 요청 · 홈스쿨 개설만 남는다.
+/// 메인은 우리집 홈스쿨 개설이다. 초대 · 참여 코드 · 검색 가입은
+/// "이미 홈스쿨이 있나요?" 아래에 둔다.
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key, required this.controller});
 
@@ -23,6 +25,7 @@ class _DashboardTabState extends State<DashboardTab> {
   final _joinSearchController = TextEditingController();
   final _joinRequestNoteController = TextEditingController();
   bool _joinSearching = false;
+  bool _openingCreate = false;
   List<HomeschoolDirectoryEntry> _joinSearchResults = const [];
   String? _joinSearchMessage;
   final Set<String> _joinRequestingIds = <String>{};
@@ -40,18 +43,22 @@ class _DashboardTabState extends State<DashboardTab> {
     final controller = widget.controller;
 
     return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        _buildOnboardingWelcome(theme, controller),
+        NestAppear(index: 0, child: _buildOnboardingWelcome(theme, controller)),
+        const SizedBox(height: 16),
+        NestAppear(
+          index: 1,
+          child: _buildOnboardingCreateCard(theme, controller),
+        ),
+        const SizedBox(height: 16),
+        const NestAppear(index: 2, child: HomeschoolTipsCard()),
         if (controller.pendingInvites.isNotEmpty) ...[
           const SizedBox(height: 16),
           PendingInvitesCard(controller: controller),
         ],
         const SizedBox(height: 16),
-        JoinByCodeCard(controller: controller),
-        const SizedBox(height: 16),
-        _buildOnboardingJoinRequestCard(theme, controller),
-        const SizedBox(height: 16),
-        _buildOnboardingCreateCard(theme, controller),
+        NestAppear(index: 3, child: _buildJoinExistingCard(theme, controller)),
       ],
     );
   }
@@ -79,7 +86,7 @@ class _DashboardTabState extends State<DashboardTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Nest에 오신 것을 환영합니다!',
+                        '우리집 홈스쿨, 여기서 열어요',
                         style: theme.textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 4),
@@ -96,35 +103,22 @@ class _DashboardTabState extends State<DashboardTab> {
             ),
             const SizedBox(height: 16),
             Text(
-              '아직 소속된 홈스쿨이 없습니다. 아래 두 가지 방법으로 시작할 수 있습니다.',
+              '혼자여도 괜찮아요. 학기·반·과목은 미리 넣어 두었으니, 이름만 보고 시작하면 됩니다.',
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: 16),
-            _OnboardingOption(
-              icon: Icons.mail_outline,
-              title: '초대를 받았나요?',
-              description:
-                  '홈스쿨 관리자가 이메일로 초대하면 아래 "대기 중 초대" 카드가 나타납니다.\n'
-                  '관리자에게 가입한 이메일 주소를 알려주세요.',
-              highlight: controller.pendingInvites.isNotEmpty,
-            ),
-            const SizedBox(height: 10),
             const _OnboardingOption(
-              icon: Icons.travel_explore,
-              title: '홈스쿨 검색 후 가입 요청',
-              description:
-                  '홈스쿨 이름으로 검색하고 가입 요청을 보낼 수 있습니다.\n'
-                  '요청은 홈스쿨 관리자 승인 후 참여가 완료됩니다.',
-              highlight: false,
+              icon: Icons.home_work_outlined,
+              title: '우리집 홈스쿨 열기',
+              description: '기본 틀이 이미 채워져 있어요. 아이와 시간표는 천천히 넣으면 됩니다.',
+              highlight: true,
             ),
             const SizedBox(height: 10),
             _OnboardingOption(
-              icon: Icons.add_home,
-              title: '새 홈스쿨을 직접 개설',
-              description:
-                  '관리자로서 새 홈스쿨을 개설하고 학기, 반, 과목을 한번에 설정합니다.\n'
-                  '아래 버튼을 눌러 개설 모달에서 진행하세요.',
-              highlight: false,
+              icon: Icons.group_add_outlined,
+              title: '이미 있는 홈스쿨',
+              description: '참여 코드나 초대로 들어가면 됩니다.',
+              highlight: controller.pendingInvites.isNotEmpty,
             ),
           ],
         ),
@@ -137,6 +131,7 @@ class _DashboardTabState extends State<DashboardTab> {
     NestController controller,
   ) {
     return Card(
+      color: NestColors.roseMist.withValues(alpha: 0.35),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -146,23 +141,62 @@ class _DashboardTabState extends State<DashboardTab> {
               children: [
                 Icon(Icons.add_home, color: NestColors.dustyRose),
                 const SizedBox(width: 8),
-                Text('홈스쿨 개설', style: theme.textTheme.titleLarge),
+                Text('우리집 홈스쿨 시작하기', style: theme.textTheme.titleLarge),
               ],
             ),
             const SizedBox(height: 6),
             Text(
-              '홈스쿨, 학기, 반, 과목, 시간 슬롯을 한번에 만들고 관리자로 시작합니다.\n'
-              '개설 버튼을 누르면 모달에서 입력할 수 있습니다.',
+              '학기, 반, 과목을 미리 채워 두었어요. 그대로 눌러도 됩니다.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 14),
-            ElevatedButton.icon(
-              onPressed: controller.isBusy ? null : _showOnboardingCreateModal,
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('홈스쿨 개설 열기'),
+            NestPressable(
+              enabled: !_openingCreate && !controller.isBusy,
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _openingCreate || controller.isBusy
+                      ? null
+                      : _showOnboardingCreateModal,
+                  child: Text(
+                    _openingCreate || controller.isBusy ? '열고 있어요' : '바로 시작하기',
+                  ),
+                ),
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJoinExistingCard(ThemeData theme, NestController controller) {
+    return Card(
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          tilePadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+          leading: Icon(Icons.group_add_outlined, color: NestColors.clay),
+          title: Text(
+            '이미 홈스쿨이 있나요?',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          subtitle: Text(
+            '참여 코드, 검색, 초대로 다른 홈스쿨에 합류할 수 있어요.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.72),
+            ),
+          ),
+          children: [
+            JoinByCodeCard(controller: controller, framed: false),
+            const SizedBox(height: 12),
+            _buildOnboardingJoinRequestCard(theme, controller, framed: false),
           ],
         ),
       ),
@@ -171,109 +205,115 @@ class _DashboardTabState extends State<DashboardTab> {
 
   Widget _buildOnboardingJoinRequestCard(
     ThemeData theme,
-    NestController controller,
-  ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.travel_explore, color: NestColors.dustyRose),
-                const SizedBox(width: 8),
-                Text('홈스쿨 검색 및 가입 요청', style: theme.textTheme.titleLarge),
-              ],
+    NestController controller, {
+    bool framed = true,
+  }) {
+    final body = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.travel_explore, color: NestColors.dustyRose),
+              const SizedBox(width: 8),
+              Text('홈스쿨 검색 및 가입 요청', style: theme.textTheme.titleLarge),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '이름으로 홈스쿨을 검색한 뒤 가입 요청을 보낼 수 있습니다.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.72),
             ),
-            const SizedBox(height: 6),
-            Text(
-              '이름으로 홈스쿨을 검색한 뒤 가입 요청을 보낼 수 있습니다.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _joinSearchController,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _searchHomeschools(),
-                    decoration: InputDecoration(
-                      labelText: '홈스쿨 이름 검색',
-                      hintText: '예: Nest Warm Home',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        onPressed:
-                            _joinSearching ? null : _searchHomeschools,
-                        icon: const Icon(Icons.arrow_forward),
-                        tooltip: '검색',
-                      ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _joinSearchController,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _searchHomeschools(),
+                  decoration: InputDecoration(
+                    labelText: '홈스쿨 이름 검색',
+                    hintText: '예: 우리 마을 홈스쿨',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      onPressed: _joinSearching ? null : _searchHomeschools,
+                      icon: const Icon(Icons.arrow_forward),
+                      tooltip: '검색',
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                FilledButton.tonalIcon(
-                  onPressed: _joinSearching ? null : _searchHomeschools,
-                  icon: const Icon(Icons.search),
-                  label: const Text('검색'),
-                ),
-              ],
-            ),
-            if (_joinSearchMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _joinSearchMessage!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.72),
-                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.tonalIcon(
+                onPressed: _joinSearching ? null : _searchHomeschools,
+                icon: const Icon(Icons.search),
+                label: const Text('검색'),
               ),
             ],
-            const SizedBox(height: 12),
-            if (_joinSearching)
-              const Center(child: CircularProgressIndicator())
-            else if (_joinSearchResults.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: NestColors.roseMist),
-                  color: NestColors.creamyWhite,
-                ),
-                child: Text(
-                  '검색어를 입력하고 홈스쿨을 찾아보세요.',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              )
-            else
-              ..._joinSearchResults.map(
-                (entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _OnboardingJoinResultTile(
-                    entry: entry,
-                    isRequesting: _joinRequestingIds.contains(entry.id),
-                    onRequest: () => _promptJoinRequest(entry),
-                  ),
+          ),
+          if (_joinSearchMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _joinSearchMessage!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (_joinSearching)
+            const Center(child: CircularProgressIndicator())
+          else if (_joinSearchResults.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: NestColors.roseMist),
+                color: NestColors.creamyWhite,
+              ),
+              child: Text(
+                '검색어를 입력하고 홈스쿨을 찾아보세요.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            )
+          else
+            ..._joinSearchResults.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _OnboardingJoinResultTile(
+                  entry: entry,
+                  isRequesting: _joinRequestingIds.contains(entry.id),
+                  onRequest: () => _promptJoinRequest(entry),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
+    if (!framed) return body;
+    return Card(child: body);
   }
 
   Future<void> _showOnboardingCreateModal() async {
-    final created = await showHomeschoolCreateDialog(
-      context: context,
-      controller: widget.controller,
-    );
-    if (created && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.controller.statusMessage)),
+    if (_openingCreate || widget.controller.isBusy) return;
+    setState(() => _openingCreate = true);
+    try {
+      final created = await showHomeschoolCreateDialog(
+        context: context,
+        controller: widget.controller,
       );
+      if (created && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.controller.statusMessage)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _openingCreate = false);
     }
   }
 
@@ -430,9 +470,14 @@ class _DashboardTabState extends State<DashboardTab> {
 /// 참여 코드로 홈스쿨에 합류를 요청하는 온보딩 카드.
 /// 코드 확인 → 역할(학부모/선생님/학생) 선택 → 요청 흐름을 담는다.
 class JoinByCodeCard extends StatefulWidget {
-  const JoinByCodeCard({super.key, required this.controller});
+  const JoinByCodeCard({
+    super.key,
+    required this.controller,
+    this.framed = true,
+  });
 
   final NestController controller;
+  final bool framed;
 
   @override
   State<JoinByCodeCard> createState() => _JoinByCodeCardState();
@@ -502,157 +547,166 @@ class _JoinByCodeCardState extends State<JoinByCodeCard> {
     final theme = Theme.of(context);
 
     if (_submittedName != null) {
-      return Card(
-        color: NestColors.mutedSage.withValues(alpha: 0.12),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.check_circle,
-                      color: NestColors.mutedSage, size: 26),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('$_submittedName 합류를 요청했어요!',
-                        style: theme.textTheme.titleMedium),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _role == 'STUDENT'
-                    ? '관리 선생님이 승인하면서 학생 정보와 이 계정을 연결해 드립니다.\n'
-                          '승인 후 앱을 새로고침하면 내 시간표가 나타납니다.'
-                    : '관리자가 승인하면 바로 이용할 수 있어요. 조금만 기다려 주세요.\n'
-                          '승인 후 앱을 새로고침하면 홈스쿨이 나타납니다.',
-                style: theme.textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+      final success = Padding(
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.vpn_key_outlined, color: NestColors.clay),
+                const Icon(
+                  Icons.check_circle,
+                  color: NestColors.mutedSage,
+                  size: 26,
+                ),
                 const SizedBox(width: 8),
-                Text('참여 코드로 합류하기', style: theme.textTheme.titleLarge),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '학교(홈스쿨)에서 받은 코드를 입력하세요.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
                 Expanded(
-                  child: TextField(
-                    controller: _codeController,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: const InputDecoration(
-                      labelText: '참여 코드',
-                      hintText: '예: 44UDMV',
-                      prefixIcon: Icon(Icons.tag),
-                    ),
-                    onSubmitted: (_) => _resolve(),
+                  child: Text(
+                    '$_submittedName 합류를 요청했어요!',
+                    style: theme.textTheme.titleMedium,
                   ),
-                ),
-                const SizedBox(width: 10),
-                FilledButton(
-                  onPressed: _resolving ? null : _resolve,
-                  child: _resolving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('확인'),
                 ),
               ],
             ),
-            if (_resolvedName != null) ...[
-              const Divider(height: 26),
-              Text('“$_resolvedName” 에 합류할까요?',
-                  style: theme.textTheme.titleMedium),
-              const SizedBox(height: 10),
-              Text('나는 …', style: theme.textTheme.bodyMedium),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                children: [
-                  ChoiceChip(
-                    label: const Text('학부모'),
-                    selected: _role == 'PARENT',
-                    onSelected: (_) => setState(() => _role = 'PARENT'),
+            const SizedBox(height: 8),
+            Text(
+              _role == 'STUDENT'
+                  ? '관리 선생님이 승인하면서 학생 정보와 이 계정을 연결해 드립니다.\n'
+                        '승인 후 앱을 새로고침하면 내 시간표가 나타납니다.'
+                  : '관리자가 승인하면 바로 이용할 수 있어요. 조금만 기다려 주세요.\n'
+                        '승인 후 앱을 새로고침하면 홈스쿨이 나타납니다.',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      );
+      if (!widget.framed) return success;
+      return Card(
+        color: NestColors.mutedSage.withValues(alpha: 0.12),
+        child: success,
+      );
+    }
+
+    final form = Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.vpn_key_outlined, color: NestColors.clay),
+              const SizedBox(width: 8),
+              Text('참여 코드로 합류하기', style: theme.textTheme.titleLarge),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '학교(홈스쿨)에서 받은 코드를 입력하세요.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _codeController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: '참여 코드',
+                    hintText: '예: 44UDMV',
+                    prefixIcon: Icon(Icons.tag),
                   ),
-                  ChoiceChip(
-                    label: const Text('선생님'),
-                    selected: _role == 'TEACHER',
-                    onSelected: (_) => setState(() => _role = 'TEACHER'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('학생'),
-                    selected: _role == 'STUDENT',
-                    onSelected: (_) => setState(() => _role = 'STUDENT'),
-                  ),
-                ],
+                  onSubmitted: (_) => _resolve(),
+                ),
               ),
-              if (_role == 'STUDENT') ...[
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: NestColors.roseMist.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '승인되면 관리 선생님이 학생 정보와 계정을 연결해 드립니다.\n'
-                    '아래에 본인 이름을 적어 주면 더 빨리 확인할 수 있어요.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: NestColors.deepWood.withValues(alpha: 0.8),
-                    ),
-                  ),
+              const SizedBox(width: 10),
+              FilledButton(
+                onPressed: _resolving ? null : _resolve,
+                child: _resolving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('확인'),
+              ),
+            ],
+          ),
+          if (_resolvedName != null) ...[
+            const Divider(height: 26),
+            Text(
+              '“$_resolvedName” 에 합류할까요?',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            Text('나는 …', style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('학부모'),
+                  selected: _role == 'PARENT',
+                  onSelected: (_) => setState(() => _role = 'PARENT'),
+                ),
+                ChoiceChip(
+                  label: const Text('선생님'),
+                  selected: _role == 'TEACHER',
+                  onSelected: (_) => setState(() => _role = 'TEACHER'),
+                ),
+                ChoiceChip(
+                  label: const Text('학생'),
+                  selected: _role == 'STUDENT',
+                  onSelected: (_) => setState(() => _role = 'STUDENT'),
                 ),
               ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: _noteController,
-                decoration: InputDecoration(
-                  labelText: '관리자에게 한마디 (선택)',
-                  hintText: _role == 'STUDENT'
-                      ? '관리자가 알아볼 수 있게 (예: 3학년 김예서)'
-                      : '관리자가 알아볼 수 있게 (예: 홍길동 아빠 · 자녀 예서)',
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
+            ),
+            if (_role == 'STUDENT') ...[
+              const SizedBox(height: 8),
+              Container(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _submitting ? null : _submit,
-                  icon: const Icon(Icons.send_outlined, size: 18),
-                  label: Text(_submitting ? '요청 중...' : '합류 요청 보내기'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: NestColors.roseMist.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '승인되면 관리 선생님이 학생 정보와 계정을 연결해 드립니다.\n'
+                  '아래에 본인 이름을 적어 주면 더 빨리 확인할 수 있어요.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.8),
+                  ),
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _noteController,
+              decoration: InputDecoration(
+                labelText: '관리자에게 한마디 (선택)',
+                hintText: _role == 'STUDENT'
+                    ? '관리자가 알아볼 수 있게 (예: 3학년 김예서)'
+                    : '관리자가 알아볼 수 있게 (예: 홍길동 아빠 · 자녀 예서)',
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _submitting ? null : _submit,
+                icon: const Icon(Icons.send_outlined, size: 18),
+                label: Text(_submitting ? '요청 중...' : '합류 요청 보내기'),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
+    if (!widget.framed) return form;
+    return Card(child: form);
   }
 }
 
@@ -665,9 +719,7 @@ class PendingInvitesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final pending =
-        controller.pendingInvites
-            .where((invite) => invite.canAccept)
-            .toList()
+        controller.pendingInvites.where((invite) => invite.canAccept).toList()
           ..sort((a, b) {
             final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
             final right = b.createdAt?.millisecondsSinceEpoch ?? 0;

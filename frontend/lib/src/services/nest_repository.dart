@@ -263,10 +263,7 @@ class NestRepository {
 
     final uid = client.auth.currentUser?.id;
     if (uid != null) {
-      await client
-          .from('profiles')
-          .update({'phone': normalized})
-          .eq('id', uid);
+      await client.from('profiles').update({'phone': normalized}).eq('id', uid);
     }
   }
 
@@ -283,7 +280,9 @@ class NestRepository {
         ? filename.substring(filename.lastIndexOf('.')).toLowerCase()
         : '.jpg';
     final path = 'avatars/$userId/${DateTime.now().millisecondsSinceEpoch}$ext';
-    await client.storage.from('media').uploadBinary(
+    await client.storage
+        .from('media')
+        .uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(contentType: mimeType, upsert: true),
@@ -322,9 +321,7 @@ class NestRepository {
       'search_homeschool_directory',
       params: {'p_query': query.trim(), 'p_limit': limit},
     );
-    return _asRows(
-      data,
-    ).map(HomeschoolDirectoryEntry.fromMap).toList();
+    return _asRows(data).map(HomeschoolDirectoryEntry.fromMap).toList();
   }
 
   Future<void> createHomeschoolJoinRequest({
@@ -352,9 +349,7 @@ class NestRepository {
         .select()
         .eq('homeschool_id', homeschoolId)
         .order('created_at', ascending: false);
-    return _asRows(data)
-        .map(HomeschoolJoinRequest.fromMap)
-        .toList();
+    return _asRows(data).map(HomeschoolJoinRequest.fromMap).toList();
   }
 
   Future<void> updateJoinRequestStatus({
@@ -362,11 +357,14 @@ class NestRepository {
     required String status,
     required String reviewedByUserId,
   }) {
-    return client.from('homeschool_join_requests').update({
-      'status': status,
-      'reviewed_by_user_id': reviewedByUserId,
-      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', requestId);
+    return client
+        .from('homeschool_join_requests')
+        .update({
+          'status': status,
+          'reviewed_by_user_id': reviewedByUserId,
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', requestId);
   }
 
   // ── 참여 코드로 간편 합류 ──
@@ -375,7 +373,10 @@ class NestRepository {
   Future<({String homeschoolId, String name})?> resolveJoinCode(
     String code,
   ) async {
-    final data = await client.rpc('resolve_join_code', params: {'p_code': code});
+    final data = await client.rpc(
+      'resolve_join_code',
+      params: {'p_code': code},
+    );
     final rows = _asRows(data);
     if (rows.isEmpty) return null;
     final r = rows.first;
@@ -391,11 +392,10 @@ class NestRepository {
     required String role,
     String note = '',
   }) async {
-    final data = await client.rpc('request_join_with_code', params: {
-      'p_code': code,
-      'p_role': role,
-      'p_note': note,
-    });
+    final data = await client.rpc(
+      'request_join_with_code',
+      params: {'p_code': code, 'p_role': role, 'p_note': note},
+    );
     final rows = _asRows(data);
     if (rows.isEmpty) return null;
     final r = rows.first;
@@ -465,9 +465,7 @@ class NestRepository {
         },
       );
 
-      return _asRows(
-        data,
-      ).map(HomeschoolMemberDirectoryEntry.fromMap).toList();
+      return _asRows(data).map(HomeschoolMemberDirectoryEntry.fromMap).toList();
     } on PostgrestException {
       return const [];
     }
@@ -838,11 +836,14 @@ class NestRepository {
     required String requestId,
     required String reviewedByUserId,
   }) {
-    return client.from('child_registration_requests').update({
-      'status': 'REJECTED',
-      'reviewed_by_user_id': reviewedByUserId,
-      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', requestId);
+    return client
+        .from('child_registration_requests')
+        .update({
+          'status': 'REJECTED',
+          'reviewed_by_user_id': reviewedByUserId,
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', requestId);
   }
 
   Future<ChildProfile> updateChild({
@@ -1013,9 +1014,7 @@ class NestRepository {
         .order('start_time')
         .limit(1200);
 
-    return _asRows(
-      data,
-    ).map(MemberUnavailabilityBlock.fromMap).toList();
+    return _asRows(data).map(MemberUnavailabilityBlock.fromMap).toList();
   }
 
   Future<MemberUnavailabilityBlock> createMemberUnavailabilityBlock({
@@ -1067,9 +1066,7 @@ class NestRepository {
         .select('id, class_session_id, teacher_profile_id, assignment_role')
         .inFilter('class_session_id', classSessionIds);
 
-    return _asRows(
-      data,
-    ).map(SessionTeacherAssignment.fromMap).toList();
+    return _asRows(data).map(SessionTeacherAssignment.fromMap).toList();
   }
 
   Future<void> upsertSessionTeacherAssignment({
@@ -1164,9 +1161,7 @@ class NestRepository {
         .order('recorded_at', ascending: false)
         .limit(800);
 
-    return _asRows(
-      data,
-    ).map(StudentActivityLog.fromMap).toList();
+    return _asRows(data).map(StudentActivityLog.fromMap).toList();
   }
 
   Future<void> createStudentActivityLog({
@@ -1255,15 +1250,26 @@ class NestRepository {
     required String homeschoolId,
     String? termId,
   }) async {
-    var query = client
-        .from('academic_events')
-        .select()
-        .eq('homeschool_id', homeschoolId);
-    if (termId != null && termId.isNotEmpty) {
-      query = query.eq('term_id', termId);
+    try {
+      return await _queryAcademicEvents(
+        homeschoolId: homeschoolId,
+        termId: termId,
+        select: _academicEventExtrasSupported
+            ? _academicEventSelect
+            : _academicEventSelectLegacy,
+      );
+    } on PostgrestException catch (error) {
+      if (_academicEventExtrasSupported &&
+          (error.code == '42703' || _isMissingSchemaObject(error, 'kind'))) {
+        _academicEventExtrasSupported = false;
+        return _queryAcademicEvents(
+          homeschoolId: homeschoolId,
+          termId: termId,
+          select: _academicEventSelectLegacy,
+        );
+      }
+      rethrow;
     }
-    final data = await query.order('event_date', ascending: true).limit(200);
-    return _asRows(data).map(AcademicEvent.fromMap).toList();
   }
 
   Future<void> createAcademicEvent({
@@ -1274,8 +1280,13 @@ class NestRepository {
     required String eventDate,
     String? endDate,
     required String createdByUserId,
-  }) {
-    return client.from('academic_events').insert({
+    String kind = 'EVENT',
+    String? startTime,
+    String? endTime,
+    bool publishAnnouncement = true,
+    bool showOnTimetable = true,
+  }) async {
+    final row = <String, dynamic>{
       'homeschool_id': homeschoolId,
       'term_id': _normalizeNullable(termId),
       'title': title.trim(),
@@ -1283,7 +1294,31 @@ class NestRepository {
       'event_date': eventDate,
       'end_date': _normalizeNullable(endDate),
       'created_by_user_id': createdByUserId,
-    });
+    };
+    if (_academicEventExtrasSupported) {
+      row.addAll({
+        'kind': kind,
+        'start_time': _normalizeNullable(startTime),
+        'end_time': _normalizeNullable(endTime),
+        'publish_announcement': publishAnnouncement,
+        'show_on_timetable': showOnTimetable,
+      });
+    }
+    try {
+      await client.from('academic_events').insert(row);
+    } on PostgrestException catch (error) {
+      if (_academicEventExtrasSupported && error.code == '42703') {
+        _academicEventExtrasSupported = false;
+        row.remove('kind');
+        row.remove('start_time');
+        row.remove('end_time');
+        row.remove('publish_announcement');
+        row.remove('show_on_timetable');
+        await client.from('academic_events').insert(row);
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<void> updateAcademicEvent({
@@ -1292,20 +1327,236 @@ class NestRepository {
     required String description,
     required String eventDate,
     String? endDate,
-  }) {
-    return client
-        .from('academic_events')
-        .update({
-          'title': title.trim(),
-          'description': description.trim(),
-          'event_date': eventDate,
-          'end_date': _normalizeNullable(endDate),
-        })
-        .eq('id', eventId);
+    String kind = 'EVENT',
+    String? startTime,
+    String? endTime,
+    bool publishAnnouncement = true,
+    bool showOnTimetable = true,
+  }) async {
+    final row = <String, dynamic>{
+      'title': title.trim(),
+      'description': description.trim(),
+      'event_date': eventDate,
+      'end_date': _normalizeNullable(endDate),
+    };
+    if (_academicEventExtrasSupported) {
+      row.addAll({
+        'kind': kind,
+        'start_time': _normalizeNullable(startTime),
+        'end_time': _normalizeNullable(endTime),
+        'publish_announcement': publishAnnouncement,
+        'show_on_timetable': showOnTimetable,
+      });
+    }
+    try {
+      await client.from('academic_events').update(row).eq('id', eventId);
+    } on PostgrestException catch (error) {
+      if (_academicEventExtrasSupported && error.code == '42703') {
+        _academicEventExtrasSupported = false;
+        row.remove('kind');
+        row.remove('start_time');
+        row.remove('end_time');
+        row.remove('publish_announcement');
+        row.remove('show_on_timetable');
+        await client.from('academic_events').update(row).eq('id', eventId);
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<void> deleteAcademicEvent({required String eventId}) {
     return client.from('academic_events').delete().eq('id', eventId);
+  }
+
+  static const _academicEventSelect =
+      'id, homeschool_id, term_id, title, description, event_date, end_date, '
+      'created_by_user_id, created_at, kind, start_time, end_time, '
+      'publish_announcement, announcement_id, show_on_timetable';
+
+  static const _academicEventSelectLegacy =
+      'id, homeschool_id, term_id, title, description, event_date, end_date, '
+      'created_by_user_id, created_at';
+
+  bool _academicEventExtrasSupported = true;
+  bool _personalEventsSupported = true;
+  bool _calendarIntegrationSupported = true;
+
+  Future<List<AcademicEvent>> _queryAcademicEvents({
+    required String homeschoolId,
+    String? termId,
+    required String select,
+  }) async {
+    var query = client
+        .from('academic_events')
+        .select(select)
+        .eq('homeschool_id', homeschoolId);
+    if (termId != null && termId.isNotEmpty) {
+      query = query.eq('term_id', termId);
+    }
+    final data = await query.order('event_date', ascending: true).limit(200);
+    return _asRows(data).map(AcademicEvent.fromMap).toList();
+  }
+
+  // ── Personal events + calendar ──
+
+  Future<List<PersonalEvent>> fetchPersonalEvents({
+    required String homeschoolId,
+    String? childId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    if (!_personalEventsSupported) return const [];
+    try {
+      var query = client
+          .from('personal_events')
+          .select()
+          .eq('homeschool_id', homeschoolId);
+      if (childId != null && childId.isNotEmpty) {
+        query = query.eq('child_id', childId);
+      }
+      if (from != null) {
+        query = query.gte('ends_at', from.toUtc().toIso8601String());
+      }
+      if (to != null) {
+        query = query.lt('starts_at', to.toUtc().toIso8601String());
+      }
+      final data = await query.order('starts_at', ascending: true).limit(400);
+      return _asRows(data).map(PersonalEvent.fromMap).toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'personal_events')) {
+        _personalEventsSupported = false;
+        return const [];
+      }
+      rethrow;
+    }
+  }
+
+  Future<PersonalEvent> createPersonalEvent({
+    required String homeschoolId,
+    required String ownerUserId,
+    required String childId,
+    required String title,
+    required String notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    required String conflictPolicy,
+  }) async {
+    try {
+      final row = await client
+          .from('personal_events')
+          .insert({
+            'homeschool_id': homeschoolId,
+            'owner_user_id': ownerUserId,
+            'child_id': childId,
+            'title': title.trim(),
+            'notes': notes.trim(),
+            'starts_at': startsAt.toUtc().toIso8601String(),
+            'ends_at': endsAt.toUtc().toIso8601String(),
+            'conflict_policy': conflictPolicy,
+            'source': 'NEST',
+          })
+          .select()
+          .single();
+      return PersonalEvent.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'personal_events')) {
+        throw StateError('개인 일정 기능이 아직 서버에 배포되지 않았습니다.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<PersonalEvent> updatePersonalEvent({
+    required String eventId,
+    required String title,
+    required String notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    required String conflictPolicy,
+  }) async {
+    final row = await client
+        .from('personal_events')
+        .update({
+          'title': title.trim(),
+          'notes': notes.trim(),
+          'starts_at': startsAt.toUtc().toIso8601String(),
+          'ends_at': endsAt.toUtc().toIso8601String(),
+          'conflict_policy': conflictPolicy,
+        })
+        .eq('id', eventId)
+        .select()
+        .single();
+    return PersonalEvent.fromMap(_asMap(row));
+  }
+
+  Future<void> deletePersonalEvent({required String eventId}) {
+    return client.from('personal_events').delete().eq('id', eventId);
+  }
+
+  Future<CalendarIntegration?> fetchCalendarIntegration() async {
+    if (!_calendarIntegrationSupported) return null;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) return null;
+    try {
+      final row = await client
+          .from('calendar_integrations')
+          .select(
+            'id, user_id, homeschool_id, provider, status, google_email, '
+            'calendar_id, last_synced_at, updated_at',
+          )
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (row == null) return null;
+      return CalendarIntegration.fromMap(_asMap(row));
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'calendar_integrations')) {
+        _calendarIntegrationSupported = false;
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<String?> calendarConnectStart({
+    required String homeschoolId,
+    required String redirectMode,
+  }) async {
+    final response = await client.functions.invoke(
+      'google-calendar-connect-start',
+      body: {'homeschool_id': homeschoolId, 'redirect_mode': redirectMode},
+    );
+    final authUrl = _asMap(response.data)['auth_url'];
+    return authUrl is String && authUrl.isNotEmpty ? authUrl : null;
+  }
+
+  Future<Map<String, dynamic>> calendarConnectComplete({
+    required String homeschoolId,
+    required String code,
+  }) async {
+    final response = await client.functions.invoke(
+      'google-calendar-connect-complete',
+      body: {'homeschool_id': homeschoolId, 'code': code},
+    );
+    return _asMap(response.data);
+  }
+
+  Future<Map<String, dynamic>> syncGoogleCalendar({
+    required String homeschoolId,
+    required String childId,
+  }) async {
+    final response = await client.functions.invoke(
+      'google-calendar-sync',
+      body: {'homeschool_id': homeschoolId, 'child_id': childId},
+    );
+    return _asMap(response.data);
+  }
+
+  Future<void> disconnectGoogleCalendar() async {
+    await client.functions.invoke(
+      'google-calendar-sync',
+      body: {'action': 'disconnect'},
+    );
   }
 
   Future<List<AuditLog>> fetchAuditLogs({
@@ -1583,12 +1834,16 @@ class NestRepository {
     required String startTime,
     required String endTime,
   }) async {
-    final data = await client.from('time_slots').insert({
-      'term_id': termId,
-      'day_of_week': dayOfWeek,
-      'start_time': startTime,
-      'end_time': endTime,
-    }).select().single();
+    final data = await client
+        .from('time_slots')
+        .insert({
+          'term_id': termId,
+          'day_of_week': dayOfWeek,
+          'start_time': startTime,
+          'end_time': endTime,
+        })
+        .select()
+        .single();
 
     return TimeSlot.fromMap(data);
   }
@@ -1660,13 +1915,83 @@ class NestRepository {
   }) async {
     await client
         .from('time_slots')
-        .update({
-          'start_time': newStartTime,
-          'end_time': newEndTime,
-        })
+        .update({'start_time': newStartTime, 'end_time': newEndTime})
         .eq('term_id', termId)
         .eq('start_time', oldStartTime)
         .eq('end_time', oldEndTime);
+  }
+
+  bool _termSchedulePackSupported = true;
+
+  /// 학기 전체 세션+교사 배정을 한 번의 RPC로 읽는다.
+  /// 함수가 없으면 반별 조회로 폴백한다.
+  Future<TermSchedulePack> fetchTermSchedulePack({
+    required String termId,
+  }) async {
+    if (termId.isEmpty) {
+      return const TermSchedulePack();
+    }
+    if (_termSchedulePackSupported) {
+      try {
+        final data = await client.rpc(
+          'fetch_term_schedule_pack',
+          params: {'p_term_id': termId},
+        );
+        if (data is Map<String, dynamic>) {
+          return TermSchedulePack.fromMap(data);
+        }
+        if (data is Map) {
+          return TermSchedulePack.fromMap(Map<String, dynamic>.from(data));
+        }
+      } on PostgrestException catch (error) {
+        if (_isMissingSchemaObject(error, 'fetch_term_schedule_pack')) {
+          _termSchedulePackSupported = false;
+        } else {
+          rethrow;
+        }
+      }
+    }
+
+    final sessions = await _fetchSessionsByTerm(termId: termId);
+    final sessionIds = sessions
+        .map((session) => session.id)
+        .where((id) => id.isNotEmpty)
+        .toList();
+    final assignments = await fetchSessionTeacherAssignments(
+      classSessionIds: sessionIds,
+    );
+    return TermSchedulePack(sessions: sessions, assignments: assignments);
+  }
+
+  Future<List<ClassSession>> _fetchSessionsByTerm({
+    required String termId,
+  }) async {
+    final select = _classSessionLocationSupported == false
+        ? 'id, class_group_id, course_id, time_slot_id, title, source_type, status, class_groups!inner(term_id)'
+        : 'id, class_group_id, course_id, time_slot_id, title, source_type, status, location, class_groups!inner(term_id)';
+    try {
+      final data = await client
+          .from('class_sessions')
+          .select(select)
+          .eq('class_groups.term_id', termId)
+          .neq('status', 'CANCELED');
+      return _asRows(data).map(ClassSession.fromMap).toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingLocationColumn(error)) {
+        _classSessionLocationSupported = false;
+        final data = await client
+            .from('class_sessions')
+            .select(
+              'id, class_group_id, course_id, time_slot_id, title, source_type, status, class_groups!inner(term_id)',
+            )
+            .eq('class_groups.term_id', termId)
+            .neq('status', 'CANCELED');
+        return _asRows(data)
+            .map((row) => ClassSession.fromMap({...row, 'location': null}))
+            .toList();
+      }
+      rethrow;
+    }
   }
 
   Future<List<ClassSession>> fetchSessions({
@@ -1681,9 +2006,9 @@ class NestRepository {
           .eq('class_group_id', classGroupId)
           .neq('status', 'CANCELED');
 
-      return _asRows(legacyData)
-          .map((row) => ClassSession.fromMap({...row, 'location': null}))
-          .toList();
+      return _asRows(
+        legacyData,
+      ).map((row) => ClassSession.fromMap({...row, 'location': null})).toList();
     }
 
     try {
@@ -1791,37 +2116,40 @@ class NestRepository {
 
     final termId = _asMap(createdTerm)['id'] as String;
 
-    final createdClassGroup = await client
-        .from('class_groups')
-        .insert({'term_id': termId, 'name': className, 'capacity': 12})
-        .select('id')
-        .single();
-
-    final classGroupId = _asMap(createdClassGroup)['id'] as String;
-
-    if (courseNames.isNotEmpty) {
-      final rows = courseNames
-          .map(
-            (name) => {
-              'homeschool_id': homeschoolId,
-              'name': name,
-              'default_duration_min': 50,
-            },
-          )
-          .toList();
-
-      await client
-          .from('courses')
-          .upsert(rows, onConflict: 'homeschool_id,name');
-    }
-
-    final defaultSlots = _defaultTimeSlots(termId: termId);
-    await client
-        .from('time_slots')
-        .upsert(
-          defaultSlots,
-          onConflict: 'term_id,day_of_week,start_time,end_time',
-        );
+    late final String classGroupId;
+    await Future.wait([
+      () async {
+        final createdClassGroup = await client
+            .from('class_groups')
+            .insert({'term_id': termId, 'name': className, 'capacity': 12})
+            .select('id')
+            .single();
+        classGroupId = _asMap(createdClassGroup)['id'] as String;
+      }(),
+      if (courseNames.isNotEmpty)
+        client
+            .from('courses')
+            .upsert(
+              courseNames
+                  .map(
+                    (name) => {
+                      'homeschool_id': homeschoolId,
+                      'name': name,
+                      'default_duration_min': 50,
+                    },
+                  )
+                  .toList(),
+              onConflict: 'homeschool_id,name',
+            )
+      else
+        Future<void>.value(),
+      client
+          .from('time_slots')
+          .upsert(
+            _defaultTimeSlots(termId: termId),
+            onConflict: 'term_id,day_of_week,start_time,end_time',
+          ),
+    ]);
 
     return BootstrapResult(
       homeschoolId: homeschoolId,
@@ -1890,12 +2218,8 @@ class NestRepository {
       return GeneratedProposalDraft(
         source: (body['source'] as String?) ?? 'edge-function',
         sessions: sessions,
-        hardConflicts:
-            (body['hard_conflicts'] as List?)?.toList() ??
-            const [],
-        softWarnings:
-            (body['soft_warnings'] as List?)?.toList() ??
-            const [],
+        hardConflicts: (body['hard_conflicts'] as List?)?.toList() ?? const [],
+        softWarnings: (body['soft_warnings'] as List?)?.toList() ?? const [],
       );
     } catch (_) {
       return null;
@@ -2081,9 +2405,9 @@ class NestRepository {
           .inFilter('class_group_id', classGroupIds)
           .neq('status', 'CANCELED');
 
-      return _asRows(legacyData)
-          .map((row) => ClassSession.fromMap({...row, 'location': null}))
-          .toList();
+      return _asRows(
+        legacyData,
+      ).map((row) => ClassSession.fromMap({...row, 'location': null})).toList();
     }
 
     try {
@@ -2292,11 +2616,13 @@ class NestRepository {
     required String slotId,
     required String childId,
   }) {
-    return client.from('self_study_slot_exclusions').upsert(
-      {'slot_id': slotId, 'child_id': childId},
-      onConflict: 'slot_id,child_id',
-      ignoreDuplicates: true,
-    );
+    return client
+        .from('self_study_slot_exclusions')
+        .upsert(
+          {'slot_id': slotId, 'child_id': childId},
+          onConflict: 'slot_id,child_id',
+          ignoreDuplicates: true,
+        );
   }
 
   Future<void> removeSelfStudyExclusion({
@@ -2853,12 +3179,7 @@ class NestRepository {
     try {
       final response = await client.functions.invoke(
         'nest-notify',
-        body: {
-          'event': event,
-          'id': id,
-          'channel': channel,
-          'force': force,
-        },
+        body: {'event': event, 'id': id, 'channel': channel, 'force': force},
       );
       _nestNotifySupported = true;
       return NotifyResult.fromMap(_asMap(response.data));
@@ -2873,7 +3194,10 @@ class NestRepository {
 
   Future<NotificationPrefs> fetchNotificationPrefs() async {
     try {
-      final row = await client.from('notification_prefs').select().maybeSingle();
+      final row = await client
+          .from('notification_prefs')
+          .select()
+          .maybeSingle();
       if (row == null) return const NotificationPrefs();
       return NotificationPrefs.fromMap(row);
     } on PostgrestException {
@@ -2892,11 +3216,15 @@ class NestRepository {
     });
   }
 
-  Future<List<NotificationInboxItem>> fetchNotificationInbox({int limit = 40}) async {
+  Future<List<NotificationInboxItem>> fetchNotificationInbox({
+    int limit = 40,
+  }) async {
     try {
       final data = await client
           .from('notification_log')
-          .select('id, event_type, title, body, payload, created_at, channel, status')
+          .select(
+            'id, event_type, title, body, payload, created_at, channel, status',
+          )
           .eq('channel', 'push')
           .order('created_at', ascending: false)
           .limit(limit);
@@ -2980,19 +3308,17 @@ class NestRepository {
         '${now.millisecondsSinceEpoch}_${file.name.hashCode.abs()}$ext';
     final storagePath = '$homeschoolId/$month/$uniqueName';
 
-    await client.storage.from('media').uploadBinary(
+    await client.storage
+        .from('media')
+        .uploadBinary(
           storagePath,
           file.bytes,
           fileOptions: FileOptions(contentType: file.mimeType),
         );
 
-    final publicUrl =
-        client.storage.from('media').getPublicUrl(storagePath);
+    final publicUrl = client.storage.from('media').getPublicUrl(storagePath);
 
-    return StorageUploadResult(
-      storagePath: storagePath,
-      publicUrl: publicUrl,
-    );
+    return StorageUploadResult(storagePath: storagePath, publicUrl: publicUrl);
   }
 
   Future<String> insertMediaAsset({

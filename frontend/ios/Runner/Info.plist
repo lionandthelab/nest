@@ -34,6 +34,43 @@
 				<string>com.lionandthelab.nest</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>kakao-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kakao0a51d6ea6e78e3565b8a45655bca8142</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>naver-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>nestnaverlogin</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>google-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.875114759372-2n9lulvdd9jmkatpugh8ilievvr1vfnn</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>kakaokompassauth</string>
+		<string>kakaotalk</string>
+		<string>naversearchapp</string>
+		<string>naversearchthirdlogin</string>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
@@ -85,5 +122,17 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+<!-- lion_auth:begin -->
+	<key>GIDClientID</key>
+	<string>875114759372-2n9lulvdd9jmkatpugh8ilievvr1vfnn.apps.googleusercontent.com</string>
+	<key>NidClientID</key>
+	<string>Z1lpn0C9AFZ3BiXgLuno</string>
+	<key>NidClientSecret</key>
+	<string>3zfkU4dWjY</string>
+	<key>NidAppName</key>
+	<string>Nest</string>
+	<key>NidUrlScheme</key>
+	<string>nestnaverlogin</string>
+<!-- lion_auth:end -->
 </dict>
 </plist>

@@ -973,6 +973,12 @@ class AcademicEvent {
     this.endDate,
     this.createdByUserId,
     this.createdAt,
+    this.kind = 'EVENT',
+    this.startTime,
+    this.endTime,
+    this.publishAnnouncement = true,
+    this.announcementId,
+    this.showOnTimetable = true,
   });
 
   final String id;
@@ -985,19 +991,172 @@ class AcademicEvent {
   final String? createdByUserId;
   final DateTime? createdAt;
 
+  /// EVENT / HOLIDAY / FIELD_TRIP / CEREMONY / BREAK
+  final String kind;
+
+  /// `HH:MM:SS`. null 이면 종일.
+  final String? startTime;
+  final String? endTime;
+  final bool publishAnnouncement;
+  final String? announcementId;
+  final bool showOnTimetable;
+
+  bool get isAllDay {
+    final start = (startTime ?? '').trim();
+    return start.isEmpty;
+  }
+
+  bool coversDate(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final start = DateTime(eventDate.year, eventDate.month, eventDate.day);
+    final endRaw = endDate ?? eventDate;
+    final end = DateTime(endRaw.year, endRaw.month, endRaw.day);
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
+
   factory AcademicEvent.fromMap(Map<String, dynamic> map) {
+    final parsedDate =
+        parseDateOnly(map['event_date']) ??
+        DateTime.parse(map['event_date'] as String);
     return AcademicEvent(
       id: (map['id'] as String?) ?? '',
       homeschoolId: (map['homeschool_id'] as String?) ?? '',
       termId: map['term_id'] as String?,
       title: (map['title'] as String?) ?? '',
       description: (map['description'] as String?) ?? '',
-      eventDate: DateTime.parse(map['event_date'] as String),
-      endDate: map['end_date'] == null
-          ? null
-          : DateTime.tryParse(map['end_date'] as String),
+      eventDate: parsedDate,
+      endDate: parseDateOnly(map['end_date']),
       createdByUserId: map['created_by_user_id'] as String?,
       createdAt: parseDateTime(map['created_at']),
+      kind: (map['kind'] as String?) ?? 'EVENT',
+      startTime: map['start_time'] as String?,
+      endTime: map['end_time'] as String?,
+      publishAnnouncement: parseBool(
+        map['publish_announcement'],
+        fallback: true,
+      ),
+      announcementId: map['announcement_id'] as String?,
+      showOnTimetable: parseBool(map['show_on_timetable'], fallback: true),
+    );
+  }
+}
+
+/// 아이(또는 학생 본인) 시간표 위에 올리는 날짜 있는 개인 일정.
+class PersonalEvent {
+  const PersonalEvent({
+    required this.id,
+    required this.homeschoolId,
+    required this.ownerUserId,
+    required this.childId,
+    required this.title,
+    this.notes = '',
+    required this.startsAt,
+    required this.endsAt,
+    this.conflictPolicy = 'KEEP_BOTH',
+    this.source = 'NEST',
+    this.googleEventId,
+    this.googleCalendarId,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String ownerUserId;
+  final String childId;
+  final String title;
+  final String notes;
+  final DateTime startsAt;
+  final DateTime endsAt;
+
+  /// KEEP_BOTH | PRIORITIZE_PERSONAL
+  final String conflictPolicy;
+
+  /// NEST | GOOGLE
+  final String source;
+  final String? googleEventId;
+  final String? googleCalendarId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  bool get prioritizesPersonal => conflictPolicy == 'PRIORITIZE_PERSONAL';
+  bool get isFromGoogle => source == 'GOOGLE';
+
+  bool coversDate(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final start = DateTime(startsAt.year, startsAt.month, startsAt.day);
+    final end = DateTime(endsAt.year, endsAt.month, endsAt.day);
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
+
+  factory PersonalEvent.fromMap(Map<String, dynamic> map) {
+    return PersonalEvent(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      ownerUserId: (map['owner_user_id'] as String?) ?? '',
+      childId: (map['child_id'] as String?) ?? '',
+      title: (map['title'] as String?) ?? '',
+      notes: (map['notes'] as String?) ?? '',
+      startsAt: parseDateTime(map['starts_at']) ?? DateTime.now(),
+      endsAt: parseDateTime(map['ends_at']) ?? DateTime.now(),
+      conflictPolicy: (map['conflict_policy'] as String?) ?? 'KEEP_BOTH',
+      source: (map['source'] as String?) ?? 'NEST',
+      googleEventId: map['google_event_id'] as String?,
+      googleCalendarId: map['google_calendar_id'] as String?,
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'homeschool_id': homeschoolId,
+    'owner_user_id': ownerUserId,
+    'child_id': childId,
+    'title': title,
+    'notes': notes,
+    'starts_at': startsAt.toUtc().toIso8601String(),
+    'ends_at': endsAt.toUtc().toIso8601String(),
+    'conflict_policy': conflictPolicy,
+    'source': source,
+    if (googleEventId != null) 'google_event_id': googleEventId,
+    if (googleCalendarId != null) 'google_calendar_id': googleCalendarId,
+  };
+}
+
+/// 클라이언트가 봐도 되는 Google Calendar 연결 상태. 토큰은 절대 담지 않는다.
+class CalendarIntegration {
+  const CalendarIntegration({
+    required this.id,
+    required this.userId,
+    this.homeschoolId,
+    this.status = 'DISCONNECTED',
+    this.googleEmail,
+    this.calendarId = 'primary',
+    this.lastSyncedAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String? homeschoolId;
+  final String status;
+  final String? googleEmail;
+  final String calendarId;
+  final DateTime? lastSyncedAt;
+  final DateTime? updatedAt;
+
+  bool get isConnected => status == 'CONNECTED';
+
+  factory CalendarIntegration.fromMap(Map<String, dynamic> map) {
+    return CalendarIntegration(
+      id: (map['id'] as String?) ?? '',
+      userId: (map['user_id'] as String?) ?? '',
+      homeschoolId: map['homeschool_id'] as String?,
+      status: (map['status'] as String?) ?? 'DISCONNECTED',
+      googleEmail: map['google_email'] as String?,
+      calendarId: (map['calendar_id'] as String?) ?? 'primary',
+      lastSyncedAt: parseDateTime(map['last_synced_at']),
+      updatedAt: parseDateTime(map['updated_at']),
     );
   }
 }
@@ -1174,6 +1333,34 @@ class ClassSession {
     'status': status,
     'location': location,
   };
+}
+
+/// 학기 시간표 한 번에 읽기(`fetch_term_schedule_pack`).
+class TermSchedulePack {
+  const TermSchedulePack({
+    this.sessions = const [],
+    this.assignments = const [],
+  });
+
+  final List<ClassSession> sessions;
+  final List<SessionTeacherAssignment> assignments;
+
+  factory TermSchedulePack.fromMap(Map<String, dynamic> map) {
+    return TermSchedulePack(
+      sessions: _mapRows(map['sessions']).map(ClassSession.fromMap).toList(),
+      assignments: _mapRows(
+        map['assignments'],
+      ).map(SessionTeacherAssignment.fromMap).toList(),
+    );
+  }
+}
+
+List<Map<String, dynamic>> _mapRows(dynamic value) {
+  if (value is! List) return const [];
+  return value
+      .whereType<Map>()
+      .map((row) => Map<String, dynamic>.from(row))
+      .toList();
 }
 
 /// 수업 변경 공지(class_session_changes).
@@ -2016,9 +2203,9 @@ class SelfStudyPlan {
     final rawDays = map['days'];
     final days = rawDays is List
         ? rawDays
-            .map((e) => e is num ? e.toInt() : int.tryParse('$e') ?? -1)
-            .where((d) => d >= 0 && d <= 6)
-            .toList()
+              .map((e) => e is num ? e.toInt() : int.tryParse('$e') ?? -1)
+              .where((d) => d >= 0 && d <= 6)
+              .toList()
         : <int>[];
     return SelfStudyPlan(
       id: (map['id'] as String?) ?? '',
@@ -2202,8 +2389,14 @@ class NotificationPrefs {
   factory NotificationPrefs.fromMap(Map<String, dynamic> map) {
     return NotificationPrefs(
       pushEnabled: parseBool(map['push_enabled'], fallback: true),
-      morningDigestEnabled: parseBool(map['morning_digest_enabled'], fallback: true),
-      classReminderEnabled: parseBool(map['class_reminder_enabled'], fallback: true),
+      morningDigestEnabled: parseBool(
+        map['morning_digest_enabled'],
+        fallback: true,
+      ),
+      classReminderEnabled: parseBool(
+        map['class_reminder_enabled'],
+        fallback: true,
+      ),
       quietHoursStart: map['quiet_hours_start'] as String?,
       quietHoursEnd: map['quiet_hours_end'] as String?,
     );

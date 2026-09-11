@@ -12,6 +12,7 @@ import 'package:nest_frontend/src/ui/home_page.dart';
 import 'package:nest_frontend/src/ui/tabs/admin_home_tab.dart';
 import 'package:nest_frontend/src/ui/tabs/admin_news_tab.dart';
 import 'package:nest_frontend/src/ui/tabs/profile_settings_tab.dart';
+import 'package:nest_frontend/src/ui/widgets/nest_motion.dart';
 
 /// 네트워크를 타지 않는 위젯 테스트용 관리자 컨트롤러.
 /// autoRefreshToken을 꺼야 GoTrue의 주기 타이머가 생기지 않아 pending-timer
@@ -32,11 +33,7 @@ NestController _adminController() {
       'homeschool_id': 'hs-1',
       'role': 'HOMESCHOOL_ADMIN',
       'status': 'ACTIVE',
-      'homeschools': {
-        'id': 'hs-1',
-        'name': '테스트스쿨',
-        'timezone': 'Asia/Seoul',
-      },
+      'homeschools': {'id': 'hs-1', 'name': '테스트스쿨', 'timezone': 'Asia/Seoul'},
     }),
   ];
   controller.terms = [
@@ -100,7 +97,9 @@ Widget _mobileApp(Widget child) {
       GlobalWidgetsLocalizations.delegate,
       GlobalCupertinoLocalizations.delegate,
     ],
-    home: Scaffold(body: Padding(padding: const EdgeInsets.all(10), child: child)),
+    home: Scaffold(
+      body: Padding(padding: const EdgeInsets.all(10), child: child),
+    ),
   );
 }
 
@@ -118,7 +117,9 @@ void main() {
       final controller = _adminController();
 
       await tester.pumpWidget(
-        _mobileApp(AdminHomeTab(controller: controller, onNavigate: (_, {section}) {})),
+        _mobileApp(
+          AdminHomeTab(controller: controller, onNavigate: (_, {section}) {}),
+        ),
       );
       await tester.pump();
 
@@ -272,14 +273,14 @@ void main() {
 
       expect(find.byTooltip('알림'), findsOneWidget);
       expect(find.text('테스트스쿨'), findsWidgets);
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(NestDockBar), findsOneWidget);
       expect(
-        find.descendant(of: find.byType(NavigationBar), matching: find.text('홈')),
+        find.descendant(of: find.byType(NestDockBar), matching: find.text('홈')),
         findsOneWidget,
       );
       expect(
         find.descendant(
-          of: find.byType(NavigationBar),
+          of: find.byType(NestDockBar),
           matching: find.text('시간표'),
         ),
         findsOneWidget,

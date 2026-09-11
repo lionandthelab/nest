@@ -123,11 +123,16 @@ class HubScaffold extends StatelessWidget {
                   .map(
                     (section) => Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        selected: section.id == selected.id,
-                        label: Text(section.label),
-                        avatar: Icon(section.icon, size: 17),
-                        onSelected: (_) => onSelectSection(section.id),
+                      child: NestPressable(
+                        child: ChoiceChip(
+                          selected: section.id == selected.id,
+                          label: Text(section.label),
+                          avatar: Icon(section.icon, size: 17),
+                          onSelected: (_) {
+                            NestHaptics.selection();
+                            onSelectSection(section.id);
+                          },
+                        ),
                       ),
                     ),
                   )
@@ -137,8 +142,8 @@ class HubScaffold extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 280),
-          switchInCurve: Curves.easeOutCubic,
+          duration: NestMotion.fade,
+          switchInCurve: NestMotion.appearCurve,
           switchOutCurve: Curves.easeInCubic,
           transitionBuilder: (child, animation) =>
               nestFadeSlideTransition(child, animation),

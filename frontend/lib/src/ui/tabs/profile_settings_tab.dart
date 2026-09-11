@@ -7,6 +7,7 @@ import '../../state/nest_controller.dart';
 import '../legal/legal_page.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
+import '../widgets/calendar_connect_card.dart';
 import '../widgets/nest_empty_state.dart';
 
 class ProfileSettingsTab extends StatefulWidget {
@@ -263,6 +264,11 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           label: '역할',
           value: _roleLabel(controller.currentRole),
           onTap: null,
+        ),
+        const SizedBox(height: 16),
+        CalendarConnectCard(
+          controller: controller,
+          childId: widget.selectedChildId,
         ),
 
         const SizedBox(height: 28),

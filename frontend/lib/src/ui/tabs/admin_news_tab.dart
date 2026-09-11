@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/schedule_overlap.dart';
 import '../../state/nest_controller.dart';
 import '../models/new_term_checklist.dart';
 import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
+import '../widgets/term_calendar_view.dart';
 
 /// 관리자 소식 탭 — 공지사항과 학사일정을 한 화면에서 관리한다.
 ///
@@ -280,6 +282,19 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
     final past = events.where(isPast).toList().reversed.toList();
 
     return [
+      TermCalendarView(
+        academicEvents: events,
+        personalEvents: const [],
+        termStart: controller.selectedTerm?.startDate,
+        termEnd: controller.selectedTerm?.endDate,
+        courseNameOf: controller.findCourseName,
+        classesOnDate: (date) => controller.occurrencesOn(
+          date,
+          forSessions: controller.allTermSessions,
+        ),
+        onOpenAcademic: (event) => _openEventEditor(event: event),
+      ),
+      const SizedBox(height: 16),
       _PrimaryAction(
         icon: Icons.event_available_outlined,
         label: '학사일정 추가',
@@ -357,6 +372,11 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
           endDate: result.endDate == null
               ? null
               : formatter.format(result.endDate!),
+          kind: result.kind,
+          startTime: result.startTime,
+          endTime: result.endTime,
+          publishAnnouncement: result.publishAnnouncement,
+          showOnTimetable: result.showOnTimetable,
         );
       } else {
         await controller.updateAcademicEvent(
@@ -367,6 +387,11 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
           endDate: result.endDate == null
               ? null
               : formatter.format(result.endDate!),
+          kind: result.kind,
+          startTime: result.startTime,
+          endTime: result.endTime,
+          publishAnnouncement: result.publishAnnouncement,
+          showOnTimetable: result.showOnTimetable,
         );
       }
       if (mounted) setState(() {});
@@ -991,12 +1016,22 @@ class _EventDraft {
     required this.description,
     required this.startDate,
     required this.endDate,
+    required this.kind,
+    this.startTime,
+    this.endTime,
+    required this.publishAnnouncement,
+    required this.showOnTimetable,
   });
 
   final String title;
   final String description;
   final DateTime startDate;
   final DateTime? endDate;
+  final String kind;
+  final String? startTime;
+  final String? endTime;
+  final bool publishAnnouncement;
+  final bool showOnTimetable;
 }
 
 class _EventEditorSheet extends StatefulWidget {
@@ -1018,6 +1053,12 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
   late DateTime _startDate;
   DateTime? _endDate;
   late bool _multiDay;
+  late String _kind;
+  late bool _timed;
+  TimeOfDay? _startClock;
+  TimeOfDay? _endClock;
+  late bool _publishAnnouncement;
+  late bool _showOnTimetable;
 
   @override
   void initState() {
@@ -1037,6 +1078,29 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
     _multiDay =
         _endDate != null && !DateUtils.isSameDay(_startDate, _endDate!);
     if (!_multiDay) _endDate = null;
+    _kind = event?.kind ?? 'EVENT';
+    _timed = event != null && !event.isAllDay;
+    _startClock = _parseClock(event?.startTime);
+    _endClock = _parseClock(event?.endTime);
+    _publishAnnouncement = event?.publishAnnouncement ?? true;
+    _showOnTimetable = event?.showOnTimetable ?? true;
+  }
+
+  TimeOfDay? _parseClock(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final parts = value.split(':');
+    if (parts.length < 2) return null;
+    return TimeOfDay(
+      hour: int.tryParse(parts[0]) ?? 0,
+      minute: int.tryParse(parts[1]) ?? 0,
+    );
+  }
+
+  String? _formatClock(TimeOfDay? value) {
+    if (value == null) return null;
+    final hh = value.hour.toString().padLeft(2, '0');
+    final mm = value.minute.toString().padLeft(2, '0');
+    return '$hh:$mm:00';
   }
 
   @override
@@ -1080,6 +1144,11 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
         description: _descController.text,
         startDate: _startDate,
         endDate: _multiDay ? (_endDate ?? _startDate) : null,
+        kind: _kind,
+        startTime: _timed ? _formatClock(_startClock ?? const TimeOfDay(hour: 9, minute: 0)) : null,
+        endTime: _timed ? _formatClock(_endClock ?? const TimeOfDay(hour: 10, minute: 0)) : null,
+        publishAnnouncement: _publishAnnouncement,
+        showOnTimetable: _showOnTimetable,
       ),
     );
   }
@@ -1154,6 +1223,99 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
                   alignLabelWithHint: true,
                   hintText: '준비물, 장소 등을 적어주세요.',
                 ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '종류',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final kind in const [
+                    'EVENT',
+                    'HOLIDAY',
+                    'FIELD_TRIP',
+                    'CEREMONY',
+                    'BREAK',
+                  ])
+                    ChoiceChip(
+                      label: Text(academicKindLabel(kind)),
+                      selected: _kind == kind,
+                      onSelected: (_) => setState(() => _kind = kind),
+                    ),
+                ],
+              ),
+              SwitchListTile(
+                title: const Text('시각 지정'),
+                subtitle: const Text('비우면 종일 일정으로 달력·시간표 헤더에만 올라갑니다.'),
+                value: _timed,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (value) => setState(() {
+                  _timed = value;
+                  _startClock ??= const TimeOfDay(hour: 9, minute: 0);
+                  _endClock ??= const TimeOfDay(hour: 10, minute: 0);
+                }),
+              ),
+              if (_timed)
+                Row(
+                  children: [
+                    Expanded(
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('시작'),
+                        subtitle: Text(
+                          (_startClock ?? const TimeOfDay(hour: 9, minute: 0))
+                              .format(context),
+                        ),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime:
+                                _startClock ?? const TimeOfDay(hour: 9, minute: 0),
+                          );
+                          if (picked != null && mounted) {
+                            setState(() => _startClock = picked);
+                          }
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('종료'),
+                        subtitle: Text(
+                          (_endClock ?? const TimeOfDay(hour: 10, minute: 0))
+                              .format(context),
+                        ),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime:
+                                _endClock ?? const TimeOfDay(hour: 10, minute: 0),
+                          );
+                          if (picked != null && mounted) {
+                            setState(() => _endClock = picked);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              SwitchListTile(
+                title: const Text('공지로도 올리기'),
+                subtitle: const Text('학부모·학생 소식에 같은 내용이 올라갑니다.'),
+                value: _publishAnnouncement,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (value) =>
+                    setState(() => _publishAnnouncement = value),
+              ),
+              SwitchListTile(
+                title: const Text('시간표·달력에 표시'),
+                value: _showOnTimetable,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (value) => setState(() => _showOnTimetable = value),
               ),
               const SizedBox(height: 16),
               SizedBox(

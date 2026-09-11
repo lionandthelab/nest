@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../models/nest_models.dart';
 import '../services/auth_validation.dart';
@@ -11,13 +12,13 @@ import '../services/nest_cache.dart';
 import '../services/nest_push.dart';
 import '../services/nest_repository.dart';
 import '../services/schedule_occurrence.dart';
+import '../services/schedule_overlap.dart';
 import '../services/self_study_planner.dart';
 import '../services/web_oauth_bridge.dart';
 
 class NestController extends ChangeNotifier {
-  NestController({
-    required NestRepository repository,
-  }) : _repository = repository;
+  NestController({required NestRepository repository})
+    : _repository = repository;
 
   final NestRepository _repository;
 
@@ -27,8 +28,10 @@ class NestController extends ChangeNotifier {
   bool _isBusy = false;
   bool _blocksUi = true;
   bool _isExplicitAuthInProgress = false;
+  bool _bootstrapInFlight = false;
   bool _communityLoaded = false;
   bool _galleryLoaded = false;
+  bool _termScheduleLoaded = false;
   String _statusMessage = 'Ready';
   bool inboxOpenedThisSession = false;
   NotificationPrefs notificationPrefs = const NotificationPrefs();
@@ -53,6 +56,7 @@ class NestController extends ChangeNotifier {
   List<SessionTeacherAssignment> sessionTeacherAssignments = [];
   List<TeachingPlan> teachingPlans = [];
   List<StudentActivityLog> studentActivityLogs = [];
+
   /// 선택된 반 기준으로 걸러진 공지(학부모·학생·교사 화면용).
   List<Announcement> announcements = [];
 
@@ -60,6 +64,8 @@ class NestController extends ChangeNotifier {
   /// 관리자 소식 탭은 반을 골라둔 상태에서도 모든 공지를 관리해야 하므로 이쪽을 본다.
   List<Announcement> allAnnouncements = [];
   List<AcademicEvent> academicEvents = [];
+  List<PersonalEvent> personalEvents = [];
+  CalendarIntegration? calendarIntegration;
   List<AuditLog> auditLogs = [];
 
   /// 학기 전체 세션에 걸린 수업 변경 공지(휴강/시간·장소 변경/보강/안내).
@@ -275,9 +281,7 @@ class NestController extends ChangeNotifier {
       if (m.homeschoolId.isEmpty) continue;
       if (seen.add(m.homeschoolId)) out.add(m.homeschool);
     }
-    out.sort(
-      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-    );
+    out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return out;
   }
 
@@ -315,9 +319,12 @@ class NestController extends ChangeNotifier {
     }
     final uid = user?.id;
     if (uid != null) {
-      final cached = NestCache.loadMeta(userId: uid, homeschoolId: homeschoolId)?[
-              'currentRole']
-          as String?;
+      final cached =
+          NestCache.loadMeta(
+                userId: uid,
+                homeschoolId: homeschoolId,
+              )?['currentRole']
+              as String?;
       if (cached != null &&
           heldRoles.contains(cached) &&
           _honorsPreferredViewRole(homeschoolId, cached, heldRoles)) {
@@ -459,10 +466,9 @@ class NestController extends ChangeNotifier {
     if (currentUserId == null || currentUserId.isEmpty) {
       return const [];
     }
-    final rows = children
-        .where((child) => child.userId == currentUserId)
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final rows =
+        children.where((child) => child.userId == currentUserId).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
     return rows;
   }
 
@@ -599,7 +605,10 @@ class NestController extends ChangeNotifier {
     _isExplicitAuthInProgress = true;
     try {
       await _runBusy('로그인 중...', () async {
-        await _repository.signIn(email: email.trim(), password: password.trim());
+        await _repository.signIn(
+          email: email.trim(),
+          password: password.trim(),
+        );
         await _onAuthStateChanged(_repository.currentSession);
         _setStatus('로그인 성공');
       });
@@ -665,9 +674,7 @@ class NestController extends ChangeNotifier {
       } on InvalidPhoneNumber {
         throw StateError('휴대폰 번호 형식이 올바르지 않습니다. 예: 01012345678');
       }
-      _setStatus(
-        trimmed.isEmpty ? '연락처를 삭제했습니다.' : '연락처가 변경되었습니다.',
-      );
+      _setStatus(trimmed.isEmpty ? '연락처를 삭제했습니다.' : '연락처가 변경되었습니다.');
     });
   }
 
@@ -783,9 +790,9 @@ class NestController extends ChangeNotifier {
     // 이 홈스쿨에서 이전에 쓰던 역할을 캐시에서 복원(재시작 후에도 최근 역할 유지).
     final uid = user?.id;
     if (hid != null && uid != null && !_viewRoleByHomeschool.containsKey(hid)) {
-      final cachedRole = NestCache.loadMeta(userId: uid, homeschoolId: hid)?[
-              'currentRole']
-          as String?;
+      final cachedRole =
+          NestCache.loadMeta(userId: uid, homeschoolId: hid)?['currentRole']
+              as String?;
       if (cachedRole != null && cachedRole.isNotEmpty) {
         _viewRoleByHomeschool[hid] = cachedRole;
       }
@@ -796,9 +803,10 @@ class NestController extends ChangeNotifier {
 
     _communityLoaded = false;
     _galleryLoaded = false;
+    _termScheduleLoaded = false;
     await _runBusy('학기/반 정보를 불러오는 중...', () async {
-      await _loadTermAndBelow();
-      await _loadRoleScopedContext();
+      await Future.wait([_loadTermAndBelow(), _loadIndependentContext()]);
+      await _loadOperationalData();
       _ensureRoleViewTargetSelection();
     });
     unawaited(_loadDeferredContext());
@@ -936,17 +944,22 @@ class NestController extends ChangeNotifier {
     notifyListeners();
 
     await _runBusy('반/시간표 데이터를 불러오는 중...', () async {
-      await _loadClassGroups();
-      await _loadTimetableAssets();
-      await _loadSessions();
-      await loadClassEnrollments();
-      await loadSessionTeacherAssignments();
-      await _loadProposals();
-      await loadTeachingPlans();
-      await loadAnnouncements();
-      await _loadNewScheduleFeaturesTolerantly();
-      await loadGalleryItems();
-      await loadCommunityFeed();
+      _termScheduleLoaded = false;
+      await Future.wait([
+        _loadClassGroups(),
+        _loadTimetableAssets(),
+        _loadTermSessionsPack(),
+        _loadProposals(),
+      ]);
+      _syncSelectedSessionsFromTermPack();
+      await Future.wait([
+        loadClassEnrollments(),
+        loadTeachingPlans(),
+        loadAnnouncements(),
+        _loadNewScheduleFeaturesTolerantly(),
+        loadGalleryItems(),
+        loadCommunityFeed(),
+      ]);
     });
   }
 
@@ -1017,7 +1030,8 @@ class NestController extends ChangeNotifier {
     // 해제(status를 ARCHIVED가 아닌 값으로 변경)하는 것은 허용한다. DB의
     // guard_update_archived_terms 트리거와 동일한 규칙(이중 방어).
     final target = terms.where((t) => t.id == id).firstOrNull;
-    final staysArchived = (target?.isArchived ?? false) &&
+    final staysArchived =
+        (target?.isArchived ?? false) &&
         (status == null || status.toUpperCase() == 'ARCHIVED');
     if (staysArchived) {
       bool sameDay(DateTime? a, DateTime? b) {
@@ -1115,16 +1129,21 @@ class NestController extends ChangeNotifier {
     selectedClassGroupId = _normalizeNullable(classGroupId);
     scheduleOptionDrafts = [];
     selectedScheduleOptionId = null;
+    _syncSelectedSessionsFromTermPack();
     notifyListeners();
 
     await _runBusy('수업 및 갤러리를 갱신하는 중...', () async {
-      await _loadSessions();
-      await loadClassEnrollments();
-      await loadSessionTeacherAssignments();
-      await loadTeachingPlans();
-      await loadAnnouncements();
-      await loadGalleryItems();
-      await loadCommunityFeed();
+      if (!_termScheduleLoaded) {
+        await _loadTermSessionsPack();
+        _syncSelectedSessionsFromTermPack();
+      }
+      await Future.wait([
+        loadClassEnrollments(),
+        loadTeachingPlans(),
+        loadAnnouncements(),
+        loadGalleryItems(),
+        loadCommunityFeed(),
+      ]);
     });
   }
 
@@ -1138,6 +1157,9 @@ class NestController extends ChangeNotifier {
   }) async {
     if (user == null) {
       throw StateError('로그인이 필요합니다.');
+    }
+    if (_bootstrapInFlight || _isBusy) {
+      throw StateError('이미 만들고 있어요.');
     }
 
     final canBootstrap = isAdminLike || memberships.isEmpty;
@@ -1158,28 +1180,40 @@ class NestController extends ChangeNotifier {
     }
 
     final courseNames = _parseCommaWords(coursesCsv);
+    _bootstrapInFlight = true;
+    try {
+      await _runBusy('우리집 홈스쿨을 만드는 중...', () async {
+        final result = await _repository.createBootstrapFrame(
+          ownerUserId: user!.id,
+          currentHomeschoolId: selectedHomeschoolId,
+          homeschoolName: trimmedHomeschool,
+          termName: trimmedTerm,
+          startDate: startDate,
+          endDate: endDate,
+          className: trimmedClass,
+          courseNames: courseNames,
+        );
 
-    await _runBusy('기본 운영 틀 생성 중...', () async {
-      final result = await _repository.createBootstrapFrame(
-        ownerUserId: user!.id,
-        currentHomeschoolId: selectedHomeschoolId,
-        homeschoolName: trimmedHomeschool,
-        termName: trimmedTerm,
-        startDate: startDate,
-        endDate: endDate,
-        className: trimmedClass,
-        courseNames: courseNames,
-      );
+        selectedHomeschoolId = result.homeschoolId;
+        selectedTermId = result.termId;
+        // 방금 만든 학기를 유지해야 하므로 명시적 선택으로 취급한다.
+        _termSelectionIsExplicit = true;
+        selectedClassGroupId = result.classGroupId;
 
-      selectedHomeschoolId = result.homeschoolId;
-      selectedTermId = result.termId;
-      // 방금 만든 학기를 유지해야 하므로 명시적 선택으로 취급한다.
-      _termSelectionIsExplicit = true;
-      selectedClassGroupId = result.classGroupId;
+        memberships = await _repository.fetchMemberships(userId: user!.id);
+        currentRole = _resolveViewRole(selectedHomeschoolId);
+        notifyListeners();
 
-      await loadHomeschoolContext();
-      _setStatus('초기 세팅 완료');
-    });
+        await _loadTermAndBelow(includeScheduleExtras: false);
+        _ensureRoleViewTargetSelection();
+        _setStatus('우리집 홈스쿨을 열었어요');
+      });
+      unawaited(_loadRoleScopedContext());
+      unawaited(_loadDeferredContext());
+      unawaited(_persistToCache());
+    } finally {
+      _bootstrapInFlight = false;
+    }
   }
 
   Future<void> generateProposal(String prompt) async {
@@ -1385,19 +1419,17 @@ class NestController extends ChangeNotifier {
       return;
     }
 
-    final updatedSessions = draft.sessions
-        .map((session) {
-          if (session.localId != sessionLocalId) {
-            return session;
-          }
-          return session.copyWith(
-            courseId: courseId,
-            timeSlotId: timeSlotId,
-            teacherMainId: teacherMainId,
-            clearTeacherMainId: clearTeacherMainId,
-          );
-        })
-        .toList();
+    final updatedSessions = draft.sessions.map((session) {
+      if (session.localId != sessionLocalId) {
+        return session;
+      }
+      return session.copyWith(
+        courseId: courseId,
+        timeSlotId: timeSlotId,
+        teacherMainId: teacherMainId,
+        clearTeacherMainId: clearTeacherMainId,
+      );
+    }).toList();
 
     _replaceScheduleOptionDraft(
       draft.copyWith(
@@ -1945,7 +1977,9 @@ class NestController extends ChangeNotifier {
     // file never affects the Storage-backed primary upload.
     const maxDriveMirrorBytes = 40 * 1024 * 1024;
     if (file.sizeBytes > maxDriveMirrorBytes) {
-      debugPrint('[Drive] skip mirror: file too large (${file.sizeBytes} bytes)');
+      debugPrint(
+        '[Drive] skip mirror: file too large (${file.sizeBytes} bytes)',
+      );
       return;
     }
 
@@ -1983,7 +2017,6 @@ class NestController extends ChangeNotifier {
       debugPrint('[Drive] media mirror failed: $error');
     }
   }
-
 
   Future<void> loadHomeschoolContext() async {
     if (user == null) {
@@ -2051,6 +2084,9 @@ class NestController extends ChangeNotifier {
       studentActivityLogs = [];
       announcements = [];
       allAnnouncements = [];
+      academicEvents = [];
+      personalEvents = [];
+      calendarIntegration = null;
       auditLogs = [];
       selfStudyPlans = [];
       selectedSelfStudyPlanId = null;
@@ -2061,10 +2097,10 @@ class NestController extends ChangeNotifier {
 
       if (pendingInvites.isNotEmpty) {
         _setStatus(
-          '소속 홈스쿨이 없습니다. 대시보드에서 대기 초대 ${pendingInvites.length}건을 확인하세요.',
+          '소속 홈스쿨이 없습니다. 시작하기에서 대기 초대 ${pendingInvites.length}건을 확인하세요.',
         );
       } else {
-        _setStatus('소속 홈스쿨이 없습니다. 대시보드에서 초기 세팅을 진행하세요.');
+        _setStatus('소속 홈스쿨이 없습니다. 시작하기에서 우리집 홈스쿨을 만들거나 참여하세요.');
       }
       notifyListeners();
       return;
@@ -2083,8 +2119,8 @@ class NestController extends ChangeNotifier {
     currentRole = _resolveViewRole(selectedHomeschoolId);
 
     try {
-      await _loadTermAndBelow();
-      await _loadRoleScopedContext();
+      await Future.wait([_loadTermAndBelow(), _loadIndependentContext()]);
+      await _loadOperationalData();
       _ensureRoleViewTargetSelection();
 
       _setStatus('운영 컨텍스트 로드 완료');
@@ -2097,18 +2133,24 @@ class NestController extends ChangeNotifier {
     unawaited(_loadDeferredContext());
   }
 
-  /// 홈을 바로 그릴 수 있는 역할별 필수 데이터만 로드한다.
-  Future<void> _loadRoleScopedContext() async {
+  /// 학기/반에 의존하지 않는 홈·달력 데이터를 병렬로 읽는다.
+  Future<void> _loadIndependentContext() async {
     await Future.wait([
       if (isAdminLike) loadHomeschoolMemberships(),
       if (isAdminLike) loadHomeschoolInvites(),
       if (isAdminLike) loadJoinRequests(),
       if (isAdminLike) loadChildRegistrationRequests(),
-      _loadOperationalData(),
       loadAcademicEvents(),
+      loadPersonalEvents(),
+      loadCalendarIntegration(),
       loadNotificationPrefs(),
       loadNotificationInbox(),
     ]);
+  }
+
+  /// 홈을 바로 그릴 수 있는 역할별 필수 데이터만 로드한다.
+  Future<void> _loadRoleScopedContext() async {
+    await Future.wait([_loadIndependentContext(), _loadOperationalData()]);
   }
 
   Future<void> _loadDeferredContext() async {
@@ -2223,9 +2265,7 @@ class NestController extends ChangeNotifier {
     );
 
     mediaChildrenByAsset = await _repository.fetchMediaChildrenByAsset(
-      mediaAssetIds: galleryItems
-          .map((item) => item.id)
-          .toList(),
+      mediaAssetIds: galleryItems.map((item) => item.id).toList(),
     );
 
     _notifyIfIdle();
@@ -2435,9 +2475,7 @@ class NestController extends ChangeNotifier {
     return code;
   }
 
-  Future<void> rejectJoinRequest({
-    required String requestId,
-  }) async {
+  Future<void> rejectJoinRequest({required String requestId}) async {
     if (!canManageMemberships) {
       throw StateError('홈스쿨 관리자 권한이 필요합니다.');
     }
@@ -2586,6 +2624,11 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> loadSessionTeacherAssignments() async {
+    if (_termScheduleLoaded) {
+      _syncSelectedSessionsFromTermPack();
+      _notifyIfIdle();
+      return;
+    }
     final sessionIds = sessions
         .map((session) => session.id)
         .where((id) => id.isNotEmpty)
@@ -2669,6 +2712,11 @@ class NestController extends ChangeNotifier {
     required String description,
     required String eventDate,
     String? endDate,
+    String kind = 'EVENT',
+    String? startTime,
+    String? endTime,
+    bool publishAnnouncement = true,
+    bool showOnTimetable = true,
   }) async {
     final homeschoolId = selectedHomeschoolId;
     final userId = user?.id;
@@ -2683,9 +2731,14 @@ class NestController extends ChangeNotifier {
       eventDate: eventDate,
       endDate: endDate,
       createdByUserId: userId,
+      kind: kind,
+      startTime: startTime,
+      endTime: endTime,
+      publishAnnouncement: publishAnnouncement,
+      showOnTimetable: showOnTimetable,
     );
-    _setStatus('학사 일정이 추가되었습니다.');
-    await loadAcademicEvents();
+    _setStatus(publishAnnouncement ? '학사 일정과 공지를 올렸습니다.' : '학사 일정이 추가되었습니다.');
+    await Future.wait([loadAcademicEvents(), loadAnnouncements()]);
   }
 
   Future<void> updateAcademicEvent({
@@ -2694,6 +2747,11 @@ class NestController extends ChangeNotifier {
     required String description,
     required String eventDate,
     String? endDate,
+    String kind = 'EVENT',
+    String? startTime,
+    String? endTime,
+    bool publishAnnouncement = true,
+    bool showOnTimetable = true,
   }) async {
     final trimmedTitle = title.trim();
     if (trimmedTitle.isEmpty) {
@@ -2705,15 +2763,275 @@ class NestController extends ChangeNotifier {
       description: description,
       eventDate: eventDate,
       endDate: endDate,
+      kind: kind,
+      startTime: startTime,
+      endTime: endTime,
+      publishAnnouncement: publishAnnouncement,
+      showOnTimetable: showOnTimetable,
     );
     _setStatus('학사 일정을 수정했습니다.');
-    await loadAcademicEvents();
+    await Future.wait([loadAcademicEvents(), loadAnnouncements()]);
   }
 
   Future<void> deleteAcademicEvent({required String eventId}) async {
     await _repository.deleteAcademicEvent(eventId: eventId);
     _setStatus('학사 일정이 삭제되었습니다.');
-    await loadAcademicEvents();
+    await Future.wait([loadAcademicEvents(), loadAnnouncements()]);
+  }
+
+  Future<void> loadPersonalEvents({String? childId}) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      personalEvents = [];
+      _notifyIfIdle();
+      return;
+    }
+    try {
+      final termEnd = selectedTerm?.endDate;
+      personalEvents = await _repository.fetchPersonalEvents(
+        homeschoolId: homeschoolId,
+        childId: childId,
+        from: selectedTerm?.startDate,
+        to: termEnd == null
+            ? null
+            : DateTime(
+                termEnd.year,
+                termEnd.month,
+                termEnd.day,
+              ).add(const Duration(days: 1)),
+      );
+    } catch (_) {
+      personalEvents = [];
+    }
+    _notifyIfIdle();
+  }
+
+  List<PersonalEvent> personalEventsForChild(String? childId) {
+    if (childId == null || childId.isEmpty) return const [];
+    return personalEvents.where((event) => event.childId == childId).toList();
+  }
+
+  List<PersonalEvent> personalEventsOn(DateTime date, {String? childId}) {
+    return personalEventsOnDate(
+      events: personalEvents,
+      date: date,
+      childId: childId,
+    );
+  }
+
+  List<AcademicEvent> academicEventsOn(
+    DateTime date, {
+    bool timetableOnly = false,
+  }) {
+    return academicEventsOnDate(
+      events: academicEvents,
+      date: date,
+      timetableOnly: timetableOnly,
+    );
+  }
+
+  bool get canManagePersonalSchedule =>
+      isParentView || isStudentView || isAdminLike;
+
+  Future<void> createPersonalEvent({
+    required String childId,
+    required String title,
+    required String notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    String conflictPolicy = 'KEEP_BOTH',
+  }) async {
+    final homeschoolId = selectedHomeschoolId;
+    final userId = user?.id;
+    if (homeschoolId == null || userId == null) {
+      throw StateError('홈스쿨/사용자 정보가 없습니다.');
+    }
+    if (title.trim().isEmpty) {
+      throw StateError('일정 제목을 입력하세요.');
+    }
+    if (!endsAt.isAfter(startsAt)) {
+      throw StateError('끝나는 시각은 시작 시각보다 뒤여야 합니다.');
+    }
+    await _runBusy('개인 일정을 저장하는 중...', () async {
+      await _repository.createPersonalEvent(
+        homeschoolId: homeschoolId,
+        ownerUserId: userId,
+        childId: childId,
+        title: title,
+        notes: notes,
+        startsAt: startsAt,
+        endsAt: endsAt,
+        conflictPolicy: conflictPolicy,
+      );
+      _setStatus('개인 일정을 넣었습니다.');
+      await loadPersonalEvents();
+    });
+    unawaited(_pushPersonalToGoogleIfConnected());
+  }
+
+  Future<void> updatePersonalEvent({
+    required String eventId,
+    required String title,
+    required String notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    String conflictPolicy = 'KEEP_BOTH',
+  }) async {
+    if (title.trim().isEmpty) {
+      throw StateError('일정 제목을 입력하세요.');
+    }
+    if (!endsAt.isAfter(startsAt)) {
+      throw StateError('끝나는 시각은 시작 시각보다 뒤여야 합니다.');
+    }
+    await _runBusy('개인 일정을 수정하는 중...', () async {
+      await _repository.updatePersonalEvent(
+        eventId: eventId,
+        title: title,
+        notes: notes,
+        startsAt: startsAt,
+        endsAt: endsAt,
+        conflictPolicy: conflictPolicy,
+      );
+      _setStatus('개인 일정을 수정했습니다.');
+      await loadPersonalEvents();
+    });
+    unawaited(_pushPersonalToGoogleIfConnected());
+  }
+
+  Future<void> deletePersonalEvent({required String eventId}) async {
+    await _runBusy('개인 일정을 지우는 중...', () async {
+      await _repository.deletePersonalEvent(eventId: eventId);
+      _setStatus('개인 일정을 지웠습니다.');
+      await loadPersonalEvents();
+    });
+  }
+
+  Future<void> loadCalendarIntegration() async {
+    try {
+      calendarIntegration = await _repository.fetchCalendarIntegration();
+    } catch (_) {
+      // 미배포·권한 오류는 설정 카드를 숨기지 않고 끊김으로 보여 준다.
+    }
+    _notifyIfIdle();
+  }
+
+  Future<String?> connectGoogleCalendar() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return '홈스쿨을 먼저 선택하세요.';
+    }
+    final accessToken = _repository.currentSession?.accessToken;
+    if (accessToken == null || accessToken.isEmpty) {
+      return '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.';
+    }
+
+    try {
+      if (_oauthBridge.supported) {
+        await _oauthBridge.stashContext(
+          homeschoolId: homeschoolId,
+          rootFolderId: '',
+          folderPolicy: 'CALENDAR',
+          supabaseUrl: AppConfig.supabaseUrl,
+          supabaseAnonKey: AppConfig.supabaseAnonKey,
+          accessToken: accessToken,
+          intent: 'calendar',
+        );
+        final authUrl = await _repository.calendarConnectStart(
+          homeschoolId: homeschoolId,
+          redirectMode: 'web',
+        );
+        if (authUrl == null || authUrl.isEmpty) {
+          return 'Google 인증 주소를 받지 못했습니다.';
+        }
+        await _oauthBridge.openPopup(authUrl);
+        final result = await _pollOauthResult();
+        if (result == null || result['success'] != true) {
+          final error = result?['error'];
+          return error is String && error.isNotEmpty
+              ? 'Google 캘린더 연결 실패: $error'
+              : 'Google 캘린더 연결이 끝나지 않았습니다.';
+        }
+        await loadCalendarIntegration();
+        return null;
+      }
+
+      final authUrl = await _repository.calendarConnectStart(
+        homeschoolId: homeschoolId,
+        redirectMode: 'app',
+      );
+      if (authUrl == null || authUrl.isEmpty) {
+        return 'Google 인증 주소를 받지 못했습니다.';
+      }
+      final launched = await launchUrl(
+        Uri.parse(authUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        return '브라우저를 열 수 없습니다.';
+      }
+      await _pollCalendarConnected();
+      return calendarIntegration?.isConnected == true
+          ? null
+          : '브라우저에서 Google 로그인을 마친 뒤, 여기서 다시 새로고침해 주세요.';
+    } catch (error) {
+      return error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      await _oauthBridge.clearContext();
+    }
+  }
+
+  Future<void> _pollCalendarConnected() async {
+    const timeout = Duration(minutes: 3);
+    const interval = Duration(seconds: 2);
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(interval);
+      await loadCalendarIntegration();
+      if (calendarIntegration?.isConnected == true) {
+        return;
+      }
+    }
+  }
+
+  Future<String?> syncGoogleCalendar({required String childId}) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null) return '홈스쿨을 먼저 선택하세요.';
+    if (calendarIntegration?.isConnected != true) {
+      return '먼저 Google 캘린더를 연결하세요.';
+    }
+    try {
+      await _runBusy('캘린더를 맞추는 중...', () async {
+        await _repository.syncGoogleCalendar(
+          homeschoolId: homeschoolId,
+          childId: childId,
+        );
+        await Future.wait([loadPersonalEvents(), loadCalendarIntegration()]);
+        _setStatus('Google 캘린더와 맞췄습니다.');
+      });
+      return null;
+    } catch (error) {
+      return error.toString().replaceFirst('Exception: ', '');
+    }
+  }
+
+  Future<void> disconnectGoogleCalendar() async {
+    await _runBusy('캘린더 연결을 끊는 중...', () async {
+      await _repository.disconnectGoogleCalendar();
+      calendarIntegration = null;
+      _setStatus('Google 캘린더 연결을 끊었습니다.');
+    });
+  }
+
+  Future<void> _pushPersonalToGoogleIfConnected() async {
+    final childId = activeStudentChildId ?? myChildren.firstOrNull?.id;
+    if (childId == null || calendarIntegration?.isConnected != true) return;
+    try {
+      await _repository.syncGoogleCalendar(
+        homeschoolId: selectedHomeschoolId ?? '',
+        childId: childId,
+      );
+      await loadCalendarIntegration();
+    } catch (_) {}
   }
 
   // ── 학생 계정 연결 (children.user_id) ──
@@ -2895,11 +3213,10 @@ class NestController extends ChangeNotifier {
         courseIds: [normalized],
       );
       _fullyLoadedCourseLessonIds.add(normalized);
-      final merged = courseLessons
-          .where((row) => row.courseId != normalized)
-          .toList()
-        ..addAll(rows)
-        ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
+      final merged =
+          courseLessons.where((row) => row.courseId != normalized).toList()
+            ..addAll(rows)
+            ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
       courseLessons = merged;
       _notifyIfIdle();
     } catch (_) {
@@ -2915,9 +3232,7 @@ class NestController extends ChangeNotifier {
     if (courseId.isEmpty) {
       return const [];
     }
-    final rows = courseLessons
-        .where((row) => row.courseId == courseId)
-        .toList()
+    final rows = courseLessons.where((row) => row.courseId == courseId).toList()
       ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
     return rows;
   }
@@ -3151,21 +3466,29 @@ class NestController extends ChangeNotifier {
   /// 권한 오류 등)는 여기서 빈 목록으로 degrade 한다. 사용자가 직접 트리거하는
   /// 재조회(뮤테이션 직후 등)는 계속 예외를 그대로 올린다.
   Future<void> _loadNewScheduleFeaturesTolerantly() async {
-    try {
-      await loadClassSessionChanges();
-    } catch (_) {
-      classSessionChanges = [];
-    }
-    try {
-      await loadAbsenceReports();
-    } catch (_) {
-      absenceReports = [];
-    }
-    try {
-      await loadCourseLessons();
-    } catch (_) {
-      courseLessons = [];
-    }
+    await Future.wait([
+      () async {
+        try {
+          await loadClassSessionChanges();
+        } catch (_) {
+          classSessionChanges = [];
+        }
+      }(),
+      () async {
+        try {
+          await loadAbsenceReports();
+        } catch (_) {
+          absenceReports = [];
+        }
+      }(),
+      () async {
+        try {
+          await loadCourseLessons();
+        } catch (_) {
+          courseLessons = [];
+        }
+      }(),
+    ]);
     _notifyIfIdle();
   }
 
@@ -3185,10 +3508,11 @@ class NestController extends ChangeNotifier {
 
   /// 세션에 걸린 변경 공지(적용 시작일 순).
   List<ClassSessionChange> changesForSession(String sessionId) {
-    final rows = classSessionChanges
-        .where((row) => row.classSessionId == sessionId)
-        .toList()
-      ..sort((a, b) => a.effectiveFrom.compareTo(b.effectiveFrom));
+    final rows =
+        classSessionChanges
+            .where((row) => row.classSessionId == sessionId)
+            .toList()
+          ..sort((a, b) => a.effectiveFrom.compareTo(b.effectiveFrom));
     return rows;
   }
 
@@ -3200,9 +3524,7 @@ class NestController extends ChangeNotifier {
     required DateTime date,
   }) {
     final matches = classSessionChanges
-        .where(
-          (row) => row.classSessionId == sessionId && row.appliesOn(date),
-        )
+        .where((row) => row.classSessionId == sessionId && row.appliesOn(date))
         .toList();
     if (matches.isEmpty) {
       return null;
@@ -3383,10 +3705,7 @@ class NestController extends ChangeNotifier {
 
   /// 발송 결과를 부풀리지 않고 있는 그대로 문장으로 만든다.
   /// 한 명도 못 보냈으면 성공처럼 말하지 않는다.
-  String _notifyStatusMessage(
-    NotifyResult result, {
-    required String audience,
-  }) {
+  String _notifyStatusMessage(NotifyResult result, {required String audience}) {
     if (result.sent <= 0) {
       if (result.alreadyNotified) {
         return '이미 발송한 알림입니다. 다시 보내려면 재발송을 선택하세요.';
@@ -3416,9 +3735,11 @@ class NestController extends ChangeNotifier {
   /// 결석 신고 조회 시작일. 지난 회차 이력도 조금은 보이도록 30일 전부터 읽는다.
   DateTime get _absenceReportWindowStart {
     final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day).subtract(
-      const Duration(days: 30),
-    );
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 30));
   }
 
   Future<void> loadAbsenceReports() async {
@@ -3438,19 +3759,16 @@ class NestController extends ChangeNotifier {
 
   /// 아이별 결석 신고(최근 회차 순).
   List<AbsenceReport> absencesForChild(String childId) {
-    final rows = absenceReports
-        .where((row) => row.childId == childId)
-        .toList()
+    final rows = absenceReports.where((row) => row.childId == childId).toList()
       ..sort((a, b) => b.occurrenceDate.compareTo(a.occurrenceDate));
     return rows;
   }
 
   /// 수업별 결석 신고(최근 회차 순).
   List<AbsenceReport> absencesForSession(String sessionId) {
-    final rows = absenceReports
-        .where((row) => row.classSessionId == sessionId)
-        .toList()
-      ..sort((a, b) => b.occurrenceDate.compareTo(a.occurrenceDate));
+    final rows =
+        absenceReports.where((row) => row.classSessionId == sessionId).toList()
+          ..sort((a, b) => b.occurrenceDate.compareTo(a.occurrenceDate));
     return rows;
   }
 
@@ -3504,10 +3822,11 @@ class NestController extends ChangeNotifier {
           assignment.classSessionId,
     };
 
-    final rows = pending
-        .where((row) => mySessionIds.contains(row.classSessionId))
-        .toList()
-      ..sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
+    final rows =
+        pending
+            .where((row) => mySessionIds.contains(row.classSessionId))
+            .toList()
+          ..sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
     return rows;
   }
 
@@ -3728,9 +4047,7 @@ class NestController extends ChangeNotifier {
               )
               .toList();
 
-    final postIds = filteredPosts
-        .map((post) => post.id)
-        .toList();
+    final postIds = filteredPosts.map((post) => post.id).toList();
 
     communityPosts = filteredPosts;
 
@@ -3761,9 +4078,7 @@ class NestController extends ChangeNotifier {
       likedCommunityPostIds = <String>{};
     }
 
-    communityReports = reportsFuture != null
-        ? await reportsFuture
-        : const [];
+    communityReports = reportsFuture != null ? await reportsFuture : const [];
 
     _notifyIfIdle();
   }
@@ -4703,8 +5018,7 @@ class NestController extends ChangeNotifier {
       throw StateError('시간 형식이 올바르지 않습니다 (HH:MM).');
     }
 
-    var startMinutes =
-        int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+    var startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
     final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
 
     if (startMinutes >= endMinutes) {
@@ -4764,7 +5078,9 @@ class NestController extends ChangeNotifier {
       }
 
       await _loadTimetableAssets();
-      _setStatus('교시를 재설정했습니다 (${uniquePeriods.length}교시 × ${activeDays.length}요일).');
+      _setStatus(
+        '교시를 재설정했습니다 (${uniquePeriods.length}교시 × ${activeDays.length}요일).',
+      );
     });
   }
 
@@ -5083,9 +5399,7 @@ class NestController extends ChangeNotifier {
     _notifyIfIdle();
   }
 
-  Future<void> approveChildRegistration({
-    required String requestId,
-  }) async {
+  Future<void> approveChildRegistration({required String requestId}) async {
     if (!canManageFamilies) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
     }
@@ -5100,9 +5414,7 @@ class NestController extends ChangeNotifier {
     });
   }
 
-  Future<void> rejectChildRegistration({
-    required String requestId,
-  }) async {
+  Future<void> rejectChildRegistration({required String requestId}) async {
     if (!canManageFamilies) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
     }
@@ -5336,7 +5648,8 @@ class NestController extends ChangeNotifier {
       await loadTeacherProfiles();
 
       final linkedUserId = created.userId;
-      final needsTeacherRole = linkedUserId != null &&
+      final needsTeacherRole =
+          linkedUserId != null &&
           linkedUserId.isNotEmpty &&
           !hasTeacherViewRole(linkedUserId);
       final grantedTeacherRole =
@@ -5353,11 +5666,13 @@ class NestController extends ChangeNotifier {
           'granted_teacher_role': grantedTeacherRole,
         },
       );
-      _setStatus(_teacherProfileSavedStatus(
-        savedMessage: '교사 프로필을 생성했습니다.',
-        needsTeacherRole: needsTeacherRole,
-        grantedTeacherRole: grantedTeacherRole,
-      ));
+      _setStatus(
+        _teacherProfileSavedStatus(
+          savedMessage: '교사 프로필을 생성했습니다.',
+          needsTeacherRole: needsTeacherRole,
+          grantedTeacherRole: grantedTeacherRole,
+        ),
+      );
     });
     return created;
   }
@@ -5462,7 +5777,8 @@ class NestController extends ChangeNotifier {
       await loadTeacherProfiles();
 
       final linkedUserId = updated.userId;
-      final needsTeacherRole = linkedUserId != null &&
+      final needsTeacherRole =
+          linkedUserId != null &&
           linkedUserId.isNotEmpty &&
           !hasTeacherViewRole(linkedUserId);
       final grantedTeacherRole =
@@ -5479,11 +5795,13 @@ class NestController extends ChangeNotifier {
           'granted_teacher_role': grantedTeacherRole,
         },
       );
-      _setStatus(_teacherProfileSavedStatus(
-        savedMessage: '교사 프로필을 수정했습니다.',
-        needsTeacherRole: needsTeacherRole,
-        grantedTeacherRole: grantedTeacherRole,
-      ));
+      _setStatus(
+        _teacherProfileSavedStatus(
+          savedMessage: '교사 프로필을 수정했습니다.',
+          needsTeacherRole: needsTeacherRole,
+          grantedTeacherRole: grantedTeacherRole,
+        ),
+      );
     });
     return updated;
   }
@@ -5820,9 +6138,7 @@ class NestController extends ChangeNotifier {
       if (deleted == 0) {
         // RLS delete 정책(20260821090000)이 아직 배포되지 않았거나 권한이 없으면
         // 예외 없이 0건이 지워진다. 삭제된 척하지 않고 이유를 알린다.
-        throw StateError(
-          '공지를 삭제하지 못했습니다. 서버에 삭제 권한이 아직 적용되지 않았을 수 있습니다.',
-        );
+        throw StateError('공지를 삭제하지 못했습니다. 서버에 삭제 권한이 아직 적용되지 않았을 수 있습니다.');
       }
       await loadAnnouncements();
       await _logAudit(
@@ -6093,19 +6409,20 @@ class NestController extends ChangeNotifier {
       throw StateError('이미 이 홈스쿨에 소속되어 있지 않습니다.');
     }
 
-    final isOnlyAdmin = myRoles.any((m) => m.role == 'HOMESCHOOL_ADMIN') &&
+    final isOnlyAdmin =
+        myRoles.any((m) => m.role == 'HOMESCHOOL_ADMIN') &&
         homeschoolMemberships
-                .where((m) =>
-                    m.role == 'HOMESCHOOL_ADMIN' &&
-                    m.status == 'ACTIVE' &&
-                    m.homeschoolId == homeschoolId)
+                .where(
+                  (m) =>
+                      m.role == 'HOMESCHOOL_ADMIN' &&
+                      m.status == 'ACTIVE' &&
+                      m.homeschoolId == homeschoolId,
+                )
                 .length <=
             1;
 
     if (isOnlyAdmin) {
-      throw StateError(
-        '유일한 관리자는 탈퇴할 수 없습니다. 다른 구성원에게 관리자 역할을 부여한 뒤 탈퇴하세요.',
-      );
+      throw StateError('유일한 관리자는 탈퇴할 수 없습니다. 다른 구성원에게 관리자 역할을 부여한 뒤 탈퇴하세요.');
     }
 
     await _runBusy('홈스쿨 탈퇴 처리 중...', () async {
@@ -6156,9 +6473,7 @@ class NestController extends ChangeNotifier {
   }
 
   List<ClassSession> sessionsForSlot(String slotId) {
-    return sessions
-        .where((session) => session.timeSlotId == slotId)
-        .toList();
+    return sessions.where((session) => session.timeSlotId == slotId).toList();
   }
 
   List<CommunityPostMedia> mediaForCommunityPost(String postId) {
@@ -6178,9 +6493,7 @@ class NestController extends ChangeNotifier {
   }
 
   List<CommunityReport> reportsForCommunityPost(String postId) {
-    return communityReports
-        .where((report) => report.postId == postId)
-        .toList();
+    return communityReports.where((report) => report.postId == postId).toList();
   }
 
   int openReportsForCommunityPost(String postId) {
@@ -6320,10 +6633,9 @@ class NestController extends ChangeNotifier {
     if (familyIds.isEmpty) {
       return const [];
     }
-    final rows = children
-        .where((child) => familyIds.contains(child.familyId))
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final rows =
+        children.where((child) => familyIds.contains(child.familyId)).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
     return rows;
   }
 
@@ -6355,9 +6667,7 @@ class NestController extends ChangeNotifier {
   }
 
   List<Membership> membershipsByUser(String userId) {
-    return homeschoolMemberships
-        .where((row) => row.userId == userId)
-        .toList();
+    return homeschoolMemberships.where((row) => row.userId == userId).toList();
   }
 
   List<String> get parentCandidateUserIds {
@@ -6372,9 +6682,7 @@ class NestController extends ChangeNotifier {
   }
 
   List<ChildProfile> childrenForFamily(String familyId) {
-    return children
-        .where((child) => child.familyId == familyId)
-        .toList();
+    return children.where((child) => child.familyId == familyId).toList();
   }
 
   List<ChildProfile> get myChildren {
@@ -6383,15 +6691,13 @@ class NestController extends ChangeNotifier {
       return const [];
     }
 
-    final mine = children
-        .where((child) {
-          final guardians = familyGuardianUserIdsByFamily[child.familyId];
-          if (guardians == null || guardians.isEmpty) {
-            return false;
-          }
-          return guardians.contains(targetUserId);
-        })
-        .toList();
+    final mine = children.where((child) {
+      final guardians = familyGuardianUserIdsByFamily[child.familyId];
+      if (guardians == null || guardians.isEmpty) {
+        return false;
+      }
+      return guardians.contains(targetUserId);
+    }).toList();
 
     if (mine.isNotEmpty) {
       return mine;
@@ -6685,9 +6991,7 @@ class NestController extends ChangeNotifier {
   }
 
   List<StudentActivityLog> activityLogsForChild(String childId) {
-    return studentActivityLogs
-        .where((log) => log.childId == childId)
-        .toList();
+    return studentActivityLogs.where((log) => log.childId == childId).toList();
   }
 
   String findClassGroupName(String? classGroupId) {
@@ -6731,18 +7035,52 @@ class NestController extends ChangeNotifier {
     return _repository.fetchAnnouncements(homeschoolId: homeschoolId);
   }
 
-  Future<void> _loadTermAndBelow() async {
+  Future<void> _loadTermAndBelow({bool includeScheduleExtras = true}) async {
     await _loadTerms();
-    // classGroups sets selectedClassGroupId needed by _loadSessions.
-    // timetableAssets only needs termId, so it can run in parallel with classGroups.
-    await Future.wait([_loadClassGroups(), _loadTimetableAssets()]);
+    _termScheduleLoaded = false;
     await Future.wait([
-      _loadSessions(),
+      _loadClassGroups(),
+      _loadTimetableAssets(),
+      _loadTermSessionsPack(),
       if (isAdminLike) _loadProposals(),
     ]);
-    // 세션 id 가 필요하므로 _loadSessions 이후에 실행한다.
+    _syncSelectedSessionsFromTermPack();
+    // 세션 id 가 필요하므로 학기 팩 이후에 실행한다.
     // 신규 기능이므로 실패해도 학기 로딩 전체를 중단시키지 않는다.
-    await _loadNewScheduleFeaturesTolerantly();
+    if (includeScheduleExtras) {
+      await _loadNewScheduleFeaturesTolerantly();
+    }
+  }
+
+  Future<void> _loadTermSessionsPack() async {
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      allTermSessions = [];
+      allTermSessionTeacherAssignments = [];
+      _termScheduleLoaded = true;
+      return;
+    }
+
+    final pack = await _repository.fetchTermSchedulePack(termId: termId);
+    allTermSessions = pack.sessions;
+    allTermSessionTeacherAssignments = pack.assignments;
+    _termScheduleLoaded = true;
+  }
+
+  void _syncSelectedSessionsFromTermPack() {
+    final classGroupId = selectedClassGroupId;
+    if (classGroupId == null || classGroupId.isEmpty) {
+      sessions = [];
+      sessionTeacherAssignments = [];
+      return;
+    }
+    sessions = allTermSessions
+        .where((session) => session.classGroupId == classGroupId)
+        .toList();
+    final selectedIds = sessions.map((session) => session.id).toSet();
+    sessionTeacherAssignments = allTermSessionTeacherAssignments
+        .where((row) => selectedIds.contains(row.classSessionId))
+        .toList();
   }
 
   Future<void> _loadSelfStudy() async {
@@ -6760,8 +7098,9 @@ class NestController extends ChangeNotifier {
     final validIds = selfStudyPlans.map((p) => p.id).toSet();
     if (selectedSelfStudyPlanId == null ||
         !validIds.contains(selectedSelfStudyPlanId)) {
-      selectedSelfStudyPlanId =
-          selfStudyPlans.isNotEmpty ? selfStudyPlans.first.id : null;
+      selectedSelfStudyPlanId = selfStudyPlans.isNotEmpty
+          ? selfStudyPlans.first.id
+          : null;
     }
     await _reloadSelfStudySlotsAndExclusions();
   }
@@ -6770,10 +7109,12 @@ class NestController extends ChangeNotifier {
     final planIds = selfStudyPlans.map((p) => p.id).toList();
     selfStudySlots = await _repository.fetchSelfStudySlots(planIds: planIds);
     final slotIds = selfStudySlots.map((s) => s.id).toList();
-    selfStudyExclusions =
-        await _repository.fetchSelfStudyExclusions(slotIds: slotIds);
-    selfStudySupervisions =
-        await _repository.fetchSelfStudySupervisions(planIds: planIds);
+    selfStudyExclusions = await _repository.fetchSelfStudyExclusions(
+      slotIds: slotIds,
+    );
+    selfStudySupervisions = await _repository.fetchSelfStudySupervisions(
+      planIds: planIds,
+    );
   }
 
   /// (요일·방·시간밴드·날짜) 한 칸의 감독 교사 id 를 결정한다.
@@ -6859,17 +7200,18 @@ class NestController extends ChangeNotifier {
     return list;
   }
 
-  Set<String> excludedChildIdsForSelfStudySlot(String slotId) => selfStudyExclusions
-      .where((e) => e.slotId == slotId)
-      .map((e) => e.childId)
-      .toSet();
+  Set<String> excludedChildIdsForSelfStudySlot(String slotId) =>
+      selfStudyExclusions
+          .where((e) => e.slotId == slotId)
+          .map((e) => e.childId)
+          .toSet();
 
   /// 슬롯 자습 명단 = 반 재원생 − 제외 아동(이름 순).
   List<ChildProfile> rosterForSelfStudySlot(SelfStudySlot slot) {
     final excluded = excludedChildIdsForSelfStudySlot(slot.id);
-    return childrenForClassGroup(slot.classGroupId)
-        .where((c) => !excluded.contains(c.id))
-        .toList();
+    return childrenForClassGroup(
+      slot.classGroupId,
+    ).where((c) => !excluded.contains(c.id)).toList();
   }
 
   /// 특정 아동의 자습 슬롯(선택된 계획 기준, 제외 반영, 정렬). 부모/교사 뷰용.
@@ -6881,9 +7223,11 @@ class NestController extends ChangeNotifier {
         .map((e) => e.slotId)
         .toSet();
     return selectedPlanSelfStudySlots
-        .where((s) =>
-            groupIds.contains(s.classGroupId) &&
-            !excludedSlotIds.contains(s.id))
+        .where(
+          (s) =>
+              groupIds.contains(s.classGroupId) &&
+              !excludedSlotIds.contains(s.id),
+        )
         .toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   }
@@ -6919,12 +7263,15 @@ class NestController extends ChangeNotifier {
     final planId = selectedSelfStudyPlan?.id;
     if (planId == null) return const [];
     final rows = selfStudySupervisions
-        .where((s) =>
-            s.planId == planId && s.supervisorTeacherId == teacherProfileId)
+        .where(
+          (s) =>
+              s.planId == planId && s.supervisorTeacherId == teacherProfileId,
+        )
         .toList();
     rows.sort((a, b) {
-      final byDay = (a.dayOfWeek == 0 ? 7 : a.dayOfWeek)
-          .compareTo(b.dayOfWeek == 0 ? 7 : b.dayOfWeek);
+      final byDay = (a.dayOfWeek == 0 ? 7 : a.dayOfWeek).compareTo(
+        b.dayOfWeek == 0 ? 7 : b.dayOfWeek,
+      );
       if (byDay != 0) return byDay;
       final ad = a.occurrenceDate, bd = b.occurrenceDate;
       if (ad != null && bd != null) {
@@ -7022,7 +7369,8 @@ class NestController extends ChangeNotifier {
       throw StateError('채울 요일을 하나 이상 선택하세요.');
     }
     if (selfStudyPlans.any(
-      (p) => p.id != planId &&
+      (p) =>
+          p.id != planId &&
           p.name.trim().toLowerCase() == trimmed.toLowerCase(),
     )) {
       throw StateError('이미 동일한 이름의 자습 계획이 있습니다: $trimmed');
@@ -7089,12 +7437,14 @@ class NestController extends ChangeNotifier {
       for (final session in allTermSessions) {
         final ts = slotById[session.timeSlotId];
         if (ts == null) continue;
-        occupancy.add(GroupOccupancy(
-          classGroupId: session.classGroupId,
-          dayOfWeek: ts.dayOfWeek,
-          startMin: minutesFromTime(ts.startTime),
-          endMin: minutesFromTime(ts.endTime),
-        ));
+        occupancy.add(
+          GroupOccupancy(
+            classGroupId: session.classGroupId,
+            dayOfWeek: ts.dayOfWeek,
+            startMin: minutesFromTime(ts.startTime),
+            endMin: minutesFromTime(ts.endTime),
+          ),
+        );
       }
 
       // 2) 공강 → 슬롯 후보.
@@ -7117,7 +7467,9 @@ class NestController extends ChangeNotifier {
       String keyOf(String gid, int day, String start, String end) =>
           '$gid|$day|${start.length >= 5 ? start.substring(0, 5) : start}'
           '|${end.length >= 5 ? end.substring(0, 5) : end}';
-      final existing = selfStudySlots.where((s) => s.planId == plan.id).toList();
+      final existing = selfStudySlots
+          .where((s) => s.planId == plan.id)
+          .toList();
       final carryDetail = <String, SelfStudySlot>{
         for (final s in existing)
           keyOf(s.classGroupId, s.dayOfWeek, s.startTime, s.endTime): s,
@@ -7126,8 +7478,13 @@ class NestController extends ChangeNotifier {
       for (final s in existing) {
         final ex = excludedChildIdsForSelfStudySlot(s.id);
         if (ex.isNotEmpty) {
-          carryExclusions[
-              keyOf(s.classGroupId, s.dayOfWeek, s.startTime, s.endTime)] = ex;
+          carryExclusions[keyOf(
+                s.classGroupId,
+                s.dayOfWeek,
+                s.startTime,
+                s.endTime,
+              )] =
+              ex;
         }
       }
 
@@ -7145,7 +7502,8 @@ class NestController extends ChangeNotifier {
           'room': prior?.room ?? '',
           'supervisor_teacher_id': prior?.supervisorTeacherId,
           'label': prior?.label ?? '',
-          'sort_order': g.dayOfWeek * 100000 +
+          'sort_order':
+              g.dayOfWeek * 100000 +
               g.startMin * 100 +
               (groupIndex[g.classGroupId] ?? 0),
         });
@@ -7158,12 +7516,17 @@ class NestController extends ChangeNotifier {
 
       // 4) 보존 대상 제외 명단 재적용(아동이 아직 반에 있을 때만).
       for (final slot in createdSlots) {
-        final key =
-            keyOf(slot.classGroupId, slot.dayOfWeek, slot.startTime, slot.endTime);
+        final key = keyOf(
+          slot.classGroupId,
+          slot.dayOfWeek,
+          slot.startTime,
+          slot.endTime,
+        );
         final childIds = carryExclusions[key];
         if (childIds == null || childIds.isEmpty) continue;
-        final memberIds =
-            childrenForClassGroup(slot.classGroupId).map((c) => c.id).toSet();
+        final memberIds = childrenForClassGroup(
+          slot.classGroupId,
+        ).map((c) => c.id).toSet();
         for (final childId in childIds) {
           if (!memberIds.contains(childId)) continue;
           await _repository.addSelfStudyExclusion(
@@ -7217,7 +7580,10 @@ class NestController extends ChangeNotifier {
     _assertSelectedTermEditable();
     await _runBusy(excluded ? '명단에서 제외하는 중...' : '명단에 추가하는 중...', () async {
       if (excluded) {
-        await _repository.addSelfStudyExclusion(slotId: slotId, childId: childId);
+        await _repository.addSelfStudyExclusion(
+          slotId: slotId,
+          childId: childId,
+        );
       } else {
         await _repository.removeSelfStudyExclusion(
           slotId: slotId,
@@ -7298,37 +7664,8 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> _loadSessions() async {
-    final classGroupId = selectedClassGroupId;
-    if (classGroupId == null || classGroupId.isEmpty) {
-      sessions = [];
-      allTermSessions = [];
-      allTermSessionTeacherAssignments = [];
-      return;
-    }
-
-    sessions = await _repository.fetchSessions(classGroupId: classGroupId);
-
-    // Load all sessions across all class groups for location conflict detection
-    final allGroupIds = classGroups.map((cg) => cg.id).toList();
-    if (allGroupIds.isNotEmpty) {
-      allTermSessions = await _repository.fetchSessionsForClassGroups(
-        classGroupIds: allGroupIds,
-      );
-    } else {
-      allTermSessions = sessions;
-    }
-
-    // Teacher assignments across the whole term, for cross-class conflict
-    // detection (drag-time preflight) and the whole-school teacher overlay.
-    final allSessionIds = allTermSessions
-        .map((session) => session.id)
-        .where((id) => id.isNotEmpty)
-        .toList();
-    allTermSessionTeacherAssignments = allSessionIds.isEmpty
-        ? const []
-        : await _repository.fetchSessionTeacherAssignments(
-            classSessionIds: allSessionIds,
-          );
+    await _loadTermSessionsPack();
+    _syncSelectedSessionsFromTermPack();
   }
 
   Future<void> _loadProposals() async {
@@ -7343,9 +7680,7 @@ class NestController extends ChangeNotifier {
 
     proposals = await _repository.fetchProposals(termId: termId);
 
-    final proposalIds = proposals
-        .map((proposal) => proposal.id)
-        .toList();
+    final proposalIds = proposals.map((proposal) => proposal.id).toList();
     proposalSessionsById = await _repository.fetchProposalSessionsByProposal(
       proposalIds: proposalIds,
     );
@@ -7380,6 +7715,9 @@ class NestController extends ChangeNotifier {
     Future<void> Function() task, {
     bool blockUi = true,
   }) async {
+    if (_isBusy) {
+      throw StateError('이미 처리 중이에요.');
+    }
     _isBusy = true;
     _blocksUi = blockUi;
     _setStatus(progressMessage);
@@ -7973,8 +8311,10 @@ class NestController extends ChangeNotifier {
   }
 
   void _clearDomainState() {
+    _bootstrapInFlight = false;
     _communityLoaded = false;
     _galleryLoaded = false;
+    _termScheduleLoaded = false;
     inboxOpenedThisSession = false;
     notificationPrefs = const NotificationPrefs();
     notificationInbox = [];
@@ -7996,6 +8336,9 @@ class NestController extends ChangeNotifier {
     studentActivityLogs = [];
     announcements = [];
     allAnnouncements = [];
+    academicEvents = [];
+    personalEvents = [];
+    calendarIntegration = null;
     auditLogs = [];
     classSessionChanges = [];
     absenceReports = [];

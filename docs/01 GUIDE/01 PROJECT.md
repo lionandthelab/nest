@@ -174,6 +174,7 @@ nest/
 │   │   ├── 20260309011500_homeschool_invites_name_snapshot.sql
 │   │   ├── 20260309020000_teacher_profiles_delete_policy.sql
 │   │   ├── 20260323100000_child_registration_requests.sql
+│   │   ├── 20260911120000_personal_events_and_calendar.sql 개인일정·캘린더
 │   │   ├── 20260324100000_academic_events.sql        학사일정
 │   │   └── 20260324120000_supabase_storage_media.sql 미디어 스토리지
 │   └── functions/              Edge Functions
@@ -181,6 +182,10 @@ nest/
 │       ├── timetable-assistant-generate/
 │       ├── google-drive-connect-start/
 │       ├── google-drive-connect-complete/
+│       ├── google-calendar-connect-start/
+│       ├── google-calendar-connect-complete/
+│       ├── google-calendar-sync/
+│       ├── google-calendar-oauth/
 │       └── google-drive-upload/
 ├── openapi/
 │   └── nest-api-v1.yaml        OpenAPI 3.1 명세서
@@ -318,11 +323,12 @@ nest/
 ### 6.1 인증 및 온보딩
 
 - 이메일/비밀번호 로그인 (Supabase Auth, PKCE 플로우)
+- 구글·카카오·네이버 간편 로그인 (`lion_auth`). Apple은 심사/콘솔 준비가 되기 전이라 노출하지 않는다
+- 모바일 카카오·네이버는 시스템 브라우저에서 인가한 뒤 앱 딥링크로 돌아온다
 - 비밀번호 재설정 이메일 요청
-- 온보딩 3가지 경로:
-  - 초대 수락 (이메일 기반)
-  - 홈스쿨 검색 → 가입 요청
-  - 새 홈스쿨 직접 개설
+- 온보딩: 소속이 없으면 `시작하기` 탭만 보인다.
+  - **메인**: 우리집 홈스쿨 개설 + 짧은 시작 팁
+  - **서브**: 참여 코드 · 홈스쿨 검색 가입 요청 · 이메일 초대 수락 (여럿이 모인 홈스쿨)
 
 ### 6.2 역할 기반 동적 UI
 

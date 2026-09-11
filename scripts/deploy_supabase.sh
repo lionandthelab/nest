@@ -25,7 +25,8 @@ supabase secrets set \
   SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
   GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
   GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
-  GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT_URI"
+  GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT_URI" \
+  GOOGLE_CALENDAR_REDIRECT_URI="${GOOGLE_CALENDAR_REDIRECT_URI:-https://${PROJECT_REF}.supabase.co/functions/v1/google-calendar-oauth}"
 
 # nest-notify(수업 변경/결석 알림)는 SOLAPI_API_KEY / SOLAPI_API_SECRET /
 # SOLAPI_SENDER 시크릿을 사용한다. 이 값들은 lion_auth 메시징 셋업이 관리하므로
@@ -39,5 +40,10 @@ supabase functions deploy google-drive-connect-start --project-ref "$PROJECT_REF
 supabase functions deploy google-drive-connect-complete --project-ref "$PROJECT_REF"
 supabase functions deploy nest-notify --project-ref "$PROJECT_REF"
 supabase functions deploy nest-remind --project-ref "$PROJECT_REF"
+supabase functions deploy google-calendar-connect-start --project-ref "$PROJECT_REF"
+supabase functions deploy google-calendar-connect-complete --project-ref "$PROJECT_REF"
+supabase functions deploy google-calendar-sync --project-ref "$PROJECT_REF"
+supabase functions deploy google-calendar-oauth --project-ref "$PROJECT_REF"
+supabase functions deploy naver-oauth-bridge --project-ref "$PROJECT_REF" --no-verify-jwt
 
 echo "Done."

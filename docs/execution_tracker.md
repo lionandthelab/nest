@@ -1,6 +1,6 @@
 # Nest Execution Tracker
 
-Last updated: 2026-03-08
+Last updated: 2026-09-12
 
 ## Scope
 
@@ -81,6 +81,11 @@ Last updated: 2026-03-08
 | 2026-03-08 | 스케줄 확정 후 경고 잔여 버그 수정: `수정 확정` 성공 시 dirty 상태를 상위 탭 가드로 강제 재동기화하고, 반/선택 해제 상태에서도 dirty false를 보장하여 탭 이동 시 잘못된 `수정사항 경고` 반복 노출 제거 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-03-08 | 홈 레이아웃/내비게이션 한글화 및 헤더 UX 개편: 헤더 설정 영역 항상 확장(full-width), 사용자 이름+이메일 표시, 탭/타이틀 한국어 통일, 좌측 사이드바 상단 로고 클릭 홈 이동, 탭 하단 현재 화면 마이크로 캡션 추가 | 완료 | `flutter analyze`, `flutter test`, `flutter build web --release --base-href /nest/` |
 | 2026-09-08 | 모바일 네이티브 셸·역할별 부트·FCM 골격·아침/30분 전 스케줄 리마인더 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
+| 2026-09-11 | 첫 설치 온보딩을 홈스쿨 개설 메인으로 재배치 + 참여는 서브 + 부모님 꿀팁 컨텐츠 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
+| 2026-09-11 | 토스식 즉시 반응(누르는 순간 스케일/햅틱) + 제미나이식 카드 랜딩. 탭은 IndexedStack 0ms | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
+| 2026-09-11 | 개인 일정·학기 달력·학사일정 공지 연동·Google Calendar 골격. QA 역할별 계정 스크립트 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
+| 2026-09-12 | 우리집 홈스쿨 생성 중복 탭 잠금·로딩 오버레이·전환 모션. 생성 후 필수 컨텍스트만 대기 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
+| 2026-09-12 | 학기 시간표 팩 RPC + 관리자/달력/시간표 병렬 로드. 중복 생성 홈스쿨 정리 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test`, `supabase db push` |
 
 ## Next Batch
 

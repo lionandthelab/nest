@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/schedule_occurrence.dart';
 import '../../services/self_study_planner.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/schedule_badges.dart';
+import '../widgets/schedule_personal_section.dart';
+import '../widgets/schedule_week_bar.dart';
+import '../widgets/term_calendar_view.dart';
 import 'timetable/course_lesson_sheet.dart';
 
 /// 학생 본인 계정의 시간표 탭.
@@ -33,8 +37,8 @@ class StudentTimetableTab extends StatefulWidget {
 }
 
 class _StudentTimetableTabState extends State<StudentTimetableTab> {
-  // false = 수업 시간표, true = 자습 시간표.
-  bool _showSelfStudy = false;
+  String _pane = 'class';
+  DateTime _weekStart = nestMondayOf(DateTime.now());
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +65,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
       children: [
         _buildModeToggle(context),
         const SizedBox(height: 12),
-        if (_showSelfStudy)
+        if (_pane == 'calendar')
+          _buildCalendarView(context, controller, bundles, childId)
+        else if (_pane == 'self')
           _buildSelfStudyView(context, controller, childId)
         else if (widget.isLoadingChildClasses && bundles.isEmpty) ...[
           const SizedBox(height: 24),
@@ -101,7 +107,23 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
           Builder(
             builder: (context) {
               try {
-                return _buildWeeklyScheduleBoard(controller, bundles, childId);
+                return Column(
+                  children: [
+                    ScheduleWeekBar(
+                      weekMonday: _weekStart,
+                      onChanged: (next) =>
+                          setState(() => _weekStart = nestMondayOf(next)),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildWeeklyScheduleBoard(controller, bundles, childId),
+                    PersonalWeekList(
+                      controller: controller,
+                      childId: childId,
+                      weekMonday: _weekStart,
+                      sessions: bundles.values.expand((b) => b.sessions),
+                    ),
+                  ],
+                );
               } catch (e, st) {
                 debugPrint('[StudentTimetable] board error: $e\n$st');
                 return Card(
@@ -174,23 +196,72 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
   // ── 모드 토글 / 자습 ──
 
   Widget _buildModeToggle(BuildContext context) {
-    return SegmentedButton<bool>(
+    return SegmentedButton<String>(
       segments: const [
         ButtonSegment(
-          value: false,
+          value: 'class',
           label: Text('수업'),
           icon: Icon(Icons.school_outlined, size: 16),
         ),
         ButtonSegment(
-          value: true,
+          value: 'self',
           label: Text('자습'),
           icon: Icon(Icons.edit_note_outlined, size: 16),
         ),
+        ButtonSegment(
+          value: 'calendar',
+          label: Text('달력'),
+          icon: Icon(Icons.calendar_month_outlined, size: 16),
+        ),
       ],
-      selected: {_showSelfStudy},
+      selected: {_pane},
       showSelectedIcon: false,
       onSelectionChanged: (selection) =>
-          setState(() => _showSelfStudy = selection.first),
+          setState(() => _pane = selection.first),
+    );
+  }
+
+  Widget _buildCalendarView(
+    BuildContext context,
+    NestController controller,
+    Map<String, ChildClassBundle> bundles,
+    String childId,
+  ) {
+    final sessions = bundles.values.expand((b) => b.sessions);
+    return Column(
+      children: [
+        TermCalendarView(
+          academicEvents: controller.academicEvents,
+          personalEvents: controller.personalEventsForChild(childId),
+          childId: childId,
+          termStart: controller.selectedTerm?.startDate,
+          termEnd: controller.selectedTerm?.endDate,
+          courseNameOf: controller.findCourseName,
+          canAddPersonal: true,
+          classesOnDate: (date) =>
+              controller.occurrencesOn(date, forSessions: sessions),
+          onAddPersonal: (date) => openPersonalEventForChild(
+            context: context,
+            controller: controller,
+            childId: childId,
+            sessions: sessions,
+            date: date,
+          ),
+          onEditPersonal: (event) => openPersonalEventForChild(
+            context: context,
+            controller: controller,
+            childId: childId,
+            sessions: sessions,
+            event: event,
+          ),
+        ),
+        PersonalWeekList(
+          controller: controller,
+          childId: childId,
+          weekMonday: _weekStart,
+          sessions: sessions,
+        ),
+      ],
     );
   }
 
@@ -423,12 +494,13 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                       ),
                     ),
                   ),
-                  ...sortedDays.map(
-                    (day) => _ScheduleHeaderCell(
+                  ...sortedDays.map((day) {
+                    final date = nestDateForWeekday(_weekStart, day);
+                    return _ScheduleHeaderCell(
                       width: dayColWidth,
-                      label: _dayLabel(day),
-                    ),
-                  ),
+                      label: '${_dayLabel(day)}\n${date.month}/${date.day}',
+                    );
+                  }),
                 ],
               ),
               const Divider(height: 1, thickness: 1),

@@ -26,27 +26,22 @@ class TodayScheduleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final clock = now ?? DateTime.now();
-    final remaining = occurrences
-        .where((row) => !row.isCanceled)
-        .where((row) {
-          if (nestDateOnly(row.date) != nestDateOnly(clock)) return false;
-          return nestMinutesFromTime(row.slot.endTime) >
-              clock.hour * 60 + clock.minute;
-        })
-        .toList();
+    final remaining = occurrences.where((row) => !row.isCanceled).where((row) {
+      if (nestDateOnly(row.date) != nestDateOnly(clock)) return false;
+      return nestMinutesFromTime(row.slot.endTime) >
+          clock.hour * 60 + clock.minute;
+    }).toList();
     final next = remaining.isEmpty ? null : remaining.first;
-    final rest = remaining.length > 1 ? remaining.sublist(1) : const <ResolvedOccurrence>[];
+    final rest = remaining.length > 1
+        ? remaining.sublist(1)
+        : const <ResolvedOccurrence>[];
 
-    return Card(
-      color: NestColors.roseMist.withValues(alpha: 0.35),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onOpenTimetable == null
-            ? null
-            : () {
-                NestHaptics.selection();
-                onOpenTimetable!();
-              },
+    return NestPressable(
+      enabled: onOpenTimetable != null,
+      onPressed: onOpenTimetable,
+      borderRadius: BorderRadius.circular(18),
+      child: Card(
+        color: NestColors.roseMist.withValues(alpha: 0.35),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: next == null
@@ -103,15 +98,17 @@ class TodayScheduleCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      ...rest.take(3).map(
-                        (row) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            '${shortTimeLabel(row.slot.startTime)}  ${courseNameOf(row.session.courseId)}',
-                            style: Theme.of(context).textTheme.bodySmall,
+                      ...rest
+                          .take(3)
+                          .map(
+                            (row) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                '${shortTimeLabel(row.slot.startTime)}  ${courseNameOf(row.session.courseId)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
                     ],
                   ],
                 ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../nest_theme.dart';
+import 'nest_motion.dart';
 
 class SelectSheetOption<T> {
   const SelectSheetOption({
@@ -28,26 +29,22 @@ Future<T?> showSelectSheet<T>({
   }
 
   var query = '';
-  return showModalBottomSheet<T>(
+  return showNestSheet<T>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setSheetState) {
           final normalizedQuery = query.trim().toLowerCase();
           final filtered = normalizedQuery.isEmpty
               ? options
-              : options
-                    .where((option) {
-                      final haystack = [
-                        option.title,
-                        option.subtitle,
-                        option.keywords,
-                      ].join(' ').toLowerCase();
-                      return haystack.contains(normalizedQuery);
-                    })
-                    .toList();
+              : options.where((option) {
+                  final haystack = [
+                    option.title,
+                    option.subtitle,
+                    option.keywords,
+                  ].join(' ').toLowerCase();
+                  return haystack.contains(normalizedQuery);
+                }).toList();
 
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),

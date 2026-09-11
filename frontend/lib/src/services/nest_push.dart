@@ -43,7 +43,11 @@ class NestPush {
       ),
       backend: SupabaseLionMessagingBackend(Supabase.instance.client),
     );
-    await messaging!.initialize();
+    try {
+      await messaging!.initialize();
+    } catch (error) {
+      debugPrint('[NestPush] init failed: $error');
+    }
   }
 
   static Future<void> onSignedIn(String userId) async {

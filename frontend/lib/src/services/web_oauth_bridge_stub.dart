@@ -28,5 +28,6 @@ class _WebOauthBridgeStub implements WebOauthBridge {
     required String supabaseUrl,
     required String supabaseAnonKey,
     required String accessToken,
+    String intent = 'drive',
   }) async {}
 }

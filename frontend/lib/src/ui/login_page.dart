@@ -1,52 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lion_auth/lion_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
+import '../config/lion_auth_options.dart';
 import '../services/auth_validation.dart';
+import '../services/browser_social_auth.dart';
 import '../state/nest_controller.dart';
 import 'nest_theme.dart';
-
-const _lionGoogleWebClientId =
-    String.fromEnvironment('LION_GOOGLE_WEB_CLIENT_ID');
-const _lionGoogleIosClientId =
-    String.fromEnvironment('LION_GOOGLE_IOS_CLIENT_ID');
-const _lionKakaoNativeAppKey =
-    String.fromEnvironment('LION_KAKAO_NATIVE_APP_KEY');
-const _lionKakaoJsKey = String.fromEnvironment('LION_KAKAO_JS_KEY');
-const _lionNaverClientId = String.fromEnvironment('LION_NAVER_CLIENT_ID');
-const _lionNaverWebRedirectUri =
-    String.fromEnvironment('LION_NAVER_WEB_REDIRECT_URI');
-
-LionAuthConfig _buildLionConfig() {
-  return LionAuthConfig(
-    appName: 'Nest',
-    google: _lionGoogleWebClientId.isEmpty
-        ? null
-        : GoogleAuthOptions(
-            webClientId: _lionGoogleWebClientId,
-            iosClientId:
-                _lionGoogleIosClientId.isEmpty ? null : _lionGoogleIosClientId,
-          ),
-    kakao: _lionKakaoNativeAppKey.isEmpty
-        ? null
-        : KakaoAuthOptions(
-            nativeAppKey: _lionKakaoNativeAppKey,
-            javaScriptAppKey: _lionKakaoJsKey,
-          ),
-    naver: _lionNaverClientId.isEmpty
-        ? null
-        : NaverAuthOptions(
-            clientId: _lionNaverClientId,
-            clientName: 'Nest',
-            webRedirectUri: _lionNaverWebRedirectUri.isEmpty
-                ? null
-                : _lionNaverWebRedirectUri,
-          ),
-    apple: const AppleAuthOptions(), // appleOnlyOnIos 기본값 → iOS에서만 노출
-  );
-}
+import 'widgets/nest_motion.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.controller});
@@ -74,7 +38,7 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _lionAuth = LionAuthController(
-      config: _buildLionConfig(),
+      config: buildNestLionAuthConfig(),
       backend: SupabaseLionAuthBackend(
         Supabase.instance.client,
         emailRedirectUrl: AppConfig.authEmailRedirectUrl,
@@ -84,16 +48,59 @@ class _LoginPageState extends State<LoginPage> {
     _lionAuth.addListener(_onLionAuthChanged);
   }
 
+  /// iOS/macOS 네이티브 구글은 GIDClientID가 있을 때만 쓴다.
+  bool get _canUseNativeGoogle {
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      return AppConfig.lionGoogleIosClientId.trim().isNotEmpty;
+    }
+    return AppConfig.lionGoogleWebClientId.trim().isNotEmpty;
+  }
+
   void _onLionAuthChanged() {
     final message = _lionAuth.errorMessage;
     if (message != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
       _lionAuth.clearError();
+    }
+  }
+
+  Future<void> _onSocial(LionAuthProviderId id) async {
+    // 카카오: 공식 loginWithKakaoAccount (Safari/Custom Tabs, 카카오톡 앱투앱 없음).
+    // 네이버: 브라우저 인가 코드 + social-broker.
+    // 구글: iOS GIDClientID가 있을 때만 네이티브 시트, 없으면 브라우저 OAuth.
+    final useBrowserGoogle = !kIsWeb &&
+        id == LionAuthProviderId.google &&
+        !_canUseNativeGoogle;
+    final useBrowser = !kIsWeb &&
+        (id == LionAuthProviderId.naver || useBrowserGoogle);
+    try {
+      if (useBrowser) {
+        await BrowserSocialAuth.start(id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('브라우저에서 로그인을 마치면 앱으로 돌아옵니다.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      if (kIsWeb && id == LionAuthProviderId.google) {
+        await _lionAuth.signInWithOAuthRedirect(id);
+        return;
+      }
+      await _lionAuth.signInWithSocial(id);
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is StateError
+          ? error.message
+          : _lionAuth.errorMessage ?? '소셜 로그인에 실패했습니다.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
     }
   }
 
@@ -203,7 +210,11 @@ class _LoginPageState extends State<LoginPage> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+              const Icon(
+                Icons.check_circle_outline,
+                color: Colors.white,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Expanded(child: Text('$requestedEmail으로 재설정 메일을 발송했습니다.')),
             ],
@@ -213,9 +224,9 @@ class _LoginPageState extends State<LoginPage> {
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.controller.statusMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(widget.controller.statusMessage)));
     }
   }
 
@@ -227,340 +238,442 @@ class _LoginPageState extends State<LoginPage> {
     return LionAuthBusyOverlay(
       controller: _lionAuth,
       child: Scaffold(
-      body: Stack(
-        children: [
-          const _WarmBackground(),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset * 0.3),
-                child: TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 550),
-                  curve: Curves.easeOutCubic,
-                  tween: Tween(begin: 0.94, end: 1),
-                  builder: (context, value, child) {
-                    return Transform.scale(scale: value, child: child);
-                  },
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
-                        child: AnimatedBuilder(
-                          animation: widget.controller,
-                          builder: (context, _) {
-                            return Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // ── Logo + Brand ──
-                                  Center(
-                                    child: Image.asset(
-                                      'assets/logo_mark.png',
-                                      width: 72,
-                                      height: 72,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    AppConfig.appName,
-                                    style: theme.textTheme.displayMedium,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    AppConfig.brandLine,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: NestColors.deepWood.withValues(alpha: 0.65),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 28),
-
-                                  // ── Nickname (sign-up only) ──
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 220),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, animation) {
-                                      return FadeTransition(
-                                        opacity: animation,
-                                        child: SizeTransition(
-                                          sizeFactor: animation,
-                                          axisAlignment: -1,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: _isSignUpMode
-                                        ? Column(
-                                            key: const ValueKey('signup-nickname'),
-                                            children: [
-                                              TextFormField(
-                                                controller: _realNameController,
-                                                textInputAction: TextInputAction.next,
-                                                autofillHints: const [AutofillHints.name],
-                                                decoration: const InputDecoration(
-                                                  labelText: '실명',
-                                                  hintText: '실제 이름 (선생님·감독 확인용)',
-                                                  prefixIcon: Icon(Icons.badge_outlined, size: 20),
-                                                ),
-                                                validator: (value) {
-                                                  if (!_isSignUpMode) return null;
-                                                  if (value == null || value.trim().isEmpty) {
-                                                    return '실명을 입력하세요.';
-                                                  }
-                                                  if (value.trim().length < 2) {
-                                                    return '실명은 2자 이상으로 입력하세요.';
-                                                  }
-                                                  return null;
-                                                },
-                                              ),
-                                              const SizedBox(height: 14),
-                                              TextFormField(
-                                                controller: _nicknameController,
-                                                textInputAction: TextInputAction.next,
-                                                autofillHints: const [AutofillHints.nickname],
-                                                decoration: const InputDecoration(
-                                                  labelText: '닉네임',
-                                                  hintText: '앱에서 표시될 이름',
-                                                  prefixIcon: Icon(Icons.person_outlined, size: 20),
-                                                ),
-                                                validator: (value) {
-                                                  if (!_isSignUpMode) return null;
-                                                  if (value == null || value.trim().isEmpty) {
-                                                    return '닉네임을 입력하세요.';
-                                                  }
-                                                  if (value.trim().length < 2) {
-                                                    return '닉네임은 2자 이상으로 입력하세요.';
-                                                  }
-                                                  return null;
-                                                },
-                                              ),
-                                              const SizedBox(height: 14),
-                                            ],
-                                          )
-                                        : const SizedBox(key: ValueKey('signin-nickname-empty')),
-                                  ),
-
-                                  // ── Email ──
-                                  TextFormField(
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    textInputAction: TextInputAction.next,
-                                    autofillHints: const [AutofillHints.email],
-                                    decoration: const InputDecoration(
-                                      labelText: '이메일',
-                                      hintText: 'you@example.com',
-                                      prefixIcon: Icon(Icons.email_outlined, size: 20),
-                                    ),
-                                    // naver..com 같은 오타가 서버까지 가서 영어
-                                    // 오류로 노출되지 않도록 제출 전에 걸러낸다.
-                                    validator: validateEmailField,
-                                  ),
-                                  const SizedBox(height: 14),
-
-                                  // ── Password ──
-                                  TextFormField(
-                                    controller: _passwordController,
-                                    obscureText: _obscurePassword,
-                                    textInputAction: _isSignUpMode
-                                        ? TextInputAction.next
-                                        : TextInputAction.done,
-                                    autofillHints: _isSignUpMode
-                                        ? const [AutofillHints.newPassword]
-                                        : const [AutofillHints.password],
-                                    decoration: InputDecoration(
-                                      labelText: '비밀번호',
-                                      prefixIcon: const Icon(Icons.lock_outlined, size: 20),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(
-                                          _obscurePassword
-                                              ? Icons.visibility_off_outlined
-                                              : Icons.visibility_outlined,
-                                          size: 20,
-                                        ),
-                                        onPressed: () => setState(() {
-                                          _obscurePassword = !_obscurePassword;
-                                        }),
+        body: Stack(
+          children: [
+            const _WarmBackground(),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    24,
+                    24,
+                    24 + bottomInset * 0.3,
+                  ),
+                  child: TweenAnimationBuilder<double>(
+                    duration: NestMotion.appear,
+                    curve: NestMotion.appearCurve,
+                    tween: Tween(begin: 0.94, end: 1),
+                    builder: (context, value, child) {
+                      return Transform.scale(scale: value, child: child);
+                    },
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 460),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+                          child: AnimatedBuilder(
+                            animation: widget.controller,
+                            builder: (context, _) {
+                              return Form(
+                                key: _formKey,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // ── Logo + Brand ──
+                                    Center(
+                                      child: Image.asset(
+                                        'assets/logo_mark.png',
+                                        width: 72,
+                                        height: 72,
+                                        fit: BoxFit.contain,
                                       ),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.trim().isEmpty) {
-                                        return '비밀번호를 입력하세요.';
-                                      }
-                                      if (_isSignUpMode && value.trim().length < 8) {
-                                        return '비밀번호는 8자 이상으로 입력하세요.';
-                                      }
-                                      return null;
-                                    },
-                                    onFieldSubmitted: _isSignUpMode ? null : (_) => _onSubmit(),
-                                  ),
-
-                                  // ── Confirm Password (sign-up only) ──
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 220),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, animation) {
-                                      return FadeTransition(
-                                        opacity: animation,
-                                        child: SizeTransition(
-                                          sizeFactor: animation,
-                                          axisAlignment: -1,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: _isSignUpMode
-                                        ? Column(
-                                            key: const ValueKey('signup-confirm'),
-                                            children: [
-                                              const SizedBox(height: 14),
-                                              TextFormField(
-                                                controller: _confirmPasswordController,
-                                                obscureText: _obscureConfirm,
-                                                textInputAction: TextInputAction.done,
-                                                autofillHints: const [AutofillHints.newPassword],
-                                                decoration: InputDecoration(
-                                                  labelText: '비밀번호 확인',
-                                                  prefixIcon: const Icon(Icons.lock_outlined, size: 20),
-                                                  suffixIcon: IconButton(
-                                                    icon: Icon(
-                                                      _obscureConfirm
-                                                          ? Icons.visibility_off_outlined
-                                                          : Icons.visibility_outlined,
-                                                      size: 20,
-                                                    ),
-                                                    onPressed: () => setState(() {
-                                                      _obscureConfirm = !_obscureConfirm;
-                                                    }),
-                                                  ),
-                                                ),
-                                                validator: (value) {
-                                                  if (!_isSignUpMode) return null;
-                                                  if (value == null || value.trim().isEmpty) {
-                                                    return '비밀번호 확인을 입력하세요.';
-                                                  }
-                                                  if (value != _passwordController.text) {
-                                                    return '비밀번호가 일치하지 않습니다.';
-                                                  }
-                                                  return null;
-                                                },
-                                                onFieldSubmitted: (_) => _onSubmit(),
-                                              ),
-                                            ],
-                                          )
-                                        : const SizedBox(key: ValueKey('signin-confirm-empty')),
-                                  ),
-                                  const SizedBox(height: 24),
-
-                                  // ── Submit ──
-                                  SizedBox(
-                                    height: 50,
-                                    child: ElevatedButton(
-                                      onPressed: widget.controller.isBusy ? null : _onSubmit,
-                                      child: widget.controller.isBusy
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : Text(
-                                              _isSignUpMode ? '회원가입' : '로그인',
-                                              style: const TextStyle(fontSize: 16),
-                                            ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  // ── Mode toggle ──
-                                  TextButton(
-                                    onPressed: widget.controller.isBusy
-                                        ? null
-                                        : () {
-                                            setState(() {
-                                              _isSignUpMode = !_isSignUpMode;
-                                              _confirmPasswordController.clear();
-                                              _nicknameController.clear();
-                                              _obscureConfirm = true;
-                                            });
-                                          },
-                                    child: Text(
-                                      _isSignUpMode
-                                          ? '이미 계정이 있나요? 로그인'
-                                          : '계정이 없나요? 회원가입',
-                                    ),
-                                  ),
-                                  if (!_isSignUpMode)
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: TextButton(
-                                        onPressed: widget.controller.isBusy
-                                            ? null
-                                            : _onForgotPassword,
-                                        child: const Text('비밀번호를 잊으셨나요?'),
-                                      ),
-                                    ),
-
-                                  // ── Social login ──
-                                  if (_lionAuth
-                                      .config.enabledProviders.isNotEmpty) ...[
-                                    const SizedBox(height: 20),
-                                    Row(
-                                      children: [
-                                        const Expanded(child: Divider()),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                          ),
-                                          child: Text(
-                                            '또는 간편 로그인',
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                              color: NestColors.deepWood
-                                                  .withValues(alpha: 0.5),
-                                            ),
-                                          ),
-                                        ),
-                                        const Expanded(child: Divider()),
-                                      ],
                                     ),
                                     const SizedBox(height: 16),
-                                    AnimatedBuilder(
-                                      animation: _lionAuth,
-                                      builder: (context, _) =>
-                                          SocialLoginButtons(
-                                        controller: _lionAuth,
-                                        theme: const LionAuthTheme(
-                                          primary: NestColors.dustyRose,
-                                          background: NestColors.creamyWhite,
-                                          onBackground: NestColors.deepWood,
-                                          fontFamily: 'Pretendard Variable',
+                                    Text(
+                                      AppConfig.appName,
+                                      style: theme.textTheme.displayMedium,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      AppConfig.brandLine,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: NestColors.deepWood
+                                                .withValues(alpha: 0.65),
+                                          ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '누구나 우리집 홈스쿨을 시작할 수 있어요',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: NestColors.clay,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 28),
+
+                                    // ── Nickname (sign-up only) ──
+                                    AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 220,
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, animation) {
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: SizeTransition(
+                                            sizeFactor: animation,
+                                            axisAlignment: -1,
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: _isSignUpMode
+                                          ? Column(
+                                              key: const ValueKey(
+                                                'signup-nickname',
+                                              ),
+                                              children: [
+                                                TextFormField(
+                                                  controller:
+                                                      _realNameController,
+                                                  textInputAction:
+                                                      TextInputAction.next,
+                                                  autofillHints: const [
+                                                    AutofillHints.name,
+                                                  ],
+                                                  decoration:
+                                                      const InputDecoration(
+                                                        labelText: '실명',
+                                                        hintText:
+                                                            '실제 이름 (선생님·감독 확인용)',
+                                                        prefixIcon: Icon(
+                                                          Icons.badge_outlined,
+                                                          size: 20,
+                                                        ),
+                                                      ),
+                                                  validator: (value) {
+                                                    if (!_isSignUpMode)
+                                                      return null;
+                                                    if (value == null ||
+                                                        value.trim().isEmpty) {
+                                                      return '실명을 입력하세요.';
+                                                    }
+                                                    if (value.trim().length <
+                                                        2) {
+                                                      return '실명은 2자 이상으로 입력하세요.';
+                                                    }
+                                                    return null;
+                                                  },
+                                                ),
+                                                const SizedBox(height: 14),
+                                                TextFormField(
+                                                  controller:
+                                                      _nicknameController,
+                                                  textInputAction:
+                                                      TextInputAction.next,
+                                                  autofillHints: const [
+                                                    AutofillHints.nickname,
+                                                  ],
+                                                  decoration:
+                                                      const InputDecoration(
+                                                        labelText: '닉네임',
+                                                        hintText: '앱에서 표시될 이름',
+                                                        prefixIcon: Icon(
+                                                          Icons.person_outlined,
+                                                          size: 20,
+                                                        ),
+                                                      ),
+                                                  validator: (value) {
+                                                    if (!_isSignUpMode)
+                                                      return null;
+                                                    if (value == null ||
+                                                        value.trim().isEmpty) {
+                                                      return '닉네임을 입력하세요.';
+                                                    }
+                                                    if (value.trim().length <
+                                                        2) {
+                                                      return '닉네임은 2자 이상으로 입력하세요.';
+                                                    }
+                                                    return null;
+                                                  },
+                                                ),
+                                                const SizedBox(height: 14),
+                                              ],
+                                            )
+                                          : const SizedBox(
+                                              key: ValueKey(
+                                                'signin-nickname-empty',
+                                              ),
+                                            ),
+                                    ),
+
+                                    // ── Email ──
+                                    TextFormField(
+                                      controller: _emailController,
+                                      keyboardType: TextInputType.emailAddress,
+                                      textInputAction: TextInputAction.next,
+                                      autofillHints: const [
+                                        AutofillHints.email,
+                                      ],
+                                      decoration: const InputDecoration(
+                                        labelText: '이메일',
+                                        hintText: 'you@example.com',
+                                        prefixIcon: Icon(
+                                          Icons.email_outlined,
+                                          size: 20,
                                         ),
                                       ),
+                                      // naver..com 같은 오타가 서버까지 가서 영어
+                                      // 오류로 노출되지 않도록 제출 전에 걸러낸다.
+                                      validator: validateEmailField,
+                                    ),
+                                    const SizedBox(height: 14),
+
+                                    // ── Password ──
+                                    TextFormField(
+                                      controller: _passwordController,
+                                      obscureText: _obscurePassword,
+                                      textInputAction: _isSignUpMode
+                                          ? TextInputAction.next
+                                          : TextInputAction.done,
+                                      autofillHints: _isSignUpMode
+                                          ? const [AutofillHints.newPassword]
+                                          : const [AutofillHints.password],
+                                      decoration: InputDecoration(
+                                        labelText: '비밀번호',
+                                        prefixIcon: const Icon(
+                                          Icons.lock_outlined,
+                                          size: 20,
+                                        ),
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _obscurePassword
+                                                ? Icons.visibility_off_outlined
+                                                : Icons.visibility_outlined,
+                                            size: 20,
+                                          ),
+                                          onPressed: () => setState(() {
+                                            _obscurePassword =
+                                                !_obscurePassword;
+                                          }),
+                                        ),
+                                      ),
+                                      validator: (value) {
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
+                                          return '비밀번호를 입력하세요.';
+                                        }
+                                        if (_isSignUpMode &&
+                                            value.trim().length < 8) {
+                                          return '비밀번호는 8자 이상으로 입력하세요.';
+                                        }
+                                        return null;
+                                      },
+                                      onFieldSubmitted: _isSignUpMode
+                                          ? null
+                                          : (_) => _onSubmit(),
+                                    ),
+
+                                    // ── Confirm Password (sign-up only) ──
+                                    AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 220,
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, animation) {
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: SizeTransition(
+                                            sizeFactor: animation,
+                                            axisAlignment: -1,
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: _isSignUpMode
+                                          ? Column(
+                                              key: const ValueKey(
+                                                'signup-confirm',
+                                              ),
+                                              children: [
+                                                const SizedBox(height: 14),
+                                                TextFormField(
+                                                  controller:
+                                                      _confirmPasswordController,
+                                                  obscureText: _obscureConfirm,
+                                                  textInputAction:
+                                                      TextInputAction.done,
+                                                  autofillHints: const [
+                                                    AutofillHints.newPassword,
+                                                  ],
+                                                  decoration: InputDecoration(
+                                                    labelText: '비밀번호 확인',
+                                                    prefixIcon: const Icon(
+                                                      Icons.lock_outlined,
+                                                      size: 20,
+                                                    ),
+                                                    suffixIcon: IconButton(
+                                                      icon: Icon(
+                                                        _obscureConfirm
+                                                            ? Icons
+                                                                  .visibility_off_outlined
+                                                            : Icons
+                                                                  .visibility_outlined,
+                                                        size: 20,
+                                                      ),
+                                                      onPressed: () => setState(
+                                                        () {
+                                                          _obscureConfirm =
+                                                              !_obscureConfirm;
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  validator: (value) {
+                                                    if (!_isSignUpMode)
+                                                      return null;
+                                                    if (value == null ||
+                                                        value.trim().isEmpty) {
+                                                      return '비밀번호 확인을 입력하세요.';
+                                                    }
+                                                    if (value !=
+                                                        _passwordController
+                                                            .text) {
+                                                      return '비밀번호가 일치하지 않습니다.';
+                                                    }
+                                                    return null;
+                                                  },
+                                                  onFieldSubmitted: (_) =>
+                                                      _onSubmit(),
+                                                ),
+                                              ],
+                                            )
+                                          : const SizedBox(
+                                              key: ValueKey(
+                                                'signin-confirm-empty',
+                                              ),
+                                            ),
+                                    ),
+                                    const SizedBox(height: 24),
+
+                                    // ── Submit ──
+                                    SizedBox(
+                                      height: 50,
+                                      child: ElevatedButton(
+                                        onPressed: widget.controller.isBusy
+                                            ? null
+                                            : _onSubmit,
+                                        child: widget.controller.isBusy
+                                            ? const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white,
+                                                    ),
+                                              )
+                                            : Text(
+                                                _isSignUpMode ? '회원가입' : '로그인',
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // ── Mode toggle ──
+                                    TextButton(
+                                      onPressed: widget.controller.isBusy
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                _isSignUpMode = !_isSignUpMode;
+                                                _confirmPasswordController
+                                                    .clear();
+                                                _nicknameController.clear();
+                                                _obscureConfirm = true;
+                                              });
+                                            },
+                                      child: Text(
+                                        _isSignUpMode
+                                            ? '이미 계정이 있나요? 로그인'
+                                            : '계정이 없나요? 회원가입',
+                                      ),
+                                    ),
+                                    if (!_isSignUpMode)
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: TextButton(
+                                          onPressed: widget.controller.isBusy
+                                              ? null
+                                              : _onForgotPassword,
+                                          child: const Text('비밀번호를 잊으셨나요?'),
+                                        ),
+                                      ),
+
+                                    // ── Social login ──
+                                    if (_lionAuth
+                                        .config
+                                        .enabledProviders
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 20),
+                                      Row(
+                                        children: [
+                                          const Expanded(child: Divider()),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                            ),
+                                            child: Text(
+                                              '또는 간편 로그인',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: NestColors.deepWood
+                                                        .withValues(alpha: 0.5),
+                                                  ),
+                                            ),
+                                          ),
+                                          const Expanded(child: Divider()),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      AnimatedBuilder(
+                                        animation: _lionAuth,
+                                        builder: (context, _) =>
+                                            SocialLoginButtons(
+                                              controller: _lionAuth,
+                                              onSelect: _onSocial,
+                                              theme: const LionAuthTheme(
+                                                primary: NestColors.dustyRose,
+                                                background:
+                                                    NestColors.creamyWhite,
+                                                onBackground:
+                                                    NestColors.deepWood,
+                                                fontFamily:
+                                                    'Pretendard Variable',
+                                              ),
+                                            ),
+                                      ),
+                                    ],
+
+                                    // ── Version ──
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'v${AppConfig.appVersion}',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: NestColors.deepWood
+                                                .withValues(alpha: 0.4),
+                                          ),
+                                      textAlign: TextAlign.center,
                                     ),
                                   ],
-
-                                  // ── Version ──
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'v${AppConfig.appVersion}',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: NestColors.deepWood.withValues(alpha: 0.4),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -568,9 +681,8 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

@@ -392,6 +392,12 @@ class _FakeNestRepository extends NestRepository {
       _sessions.where((s) => classGroupIds.contains(s.classGroupId)).toList();
 
   @override
+  Future<TermSchedulePack> fetchTermSchedulePack({
+    required String termId,
+  }) async =>
+      TermSchedulePack(sessions: _sessions, assignments: _assignments);
+
+  @override
   Future<List<Proposal>> fetchProposals({required String termId}) async =>
       const [];
 
@@ -427,6 +433,18 @@ class _FakeNestRepository extends NestRepository {
     String? termId,
   }) async =>
       const [];
+
+  @override
+  Future<List<PersonalEvent>> fetchPersonalEvents({
+    required String homeschoolId,
+    String? childId,
+    DateTime? from,
+    DateTime? to,
+  }) async =>
+      const [];
+
+  @override
+  Future<CalendarIntegration?> fetchCalendarIntegration() async => null;
 
   @override
   Future<List<GalleryItem>> fetchGalleryItems({

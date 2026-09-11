@@ -3,11 +3,17 @@ import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
 import '../../services/nest_repository.dart';
+import '../../services/schedule_occurrence.dart';
+import '../../services/schedule_overlap.dart';
 import '../../services/self_study_planner.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/schedule_personal_section.dart';
+import '../widgets/schedule_week_bar.dart';
+import '../widgets/term_calendar_view.dart';
+import '../widgets/week_academic_strip.dart';
 import 'timetable/course_lesson_sheet.dart';
 
 class ParentTimetableTab extends StatefulWidget {
@@ -29,8 +35,9 @@ class ParentTimetableTab extends StatefulWidget {
 }
 
 class _ParentTimetableTabState extends State<ParentTimetableTab> {
-  // false = 수업 시간표, true = 자습 시간표.
-  bool _showSelfStudy = false;
+  // 수업 주간판 / 자습 / 학기 달력.
+  String _pane = 'class';
+  DateTime _weekStart = nestMondayOf(DateTime.now());
 
   /// 요일별 "다음 회차 날짜" 캐시. 한 번의 빌드 안에서 셀마다 학기 전체를
   /// 다시 훑지 않도록 [_buildWeeklyScheduleBoard] 진입 시 비운다.
@@ -60,7 +67,9 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           _buildModeToggle(context),
           const SizedBox(height: 12),
         ],
-        if (widget.selectedChildId != null && _showSelfStudy)
+        if (widget.selectedChildId != null && _pane == 'calendar')
+          _buildCalendarView(context, controller, bundles)
+        else if (widget.selectedChildId != null && _pane == 'self')
           _buildSelfStudyView(context, controller)
         else if (widget.isLoadingChildClasses && bundles.isEmpty) ...[
           const SizedBox(height: 24),
@@ -106,7 +115,33 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           Builder(
             builder: (context) {
               try {
-                return _buildWeeklyScheduleBoard(controller, bundles);
+                return Column(
+                  children: [
+                    ScheduleWeekBar(
+                      weekMonday: _weekStart,
+                      onChanged: (next) => setState(() {
+                        _weekStart = nestMondayOf(next);
+                        _referenceDateCache.clear();
+                      }),
+                      termStart: controller.selectedTerm?.startDate,
+                      termEnd: controller.selectedTerm?.endDate,
+                    ),
+                    WeekAcademicStrip(
+                      events: controller.academicEvents,
+                      weekMonday: _weekStart,
+                      onTapEvent: (event) =>
+                          showAcademicEventPreview(context, event),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildWeeklyScheduleBoard(controller, bundles),
+                    PersonalWeekList(
+                      controller: controller,
+                      childId: widget.selectedChildId!,
+                      weekMonday: _weekStart,
+                      sessions: bundles.values.expand((b) => b.sessions),
+                    ),
+                  ],
+                );
               } catch (e, st) {
                 debugPrint('[ParentTimetable] board error: $e\n$st');
                 return Card(
@@ -125,23 +160,75 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
   }
 
   Widget _buildModeToggle(BuildContext context) {
-    return SegmentedButton<bool>(
+    return SegmentedButton<String>(
       segments: const [
         ButtonSegment(
-          value: false,
+          value: 'class',
           label: Text('수업'),
           icon: Icon(Icons.school_outlined, size: 16),
         ),
         ButtonSegment(
-          value: true,
+          value: 'self',
           label: Text('자습'),
           icon: Icon(Icons.edit_note_outlined, size: 16),
         ),
+        ButtonSegment(
+          value: 'calendar',
+          label: Text('달력'),
+          icon: Icon(Icons.calendar_month_outlined, size: 16),
+        ),
       ],
-      selected: {_showSelfStudy},
+      selected: {_pane},
       showSelectedIcon: false,
       onSelectionChanged: (selection) =>
-          setState(() => _showSelfStudy = selection.first),
+          setState(() => _pane = selection.first),
+    );
+  }
+
+  Widget _buildCalendarView(
+    BuildContext context,
+    NestController controller,
+    Map<String, ChildClassBundle> bundles,
+  ) {
+    final childId = widget.selectedChildId!;
+    final sessions = bundles.values.expand((b) => b.sessions);
+    return Column(
+      children: [
+        TermCalendarView(
+          academicEvents: controller.academicEvents,
+          personalEvents: controller.personalEventsForChild(childId),
+          childId: childId,
+          termStart: controller.selectedTerm?.startDate,
+          termEnd: controller.selectedTerm?.endDate,
+          courseNameOf: controller.findCourseName,
+          canAddPersonal: true,
+          classesOnDate: (date) => controller.occurrencesOn(
+            date,
+            forSessions: sessions,
+          ),
+          onAddPersonal: (date) => openPersonalEventForChild(
+            context: context,
+            controller: controller,
+            childId: childId,
+            sessions: sessions,
+            date: date,
+          ),
+          onEditPersonal: (event) => openPersonalEventForChild(
+            context: context,
+            controller: controller,
+            childId: childId,
+            sessions: sessions,
+            event: event,
+          ),
+        ),
+        const SizedBox(height: 12),
+        PersonalWeekList(
+          controller: controller,
+          childId: childId,
+          weekMonday: _weekStart,
+          sessions: sessions,
+        ),
+      ],
     );
   }
 
@@ -393,13 +480,27 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                       ),
                     ),
                   ),
-                  ...sortedDays.map(
-                    (day) => _ScheduleHeaderCell(
+                  ...sortedDays.map((day) {
+                    final refDate = _referenceDateFor(controller, day);
+                    final academics = controller.academicEventsOn(
+                      refDate,
+                      timetableOnly: true,
+                    );
+                    final personal = controller.personalEventsOn(
+                      refDate,
+                      childId: widget.selectedChildId,
+                    );
+                    return _ScheduleHeaderCell(
                       width: dayColWidth,
-                      label: _dayLabel(day),
+                      label: '${_dayLabel(day)}\n${refDate.month}/${refDate.day}',
                       align: Alignment.center,
-                    ),
-                  ),
+                      extra: ScheduleDayChips(
+                        academicTitles:
+                            academics.map((e) => e.title).toList(),
+                        personalCount: personal.length,
+                      ),
+                    );
+                  }),
                 ],
               ),
               const Divider(height: 1, thickness: 1),
@@ -446,7 +547,45 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                           // 주간 반복 템플릿이라 셀 자체에는 날짜가 없다.
                           // "다음 회차" 날짜를 기준으로 변경/결석을 표시한다.
                           final refDate = _referenceDateFor(controller, day);
-                          return Container(
+                          final matchingSlot = controller.timeSlots
+                              .where(
+                                (slot) =>
+                                    slot.dayOfWeek == day &&
+                                    '${slot.startTime}-${slot.endTime}' ==
+                                        periodKey,
+                              )
+                              .firstOrNull;
+                          final personalHits = matchingSlot == null
+                              ? const <PersonalEvent>[]
+                              : personalEventsOverlappingSlot(
+                                  events: controller.personalEvents,
+                                  date: refDate,
+                                  slot: matchingSlot,
+                                  childId: widget.selectedChildId,
+                                );
+                          final academicHits = matchingSlot == null
+                              ? const <AcademicEvent>[]
+                              : academicEventsOverlappingSlot(
+                                  events: controller.academicEvents,
+                                  date: refDate,
+                                  slot: matchingSlot,
+                                );
+                          final hidesClass = personalHits.any(
+                            (event) => event.prioritizesPersonal,
+                          );
+                          return GestureDetector(
+                            onTap: cells.isEmpty && matchingSlot != null
+                                ? () => openPersonalEventForChild(
+                                      context: context,
+                                      controller: controller,
+                                      childId: widget.selectedChildId!,
+                                      sessions: bundles.values
+                                          .expand((b) => b.sessions),
+                                      date: refDate,
+                                      slot: matchingSlot,
+                                    )
+                                : null,
+                            child: Container(
                             width: dayColWidth,
                             decoration: BoxDecoration(
                               border: Border(
@@ -459,46 +598,60 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
                             ),
                             padding: const EdgeInsets.all(4),
                             child: cells.isEmpty
-                                ? const SizedBox.shrink()
+                                ? _emptyPeriodCell(
+                                    personalHits: personalHits,
+                                    academicHits: academicHits,
+                                    compact: compactFont,
+                                  )
                                 : Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
-                                    children: cells
-                                        .map(
-                                          (cell) => Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
+                                    children: [
+                                      ...cells.map(
+                                        (cell) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 4,
+                                          ),
+                                          child: _SubjectNameCell(
+                                            courseName: controller
+                                                .findCourseName(
+                                                  cell.session.courseId,
+                                                ),
+                                            compact: compactFont,
+                                            dimmed: hidesClass,
+                                            personalLabel: personalHits
+                                                    .isEmpty
+                                                ? null
+                                                : personalHits.first.title,
+                                            academicLabel: academicHits
+                                                    .isEmpty
+                                                ? null
+                                                : academicHits.first.title,
+                                            change: controller
+                                                .effectiveChangeFor(
+                                              sessionId: cell.session.id,
+                                              date: refDate,
                                             ),
-                                            child: _SubjectNameCell(
-                                              courseName: controller
-                                                  .findCourseName(
-                                                    cell.session.courseId,
-                                                  ),
-                                              compact: compactFont,
-                                              change: controller
-                                                  .effectiveChangeFor(
-                                                sessionId: cell.session.id,
-                                                date: refDate,
-                                              ),
-                                              hasAbsence: _absenceForChild(
-                                                    controller,
-                                                    sessionId: cell.session.id,
-                                                    childId:
-                                                        widget.selectedChildId,
-                                                    date: refDate,
-                                                  ) !=
-                                                  null,
-                                              onTap: () =>
-                                                  _showCellDetailModal(
-                                                context,
-                                                controller: controller,
-                                                entry: cell,
-                                              ),
+                                            hasAbsence: _absenceForChild(
+                                                  controller,
+                                                  sessionId: cell.session.id,
+                                                  childId:
+                                                      widget.selectedChildId,
+                                                  date: refDate,
+                                                ) !=
+                                                null,
+                                            onTap: () =>
+                                                _showCellDetailModal(
+                                              context,
+                                              controller: controller,
+                                              entry: cell,
                                             ),
                                           ),
-                                        )
-                                        .toList(),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                          ),
                           );
                         }),
                       ],
@@ -514,6 +667,35 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
           child: board,
         );
       },
+    );
+  }
+
+  Widget _emptyPeriodCell({
+    required List<PersonalEvent> personalHits,
+    required List<AcademicEvent> academicHits,
+    required bool compact,
+  }) {
+    if (personalHits.isEmpty && academicHits.isEmpty) {
+      return const SizedBox(height: 28);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (academicHits.isNotEmpty)
+          _OverlayChip(
+            title: academicHits.first.title,
+            compact: compact,
+            color: NestColors.clay,
+          ),
+        if (personalHits.isNotEmpty) ...[
+          if (academicHits.isNotEmpty) const SizedBox(height: 4),
+          _OverlayChip(
+            title: personalHits.first.title,
+            compact: compact,
+            color: NestColors.mutedSage,
+          ),
+        ],
+      ],
     );
   }
 
@@ -1368,27 +1550,7 @@ class _ParentTimetableTabState extends State<ParentTimetableTab> {
     if (cached != null) {
       return cached;
     }
-
-    DateTime resolved;
-    final upcoming = _upcomingDatesFor(controller, dayOfWeek);
-    if (upcoming.isNotEmpty) {
-      resolved = upcoming.first;
-    } else {
-      final term = controller.selectedTerm;
-      final start = term?.startDate;
-      final end = term?.endDate;
-      final all = (start == null || end == null)
-          ? const <DateTime>[]
-          : datesForWeekday(start, end, dayOfWeek);
-      if (all.isNotEmpty) {
-        resolved = all.last;
-      } else {
-        final today = _today();
-        final target = dayOfWeek == 0 ? 7 : dayOfWeek;
-        resolved = today.add(Duration(days: (target - today.weekday) % 7));
-      }
-    }
-
+    final resolved = nestDateForWeekday(_weekStart, dayOfWeek);
     _referenceDateCache[dayOfWeek] = resolved;
     return resolved;
   }
@@ -1531,30 +1693,38 @@ class _ScheduleHeaderCell extends StatelessWidget {
     required this.width,
     required this.label,
     required this.align,
+    this.extra,
   });
 
   final double width;
   final String label;
   final Alignment align;
+  final Widget? extra;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: width,
       alignment: align,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
         color: NestColors.creamyWhite,
         border: Border(
           left: BorderSide(color: NestColors.roseMist.withValues(alpha: 0.5)),
         ),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
-            ?.copyWith(fontWeight: FontWeight.w700),
+      child: Column(
+        children: [
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700, fontSize: 11),
+          ),
+          if (extra != null) extra!,
+        ],
       ),
     );
   }
@@ -1570,6 +1740,9 @@ class _SubjectNameCell extends StatelessWidget {
     this.compact = false,
     this.change,
     this.hasAbsence = false,
+    this.dimmed = false,
+    this.personalLabel,
+    this.academicLabel,
   });
 
   final String courseName;
@@ -1577,6 +1750,9 @@ class _SubjectNameCell extends StatelessWidget {
   final bool compact;
   final ClassSessionChange? change;
   final bool hasAbsence;
+  final bool dimmed;
+  final String? personalLabel;
+  final String? academicLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1616,8 +1792,9 @@ class _SubjectNameCell extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     fontSize: compact ? 11 : null,
                     color: isCanceled ? accent : null,
-                    decoration:
-                        isCanceled ? TextDecoration.lineThrough : null,
+                    decoration: (isCanceled || dimmed)
+                        ? TextDecoration.lineThrough
+                        : null,
                     decorationColor: isCanceled ? accent : null,
                   ),
             ),
@@ -1645,7 +1822,74 @@ class _SubjectNameCell extends StatelessWidget {
                 ),
               ),
             ],
+            if (academicLabel != null && academicLabel!.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                academicLabel!,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: badgeFontSize,
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.clay,
+                ),
+              ),
+            ],
+            if (personalLabel != null && personalLabel!.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                personalLabel!,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: badgeFontSize,
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.mutedSage,
+                ),
+              ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OverlayChip extends StatelessWidget {
+  const _OverlayChip({
+    required this.title,
+    required this.compact,
+    required this.color,
+  });
+
+  final String title;
+  final bool compact;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 4 : 6,
+        vertical: compact ? 6 : 8,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        title,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: compact ? 10 : 11,
+          fontWeight: FontWeight.w800,
+          color: color,
         ),
       ),
     );

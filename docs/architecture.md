@@ -24,7 +24,7 @@ Last updated: 2026-09-08
 
 - Frontend: Flutter (`frontend/`)
 - Backend: Supabase
-  - Auth: email/password
+  - Auth: email/password + Google/Kakao/Naver (`lion_auth`). Apple은 노출하지 않음
   - DB: Postgres + RLS
   - Edge Functions:
     - `timetable-assistant-generate`
@@ -62,8 +62,11 @@ frontend/
           hub_scaffold.dart
           nest_motion.dart
           search_select_field.dart
+          homeschool_tips_card.dart
+          homeschool_create_dialog.dart
         models/
           new_term_checklist.dart
+          homeschool_start_tips.dart
           tab_section_request.dart
         tabs/
           dashboard_tab.dart
@@ -215,15 +218,13 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 
 ### 6.1 Auth and Context Bootstrapping
 
-1. Sign in/up via `Supabase.auth`.
+1. Sign in/up via `Supabase.auth` (이메일) 또는 `lion_auth` 구글·카카오·네이버. 소셜 세션은 같은 Supabase 클라이언트라 `NestController`가 `onAuthStateChange`로 이어받는다. Apple 버튼은 심사/콘솔이 준비되기 전이라 숨긴다. 모바일 카카오는 공식 `loginWithKakaoAccount()`(Safari/Custom Tabs, 카카오톡 앱투앱 없음). 네이버는 `nid.naver.com` → `naver-oauth-bridge` → `nestnaverlogin://callback` → `social-broker`. 구글은 iOS `GIDClientID`가 있으면 네이티브 시트, 없으면 Supabase PKCE + `com.lionandthelab.nest://login-callback/`.
 2. Load active memberships (`homeschool_memberships`) for current user.
 3. Resolve current homeschool and view role.
-4. Load dependent context:
-  - terms, class groups
-  - timetable assets and sessions
-  - drive integration
-  - gallery items
-  - community feed (+ reports for admin/staff)
+4. Load dependent context in two waves:
+  - 학기/반/교시와 `fetch_term_schedule_pack`(세션+교사 배정 1회)을, 초대·학사·개인 일정·캘린더와 동시에 읽는다
+  - 가정/아이/수강은 반 목록이 생긴 뒤에 읽는다. 갤러리·커뮤니티는 해당 탭에서 `ensure*`
+5. 반만 바꾸면 이미 받은 학기 팩에서 세션을 걸러 쓰고, 시간표 저장 뒤에만 팩을 다시 받는다
 
 Admin dashboard onboarding:
 
@@ -377,15 +378,17 @@ Admin dashboard onboarding:
 
 ### 6.5 Motion and Loading System
 
-- Global state transition animation
-  - `NestAppRoot`: animated switch between bootstrap/login/home
-- Main workspace transition animation
-  - `HomePage._MainPanel`: animated tab content replacement (`fade + slide`)
-- Busy/Loading feedback
+- **제로 레이턴시 탭**: 모바일 콘텐츠는 `IndexedStack`으로 즉시 바꾸고, 모션은 손끝과 카드 랜딩에만 쓴다. 반복 루프 애니메이션은 없다.
+- `NestPressable`: 누르는 즉시(70ms) 0.97 스케일 + 햅틱, 손을 떼면 살짝 오버슈트하며 복귀
+- `NestAppear`: 홈/온보딩 카드가 아래에서 한 번만 올라와 앉는다 (stagger 42ms)
+- `NestDockBar`: 하단 탭. 선택 필과 아이콘만 움직이고 화면은 기다리지 않는다
+- `showNestSheet`: 알림함·검색 시트. 딤 28% + 핸들
+- 안드로이드 페이지 전환은 `NestPageTransitionsBuilder` (짧은 페이드+상승). iOS는 시스템 스와이프 백 유지
+- 스플래시/리플은 끈다 (`NoSplash`). 하이라이트만 roseMist
+- Busy/Loading
   - `NestLoadingScreen`: branded warm loading scene
-  - `NestBusyOverlay`: modal-style smooth busy overlay during mutations
-- Login interaction animation
-  - sign-in/sign-up mode change animates confirm-password field expansion/collapse
+  - `NestBusyOverlay`: 상단 2px 진행바 + 얇은 베일. `blocksUi`일 때만 포인터를 막는다
+- Login: 카드 스케일 인 + 로그인/회원가입 필드 전환
 
 ### 6.6 Membership and Permission Admin
 
@@ -409,9 +412,9 @@ Admin dashboard onboarding:
   3. insert `media_assets` and optional child tagging
   4. show in gallery and community attachments
 
-### 6.8 Invite Acceptance (Dashboard)
+### 6.8 Invite Acceptance (시작하기)
 
-- `Dashboard` renders pending invites matched to logged-in email.
+- 소속이 없을 때 `시작하기`(`DashboardTab`)가 로그인 이메일과 맞는 대기 초대를 보여 준다.
 - Accept flow:
   1. user clicks `초대 수락`
   2. app calls `accept_homeschool_invite` RPC
@@ -420,17 +423,26 @@ Admin dashboard onboarding:
 
 ### 6.8.1 No-membership Onboarding UX
 
-- `Dashboard` no-membership state now offers three choices:
-  - `초대를 받았나요?` 안내 + 대기 초대 수락
-  - 홈스쿨 검색 후 가입 요청
-  - 새 홈스쿨 직접 개설
+- 소속이 없으면 `HomePage`는 `시작하기` 탭 하나만 보여 준다 (`DashboardTab`).
+- **메인**: 우리집 홈스쿨 개설. 기본값을 채워 바로 시작할 수 있게 하고, 짧은 팁을 위에 둔다.
+- **서브**: 이미 있는 홈스쿨 참여. `이미 홈스쿨이 있나요?` 접기 안에 참여 코드 · 이름 검색 가입 요청.
+- 이메일 초대가 있으면 접기 밖에 초대장을 바로 보여 준다.
+- 홈스쿨 개설 flow:
+  1. `우리집 홈스쿨 시작하기` → `HomeschoolCreateDialog`
+  2. `bootstrapFrame()` → `createBootstrapFrame()` (홈스쿨 + 관리자 멤버십 + 학기/반/과목/슬롯). 반·과목·교시는 병렬 insert.
+  3. 멤버십 + 학기/반만 맞춘 뒤 관리자 홈으로 전환. 초대·갤러리·일정 부가 데이터는 뒤에서 읽는다.
+  4. 생성 중 중복 탭은 다이얼로그 `_submitting` + 컨트롤러 `_bootstrapInFlight` + `_runBusy` 재진입 거부로 막는다.
 - 가입 요청 flow:
   1. user searches by homeschool name
   2. app calls `search_homeschool_directory` RPC
   3. user submits request note in modal
   4. app inserts `homeschool_join_requests` with `PENDING`
-- 홈스쿨 개설 flow:
-  - previously inline section -> now modal dialog (`홈스쿨 개설 열기`) for first onboarding step
+
+### 6.8.2 Homeschool Start Tips
+
+- 정적 컨텐츠 (`ui/models/homeschool_start_tips.dart`). DB 없음. 법령·학력 인정·신고는 다루지 않는다.
+- `HomeschoolTipsCard`가 날짜 기준 오늘의 팁 + 나머지 목록을 보여 준다.
+- 온보딩(`시작하기`)·학부모 홈·관리자 홈에서 재사용한다.
 
 ### 6.9 Family and Enrollment Admin
 
@@ -581,7 +593,7 @@ Admin dashboard onboarding:
 - **신학기 준비 체크리스트** — 진행률 + `다음 단계: …` 버튼. 단계 목록은 **기본으로 접혀 있다**. 9단계를 모두 펼치면 360px 폭에서 '빠른 작업'이 접히는 선 아래로 밀려난다.
 - **빠른 작업** 8칸 그리드(공지 / 학사일정 / 가정·아이 / 선생님 / 반 / 과목 / 시간표 / 멤버). 타일 최소 폭 150px 기준으로 열 수를 계산해 모바일 2열 · 데스크톱 4열.
 - 지표는 4칸 카드 그리드 → 한 줄 칩 스트립으로 축소하고, 자주 쓰지 않는 Drive 연결은 접힌 카드로 맨 아래.
-- `dashboard_tab.dart`는 **소속 없는 사용자의 온보딩 전용**으로 축소됐다. 기존 `_DriveIntegrationCard` → `widgets/drive_integration_card.dart`, `빠른 초기 세팅` → `widgets/quick_bootstrap_card.dart`로 승격 이동.
+- `dashboard_tab.dart`는 **소속 없는 사용자의 온보딩 전용**이다. 메인은 우리 홈스쿨 개설, 참여는 접힌 서브다. 기존 `_DriveIntegrationCard` → `widgets/drive_integration_card.dart`, `빠른 초기 세팅` → `widgets/quick_bootstrap_card.dart`로 승격 이동.
 
 **소식 탭** (`tabs/admin_news_tab.dart`)
 
@@ -709,6 +721,18 @@ Admin dashboard onboarding:
 - 리마인더는 푸시만 보낸다. 문자는 수업변경·결석만.
 
 순수 해석 로직은 `frontend/lib/src/services/schedule_occurrence.dart` (단위 테스트 `test/schedule_occurrence_test.dart`).
+
+### 6.23 개인 일정 · 학기 달력 · Google Calendar (2026-09)
+
+학기 시간표는 요일×교시 템플릿이라 날짜가 있는 일정을 담지 못했다. 두 계층을 겹쳐 보여 준다.
+
+- **학사일정** (`academic_events`): 관리자/스태프가 학기 중간 행사·휴일·현장학습을 올린다. `kind` / 선택 시각 / `show_on_timetable`. `publish_announcement=true`(기본)면 트리거가 `[학사일정] 제목` 공지를 만들거나 맞춘다. 소식 탭 달력·주간 시간표 요일 헤더·학부모/학생 홈에 보인다.
+- **개인 일정** (`personal_events`): 학부모(자녀)와 학생 본인만 CRUD. 교시와 시간이 겹치면 칸에 같이 보이고, `PRIORITIZE_PERSONAL`이면 수업을 흐리게 한다. 공식 결석 신고는 아니다.
+- **학기 달력** (`TermCalendarView`): 월 격자 + 수업(로즈)/학사(클레이)/개인(세이지) 점. 날을 누르면 세 계층이 한 시트에 나온다. 학부모·학생 시간표의 `달력` 세그먼트, 관리자 소식의 학사일정 섹션 상단.
+- **주 이동**: 주간 보드는 선택한 주의 실제 날짜를 헤더에 찍고, 그 날짜 기준으로 개인/학사 겹침을 계산한다. 빈 칸을 누르면 그 교시에 개인 일정을 넣을 수 있다.
+- **Google Calendar**: 사용자별 `calendar_integrations`(토큰은 Edge Function만). 웹은 기존 Drive 콜백(`intent=calendar`), 앱은 `google-calendar-oauth` GET 리다이렉트. 동기화는 Nest 개인·학사 일정을 밀고, `[둥지]`가 아닌 Google 일정을 개인 일정으로 가져온다. Google Cloud에 `GOOGLE_CALENDAR_REDIRECT_URI`를 등록해야 앱 연결이 된다.
+
+마이그레이션 `20260911120000_personal_events_and_calendar.sql`. 겹침 계산은 `schedule_overlap.dart`.
 
 ## 7. Database and RLS Notes
 
@@ -848,6 +872,21 @@ Migration `20260908120000_schedule_reminders.sql`:
 - `schedule_reminder_sends` — 아침 요약은 `(event_type, occurrence_date, user_id)`, 수업 리마인더는 여기에 `class_session_id`를 더해 unique. 클라이언트 RLS는 막고 Edge Function(service role)만 기록한다
 - `pg_cron` + `pg_net`이 있으면 5분(`CLASS_REMINDER`) / 22:30 UTC=`07:30` KST(`MORNING_DIGEST`). 확장이 없으면 마이그레이션이 조용히 건너뛰고 `.github/workflows/nest_remind.yml`이 백업한다
 
+### 7.7 Personal events and calendar (2026-09)
+
+Migration `20260911120000_personal_events_and_calendar.sql`:
+
+- `personal_events` — 자녀 단위 날짜 일정. RLS는 보호자(`is_child_guardian`)와 학생 본인(`is_child_self`)만. 관리자/교사는 남의 개인 일정을 보지 않는다
+- `calendar_integrations` — 사용자별 Google 토큰. authenticated 는 상태 컬럼만 SELECT. 쓰기는 Edge Function(service role)
+- `academic_events` — `kind`, `start_time`, `end_time`, `publish_announcement`, `announcement_id`, `show_on_timetable`. 쓰기는 ADMIN/STAFF. 공지 동기화는 `sync_academic_event_announcement` 트리거
+
+### 7.8 Term schedule pack (2026-09)
+
+Migration `20260912020000_term_schedule_pack.sql`:
+
+- `fetch_term_schedule_pack(term_id)` — 학기 전체 활성 세션 + 교사 배정을 jsonb 한 번에. `is_term_member` 가드, security definer
+- 인덱스 `idx_class_sessions_group_active`, `idx_academic_events_school_term`
+
 ## 8. Environment Variables
 
 Required `dart-define` values:
@@ -907,6 +946,7 @@ Supabase Auth redirect URLs for app login/signup/password reset:
 
 - Web: `https://lionandthelab.github.io/nest/`
 - Mobile deep link: `com.lionandthelab.nest://login-callback/`
+- Mobile Naver browser callback: HTTPS `naver-oauth-bridge` → `nestnaverlogin://callback`
 
 ## 11. Operational Rules
 

@@ -9,6 +9,8 @@ import '../widgets/drive_integration_card.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
+import '../widgets/homeschool_tips_card.dart';
+import '../widgets/nest_motion.dart';
 import '../widgets/quick_bootstrap_card.dart';
 import '../widgets/term_navigator_bar.dart';
 import 'dashboard_tab.dart' show PendingInvitesCard;
@@ -71,25 +73,32 @@ class AdminHomeTab extends StatelessWidget {
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          _TermStatusHeader(controller: controller),
+          NestAppear(
+            index: 0,
+            child: _TermStatusHeader(controller: controller),
+          ),
           const SizedBox(height: 12),
-          _OpsPulseRow(
-            joinCount: pendingJoinRequests,
-            childRequestCount: pendingChildRequests,
-            unassignedCount: controller.children
-                .where(
-                  (child) =>
-                      !controller.classEnrollments.any((e) => e.childId == child.id),
-                )
-                .length,
-            onJoin: () => onNavigate(NewTermTabs.system),
-            onChildRequest: () => onNavigate(
-              NewTermTabs.termSetup,
-              section: NewTermSections.family,
-            ),
-            onUnassigned: () => onNavigate(
-              NewTermTabs.termSetup,
-              section: NewTermSections.family,
+          NestAppear(
+            index: 1,
+            child: _OpsPulseRow(
+              joinCount: pendingJoinRequests,
+              childRequestCount: pendingChildRequests,
+              unassignedCount: controller.children
+                  .where(
+                    (child) => !controller.classEnrollments.any(
+                      (e) => e.childId == child.id,
+                    ),
+                  )
+                  .length,
+              onJoin: () => onNavigate(NewTermTabs.system),
+              onChildRequest: () => onNavigate(
+                NewTermTabs.termSetup,
+                section: NewTermSections.family,
+              ),
+              onUnassigned: () => onNavigate(
+                NewTermTabs.termSetup,
+                section: NewTermSections.family,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -118,13 +127,22 @@ class AdminHomeTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          _NewTermChecklistCard(
-            checklist: checklist,
-            controller: controller,
-            onNavigate: onNavigate,
+          NestAppear(
+            index: 2,
+            child: _NewTermChecklistCard(
+              checklist: checklist,
+              controller: controller,
+              onNavigate: onNavigate,
+            ),
           ),
           const SizedBox(height: 12),
-          _QuickActionsCard(controller: controller, onNavigate: onNavigate),
+          NestAppear(
+            index: 3,
+            child: _QuickActionsCard(
+              controller: controller,
+              onNavigate: onNavigate,
+            ),
+          ),
           const SizedBox(height: 12),
           // 운영 틀이 통째로 비어 있을 때만 "한 번에 만들기" 지름길을 노출한다.
           if (controller.terms.isEmpty &&
@@ -141,6 +159,8 @@ class AdminHomeTab extends StatelessWidget {
           _UpcomingEventsCard(controller: controller, onNavigate: onNavigate),
           const SizedBox(height: 12),
           _RecentNoticesCard(controller: controller, onNavigate: onNavigate),
+          const SizedBox(height: 12),
+          const HomeschoolTipsCard(density: HomeschoolTipsDensity.compact),
           const SizedBox(height: 12),
           DriveIntegrationCard(controller: controller),
           const SizedBox(height: 24),
@@ -172,11 +192,7 @@ class _OpsPulseRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _PulseCard(
-            label: '가입 요청',
-            count: joinCount,
-            onTap: onJoin,
-          ),
+          child: _PulseCard(label: '가입 요청', count: joinCount, onTap: onJoin),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -212,13 +228,13 @@ class _PulseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: count > 0
-          ? NestColors.roseMist.withValues(alpha: 0.55)
-          : Colors.white,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
+    return NestPressable(
+      onPressed: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Card(
+        color: count > 0
+            ? NestColors.roseMist.withValues(alpha: 0.55)
+            : Colors.white,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
           child: Column(
@@ -230,10 +246,7 @@ class _PulseCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text(label, style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         ),
@@ -554,12 +567,13 @@ class _ChecklistTile extends StatelessWidget {
     final done = step.state == NewTermStepState.done;
     final blocked = step.state == NewTermStepState.blocked;
 
-    return Material(
-      color: blocked ? NestColors.creamyWhite : Colors.white,
+    return NestPressable(
+      enabled: onTap != null,
+      onPressed: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: InkWell(
+      child: Material(
+        color: blocked ? NestColors.creamyWhite : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
@@ -581,7 +595,9 @@ class _ChecklistTile extends StatelessWidget {
                 size: 20,
                 color: done
                     ? NestColors.mutedSage
-                    : NestColors.deepWood.withValues(alpha: blocked ? 0.3 : 0.5),
+                    : NestColors.deepWood.withValues(
+                        alpha: blocked ? 0.3 : 0.5,
+                      ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -749,7 +765,10 @@ class _QuickActionsCard extends StatelessWidget {
             LayoutBuilder(
               builder: (context, constraints) {
                 // 타일 최소 폭 150px 기준으로 열 수를 정한다(모바일 2열).
-                final columns = (constraints.maxWidth / 150).floor().clamp(2, 4);
+                final columns = (constraints.maxWidth / 150).floor().clamp(
+                  2,
+                  4,
+                );
                 final spacing = 10.0;
                 final tileWidth =
                     (constraints.maxWidth - spacing * (columns - 1)) / columns;
@@ -790,12 +809,13 @@ class _QuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: NestColors.creamyWhite,
+    return NestPressable(
+      enabled: onTap != null,
+      onPressed: onTap,
       borderRadius: BorderRadius.circular(14),
-      child: InkWell(
+      child: Material(
+        color: NestColors.creamyWhite,
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
         child: Container(
           height: 64,
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -849,12 +869,12 @@ class _AlertBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Material(
-      color: NestColors.roseMist.withValues(alpha: 0.3),
+    return NestPressable(
+      onPressed: onTap,
       borderRadius: BorderRadius.circular(14),
-      child: InkWell(
+      child: Material(
+        color: NestColors.roseMist.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
@@ -1031,8 +1051,7 @@ class _UpcomingEventsCard extends StatelessWidget {
     final upcoming =
         controller.academicEvents
             .where(
-              (event) =>
-                  !(event.endDate ?? event.eventDate).isBefore(today),
+              (event) => !(event.endDate ?? event.eventDate).isBefore(today),
             )
             .toList()
           ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
@@ -1056,7 +1075,10 @@ class _UpcomingEventsCard extends StatelessWidget {
                           SizedBox(
                             width: 58,
                             child: Text(
-                              DateFormat('M.d(E)', 'ko').format(event.eventDate),
+                              DateFormat(
+                                'M.d(E)',
+                                'ko',
+                              ).format(event.eventDate),
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
                                     fontWeight: FontWeight.w700,

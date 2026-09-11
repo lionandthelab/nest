@@ -124,6 +124,7 @@
         }
 
         const context = loadContext(stateToken);
+        const intent = context.intent === 'calendar' ? 'calendar' : 'drive';
 
         if (!context.supabase_url || !context.supabase_anon_key || !context.access_token) {
           fail('Supabase 연결 정보가 없습니다. 메인 화면에서 OAuth를 다시 시작하세요.');
@@ -139,8 +140,20 @@
 
         setStatus('인증 코드 교환 중...');
 
+        const functionName = intent === 'calendar'
+          ? 'google-calendar-connect-complete'
+          : 'google-drive-connect-complete';
+        const body = intent === 'calendar'
+          ? { homeschool_id: context.homeschool_id, code, redirect_mode: 'web' }
+          : {
+              homeschool_id: context.homeschool_id,
+              code,
+              root_folder_id: context.root_folder_id || null,
+              folder_policy: context.folder_policy || 'TERM_CLASS_DATE',
+            };
+
         const response = await fetch(
-          `${context.supabase_url}/functions/v1/google-drive-connect-complete`,
+          `${context.supabase_url}/functions/v1/${functionName}`,
           {
             method: 'POST',
             headers: {
@@ -148,12 +161,7 @@
               apikey: context.supabase_anon_key,
               Authorization: `Bearer ${context.access_token}`,
             },
-            body: JSON.stringify({
-              homeschool_id: context.homeschool_id,
-              code,
-              root_folder_id: context.root_folder_id || null,
-              folder_policy: context.folder_policy || 'TERM_CLASS_DATE',
-            }),
+            body: JSON.stringify(body),
           }
         );
 
@@ -190,7 +198,9 @@
           // ignore
         }
 
-        ok('Google Drive 연결이 완료되었습니다.\n이 창을 닫아도 됩니다.');
+        ok(intent === 'calendar'
+          ? 'Google 캘린더 연결이 완료되었습니다.\n이 창을 닫아도 됩니다.'
+          : 'Google Drive 연결이 완료되었습니다.\n이 창을 닫아도 됩니다.');
         notify(payload);
 
         setTimeout(() => window.close(), 1200);
@@ -204,6 +214,7 @@
           supabase_url: '',
           supabase_anon_key: '',
           access_token: '',
+          intent: 'drive',
         };
 
         try {
@@ -213,6 +224,7 @@
           context.supabase_url = localStorage.getItem('nest.oauth.supabase_url') || '';
           context.supabase_anon_key = localStorage.getItem('nest.oauth.supabase_anon_key') || '';
           context.access_token = localStorage.getItem('nest.oauth.access_token') || '';
+          context.intent = localStorage.getItem('nest.oauth.intent') || 'drive';
         } catch (_) {
           // ignore
         }

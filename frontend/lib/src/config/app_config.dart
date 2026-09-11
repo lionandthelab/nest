@@ -54,4 +54,35 @@ class AppConfig {
 
   static String get authEmailRedirectUrl =>
       kIsWeb ? authEmailRedirectUrlWeb : authEmailRedirectUrlMobile;
+
+  /// 소셜 로그인 공개 식별자. CI `dart-define`과 동일한 값이며,
+  /// 로컬 `flutter run`에도 버튼이 보이도록 기본값을 둔다.
+  /// 시크릿(클라이언트 시크릿)은 넣지 않는다.
+  static const String lionGoogleWebClientId = String.fromEnvironment(
+    'LION_GOOGLE_WEB_CLIENT_ID',
+    defaultValue:
+        '875114759372-6mkob01lrrh9r6psh0lp717up9h3litp.apps.googleusercontent.com',
+  );
+  static const String lionGoogleIosClientId = String.fromEnvironment(
+    'LION_GOOGLE_IOS_CLIENT_ID',
+    defaultValue:
+        '875114759372-2n9lulvdd9jmkatpugh8ilievvr1vfnn.apps.googleusercontent.com',
+  );
+  static const String lionKakaoNativeAppKey = String.fromEnvironment(
+    'LION_KAKAO_NATIVE_APP_KEY',
+    defaultValue: '0a51d6ea6e78e3565b8a45655bca8142',
+  );
+  static const String lionKakaoJsKey = String.fromEnvironment(
+    'LION_KAKAO_JS_KEY',
+    defaultValue: 'db129c862ec8fab23fe7cb85089eaa79',
+  );
+  static const String lionNaverClientId = String.fromEnvironment(
+    'LION_NAVER_CLIENT_ID',
+    defaultValue: 'Z1lpn0C9AFZ3BiXgLuno',
+  );
+
+  /// 비우면 현재 페이지 origin을 쓴다. 프로덕션 웹은 주소가 nestapp.life다.
+  static const String lionNaverWebRedirectUri = String.fromEnvironment(
+    'LION_NAVER_WEB_REDIRECT_URI',
+  );
 }

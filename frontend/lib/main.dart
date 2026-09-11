@@ -40,7 +40,7 @@ Future<void> main() async {
       ),
       NestCache.initialize(),
     ]);
-    await NestPush.initialize();
+    unawaited(NestPush.initialize());
 
     runApp(const NestAppRoot());
   }, (error, stack) {

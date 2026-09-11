@@ -27,13 +27,12 @@ class NestTheme {
     double fontSize = 15,
     FontWeight fontWeight = FontWeight.w400,
     Color color = NestColors.deepWood,
-  }) =>
-      TextStyle(
-        fontFamily: family,
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color,
-      );
+  }) => TextStyle(
+    fontFamily: family,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    color: color,
+  );
 
   static ThemeData light() {
     final base = ThemeData(
@@ -69,6 +68,9 @@ class NestTheme {
     );
 
     return base.copyWith(
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: NestColors.roseMist.withValues(alpha: 0.18),
       scaffoldBackgroundColor: NestColors.creamyWhite,
       textTheme: textTheme,
       appBarTheme: const AppBarTheme(
@@ -94,6 +96,8 @@ class NestTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
+        helperMaxLines: 3,
+        errorMaxLines: 2,
         hintStyle: textTheme.bodyMedium?.copyWith(
           color: NestColors.deepWood.withValues(alpha: 0.55),
         ),
@@ -211,12 +215,12 @@ class NestTheme {
       // constructors are const (at worst a non-fatal prefer_const info).
       pageTransitionsTheme: PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.android: NestPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: NestPageTransitionsBuilder(),
+          TargetPlatform.linux: NestPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: NestPageTransitionsBuilder(),
         },
       ),
       // Ensure minimum 48px touch targets for accessibility.
@@ -225,9 +229,7 @@ class NestTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titleTextStyle: textTheme.titleLarge,
       ),
       tooltipTheme: TooltipThemeData(
@@ -236,6 +238,37 @@ class NestTheme {
           borderRadius: BorderRadius.circular(8),
         ),
         textStyle: textTheme.bodySmall?.copyWith(color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// 안드로이드 기본 줌 대신 짧은 페이드+상승. iOS는 시스템 스와이프 백을 유지한다.
+class NestPageTransitionsBuilder extends PageTransitionsBuilder {
+  const NestPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final curve = CurvedAnimation(
+      parent: animation,
+      curve: const Cubic(0.16, 1, 0.3, 1),
+      reverseCurve: Curves.easeInCubic,
+    );
+    return FadeTransition(
+      opacity: curve,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.03),
+          end: Offset.zero,
+        ).animate(curve),
+        child: child,
       ),
     );
   }

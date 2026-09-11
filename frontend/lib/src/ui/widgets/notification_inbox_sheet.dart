@@ -12,11 +12,8 @@ Future<void> showNotificationInboxSheet({
   required NestController controller,
   required void Function(NotificationInboxItem item) onOpenItem,
 }) {
-  NestHaptics.light();
-  return showModalBottomSheet<void>(
+  return showNestSheet<void>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
     builder: (context) {
       return AnimatedBuilder(
         animation: controller,
@@ -53,7 +50,8 @@ Future<void> showNotificationInboxSheet({
                             )
                           : ListView.separated(
                               itemCount: items.length,
-                              separatorBuilder: (_, _) => const SizedBox(height: 8),
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 8),
                               itemBuilder: (context, index) {
                                 final item = items[index];
                                 return _InboxTile(
@@ -89,19 +87,22 @@ class _InboxTile extends StatelessWidget {
     final when = item.createdAt == null
         ? ''
         : DateFormat('M/d HH:mm').format(item.createdAt!.toLocal());
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        leading: Icon(_iconFor(item.eventType), color: NestColors.clay),
-        title: Text(
-          item.title.isEmpty ? _fallbackTitle(item.eventType) : item.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          [item.body, when].where((part) => part.isNotEmpty).join(' · '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+    return NestPressable(
+      onPressed: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Card(
+        child: ListTile(
+          leading: Icon(_iconFor(item.eventType), color: NestColors.clay),
+          title: Text(
+            item.title.isEmpty ? _fallbackTitle(item.eventType) : item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            [item.body, when].where((part) => part.isNotEmpty).join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ),
     );

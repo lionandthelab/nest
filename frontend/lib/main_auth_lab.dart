@@ -1,7 +1,7 @@
 // AuthLab — lion_auth 모듈 독립 검증 타깃.
 //
-// 기존 앱(main.dart / login_page.dart)과 완전히 분리된 엔트리포인트로,
-// 소셜 로그인 전체 플로우가 여기서 검증되기 전까지 기존 로그인은 변경하지 않는다.
+// 기존 앱(main.dart / login_page.dart)과 분리된 엔트리포인트.
+// 프로덕션 로그인은 같은 `buildNestLionAuthConfig()`를 쓴다.
 //
 // 실행 (키는 .env에서 자동 주입):
 //   node scripts/run_auth_lab.mjs                # Chrome (웹, 포트 8080)
@@ -16,15 +16,8 @@ import 'package:lion_auth/lion_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/config/app_config.dart';
+import 'src/config/lion_auth_options.dart';
 import 'src/ui/nest_theme.dart';
-
-const _googleWebClientId = String.fromEnvironment('LION_GOOGLE_WEB_CLIENT_ID');
-const _googleIosClientId = String.fromEnvironment('LION_GOOGLE_IOS_CLIENT_ID');
-const _kakaoNativeAppKey = String.fromEnvironment('LION_KAKAO_NATIVE_APP_KEY');
-const _kakaoJsKey = String.fromEnvironment('LION_KAKAO_JS_KEY');
-const _naverClientId = String.fromEnvironment('LION_NAVER_CLIENT_ID');
-const _naverWebRedirectUri =
-    String.fromEnvironment('LION_NAVER_WEB_REDIRECT_URI');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,31 +32,15 @@ Future<void> main() async {
 }
 
 LionAuthConfig _buildConfig() {
+  final base = buildNestLionAuthConfig(
+    brandLine: 'lion_auth 검증용 · Google · Kakao · Naver',
+  );
   return LionAuthConfig(
     appName: 'Nest AuthLab',
-    brandLine: _activeProvidersLine(),
-    google: _googleWebClientId.isEmpty
-        ? null
-        : GoogleAuthOptions(
-            webClientId: _googleWebClientId,
-            iosClientId: _googleIosClientId.isEmpty ? null : _googleIosClientId,
-          ),
-    kakao: _kakaoNativeAppKey.isEmpty
-        ? null
-        : KakaoAuthOptions(
-            nativeAppKey: _kakaoNativeAppKey,
-            javaScriptAppKey: _kakaoJsKey,
-          ),
-    naver: _naverClientId.isEmpty
-        ? null
-        : NaverAuthOptions(
-            clientId: _naverClientId,
-            clientName: 'Nest',
-            webRedirectUri:
-                _naverWebRedirectUri.isEmpty ? null : _naverWebRedirectUri,
-          ),
-    apple: const AppleAuthOptions(), // appleOnlyOnIos 기본값 → iOS에서만 노출
-    // Nest 기존 회원가입과 동일한 추가 수집 필드.
+    brandLine: base.brandLine,
+    google: base.google,
+    kakao: base.kakao,
+    naver: base.naver,
     extraSignUpFields: const [
       LionSignUpField(
         key: 'full_name',
@@ -78,17 +55,6 @@ LionAuthConfig _buildConfig() {
       ),
     ],
   );
-}
-
-String _activeProvidersLine() {
-  final active = [
-    if (_googleWebClientId.isNotEmpty) 'Google',
-    if (_kakaoNativeAppKey.isNotEmpty) 'Kakao',
-    if (_naverClientId.isNotEmpty) 'Naver',
-  ];
-  return active.isEmpty
-      ? 'lion_auth 검증용 · 소셜 키 미주입 (이메일만 테스트 가능)'
-      : 'lion_auth 검증용 · 활성: ${active.join(', ')}';
 }
 
 class AuthLabApp extends StatefulWidget {

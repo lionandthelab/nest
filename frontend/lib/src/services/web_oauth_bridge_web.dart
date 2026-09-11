@@ -20,6 +20,7 @@ class _WebOauthBridgeWeb implements WebOauthBridge {
     '$_prefix.supabase_url',
     '$_prefix.supabase_anon_key',
     '$_prefix.access_token',
+    '$_prefix.intent',
   ];
 
   html.WindowBase? _popup;
@@ -35,6 +36,7 @@ class _WebOauthBridgeWeb implements WebOauthBridge {
     required String supabaseUrl,
     required String supabaseAnonKey,
     required String accessToken,
+    String intent = 'drive',
   }) async {
     html.window.localStorage['$_prefix.homeschool_id'] = homeschoolId;
     html.window.localStorage['$_prefix.root_folder_id'] = rootFolderId;
@@ -42,6 +44,7 @@ class _WebOauthBridgeWeb implements WebOauthBridge {
     html.window.localStorage['$_prefix.supabase_url'] = supabaseUrl;
     html.window.localStorage['$_prefix.supabase_anon_key'] = supabaseAnonKey;
     html.window.localStorage['$_prefix.access_token'] = accessToken;
+    html.window.localStorage['$_prefix.intent'] = intent;
   }
 
   @override

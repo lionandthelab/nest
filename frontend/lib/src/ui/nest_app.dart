@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
+import '../services/browser_social_auth.dart';
 import '../services/nest_repository.dart';
 import '../state/nest_controller.dart';
 import 'home_page.dart';
@@ -18,6 +21,8 @@ class NestAppRoot extends StatefulWidget {
 }
 
 class _NestAppRootState extends State<NestAppRoot> {
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   late final NestController controller;
 
   @override
@@ -33,10 +38,19 @@ class _NestAppRootState extends State<NestAppRoot> {
     );
 
     controller.initialize();
+    BrowserSocialAuth.onMessage = (message) {
+      if (!mounted || message.isEmpty) return;
+      _messengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+    };
+    unawaited(BrowserSocialAuth.bindDeepLinks());
   }
 
   @override
   void dispose() {
+    BrowserSocialAuth.onMessage = null;
+    unawaited(BrowserSocialAuth.dispose());
     controller.dispose();
     super.dispose();
   }
@@ -45,6 +59,7 @@ class _NestAppRootState extends State<NestAppRoot> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: AppConfig.appName,
+      scaffoldMessengerKey: _messengerKey,
       debugShowCheckedModeBanner: false,
       theme: NestTheme.light(),
       locale: const Locale('ko', 'KR'),

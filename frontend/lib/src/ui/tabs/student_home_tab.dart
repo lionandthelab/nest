@@ -9,6 +9,9 @@ import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
 import '../widgets/schedule_badges.dart';
+import '../widgets/nest_motion.dart';
+import '../widgets/schedule_personal_section.dart';
+import '../widgets/today_personal_events.dart';
 import '../widgets/today_schedule_card.dart';
 import 'lessons_today_section.dart';
 
@@ -95,11 +98,34 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
       children: [
         _buildGreeting(context, child),
         const SizedBox(height: 12),
-        TodayScheduleCard(
-          occurrences: occurrences,
-          courseNameOf: controller.findCourseName,
-          classNameOf: controller.findClassGroupName,
-          onOpenTimetable: widget.onOpenTimetable,
+        NestAppear(
+          index: 0,
+          child: TodayScheduleCard(
+            occurrences: occurrences,
+            courseNameOf: controller.findCourseName,
+            classNameOf: controller.findClassGroupName,
+            onOpenTimetable: widget.onOpenTimetable,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TodayPersonalEvents(
+          events: controller.personalEventsOn(
+            DateTime.now(),
+            childId: childId,
+          ),
+          onAdd: () => openPersonalEventForChild(
+            context: context,
+            controller: controller,
+            childId: childId,
+            sessions: bundles.values.expand((bundle) => bundle.sessions),
+          ),
+          onOpen: (event) => openPersonalEventForChild(
+            context: context,
+            controller: controller,
+            childId: childId,
+            sessions: bundles.values.expand((bundle) => bundle.sessions),
+            event: event,
+          ),
         ),
         const SizedBox(height: 10),
         if (widget.onOpenTimetable != null)
@@ -115,7 +141,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
           _buildNoticeCard(
             context,
             title: '반 배정 대기 중',
-            body: '아직 반에 배정되지 않았어요. '
+            body:
+                '아직 반에 배정되지 않았어요. '
                 '관리 선생님이 반 배정을 마치면 시간표를 확인할 수 있습니다.',
           ),
           const SizedBox(height: 12),
@@ -212,8 +239,10 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                 color: NestColors.dustyRose.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(Icons.waving_hand_outlined,
-                  color: NestColors.deepWood.withValues(alpha: 0.75)),
+              child: Icon(
+                Icons.waving_hand_outlined,
+                color: NestColors.deepWood.withValues(alpha: 0.75),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -223,15 +252,15 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                   Text(
                     greeting,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '오늘은 $todayLabel이에요.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.65),
-                        ),
+                      color: NestColors.deepWood.withValues(alpha: 0.65),
+                    ),
                   ),
                 ],
               ),
@@ -261,16 +290,12 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    body,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  Text(body, style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
             ),
@@ -332,8 +357,10 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             (change) => Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -349,9 +376,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                               change.classSessionId,
                             ),
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
+                            style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -361,8 +386,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                     Text(
                       _changePeriodLabel(change),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: NestColors.deepWood.withValues(alpha: 0.6),
-                          ),
+                        color: NestColors.deepWood.withValues(alpha: 0.6),
+                      ),
                     ),
                     if (_changeDetailLabel(controller, change).isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -376,8 +401,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                       Text(
                         change.reason.trim(),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: NestColors.deepWood.withValues(alpha: 0.7),
-                            ),
+                          color: NestColors.deepWood.withValues(alpha: 0.7),
+                        ),
                       ),
                     ],
                   ],
@@ -458,8 +483,10 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
               bundles,
               report.classSessionId,
             );
-            final dateLabel =
-                DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate);
+            final dateLabel = DateFormat(
+              'M월 d일 (E)',
+              'ko',
+            ).format(report.occurrenceDate);
             final occurrence = DateTime(
               report.occurrenceDate.year,
               report.occurrenceDate.month,
@@ -470,8 +497,10 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -485,9 +514,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                                 child: Text(
                                   courseName,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
+                                  style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
                               ),
@@ -498,12 +525,11 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                           const SizedBox(height: 2),
                           Text(
                             dateLabel,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  color: NestColors.deepWood
-                                      .withValues(alpha: 0.6),
+                                  color: NestColors.deepWood.withValues(
+                                    alpha: 0.6,
+                                  ),
                                 ),
                           ),
                           if (report.reason.trim().isNotEmpty) ...[
@@ -585,14 +611,18 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
         children: [
           Row(
             children: [
-              Icon(Icons.campaign_outlined,
-                  size: 20, color: NestColors.deepWood.withValues(alpha: 0.7)),
+              Icon(
+                Icons.campaign_outlined,
+                size: 20,
+                color: NestColors.deepWood.withValues(alpha: 0.7),
+              ),
               const SizedBox(width: 6),
-              Text('공지사항',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700)),
+              Text(
+                '공지사항',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
               const Spacer(),
               TextButton(
                 onPressed: () => setState(() => _showAllAnnouncements = false),
@@ -634,8 +664,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     if (latest.body.trim().isNotEmpty)
                       Text(
@@ -643,9 +673,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color:
-                                  NestColors.deepWood.withValues(alpha: 0.65),
-                            ),
+                          color: NestColors.deepWood.withValues(alpha: 0.65),
+                        ),
                       ),
                   ],
                 ),
@@ -654,15 +683,17 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
               Text(
                 '$classGroupName · $when',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: NestColors.deepWood.withValues(alpha: 0.5),
-                      fontSize: 11,
-                    ),
+                  color: NestColors.deepWood.withValues(alpha: 0.5),
+                  fontSize: 11,
+                ),
               ),
               if (announcements.length > 1) ...[
                 const SizedBox(width: 4),
-                Icon(Icons.expand_more,
-                    size: 18,
-                    color: NestColors.deepWood.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.expand_more,
+                  size: 18,
+                  color: NestColors.deepWood.withValues(alpha: 0.5),
+                ),
               ],
             ],
           ),
@@ -691,16 +722,18 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                 if (a.pinned)
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
-                    child: Icon(Icons.push_pin,
-                        size: 14, color: NestColors.dustyRose),
+                    child: Icon(
+                      Icons.push_pin,
+                      size: 14,
+                      color: NestColors.dustyRose,
+                    ),
                   ),
                 Expanded(
                   child: Text(
                     a.title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -709,8 +742,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             Text(
               '$classGroupName · $when',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.5),
-                  ),
+                color: NestColors.deepWood.withValues(alpha: 0.5),
+              ),
             ),
             if (a.body.trim().isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -730,11 +763,12 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
   ) {
     final currentTerm = controller.selectedTerm;
     final termLabel = currentTerm != null ? currentTerm.name : '학기 정보 없음';
-    final termPeriod = currentTerm != null &&
+    final termPeriod =
+        currentTerm != null &&
             currentTerm.startDate != null &&
             currentTerm.endDate != null
         ? '${DateFormat('yyyy.MM.dd').format(currentTerm.startDate!)} ~ '
-            '${DateFormat('yyyy.MM.dd').format(currentTerm.endDate!)}'
+              '${DateFormat('yyyy.MM.dd').format(currentTerm.endDate!)}'
         : '';
 
     final events = controller.academicEvents.toList()
@@ -754,8 +788,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             child: Text(
               '$termLabel · $termPeriod',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.55),
-                  ),
+                color: NestColors.deepWood.withValues(alpha: 0.55),
+              ),
             ),
           ),
         const SizedBox(height: 10),
@@ -769,14 +803,16 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
           ...events.map((event) {
             final dateLabel = event.endDate != null
                 ? '${DateFormat('M/d').format(event.eventDate)} ~ '
-                    '${DateFormat('M/d').format(event.endDate!)}'
+                      '${DateFormat('M/d').format(event.endDate!)}'
                 : DateFormat('M월 d일 (E)', 'ko').format(event.eventDate);
 
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -790,9 +826,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                       child: Center(
                         child: Text(
                           '${event.eventDate.day}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
+                          style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                       ),
@@ -804,20 +838,17 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                         children: [
                           Text(
                             event.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
+                            style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             dateLabel,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  color: NestColors.deepWood
-                                      .withValues(alpha: 0.55),
+                                  color: NestColors.deepWood.withValues(
+                                    alpha: 0.55,
+                                  ),
                                 ),
                           ),
                           if (event.description.trim().isNotEmpty) ...[
@@ -849,23 +880,21 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
   }) {
     return Row(
       children: [
-        Icon(icon,
-            size: 20, color: NestColors.deepWood.withValues(alpha: 0.7)),
+        Icon(icon, size: 20, color: NestColors.deepWood.withValues(alpha: 0.7)),
         const SizedBox(width: 6),
         Text(
           title,
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         if (trailing != null) ...[
           const Spacer(),
           Text(
             trailing,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.55),
-                ),
+              color: NestColors.deepWood.withValues(alpha: 0.55),
+            ),
           ),
         ],
       ],
@@ -884,8 +913,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
       child: Text(
         text,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.6),
-            ),
+          color: NestColors.deepWood.withValues(alpha: 0.6),
+        ),
       ),
     );
   }
@@ -907,12 +936,16 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
 
   String _dayLabel(int dayOfWeek) {
     const labels = <int, String>{
-      0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
+      0: '일',
+      1: '월',
+      2: '화',
+      3: '수',
+      4: '목',
+      5: '금',
+      6: '토',
     };
     return labels[dayOfWeek] ?? '$dayOfWeek';
   }
 }
 
 // ── 공유 위젯 ──
-
-

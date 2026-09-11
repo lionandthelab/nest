@@ -31,6 +31,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 빌드 없이 기존 AAB를 내부 테스트 트랙에 업로드(도커 등 Flutter 미탑재 환경용)
 
+### android closed
+
+```sh
+[bundle exec] fastlane android closed
+```
+
+내부테스트 최신 빌드를 비공개(Closed) 트랙(alpha)으로 승격
+
 ### android production
 
 ```sh

@@ -43,6 +43,7 @@ interface NaverProfile {
 async function exchangeNaverCode(
   code: string,
   state: string,
+  redirectUri?: string,
 ): Promise<string> {
   const params = new URLSearchParams({
     grant_type: "authorization_code",
@@ -51,6 +52,9 @@ async function exchangeNaverCode(
     code,
     state,
   });
+  if (redirectUri) {
+    params.set("redirect_uri", redirectUri);
+  }
   const response = await fetch(
     `https://nid.naver.com/oauth2.0/token?${params}`,
   );
@@ -93,7 +97,11 @@ Deno.serve(async (req) => {
     // 1) access_token 확보 (웹: 인가 코드 교환 / 앱: 그대로 사용)
     let accessToken: string | undefined = body.access_token;
     if (!accessToken && body.auth_code) {
-      accessToken = await exchangeNaverCode(body.auth_code, body.state ?? "");
+      accessToken = await exchangeNaverCode(
+        body.auth_code,
+        body.state ?? "",
+        typeof body.redirect_uri === "string" ? body.redirect_uri : undefined,
+      );
     }
     if (!accessToken) {
       return jsonResponse(400, { error: "access_token 또는 auth_code가 필요합니다." });

@@ -209,6 +209,11 @@ function patchIos() {
   let plist = fs.readFileSync(PLIST_PATH, 'utf8');
 
   const entries = [PLIST_BEGIN];
+  if (env.LION_GOOGLE_IOS_CLIENT_ID) {
+    entries.push(
+      `\t<key>GIDClientID</key>\n\t<string>${env.LION_GOOGLE_IOS_CLIENT_ID}</string>`,
+    );
+  }
   if (env.LION_NAVER_CLIENT_ID) {
     entries.push(
       `\t<key>NidClientID</key>\n\t<string>${env.LION_NAVER_CLIENT_ID}</string>`,
@@ -233,9 +238,14 @@ function patchIos() {
 
   // CFBundleURLTypes/LSApplicationQueriesSchemes는 기존 항목과 병합이 필요해
   // 자동 패치 대신 추가할 스니펫을 출력한다 (iOS 빌드는 macOS에서 수행).
+  const googleIos = env.LION_GOOGLE_IOS_CLIENT_ID ?? '';
+  const googleScheme = googleIos
+    ? `com.googleusercontent.apps.${googleIos.replace(/\.apps\.googleusercontent\.com$/, '')}`
+    : '';
   console.log(`[ios] 아래 항목은 기존 CFBundleURLTypes/LSApplicationQueriesSchemes에 수동 병합 필요:
-  - URL Scheme 추가: kakao${env.LION_KAKAO_NATIVE_APP_KEY ?? '{네이티브앱키}'} , nestnaverlogin
-  - LSApplicationQueriesSchemes 추가: kakaokompassauth, kakaotalk, naversearchapp, naversearchthirdlogin`);
+  - URL Scheme 추가: kakao${env.LION_KAKAO_NATIVE_APP_KEY ?? '{네이티브앱키}'} , nestnaverlogin${googleScheme ? ` , ${googleScheme}` : ''}
+  - LSApplicationQueriesSchemes 추가: kakaokompassauth, kakaotalk, naversearchapp, naversearchthirdlogin
+  - GIDClientID: ${googleIos || '(LION_GOOGLE_IOS_CLIENT_ID 없음 — iOS 네이티브 구글 시트 비활성)'}`);
 }
 
 // -------------------------------------------------------------- broker
