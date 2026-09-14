@@ -49,7 +49,8 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
       return metadataName.trim();
     }
     final fromDirectory = controller.findMemberDisplayName(controller.user?.id);
-    if (fromDirectory.trim().isNotEmpty && fromDirectory != controller.user?.id) {
+    if (fromDirectory.trim().isNotEmpty &&
+        fromDirectory != controller.user?.id) {
       return fromDirectory;
     }
     final email = controller.user?.email ?? '';
@@ -100,8 +101,9 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
                 CircleAvatar(
                   radius: 52,
                   backgroundColor: NestColors.roseMist,
-                  backgroundImage:
-                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  backgroundImage: avatarUrl.isNotEmpty
+                      ? NetworkImage(avatarUrl)
+                      : null,
                   child: avatarUrl.isNotEmpty
                       ? null
                       : Text(
@@ -288,8 +290,8 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           onChanged: controller.isBusy
               ? null
               : (value) => controller.updateNotificationPrefs(
-                    controller.notificationPrefs.copyWith(pushEnabled: value),
-                  ),
+                  controller.notificationPrefs.copyWith(pushEnabled: value),
+                ),
         ),
         _SettingsSwitch(
           icon: Icons.wb_sunny_outlined,
@@ -299,10 +301,10 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           onChanged: controller.isBusy
               ? null
               : (value) => controller.updateNotificationPrefs(
-                    controller.notificationPrefs.copyWith(
-                      morningDigestEnabled: value,
-                    ),
+                  controller.notificationPrefs.copyWith(
+                    morningDigestEnabled: value,
                   ),
+                ),
         ),
         _SettingsSwitch(
           icon: Icons.alarm_outlined,
@@ -312,10 +314,10 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           onChanged: controller.isBusy
               ? null
               : (value) => controller.updateNotificationPrefs(
-                    controller.notificationPrefs.copyWith(
-                      classReminderEnabled: value,
-                    ),
+                  controller.notificationPrefs.copyWith(
+                    classReminderEnabled: value,
                   ),
+                ),
         ),
 
         // ── Parent: 내 불가 시간 section ──
@@ -389,8 +391,11 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.install_mobile,
-                        size: 24, color: NestColors.clay),
+                    Icon(
+                      Icons.install_mobile,
+                      size: 24,
+                      color: NestColors.clay,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -449,10 +454,7 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
               onPressed: controller.isBusy ? null : _confirmLeaveHomeschool,
               icon: const Icon(Icons.exit_to_app),
               label: Text(
-                '${controller.memberships.firstWhere(
-                      (m) => m.homeschoolId == controller.selectedHomeschoolId,
-                      orElse: () => controller.memberships.first,
-                    ).homeschool.name} 탈퇴',
+                '${controller.memberships.firstWhere((m) => m.homeschoolId == controller.selectedHomeschoolId, orElse: () => controller.memberships.first).homeschool.name} 탈퇴',
               ),
             ),
           ),
@@ -467,17 +469,19 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
     final currentUserId = controller.user?.id;
     if (currentUserId == null) return const SizedBox.shrink();
 
-    final blocks = controller.memberUnavailabilityBlocks
-        .where(
-          (row) =>
-              row.ownerKind == 'MEMBER_USER' && row.ownerId == currentUserId,
-        )
-        .toList()
-      ..sort((a, b) {
-        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-        if (day != 0) return day;
-        return a.startTime.compareTo(b.startTime);
-      });
+    final blocks =
+        controller.memberUnavailabilityBlocks
+            .where(
+              (row) =>
+                  row.ownerKind == 'MEMBER_USER' &&
+                  row.ownerId == currentUserId,
+            )
+            .toList()
+          ..sort((a, b) {
+            final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+            if (day != 0) return day;
+            return a.startTime.compareTo(b.startTime);
+          });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -491,15 +495,15 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
                   Text(
                     '수업 불가 시간 설정',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '등록한 시간은 시간표 생성 시 자동으로 회피됩니다.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.6),
-                        ),
+                      color: NestColors.deepWood.withValues(alpha: 0.6),
+                    ),
                   ),
                 ],
               ),
@@ -708,7 +712,13 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
 
   String _dayLabel(int dayOfWeek) {
     const labels = <int, String>{
-      0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
+      0: '일',
+      1: '월',
+      2: '화',
+      3: '수',
+      4: '목',
+      5: '금',
+      6: '토',
     };
     return labels[dayOfWeek] ?? '$dayOfWeek';
   }
@@ -754,17 +764,16 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
             child: const Text('취소'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.of(ctx).pop(textController.text.trim()),
+            onPressed: () => Navigator.of(ctx).pop(textController.text.trim()),
             child: const Text('저장'),
           ),
         ],
         child: TextField(
-        controller: textController,
-        autofocus: true,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(hintText: hint),
-      ),
+          controller: textController,
+          autofocus: true,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(hintText: hint),
+        ),
       ),
     );
     textController.dispose();
@@ -804,17 +813,15 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
             child: const Text('취소'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('탈퇴'),
           ),
         ],
         child: Text(
-        '$homeschoolName에서 탈퇴하시겠습니까?\n\n'
-        '탈퇴하면 이 홈스쿨의 모든 데이터에 접근할 수 없게 됩니다.',
-      ),
+          '$homeschoolName에서 탈퇴하시겠습니까?\n\n'
+          '탈퇴하면 이 홈스쿨의 모든 데이터에 접근할 수 없게 됩니다.',
+        ),
       ),
     );
 
@@ -870,14 +877,16 @@ class _SettingsSwitch extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: NestColors.roseMist.withValues(alpha: 0.5),
-          ),
+          bottom: BorderSide(color: NestColors.roseMist.withValues(alpha: 0.5)),
         ),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 22, color: NestColors.deepWood.withValues(alpha: 0.7)),
+          Icon(
+            icon,
+            size: 22,
+            color: NestColors.deepWood.withValues(alpha: 0.7),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -893,10 +902,7 @@ class _SettingsSwitch extends StatelessWidget {
               ],
             ),
           ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-          ),
+          Switch.adaptive(value: value, onChanged: onChanged),
         ],
       ),
     );
@@ -934,7 +940,11 @@ class _SettingsTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 22, color: NestColors.deepWood.withValues(alpha: 0.7)),
+            Icon(
+              icon,
+              size: 22,
+              color: NestColors.deepWood.withValues(alpha: 0.7),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -950,9 +960,9 @@ class _SettingsTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     value,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: valueColor,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: valueColor),
                   ),
                 ],
               ),

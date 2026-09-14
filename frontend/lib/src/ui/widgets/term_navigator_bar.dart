@@ -33,15 +33,14 @@ class TermNavigatorBar extends StatelessWidget {
         final busy = controller.isBusy;
 
         final canPrev = !busy && selectedIndex > 0;
-        final canNext = !busy && selectedIndex >= 0 && selectedIndex < ordered.length - 1;
+        final canNext =
+            !busy && selectedIndex >= 0 && selectedIndex < ordered.length - 1;
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: NestColors.roseMist.withValues(alpha: 0.45),
-            border: Border(
-              bottom: BorderSide(color: NestColors.roseMist),
-            ),
+            border: Border(bottom: BorderSide(color: NestColors.roseMist)),
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -51,8 +50,11 @@ class TermNavigatorBar extends StatelessWidget {
               return Row(
                 children: [
                   if (!compact) ...[
-                    Icon(Icons.calendar_month_outlined,
-                        size: 18, color: NestColors.clay),
+                    Icon(
+                      Icons.calendar_month_outlined,
+                      size: 18,
+                      color: NestColors.clay,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       '학기',
@@ -68,50 +70,58 @@ class TermNavigatorBar extends StatelessWidget {
                     icon: Icons.chevron_left,
                     tooltip: '이전 학기',
                     onPressed: canPrev
-                        ? () =>
-                            controller.changeTerm(ordered[selectedIndex - 1].id)
+                        ? () => controller.changeTerm(
+                            ordered[selectedIndex - 1].id,
+                          )
                         : null,
                   ),
-              Expanded(
-                child: ordered.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(
-                          '학기가 없습니다. 예정 학기를 추가하세요.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: NestColors.deepWood.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      )
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final term in ordered)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 3),
-                                child: _TermChip(
-                                  term: term,
-                                  phase: controller.phaseOf(term),
-                                  selected: term.id == selectedId,
-                                  onTap: busy || term.id == selectedId
-                                      ? null
-                                      : () => controller.changeTerm(term.id),
+                  Expanded(
+                    child: ordered.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              '학기가 없습니다. 예정 학기를 추가하세요.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: NestColors.deepWood.withValues(
+                                  alpha: 0.6,
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-              ),
-              _RoundIconButton(
-                icon: Icons.chevron_right,
-                tooltip: '다음 학기',
-                onPressed: canNext
-                    ? () => controller.changeTerm(ordered[selectedIndex + 1].id)
-                    : null,
-              ),
-              const SizedBox(width: 4),
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                for (final term in ordered)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 3,
+                                    ),
+                                    child: _TermChip(
+                                      term: term,
+                                      phase: controller.phaseOf(term),
+                                      selected: term.id == selectedId,
+                                      onTap: busy || term.id == selectedId
+                                          ? null
+                                          : () =>
+                                                controller.changeTerm(term.id),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                  ),
+                  _RoundIconButton(
+                    icon: Icons.chevron_right,
+                    tooltip: '다음 학기',
+                    onPressed: canNext
+                        ? () => controller.changeTerm(
+                            ordered[selectedIndex + 1].id,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 4),
                   if (selected != null) ...[
                     _buildReadOnlyControl(context, selected, compact),
                     _RoundIconButton(
@@ -119,8 +129,11 @@ class TermNavigatorBar extends StatelessWidget {
                       tooltip: '학기 정보 수정',
                       onPressed: busy
                           ? null
-                          : () => showTermEditorDialog(context, controller,
-                              term: selected),
+                          : () => showTermEditorDialog(
+                              context,
+                              controller,
+                              term: selected,
+                            ),
                     ),
                   ],
                   const SizedBox(width: 2),
@@ -141,7 +154,10 @@ class TermNavigatorBar extends StatelessWidget {
   /// 지난 학기(보관 아님)일 때만 편집 잠금 해제/잠금 토글을 노출한다.
   /// [compact]이면 라벨 없이 아이콘 버튼으로 축약(좁은 폭 오버플로 방지).
   Widget _buildReadOnlyControl(
-      BuildContext context, Term selected, bool compact) {
+    BuildContext context,
+    Term selected,
+    bool compact,
+  ) {
     if (controller.phaseOf(selected) != TermPhase.past) {
       return const SizedBox.shrink();
     }
@@ -154,8 +170,9 @@ class TermNavigatorBar extends StatelessWidget {
     }
     final unlocked = controller.isPastTermEditingUnlocked;
     final color = unlocked ? NestColors.mutedSage : NestColors.clay;
-    final onPressed =
-        controller.isBusy ? null : controller.togglePastTermEditing;
+    final onPressed = controller.isBusy
+        ? null
+        : controller.togglePastTermEditing;
     final icon = unlocked ? Icons.lock_open : Icons.lock_outline;
     if (compact) {
       return _RoundIconButton(
@@ -168,8 +185,10 @@ class TermNavigatorBar extends StatelessWidget {
     return TextButton.icon(
       onPressed: onPressed,
       icon: Icon(icon, size: 16),
-      label: Text(unlocked ? '편집 중' : '편집 잠금 해제',
-          style: const TextStyle(fontSize: 12)),
+      label: Text(
+        unlocked ? '편집 중' : '편집 잠금 해제',
+        style: const TextStyle(fontSize: 12),
+      ),
       style: TextButton.styleFrom(
         foregroundColor: color,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -235,8 +254,7 @@ class _TermChip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: phaseColor.withValues(alpha: selected ? 0.9 : 0.16),
                   borderRadius: BorderRadius.circular(10),
@@ -261,8 +279,11 @@ class _TermChip extends StatelessWidget {
               ),
               if (term.isArchived) ...[
                 const SizedBox(width: 4),
-                Icon(Icons.inventory_2_outlined,
-                    size: 12, color: fg.withValues(alpha: 0.7)),
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 12,
+                  color: fg.withValues(alpha: 0.7),
+                ),
               ],
             ],
           ),
@@ -331,12 +352,12 @@ Future<void> showTermEditorDialog(
 
   // 생성 모드 기본값: 마지막 학기 종료 다음날부터 약 한 학기(140일).
   DateTime defaultStart() {
-    final ends = controller.terms
-        .map((t) => t.endDate)
-        .whereType<DateTime>()
-        .toList()
-      ..sort();
-    final base = ends.isNotEmpty ? ends.last.add(const Duration(days: 1)) : DateTime.now();
+    final ends =
+        controller.terms.map((t) => t.endDate).whereType<DateTime>().toList()
+          ..sort();
+    final base = ends.isNotEmpty
+        ? ends.last.add(const Duration(days: 1))
+        : DateTime.now();
     return DateTime(base.year, base.month, base.day);
   }
 
@@ -361,9 +382,7 @@ Future<void> showTermEditorDialog(
 /// (예: "2026-1" → "2026-2", "2학기" → "3학기"). 실패하면 빈 문자열.
 String _suggestNextTermName(NestController controller) {
   // 시작일이 있는 학기만으로 최신 학기를 정한다(null 날짜는 비교 불가라 제외).
-  final dated = controller.terms
-      .where((t) => t.startDate != null)
-      .toList()
+  final dated = controller.terms.where((t) => t.startDate != null).toList()
     ..sort((a, b) => a.startDate!.compareTo(b.startDate!));
   final last = dated.lastOrNull ?? controller.terms.lastOrNull;
   if (last == null) return '';
@@ -398,8 +417,9 @@ class _TermEditorDialog extends StatefulWidget {
 }
 
 class _TermEditorDialogState extends State<_TermEditorDialog> {
-  late final TextEditingController _nameController =
-      TextEditingController(text: widget.initialName);
+  late final TextEditingController _nameController = TextEditingController(
+    text: widget.initialName,
+  );
   late DateTime _start = widget.initialStart;
   late DateTime _end = widget.initialEnd;
   late String _status = widget.term?.status ?? 'DRAFT';
@@ -449,10 +469,10 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
 
   void _showError(Object error) {
     if (!mounted) return;
-    final message =
-        error is StateError ? error.message : '작업에 실패했습니다: $error';
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    final message = error is StateError ? error.message : '작업에 실패했습니다: $error';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _save() async {
@@ -468,8 +488,11 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
     setState(() => _saving = true);
     try {
       if (widget.isCreate) {
-        await widget.controller
-            .createTerm(name: name, startDate: _start, endDate: _end);
+        await widget.controller.createTerm(
+          name: name,
+          startDate: _start,
+          endDate: _end,
+        );
       } else {
         await widget.controller.updateTerm(
           termId: widget.term!.id,
@@ -483,17 +506,18 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
     } catch (error) {
       setState(() => _saving = false);
       // DB unique(homeschool_id, name) 위반 등도 여기서 안내.
-      _showError(error is StateError
-          ? error
-          : StateError('저장에 실패했습니다. 이름이 중복되지 않았는지 확인하세요.'));
+      _showError(
+        error is StateError
+            ? error
+            : StateError('저장에 실패했습니다. 이름이 중복되지 않았는지 확인하세요.'),
+      );
     }
   }
 
   Future<void> _confirmDelete() async {
     final term = widget.term!;
     final isSelected = widget.controller.selectedTermId == term.id;
-    final classCount =
-        isSelected ? widget.controller.classGroups.length : null;
+    final classCount = isSelected ? widget.controller.classGroups.length : null;
 
     final confirmed = await showNestSheet<bool>(
       context: context,
@@ -511,22 +535,22 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
           ),
         ],
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('‘${term.name}’ 학기를 삭제할까요?'),
-          const SizedBox(height: 10),
-          Text(
-            '이 학기의 반${classCount != null ? ' $classCount개' : ''}·수업 시간표·'
-            '자습 계획·교실이 모두 함께 삭제됩니다. 되돌릴 수 없습니다.',
-            style: TextStyle(
-              fontSize: 13,
-              color: NestColors.clay,
-              fontWeight: FontWeight.w600,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('‘${term.name}’ 학기를 삭제할까요?'),
+            const SizedBox(height: 10),
+            Text(
+              '이 학기의 반${classCount != null ? ' $classCount개' : ''}·수업 시간표·'
+              '자습 계획·교실이 모두 함께 삭제됩니다. 되돌릴 수 없습니다.',
+              style: TextStyle(
+                fontSize: 13,
+                color: NestColors.clay,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
     if (confirmed != true) return;
@@ -546,7 +570,8 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
     final term = widget.term;
     // 보관 학기는 이름·기간을 잠근다(보관 해제만 허용). 삭제도 불가.
     final archivedLock = !widget.isCreate && (term?.isArchived ?? false);
-    final canDelete = !widget.isCreate &&
+    final canDelete =
+        !widget.isCreate &&
         term != null &&
         !term.isArchived &&
         widget.controller.terms.length > 1;
@@ -605,8 +630,9 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
                 child: _DateField(
                   label: '종료일',
                   value: _fmtDate(_end),
-                  onTap:
-                      _saving || archivedLock ? null : () => _pickDate(false),
+                  onTap: _saving || archivedLock
+                      ? null
+                      : () => _pickDate(false),
                 ),
               ),
             ],
@@ -641,10 +667,15 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: _saving ? null : _confirmDelete,
-                icon: Icon(Icons.delete_outline,
-                    size: 18, color: Colors.red.shade600),
-                label: Text('이 학기 삭제',
-                    style: TextStyle(color: Colors.red.shade600)),
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 18,
+                  color: Colors.red.shade600,
+                ),
+                label: Text(
+                  '이 학기 삭제',
+                  style: TextStyle(color: Colors.red.shade600),
+                ),
               ),
             ),
           ],

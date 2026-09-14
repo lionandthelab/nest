@@ -36,11 +36,7 @@ class _OpsTabState extends State<OpsTab> {
       );
     }
 
-    return ListView(
-      children: [
-        _buildAuditLogSection(controller),
-      ],
-    );
+    return ListView(children: [_buildAuditLogSection(controller)]);
   }
 
   Widget _buildAuditLogSection(NestController controller) {
@@ -63,7 +59,10 @@ class _OpsTabState extends State<OpsTab> {
               borderRadius: BorderRadius.circular(6),
               onTap: () => _showAuditLogDetail(log),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
@@ -137,15 +136,15 @@ class _OpsTabState extends State<OpsTab> {
           ),
         ],
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _detailRow('작업', log.actionType),
-          _detailRow('대상 유형', log.resourceType),
-          _detailRow('대상 ID', log.resourceId),
-          _detailRow('시간', timeText),
-        ],
-      ),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailRow('작업', log.actionType),
+            _detailRow('대상 유형', log.resourceType),
+            _detailRow('대상 ID', log.resourceId),
+            _detailRow('시간', timeText),
+          ],
+        ),
       ),
     );
   }
@@ -167,11 +166,13 @@ class _OpsTabState extends State<OpsTab> {
             ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(color: NestColors.deepWood)),
+            child: Text(
+              value,
+              style: const TextStyle(color: NestColors.deepWood),
+            ),
           ),
         ],
       ),
     );
   }
-
 }

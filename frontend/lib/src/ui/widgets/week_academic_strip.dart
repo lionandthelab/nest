@@ -11,15 +11,16 @@ Future<void> showAcademicEventPreview(
   BuildContext context,
   AcademicEvent event,
 ) {
-  final range = event.endDate == null ||
+  final range =
+      event.endDate == null ||
           nestDateOnly(event.endDate!) == nestDateOnly(event.eventDate)
       ? DateFormat('M월 d일 (E)', 'ko').format(event.eventDate)
       : '${DateFormat('M월 d일').format(event.eventDate)} – '
-          '${DateFormat('M월 d일').format(event.endDate!)}';
+            '${DateFormat('M월 d일').format(event.endDate!)}';
   final time = event.isAllDay
       ? '종일'
       : '${(event.startTime ?? '').split(':').take(2).join(':')}'
-          '${(event.endTime ?? '').trim().isEmpty ? '' : ' – ${(event.endTime ?? '').split(':').take(2).join(':')}'}';
+            '${(event.endTime ?? '').trim().isEmpty ? '' : ' – ${(event.endTime ?? '').split(':').take(2).join(':')}'}';
   return showNestSheet<void>(
     context: context,
     builder: (ctx) => NestSheet(
@@ -31,23 +32,23 @@ Future<void> showAcademicEventPreview(
         ),
       ],
       child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('${academicKindLabel(event.kind)} · $range · $time'),
-        if (event.description.trim().isNotEmpty) ...[
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${academicKindLabel(event.kind)} · $range · $time'),
+          if (event.description.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(event.description.trim()),
+          ],
           const SizedBox(height: 8),
-          Text(event.description.trim()),
+          Text(
+            event.publishAnnouncement
+                ? '소식 탭 공지에도 같이 올라갑니다.'
+                : '공지 없이 달력·시간표에만 표시됩니다.',
+            style: Theme.of(ctx).textTheme.bodySmall,
+          ),
         ],
-        const SizedBox(height: 8),
-        Text(
-          event.publishAnnouncement
-              ? '소식 탭 공지에도 같이 올라갑니다.'
-              : '공지 없이 달력·시간표에만 표시됩니다.',
-          style: Theme.of(ctx).textTheme.bodySmall,
-        ),
-      ],
-    ),
+      ),
     ),
   );
 }
@@ -135,7 +136,8 @@ class _WeekEventChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final start = DateFormat('M/d').format(event.eventDate);
     final end = event.endDate;
-    final range = end == null || nestDateOnly(end) == nestDateOnly(event.eventDate)
+    final range =
+        end == null || nestDateOnly(end) == nestDateOnly(event.eventDate)
         ? start
         : '$start–${DateFormat('M/d').format(end)}';
     final time = event.isAllDay

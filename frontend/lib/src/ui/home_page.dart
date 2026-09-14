@@ -515,8 +515,8 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
           child: const Text(
-          '시간표 탭에 저장되지 않은 수정사항이 있습니다. 탭을 이동하면 현재 수정사항이 사라집니다. 이동할까요?',
-        ),
+            '시간표 탭에 저장되지 않은 수정사항이 있습니다. 탭을 이동하면 현재 수정사항이 사라집니다. 이동할까요?',
+          ),
         ),
       );
 
@@ -1647,14 +1647,14 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
           ),
         ],
         child: TextField(
-        controller: textController,
-        autofocus: true,
-        decoration: const InputDecoration(
-          labelText: '닉네임',
-          hintText: '앱에서 표시될 이름',
-          prefixIcon: Icon(Icons.person_outlined, size: 20),
+          controller: textController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '닉네임',
+            hintText: '앱에서 표시될 이름',
+            prefixIcon: Icon(Icons.person_outlined, size: 20),
+          ),
         ),
-      ),
       ),
     );
     textController.dispose();

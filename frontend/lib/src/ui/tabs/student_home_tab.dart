@@ -110,10 +110,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
         ),
         const SizedBox(height: 10),
         TodayPersonalEvents(
-          events: controller.personalEventsOn(
-            DateTime.now(),
-            childId: childId,
-          ),
+          events: controller.personalEventsOn(DateTime.now(), childId: childId),
           onAdd: () => openPersonalEventForChild(
             context: context,
             controller: controller,
@@ -573,9 +570,9 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
           ),
         ],
         child: Text(
-        '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
-        '결석 신고를 취소할까요?',
-      ),
+          '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
+          '결석 신고를 취소할까요?',
+        ),
       ),
     );
     if (confirmed != true) return;

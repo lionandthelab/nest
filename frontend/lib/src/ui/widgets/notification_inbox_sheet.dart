@@ -26,35 +26,35 @@ Future<void> showNotificationInboxSheet({
             scrollable: false,
             child: SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.62,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: items.isEmpty
-                          ? const NestEmptyState(
-                              icon: Icons.notifications_none_outlined,
-                              title: '아직 받은 알림이 없어요',
-                              subtitle: '수업이 바뀌거나 오늘 일정이 생기면 여기에 모입니다.',
-                            )
-                          : ListView.separated(
-                              itemCount: items.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final item = items[index];
-                                return _InboxTile(
-                                  item: item,
-                                  onTap: () {
-                                    NestHaptics.selection();
-                                    Navigator.of(context).pop();
-                                    onOpenItem(item);
-                                  },
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: items.isEmpty
+                        ? const NestEmptyState(
+                            icon: Icons.notifications_none_outlined,
+                            title: '아직 받은 알림이 없어요',
+                            subtitle: '수업이 바뀌거나 오늘 일정이 생기면 여기에 모입니다.',
+                          )
+                        : ListView.separated(
+                            itemCount: items.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              return _InboxTile(
+                                item: item,
+                                onTap: () {
+                                  NestHaptics.selection();
+                                  Navigator.of(context).pop();
+                                  onOpenItem(item);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           );
         },

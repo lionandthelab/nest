@@ -131,8 +131,10 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                   color: NestColors.roseMist.withValues(alpha: 0.35),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Text('시간표 로딩 오류: $e',
-                        style: const TextStyle(fontSize: 12)),
+                    child: Text(
+                      '시간표 로딩 오류: $e',
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
                 );
               }
@@ -299,10 +301,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
         padding: const EdgeInsets.only(bottom: 8, left: 2),
         child: Text(
           planName,
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
     ];
@@ -310,16 +311,17 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
       final ds = byDay[day];
       if (ds == null || ds.isEmpty) continue;
       ds.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      children.add(Padding(
-        padding: const EdgeInsets.only(top: 6, bottom: 6, left: 2),
-        child: Text(
-          '${weekdayLabel(day)}요일',
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w800),
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 6, left: 2),
+          child: Text(
+            '${weekdayLabel(day)}요일',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
         ),
-      ));
+      );
       for (final slot in ds) {
         children.add(_selfStudyCard(context, controller, slot));
       }
@@ -377,8 +379,11 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.meeting_room_outlined,
-                        size: 16, color: NestColors.clay),
+                    Icon(
+                      Icons.meeting_room_outlined,
+                      size: 16,
+                      color: NestColors.clay,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       room,
@@ -391,8 +396,8 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                   Text(
                     '감독 · $supervisor',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.7),
-                        ),
+                      color: NestColors.deepWood.withValues(alpha: 0.7),
+                    ),
                   ),
                 ],
               ],
@@ -463,8 +468,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
         const borderWidth = 1.0;
         final contentWidth = availableWidth - borderWidth * 2;
         final naturalWidth = naturalTimeCol + naturalDayCol * sortedDays.length;
-        final scale =
-            naturalWidth > contentWidth ? contentWidth / naturalWidth : 1.0;
+        final scale = naturalWidth > contentWidth
+            ? contentWidth / naturalWidth
+            : 1.0;
         final timeColWidth = naturalTimeCol * scale;
         final dayColWidth = naturalDayCol * scale;
         final columnsWidth = timeColWidth + dayColWidth * sortedDays.length;
@@ -485,7 +491,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                   Container(
                     width: timeColWidth,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 12),
+                      horizontal: 10,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: NestColors.creamyWhite,
                       border: Border(
@@ -507,8 +515,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
               const Divider(height: 1, thickness: 1),
               ...sortedPeriods.map((periodKey) {
                 final segments = periodKey.split('-');
-                final startTimeLabel =
-                    segments.isNotEmpty ? _koreanTime(segments[0]) : periodKey;
+                final startTimeLabel = segments.isNotEmpty
+                    ? _koreanTime(segments[0])
+                    : periodKey;
                 final compactFont = scale < 0.85;
 
                 return Container(
@@ -531,9 +540,7 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                           child: Text(
                             startTimeLabel,
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   fontWeight: FontWeight.w700,
                                   fontSize: compactFont ? 10 : 12,
@@ -542,15 +549,17 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                         ),
                       ),
                       ...sortedDays.map((day) {
-                        final cells = byPeriodDay[periodKey]?[day] ??
+                        final cells =
+                            byPeriodDay[periodKey]?[day] ??
                             const <_StudentScheduleEntry>[];
                         return Container(
                           width: dayColWidth,
                           decoration: BoxDecoration(
                             border: Border(
                               left: BorderSide(
-                                color: NestColors.roseMist
-                                    .withValues(alpha: 0.45),
+                                color: NestColors.roseMist.withValues(
+                                  alpha: 0.45,
+                                ),
                               ),
                             ),
                           ),
@@ -558,8 +567,7 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                           child: cells.isEmpty
                               ? const SizedBox.shrink()
                               : Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: cells.map((cell) {
                                     final changes = _liveChanges(
                                       controller,
@@ -571,8 +579,7 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                                       childId,
                                     );
                                     return Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 4),
+                                      padding: const EdgeInsets.only(bottom: 4),
                                       child: _SubjectNameCell(
                                         courseName: controller.findCourseName(
                                           cell.session.courseId,
@@ -665,7 +672,7 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
     final timeLabel = slot == null
         ? '-'
         : '${_dayLabel(slot.dayOfWeek)} ${_shortTime(slot.startTime)} - '
-            '${_shortTime(slot.endTime)}';
+              '${_shortTime(slot.endTime)}';
     final teacherLabel = _teacherLabelForSession(
       controller: controller,
       sessionId: entry.session.id,
@@ -686,10 +693,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
             Expanded(
               child: Text(
                 courseName,
-                style: Theme.of(ctx)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(
+                  ctx,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
             IconButton(
@@ -702,8 +708,8 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
         Text(
           entry.className,
           style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.7),
-              ),
+            color: NestColors.deepWood.withValues(alpha: 0.7),
+          ),
         ),
         const SizedBox(height: 16),
         _DetailRow(
@@ -735,10 +741,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
           const Divider(height: 24),
           Text(
             '변경 안내',
-            style: Theme.of(ctx)
-                .textTheme
-                .titleSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(
+              ctx,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           ...changes.map(
@@ -756,16 +761,15 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                         Text(
                           _changePeriodLabel(change),
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         if (change.reason.trim().isNotEmpty)
                           Text(
                             change.reason.trim(),
                             style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                  color: NestColors.deepWood
-                                      .withValues(alpha: 0.7),
-                                ),
+                              color: NestColors.deepWood.withValues(alpha: 0.7),
+                            ),
                           ),
                       ],
                     ),
@@ -810,10 +814,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
             const SizedBox(width: 8),
             Text(
               '결석 신고',
-              style: Theme.of(ctx)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(
+                ctx,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
           ],
         ),
@@ -821,15 +824,12 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
         Text(
           '앞으로 있을 수업 중 못 오는 날을 미리 알려 주세요. 담당 선생님께 문자로 전달됩니다.',
           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.65),
-              ),
+            color: NestColors.deepWood.withValues(alpha: 0.65),
+          ),
         ),
         const SizedBox(height: 10),
         if (dates.isEmpty)
-          Text(
-            '남은 수업 회차가 없습니다.',
-            style: Theme.of(ctx).textTheme.bodySmall,
-          )
+          Text('남은 수업 회차가 없습니다.', style: Theme.of(ctx).textTheme.bodySmall)
         else
           ...dates.map((date) {
             // childId 로 좁혀서 조회한다. 좁히지 않으면 같은 반 형제의 신고가
@@ -880,8 +880,8 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
                     Text(
                       '휴강',
                       style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                            color: NestColors.deepWood.withValues(alpha: 0.5),
-                          ),
+                        color: NestColors.deepWood.withValues(alpha: 0.5),
+                      ),
                     )
                   else
                     TextButton(
@@ -910,10 +910,11 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
     final from = start.isBefore(today) ? today : start;
     if (end.isBefore(from)) return const [];
 
-    return datesForWeekday(from, end, dayOfWeek)
-        .where((date) => date.isAfter(today))
-        .take(8)
-        .toList(growable: false);
+    return datesForWeekday(
+      from,
+      end,
+      dayOfWeek,
+    ).where((date) => date.isAfter(today)).take(8).toList(growable: false);
   }
 
   Future<void> _reportAbsence({
@@ -979,31 +980,34 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
           ),
         ],
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${DateFormat('M월 d일 (E)', 'ko').format(date)} 수업을 결석한다고 알릴까요?',
-            style: Theme.of(ctx).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: textController,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: '사유 (선택)',
-              hintText: '예: 병원 진료',
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${DateFormat('M월 d일 (E)', 'ko').format(date)} 수업을 결석한다고 알릴까요?',
+              style: Theme.of(ctx).textTheme.bodyMedium,
             ),
-          ),
-        ],
-      ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: '사유 (선택)',
+                hintText: '예: 병원 진료',
+              ),
+            ),
+          ],
+        ),
       ),
     );
     textController.dispose();
     return result;
   }
 
-  Future<void> _cancelAbsence(AbsenceReport report, VoidCallback refresh) async {
+  Future<void> _cancelAbsence(
+    AbsenceReport report,
+    VoidCallback refresh,
+  ) async {
     final confirmed = await showNestSheet<bool>(
       context: context,
       builder: (ctx) => NestSheet(
@@ -1019,9 +1023,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
           ),
         ],
         child: Text(
-        '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
-        '결석 신고를 취소할까요?',
-      ),
+          '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
+          '결석 신고를 취소할까요?',
+        ),
       ),
     );
     if (confirmed != true) return;
@@ -1081,8 +1085,9 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
     final leftStart = leftParts.firstOrNull ?? left;
     final rightStart = rightParts.firstOrNull ?? right;
 
-    final startCompare =
-        _clockToMinute(leftStart).compareTo(_clockToMinute(rightStart));
+    final startCompare = _clockToMinute(
+      leftStart,
+    ).compareTo(_clockToMinute(rightStart));
     if (startCompare != 0) return startCompare;
 
     final leftEnd = leftParts.length > 1 ? leftParts[1] : left;
@@ -1103,24 +1108,25 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
     required String sessionId,
     required List<SessionTeacherAssignment> assignments,
   }) {
-    final rows = assignments
-        .where((row) => row.classSessionId == sessionId)
-        .toList()
-      ..sort((a, b) {
-        final left = a.assignmentRole == 'MAIN' ? 0 : 1;
-        final right = b.assignmentRole == 'MAIN' ? 0 : 1;
-        if (left != right) return left.compareTo(right);
-        return controller
-            .findTeacherName(a.teacherProfileId)
-            .compareTo(controller.findTeacherName(b.teacherProfileId));
-      });
+    final rows =
+        assignments.where((row) => row.classSessionId == sessionId).toList()
+          ..sort((a, b) {
+            final left = a.assignmentRole == 'MAIN' ? 0 : 1;
+            final right = b.assignmentRole == 'MAIN' ? 0 : 1;
+            if (left != right) return left.compareTo(right);
+            return controller
+                .findTeacherName(a.teacherProfileId)
+                .compareTo(controller.findTeacherName(b.teacherProfileId));
+          });
 
     if (rows.isEmpty) return '담당교사 미지정';
 
-    return rows.map((row) {
-      final name = controller.findTeacherName(row.teacherProfileId);
-      return row.assignmentRole == 'MAIN' ? '주강사 $name' : '보조 $name';
-    }).join(', ');
+    return rows
+        .map((row) {
+          final name = controller.findTeacherName(row.teacherProfileId);
+          return row.assignmentRole == 'MAIN' ? '주강사 $name' : '보조 $name';
+        })
+        .join(', ');
   }
 
   String _changePeriodLabel(ClassSessionChange change) {
@@ -1144,7 +1150,13 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
 
   String _dayLabel(int dayOfWeek) {
     const labels = <int, String>{
-      0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
+      0: '일',
+      1: '월',
+      2: '화',
+      3: '수',
+      4: '목',
+      5: '금',
+      6: '토',
     };
     return labels[dayOfWeek] ?? '$dayOfWeek';
   }
@@ -1203,10 +1215,9 @@ class _ScheduleHeaderCell extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
-            ?.copyWith(fontWeight: FontWeight.w700),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -1259,11 +1270,10 @@ class _SubjectNameCell extends StatelessWidget {
               courseName,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: compact ? 11 : null,
-                    decoration:
-                        canceled ? TextDecoration.lineThrough : null,
-                  ),
+                fontWeight: FontWeight.w800,
+                fontSize: compact ? 11 : null,
+                decoration: canceled ? TextDecoration.lineThrough : null,
+              ),
             ),
             if (label != null || hasAbsence) ...[
               const SizedBox(height: 3),
@@ -1310,8 +1320,8 @@ class _DetailRow extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: NestColors.deepWood.withValues(alpha: 0.6),
-                    ),
+                  color: NestColors.deepWood.withValues(alpha: 0.6),
+                ),
               ),
               const SizedBox(height: 2),
               Text(value, style: Theme.of(context).textTheme.bodyMedium),

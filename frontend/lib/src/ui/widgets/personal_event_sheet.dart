@@ -67,9 +67,9 @@ Future<void> showPersonalEventSheet({
     }
   } catch (_) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(controller.statusMessage)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(controller.statusMessage)));
   }
 }
 
@@ -104,8 +104,8 @@ class _PersonalEventSheetState extends State<PersonalEventSheet> {
   void initState() {
     super.initState();
     final event = widget.event;
-    final fallbackStart = widget.initialStart ??
-        DateTime.now().add(const Duration(minutes: 30));
+    final fallbackStart =
+        widget.initialStart ?? DateTime.now().add(const Duration(minutes: 30));
     final alignedStart = DateTime(
       fallbackStart.year,
       fallbackStart.month,
@@ -114,7 +114,8 @@ class _PersonalEventSheetState extends State<PersonalEventSheet> {
       fallbackStart.minute,
     );
     _start = event?.startsAt ?? alignedStart;
-    _end = event?.endsAt ??
+    _end =
+        event?.endsAt ??
         widget.initialEnd ??
         alignedStart.add(const Duration(hours: 1));
     _title = TextEditingController(text: event?.title ?? '');
@@ -175,7 +176,9 @@ class _PersonalEventSheetState extends State<PersonalEventSheet> {
       if (isStart) {
         final duration = _end.difference(_start);
         _start = next;
-        _end = _start.add(duration.isNegative ? const Duration(hours: 1) : duration);
+        _end = _start.add(
+          duration.isNegative ? const Duration(hours: 1) : duration,
+        );
         if (!_end.isAfter(_start)) {
           _end = _start.add(const Duration(hours: 1));
         }
@@ -227,114 +230,111 @@ class _PersonalEventSheetState extends State<PersonalEventSheet> {
         ),
       ],
       child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _title,
-              autofocus: !isEdit,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: '제목',
-                hintText: '예: 피아노, 병원, 가족 약속',
-                prefixIcon: Icon(Icons.event_available_outlined, size: 20),
-              ),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _title,
+            autofocus: !isEdit,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: '제목',
+              hintText: '예: 피아노, 병원, 가족 약속',
+              prefixIcon: Icon(Icons.event_available_outlined, size: 20),
             ),
-            const SizedBox(height: 10),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today_outlined),
-              title: const Text('날짜'),
-              subtitle: Text(DateFormat('yyyy년 M월 d일 (E)', 'ko').format(_start)),
-              onTap: _pickDate,
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('시작'),
-                    subtitle: Text(DateFormat('a h:mm', 'ko').format(_start)),
-                    onTap: () => _pickTime(isStart: true),
-                  ),
-                ),
-                Expanded(
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('종료'),
-                    subtitle: Text(DateFormat('a h:mm', 'ko').format(_end)),
-                    onTap: () => _pickTime(isStart: false),
-                  ),
-                ),
-              ],
-            ),
-            TextField(
-              controller: _notes,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: '메모 (선택)',
-                alignLabelWithHint: true,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (overlaps.isNotEmpty) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: NestColors.roseMist.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '학기 수업과 ${overlaps.length}개가 겹칩니다',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ...overlaps.map(
-                      (row) => Text(
-                        '· ${widget.courseNameOf(row.session.courseId)} '
-                        '${DateFormat('M/d HH:mm').format(nestDateTimeOn(row.date, row.slot.startTime))}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
+          ),
+          const SizedBox(height: 10),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.calendar_today_outlined),
+            title: const Text('날짜'),
+            subtitle: Text(DateFormat('yyyy년 M월 d일 (E)', 'ko').format(_start)),
+            onTap: _pickDate,
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('시작'),
+                  subtitle: Text(DateFormat('a h:mm', 'ko').format(_start)),
+                  onTap: () => _pickTime(isStart: true),
                 ),
               ),
-              const SizedBox(height: 8),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                    value: 'KEEP_BOTH',
-                    label: Text('둘 다 보기'),
-                  ),
-                  ButtonSegment(
-                    value: 'PRIORITIZE_PERSONAL',
-                    label: Text('개인 우선'),
-                  ),
-                ],
-                selected: {_policy},
-                showSelectedIcon: false,
-                onSelectionChanged: (values) =>
-                    setState(() => _policy = values.first),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _policy == 'PRIORITIZE_PERSONAL'
-                    ? '겹치는 수업 칸은 흐리게 두고, 이 일정을 먼저 보여 줍니다. 공식 결석 신고는 따로 해야 합니다.'
-                    : '수업과 개인 일정을 한 칸에 같이 보여 줍니다.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.65),
+              Expanded(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('종료'),
+                  subtitle: Text(DateFormat('a h:mm', 'ko').format(_end)),
+                  onTap: () => _pickTime(isStart: false),
                 ),
               ),
             ],
+          ),
+          TextField(
+            controller: _notes,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: '메모 (선택)',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (overlaps.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: NestColors.roseMist.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '학기 수업과 ${overlaps.length}개가 겹칩니다',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...overlaps.map(
+                    (row) => Text(
+                      '· ${widget.courseNameOf(row.session.courseId)} '
+                      '${DateFormat('M/d HH:mm').format(nestDateTimeOn(row.date, row.slot.startTime))}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'KEEP_BOTH', label: Text('둘 다 보기')),
+                ButtonSegment(
+                  value: 'PRIORITIZE_PERSONAL',
+                  label: Text('개인 우선'),
+                ),
+              ],
+              selected: {_policy},
+              showSelectedIcon: false,
+              onSelectionChanged: (values) =>
+                  setState(() => _policy = values.first),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _policy == 'PRIORITIZE_PERSONAL'
+                  ? '겹치는 수업 칸은 흐리게 두고, 이 일정을 먼저 보여 줍니다. 공식 결석 신고는 따로 해야 합니다.'
+                  : '수업과 개인 일정을 한 칸에 같이 보여 줍니다.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.65),
+              ),
+            ),
           ],
-        ),
+        ],
+      ),
     );
   }
 }

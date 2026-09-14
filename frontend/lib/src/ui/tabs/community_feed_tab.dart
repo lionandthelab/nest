@@ -93,8 +93,10 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
             : ListView.separated(
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: posts.length,
-                separatorBuilder: (context, i) =>
-                    Divider(height: 1, color: NestColors.roseMist.withValues(alpha: 0.5)),
+                separatorBuilder: (context, i) => Divider(
+                  height: 1,
+                  color: NestColors.roseMist.withValues(alpha: 0.5),
+                ),
                 itemBuilder: (context, index) {
                   final post = posts[index];
                   return _InstagramPostCard(
@@ -103,8 +105,9 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                     comments: controller.commentsForCommunityPost(post.id),
                     liked: controller.isCommunityPostLiked(post.id),
                     likeCount: controller.likesForCommunityPost(post.id),
-                    classGroupName:
-                        controller.findClassGroupName(post.classGroupId),
+                    classGroupName: controller.findClassGroupName(
+                      post.classGroupId,
+                    ),
                     commentController: _commentControllers[post.id]!,
                     isBusy: controller.isBusy,
                     onLike: () => _toggleLike(post.id),
@@ -164,10 +167,9 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                   const SizedBox(height: 16),
                   Text(
                     '새 게시글',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -189,8 +191,9 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                         ? null
                         : (value) {
                             setState(() {
-                              _targetClassGroupId =
-                                  value == '__ALL__' ? null : value;
+                              _targetClassGroupId = value == '__ALL__'
+                                  ? null
+                                  : value;
                             });
                             setModalState(() {});
                           },
@@ -205,12 +208,12 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                   Row(
                     children: [
                       IconButton.filled(
-                        onPressed:
-                            controller.isBusy ? null : _pickMedia,
+                        onPressed: controller.isBusy ? null : _pickMedia,
                         icon: const Icon(Icons.photo_library_outlined),
                         style: IconButton.styleFrom(
-                          backgroundColor:
-                              NestColors.roseMist.withValues(alpha: 0.5),
+                          backgroundColor: NestColors.roseMist.withValues(
+                            alpha: 0.5,
+                          ),
                           foregroundColor: NestColors.deepWood,
                         ),
                       ),
@@ -341,34 +344,35 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                 ),
               ],
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: reasonCategory,
-                  decoration: const InputDecoration(labelText: '사유'),
-                  items: const [
-                    DropdownMenuItem(value: 'SPAM', child: Text('스팸')),
-                    DropdownMenuItem(value: 'ABUSE', child: Text('비방/욕설')),
-                    DropdownMenuItem(
-                        value: 'SAFETY', child: Text('안전 문제')),
-                    DropdownMenuItem(
-                        value: 'INAPPROPRIATE', child: Text('부적절한 내용')),
-                    DropdownMenuItem(value: 'OTHER', child: Text('기타')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setLocalState(() => reasonCategory = value);
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: detailController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(labelText: '상세 내용'),
-                ),
-              ],
-            ),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: reasonCategory,
+                    decoration: const InputDecoration(labelText: '사유'),
+                    items: const [
+                      DropdownMenuItem(value: 'SPAM', child: Text('스팸')),
+                      DropdownMenuItem(value: 'ABUSE', child: Text('비방/욕설')),
+                      DropdownMenuItem(value: 'SAFETY', child: Text('안전 문제')),
+                      DropdownMenuItem(
+                        value: 'INAPPROPRIATE',
+                        child: Text('부적절한 내용'),
+                      ),
+                      DropdownMenuItem(value: 'OTHER', child: Text('기타')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setLocalState(() => reasonCategory = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: detailController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: '상세 내용'),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -470,8 +474,9 @@ class _InstagramPostCard extends StatelessWidget {
                     children: [
                       Text(
                         post.authorDisplayName,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       Text(
                         '$classGroupName · $createdLabel',
@@ -486,7 +491,11 @@ class _InstagramPostCard extends StatelessWidget {
                 if (post.isPinned)
                   Padding(
                     padding: const EdgeInsets.only(right: 4),
-                    child: Icon(Icons.push_pin, size: 16, color: NestColors.dustyRose),
+                    child: Icon(
+                      Icons.push_pin,
+                      size: 16,
+                      color: NestColors.dustyRose,
+                    ),
                   ),
                 IconButton(
                   onPressed: onReport,
@@ -503,11 +512,13 @@ class _InstagramPostCard extends StatelessWidget {
           // ── Media area ──
           if (media.isNotEmpty) ...[
             const SizedBox(height: 10),
-            ...media.map((item) => _InstagramMediaTile(
-                  item: item,
-                  imageUrl: mediaUrlResolver(item.storagePath),
-                  onOpenMediaLink: onOpenMediaLink,
-                )),
+            ...media.map(
+              (item) => _InstagramMediaTile(
+                item: item,
+                imageUrl: mediaUrlResolver(item.storagePath),
+                onOpenMediaLink: onOpenMediaLink,
+              ),
+            ),
           ],
 
           // ── Content text ──
@@ -534,7 +545,10 @@ class _InstagramPostCard extends StatelessWidget {
                 ),
                 IconButton(
                   onPressed: null,
-                  icon: Icon(Icons.chat_bubble_outline, color: NestColors.deepWood),
+                  icon: Icon(
+                    Icons.chat_bubble_outline,
+                    color: NestColors.deepWood,
+                  ),
                 ),
                 IconButton(
                   onPressed: isBusy ? null : onReport,
@@ -550,8 +564,9 @@ class _InstagramPostCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
               child: Text(
                 '좋아요 $likeCount개',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
 
@@ -570,8 +585,7 @@ class _InstagramPostCard extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: '${c.authorDisplayName}  ',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           TextSpan(text: c.content),
                         ],
@@ -742,8 +756,9 @@ class _SelectedCommunityFileLabel extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed:
-                controller.isBusy ? null : controller.clearPendingCommunityFile,
+            onPressed: controller.isBusy
+                ? null
+                : controller.clearPendingCommunityFile,
             icon: const Icon(Icons.clear, size: 18),
             visualDensity: VisualDensity.compact,
           ),

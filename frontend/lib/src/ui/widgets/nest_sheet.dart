@@ -316,10 +316,7 @@ class NestSheet extends StatelessWidget {
         ),
         Flexible(
           child: scrollable
-              ? SingleChildScrollView(
-                  primary: false,
-                  child: body,
-                )
+              ? SingleChildScrollView(primary: false, child: body)
               : body,
         ),
         if (actions.isNotEmpty || destructiveAction != null)
@@ -436,10 +433,7 @@ class _NestSheetSurface extends StatelessWidget {
           ),
         ],
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: child,
-      ),
+      child: Material(type: MaterialType.transparency, child: child),
     );
   }
 }

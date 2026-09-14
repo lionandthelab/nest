@@ -94,8 +94,8 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.85),
-                  ),
+                color: NestColors.deepWood.withValues(alpha: 0.85),
+              ),
             ),
           ),
         ],
@@ -116,10 +116,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             child: plans.isEmpty
                 ? Text(
                     '자습 계획',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   )
                 : DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
@@ -132,7 +131,8 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                             child: Text(
                               p.name,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w700),
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                       ],
@@ -144,7 +144,8 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             IconButton(
               tooltip: '계획 삭제',
               icon: const Icon(Icons.delete_outline, size: 20),
-              onPressed: () => _confirmDeletePlan(controller.selectedSelfStudyPlan!),
+              onPressed: () =>
+                  _confirmDeletePlan(controller.selectedSelfStudyPlan!),
             ),
           ],
           FilledButton.tonalIcon(
@@ -161,8 +162,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
   Widget _buildConfigCard(BuildContext context, SelfStudyPlan plan) {
     final days = (plan.days.toList()
       ..sort((a, b) => (a == 0 ? 7 : a).compareTo(b == 0 ? 7 : b)));
-    final daysLabel =
-        days.map((d) => weekdayLabel(d)).join('·');
+    final daysLabel = days.map((d) => weekdayLabel(d)).join('·');
     final windowLabel =
         '${humanTimeLabel(minutesFromTime(plan.windowStart))}~'
         '${humanTimeLabel(minutesFromTime(plan.windowEnd))}';
@@ -192,8 +192,8 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             Text(
               plan.note,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.7),
-                  ),
+                color: NestColors.deepWood.withValues(alpha: 0.7),
+              ),
             ),
           ],
           const SizedBox(height: 12),
@@ -228,8 +228,11 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
     final ids = controller.supervisorTeacherIdsInSelectedPlan;
     if (ids.isEmpty) return const SizedBox.shrink();
     final sorted = ids.toList()
-      ..sort((a, b) =>
-          controller.findTeacherName(a).compareTo(controller.findTeacherName(b)));
+      ..sort(
+        (a, b) => controller
+            .findTeacherName(a)
+            .compareTo(controller.findTeacherName(b)),
+      );
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: _card(
@@ -238,15 +241,17 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
           children: [
             Row(
               children: [
-                const Icon(Icons.assignment_ind_outlined,
-                    size: 18, color: NestColors.clay),
+                const Icon(
+                  Icons.assignment_ind_outlined,
+                  size: 18,
+                  color: NestColors.clay,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '감독표',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -254,8 +259,8 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             Text(
               '교사를 누르면 그 교사의 감독 날짜·시간·장소가 나옵니다.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.7),
-                  ),
+                color: NestColors.deepWood.withValues(alpha: 0.7),
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -310,16 +315,17 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
       final daySlots = byDay[day];
       if (daySlots == null || daySlots.isEmpty) continue;
       daySlots.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      sections.add(Padding(
-        padding: const EdgeInsets.only(top: 4, bottom: 6, left: 4),
-        child: Text(
-          '${weekdayLabel(day)}요일',
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w800),
+      sections.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 6, left: 4),
+          child: Text(
+            '${weekdayLabel(day)}요일',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
         ),
-      ));
+      );
       for (final slot in daySlots) {
         sections.add(_buildSlotCard(context, slot));
         sections.add(const SizedBox(height: 8));
@@ -332,14 +338,15 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
     final readOnly = controller.isSelectedTermReadOnly;
     final groupName = controller.findClassGroupName(slot.classGroupId);
     final roster = controller.rosterForSelfStudySlot(slot);
-    final excludedCount =
-        controller.excludedChildIdsForSelfStudySlot(slot.id).length;
+    final excludedCount = controller
+        .excludedChildIdsForSelfStudySlot(slot.id)
+        .length;
     final supervisorName = slot.supervisorTeacherId == null
         ? null
         : controller.teacherProfiles
-            .where((t) => t.id == slot.supervisorTeacherId)
-            .map((t) => t.displayName)
-            .firstOrNull;
+              .where((t) => t.id == slot.supervisorTeacherId)
+              .map((t) => t.displayName)
+              .firstOrNull;
 
     return _card(
       child: Column(
@@ -348,8 +355,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: NestColors.mutedSage.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
@@ -366,10 +372,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
               const SizedBox(width: 8),
               Text(
                 groupName,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               Text(
@@ -378,9 +383,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                   minutesFromTime(slot.endTime),
                 ),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: NestColors.clay,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.clay,
+                ),
               ),
             ],
           ),
@@ -435,14 +440,12 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
         title: Text(
           '자습 명단 ${roster.length}명'
           '${excludedCount > 0 ? ' · 제외 $excludedCount명' : ''}',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         subtitle: allMembers.isEmpty
-            ? const Text('이 반에 배정된 아동이 없습니다.',
-                style: TextStyle(fontSize: 12))
+            ? const Text('이 반에 배정된 아동이 없습니다.', style: TextStyle(fontSize: 12))
             : null,
         children: [
           Wrap(
@@ -504,11 +507,11 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
           ),
         ],
         child: Text(
-        hasSlots
-            ? '수업 시간표의 공강을 다시 계산해 자습 슬롯을 새로 만듭니다.\n'
-                '방/감독/제외 명단은 시간이 같은 슬롯에 한해 최대한 유지됩니다.'
-            : '수업 시간표의 공강을 계산해 반별 자습 슬롯을 만듭니다.',
-      ),
+          hasSlots
+              ? '수업 시간표의 공강을 다시 계산해 자습 슬롯을 새로 만듭니다.\n'
+                    '방/감독/제외 명단은 시간이 같은 슬롯에 한해 최대한 유지됩니다.'
+              : '수업 시간표의 공강을 계산해 반별 자습 슬롯을 만듭니다.',
+        ),
       ),
     );
     if (ok != true) return;
@@ -546,38 +549,37 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             ),
           ],
           child: StatefulBuilder(
-          builder: (ctx, setInner) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: controller0,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: '방 이름',
-                  hintText: '예: 중예배실, 304호',
+            builder: (ctx, setInner) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller0,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: '방 이름',
+                    hintText: '예: 중예배실, 304호',
+                  ),
                 ),
-              ),
-              if (rooms.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                const Text('등록된 강의실', style: TextStyle(fontSize: 12)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final r in rooms)
-                      ActionChip(
-                        label: Text(r),
-                        onPressed: () =>
-                            setInner(() => controller0.text = r),
-                      ),
-                  ],
-                ),
+                if (rooms.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('등록된 강의실', style: TextStyle(fontSize: 12)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final r in rooms)
+                        ActionChip(
+                          label: Text(r),
+                          onPressed: () => setInner(() => controller0.text = r),
+                        ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
         );
       },
     );
@@ -656,10 +658,11 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
   }
 
   Future<void> _openPlanDialog({SelfStudyPlan? plan}) async {
-    final nameController =
-        TextEditingController(text: plan?.name ?? '공과 자습');
+    final nameController = TextEditingController(text: plan?.name ?? '공과 자습');
     final noteController = TextEditingController(text: plan?.note ?? '');
-    final days = <int>{...(plan?.days ?? const [1, 2, 3, 4, 5])};
+    final days = <int>{
+      ...(plan?.days ?? const [1, 2, 3, 4, 5]),
+    };
     var start = _timeOf(plan?.windowStart ?? '09:00', fallback: 9);
     var end = _timeOf(plan?.windowEnd ?? '12:00', fallback: 12);
     DateTime? periodStart = plan?.periodStart;
@@ -672,24 +675,25 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
         return StatefulBuilder(
           builder: (ctx, setInner) {
             Widget dayChip(int day) => FilterChip(
-                  label: Text(weekdayLabel(day)),
-                  selected: days.contains(day),
-                  onSelected: (v) => setInner(() {
-                    if (v) {
-                      days.add(day);
-                    } else {
-                      days.remove(day);
-                    }
-                  }),
-                );
+              label: Text(weekdayLabel(day)),
+              selected: days.contains(day),
+              onSelected: (v) => setInner(() {
+                if (v) {
+                  days.add(day);
+                } else {
+                  days.remove(day);
+                }
+              }),
+            );
 
             Future<void> pickTime(bool isStart) async {
               final picked = await showTimePicker(
                 context: ctx,
                 initialTime: isStart ? start : end,
                 builder: (context, child) => MediaQuery(
-                  data: MediaQuery.of(context)
-                      .copyWith(alwaysUse24HourFormat: true),
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(alwaysUse24HourFormat: true),
                   child: child!,
                 ),
               );
@@ -779,7 +783,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                       Expanded(
                         child: _dialogField(
                           '기간 시작',
-                          periodStart == null ? '학기 기준' : _fmtDate(periodStart!),
+                          periodStart == null
+                              ? '학기 기준'
+                              : _fmtDate(periodStart!),
                           Icons.date_range,
                           () => pickDate(true),
                         ),
@@ -796,8 +802,10 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  const Text('최소 공강(이보다 짧은 빈 시간은 자습으로 만들지 않음)',
-                      style: TextStyle(fontSize: 12)),
+                  const Text(
+                    '최소 공강(이보다 짧은 빈 시간은 자습으로 만들지 않음)',
+                    style: TextStyle(fontSize: 12),
+                  ),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
@@ -922,13 +930,17 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color:
-                              NestColors.deepWood.withValues(alpha: 0.6))),
-                  Text(value,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: NestColors.deepWood.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  Text(
+                    value,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
             ),
@@ -941,9 +953,9 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
   void _showError(Object e) {
     if (!mounted) return;
     final message = e is StateError ? e.message : e.toString();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   TimeOfDay _timeOf(String value, {required int fallback}) {

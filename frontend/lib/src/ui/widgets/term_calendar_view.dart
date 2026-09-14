@@ -85,9 +85,9 @@ class _TermCalendarViewState extends State<TermCalendarView> {
               child: Text(
                 DateFormat('yyyy년 M월', 'ko').format(_month),
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
             IconButton(
@@ -128,7 +128,9 @@ class _TermCalendarViewState extends State<TermCalendarView> {
                 return const Expanded(child: SizedBox(height: 54));
               }
               final date = DateTime(_month.year, _month.month, dayNum);
-              return Expanded(child: _DayCell(date: date, parent: widget));
+              return Expanded(
+                child: _DayCell(date: date, parent: widget),
+              );
             }),
           ),
         const SizedBox(height: 8),
@@ -222,97 +224,100 @@ class _DayCell extends StatelessWidget {
         return NestSheet(
           title: DateFormat('M월 d일 (E)', 'ko').format(date),
           child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (academic.isEmpty && classes.isEmpty && personal.isEmpty)
-                  const Text('이 날에는 아직 일정이 없습니다.'),
-                ...academic.map(
-                  (event) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.flag_outlined, color: NestColors.clay),
-                    title: Text(event.title),
-                    subtitle: Text(
-                      [
-                        academicKindLabel(event.kind),
-                        if (!event.isAllDay)
-                          '${event.startTime} – ${event.endTime ?? ''}',
-                      ].join(' · '),
-                    ),
-                    onTap: parent.onOpenAcademic == null
-                        ? null
-                        : () {
-                            Navigator.pop(sheetContext);
-                            parent.onOpenAcademic!(event);
-                          },
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (academic.isEmpty && classes.isEmpty && personal.isEmpty)
+                const Text('이 날에는 아직 일정이 없습니다.'),
+              ...academic.map(
+                (event) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.flag_outlined,
+                    color: NestColors.clay,
+                  ),
+                  title: Text(event.title),
+                  subtitle: Text(
+                    [
+                      academicKindLabel(event.kind),
+                      if (!event.isAllDay)
+                        '${event.startTime} – ${event.endTime ?? ''}',
+                    ].join(' · '),
+                  ),
+                  onTap: parent.onOpenAcademic == null
+                      ? null
+                      : () {
+                          Navigator.pop(sheetContext);
+                          parent.onOpenAcademic!(event);
+                        },
+                ),
+              ),
+              ...classes.map((row) {
+                final hidden = personalHidesClass(
+                  events: personal,
+                  date: date,
+                  slot: row.slot,
+                );
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    row.isCanceled
+                        ? Icons.event_busy_outlined
+                        : Icons.school_outlined,
+                    color: NestColors.dustyRose,
+                  ),
+                  title: Text(
+                    parent.courseNameOf(row.session.courseId),
+                    style: hidden
+                        ? const TextStyle(
+                            decoration: TextDecoration.lineThrough,
+                          )
+                        : null,
+                  ),
+                  subtitle: Text(
+                    '${row.slot.startTime.substring(0, 5)} – '
+                    '${row.slot.endTime.substring(0, 5)}'
+                    '${hidden ? ' · 개인 일정 우선' : ''}'
+                    '${row.isCanceled ? ' · 휴강' : ''}',
+                  ),
+                );
+              }),
+              ...personal.map(
+                (event) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.person_outline,
+                    color: NestColors.mutedSage,
+                  ),
+                  title: Text(event.title),
+                  subtitle: Text(
+                    '${DateFormat('HH:mm').format(event.startsAt)} – '
+                    '${DateFormat('HH:mm').format(event.endsAt)}'
+                    '${event.isFromGoogle ? ' · Google' : ''}',
+                  ),
+                  onTap: parent.onEditPersonal == null
+                      ? null
+                      : () {
+                          Navigator.pop(sheetContext);
+                          parent.onEditPersonal!(event);
+                        },
+                ),
+              ),
+              if (parent.canAddPersonal && parent.onAddPersonal != null) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      parent.onAddPersonal!(date);
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('이 날에 개인 일정'),
                   ),
                 ),
-                ...classes.map((row) {
-                  final hidden = personalHidesClass(
-                    events: personal,
-                    date: date,
-                    slot: row.slot,
-                  );
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      row.isCanceled
-                          ? Icons.event_busy_outlined
-                          : Icons.school_outlined,
-                      color: NestColors.dustyRose,
-                    ),
-                    title: Text(
-                      parent.courseNameOf(row.session.courseId),
-                      style: hidden
-                          ? const TextStyle(
-                              decoration: TextDecoration.lineThrough,
-                            )
-                          : null,
-                    ),
-                    subtitle: Text(
-                      '${row.slot.startTime.substring(0, 5)} – '
-                      '${row.slot.endTime.substring(0, 5)}'
-                      '${hidden ? ' · 개인 일정 우선' : ''}'
-                      '${row.isCanceled ? ' · 휴강' : ''}',
-                    ),
-                  );
-                }),
-                ...personal.map(
-                  (event) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.person_outline,
-                      color: NestColors.mutedSage,
-                    ),
-                    title: Text(event.title),
-                    subtitle: Text(
-                      '${DateFormat('HH:mm').format(event.startsAt)} – '
-                      '${DateFormat('HH:mm').format(event.endsAt)}'
-                      '${event.isFromGoogle ? ' · Google' : ''}',
-                    ),
-                    onTap: parent.onEditPersonal == null
-                        ? null
-                        : () {
-                            Navigator.pop(sheetContext);
-                            parent.onEditPersonal!(event);
-                          },
-                  ),
-                ),
-                if (parent.canAddPersonal && parent.onAddPersonal != null) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(sheetContext);
-                        parent.onAddPersonal!(date);
-                      },
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('이 날에 개인 일정'),
-                    ),
-                  ),
-                ],
               ],
-            ),
+            ],
+          ),
         );
       },
     );

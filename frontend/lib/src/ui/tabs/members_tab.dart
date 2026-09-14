@@ -43,10 +43,7 @@ class _MembersTabState extends State<MembersTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '멤버 관리',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              Text('멤버 관리', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
               const Text('홈스쿨 관리자만 권한 관리를 할 수 있습니다.'),
             ],
@@ -55,8 +52,9 @@ class _MembersTabState extends State<MembersTab> {
       );
     }
 
-    final pendingRequests =
-        controller.joinRequests.where((r) => r.isPending).toList();
+    final pendingRequests = controller.joinRequests
+        .where((r) => r.isPending)
+        .toList();
 
     return ListView(
       children: [
@@ -86,8 +84,11 @@ class _MembersTabState extends State<MembersTab> {
           children: [
             Row(
               children: [
-                const Icon(Icons.vpn_key_outlined,
-                    size: 20, color: NestColors.clay),
+                const Icon(
+                  Icons.vpn_key_outlined,
+                  size: 20,
+                  color: NestColors.clay,
+                ),
                 const SizedBox(width: 8),
                 Text('참여 코드', style: theme.textTheme.titleLarge),
               ],
@@ -104,8 +105,10 @@ class _MembersTabState extends State<MembersTab> {
               children: [
                 Expanded(
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: NestColors.roseMist.withValues(alpha: 0.5),
@@ -161,9 +164,7 @@ class _MembersTabState extends State<MembersTab> {
             child: const Text('재발급'),
           ),
         ],
-        child: const Text(
-        '새 코드를 만들면 기존 코드는 더 이상 쓸 수 없어요. 계속할까요?',
-      ),
+        child: const Text('새 코드를 만들면 기존 코드는 더 이상 쓸 수 없어요. 계속할까요?'),
       ),
     );
     if (ok != true) return;
@@ -266,9 +267,9 @@ class _MembersTabState extends State<MembersTab> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 '메모: ${req.requestNote}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontStyle: FontStyle.italic,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
               ),
             ),
           Text(
@@ -291,8 +292,9 @@ class _MembersTabState extends State<MembersTab> {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed:
-                    controller.isBusy ? null : () => _showApproveDialog(req),
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _showApproveDialog(req),
                 icon: const Icon(Icons.check, size: 18),
                 label: const Text('승인'),
               ),
@@ -374,7 +376,8 @@ class _MembersTabState extends State<MembersTab> {
                   child: const Text('취소'),
                 ),
                 FilledButton(
-                  onPressed: (role == 'PARENT' && familyId == null) ||
+                  onPressed:
+                      (role == 'PARENT' && familyId == null) ||
                           (role == 'STUDENT' && studentChildId == null)
                       ? null
                       : () => Navigator.pop(ctx, true),
@@ -392,15 +395,21 @@ class _MembersTabState extends State<MembersTab> {
                     style: Theme.of(ctx).textTheme.titleSmall,
                   ),
                   if ((req.requesterName ?? '').trim().isNotEmpty)
-                    Text('닉네임: ${req.requesterName}',
-                        style: Theme.of(ctx).textTheme.bodySmall),
-                  Text(req.requesterEmail,
-                      style: Theme.of(ctx).textTheme.bodySmall),
+                    Text(
+                      '닉네임: ${req.requesterName}',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                  Text(
+                    req.requesterEmail,
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
                   if ((req.requestNote ?? '').trim().isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Text('메모: ${req.requestNote}',
-                          style: Theme.of(ctx).textTheme.bodySmall),
+                      child: Text(
+                        '메모: ${req.requestNote}',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
                     ),
                   const SizedBox(height: 14),
                   const Text('역할'),
@@ -423,22 +432,23 @@ class _MembersTabState extends State<MembersTab> {
                     if (families.isEmpty)
                       Text(
                         '등록된 가정이 없습니다. 학기 설정 › 가정에서 먼저 만들어 주세요.',
-                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                              color: NestColors.clay,
-                            ),
+                        style: Theme.of(
+                          ctx,
+                        ).textTheme.bodySmall?.copyWith(color: NestColors.clay),
                       )
                     else
                       DropdownButtonFormField<String>(
                         initialValue: familyId,
                         isExpanded: true,
-                        decoration:
-                            const InputDecoration(hintText: '가정 선택'),
+                        decoration: const InputDecoration(hintText: '가정 선택'),
                         items: [
                           for (final f in families)
                             DropdownMenuItem(
                               value: f.id,
-                              child: Text(f.familyName,
-                                  overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                f.familyName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                         ],
                         onChanged: (v) => setInner(() => familyId = v),
@@ -451,9 +461,9 @@ class _MembersTabState extends State<MembersTab> {
                     if (linkableChildren.isEmpty)
                       Text(
                         '연결할 수 있는 아이가 없습니다. 학기 설정 › 가정에서 아이를 먼저 등록해 주세요.',
-                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                              color: NestColors.clay,
-                            ),
+                        style: Theme.of(
+                          ctx,
+                        ).textTheme.bodySmall?.copyWith(color: NestColors.clay),
                       )
                     else
                       SelectFieldCard(
@@ -475,8 +485,7 @@ class _MembersTabState extends State<MembersTab> {
                                   value: child.id,
                                   title: child.name,
                                   subtitle: child.familyName,
-                                  keywords:
-                                      '${child.name} ${child.familyName}',
+                                  keywords: '${child.name} ${child.familyName}',
                                 ),
                             ],
                           );
@@ -498,8 +507,8 @@ class _MembersTabState extends State<MembersTab> {
                       title: Text(
                         "'${matched.displayName}' 선생님 프로필과 연결",
                         style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       subtitle: const Text(
                         '기존 감독/교사 프로필과 이 계정을 이어, 감독 시간표가 보이게 합니다.',
@@ -573,16 +582,19 @@ class _MembersTabState extends State<MembersTab> {
     final memberItems = <DropdownMenuItem<String?>>[];
     for (final uid in userIds) {
       final name = controller.findMemberDisplayName(uid);
-      memberItems.add(DropdownMenuItem(
-        value: uid,
-        child: Text(name, overflow: TextOverflow.ellipsis),
-      ));
+      memberItems.add(
+        DropdownMenuItem(
+          value: uid,
+          child: Text(name, overflow: TextOverflow.ellipsis),
+        ),
+      );
     }
     // Sort by display name
-    memberItems.sort((a, b) => (a.child as Text)
-        .data!
-        .toLowerCase()
-        .compareTo((b.child as Text).data!.toLowerCase()));
+    memberItems.sort(
+      (a, b) => (a.child as Text).data!.toLowerCase().compareTo(
+        (b.child as Text).data!.toLowerCase(),
+      ),
+    );
 
     return Card(
       child: Padding(
@@ -590,10 +602,7 @@ class _MembersTabState extends State<MembersTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '멤버 권한 관리',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('멤버 권한 관리', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
               '기존 멤버를 선택하여 권한을 부여/회수합니다.',
@@ -663,8 +672,7 @@ class _MembersTabState extends State<MembersTab> {
         final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
         return right.compareTo(left);
       });
-    final pendingCount =
-        invites.where((i) => i.status == 'PENDING').length;
+    final pendingCount = invites.where((i) => i.status == 'PENDING').length;
 
     return Card(
       child: Padding(
@@ -675,8 +683,10 @@ class _MembersTabState extends State<MembersTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text('이메일 초대',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  child: Text(
+                    '이메일 초대',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
                 ActionChip(
                   avatar: Icon(
@@ -777,9 +787,7 @@ class _MembersTabState extends State<MembersTab> {
           builder: (context, setDialogState) {
             final filtered = _showCancelled
                 ? invites
-                : invites
-                    .where((i) => i.status != 'CANCELED')
-                    .toList();
+                : invites.where((i) => i.status != 'CANCELED').toList();
 
             return NestSheet(
               title: '초대 현황',
@@ -905,7 +913,8 @@ class _MembersTabState extends State<MembersTab> {
 
     for (final role in sortedRoles) {
       roleMap[role]!.sort(
-          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
     }
 
     return Card(
@@ -914,8 +923,7 @@ class _MembersTabState extends State<MembersTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('현재 멤버 권한',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text('현재 멤버 권한', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
             if (sortedRoles.isEmpty)
               const NestEmptyState(
@@ -932,49 +940,51 @@ class _MembersTabState extends State<MembersTab> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: NestColors.roseMist.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           '${_roleLabel(role)} (${members.length})',
-                          style:
-                              Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      ...members.map((m) => Padding(
-                            padding: const EdgeInsets.only(
-                                left: 8, bottom: 4),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.person_outline, size: 18),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    m.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium,
-                                  ),
+                      ...members.map(
+                        (m) => Padding(
+                          padding: const EdgeInsets.only(left: 8, bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.person_outline, size: 18),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  m.name,
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                 ),
-                                ActionChip(
-                                  label: const Text('회수'),
-                                  avatar: const Icon(
-                                      Icons.remove_circle_outline,
-                                      size: 16),
-                                  onPressed: controller.isBusy
-                                      ? null
-                                      : () => _revokeRole(
-                                          userId: m.userId, role: role),
-                                  visualDensity: VisualDensity.compact,
+                              ),
+                              ActionChip(
+                                label: const Text('회수'),
+                                avatar: const Icon(
+                                  Icons.remove_circle_outline,
+                                  size: 16,
                                 ),
-                              ],
-                            ),
-                          )),
+                                onPressed: controller.isBusy
+                                    ? null
+                                    : () => _revokeRole(
+                                        userId: m.userId,
+                                        role: role,
+                                      ),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -1015,10 +1025,7 @@ class _MembersTabState extends State<MembersTab> {
     DropdownMenuItem(value: 'TEACHER', child: Text('교사')),
     DropdownMenuItem(value: 'GUEST_TEACHER', child: Text('외부교사')),
     DropdownMenuItem(value: 'STAFF', child: Text('스태프')),
-    DropdownMenuItem(
-      value: 'HOMESCHOOL_ADMIN',
-      child: Text('관리자'),
-    ),
+    DropdownMenuItem(value: 'HOMESCHOOL_ADMIN', child: Text('관리자')),
   ];
 
   String _statusLabel(String status) {

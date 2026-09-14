@@ -115,7 +115,9 @@ class ChildSelectorHeader extends StatelessWidget {
                                     Icons.flag_circle_outlined,
                                     size: 14,
                                   ),
-                                  label: Text(_childStatusLabel(selectedChild.status)),
+                                  label: Text(
+                                    _childStatusLabel(selectedChild.status),
+                                  ),
                                   visualDensity: VisualDensity.compact,
                                 ),
                                 Chip(
@@ -301,9 +303,9 @@ class ChildSelectorHeader extends StatelessWidget {
 
     if (familyName.isEmpty || childName.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('가정 이름과 아이 이름을 입력하세요.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('가정 이름과 아이 이름을 입력하세요.')));
       }
       return;
     }
@@ -317,15 +319,15 @@ class ChildSelectorHeader extends StatelessWidget {
             : DateFormat('yyyy-MM-dd').format(birthDate!),
       );
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(controller.statusMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(controller.statusMessage)));
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(controller.statusMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(controller.statusMessage)));
       }
     }
   }

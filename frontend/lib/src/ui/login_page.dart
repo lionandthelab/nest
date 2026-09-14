@@ -176,28 +176,28 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ],
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '가입한 이메일 주소를 입력하면 비밀번호 재설정 링크를 보내드립니다.',
-            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.65),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '가입한 이메일 주소를 입력하면 비밀번호 재설정 링크를 보내드립니다.',
+              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.65),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: '이메일',
-              hintText: 'you@example.com',
-              prefixIcon: Icon(Icons.email_outlined, size: 20),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: '이메일',
+                hintText: 'you@example.com',
+                prefixIcon: Icon(Icons.email_outlined, size: 20),
+              ),
+              autofocus: true,
             ),
-            autofocus: true,
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
     emailController.dispose();

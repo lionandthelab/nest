@@ -64,7 +64,9 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
 
   void _showMessage(String message) {
     if (!mounted || message.trim().isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _errorText(Object error) =>
@@ -129,8 +131,7 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
         ],
         selected: {_section},
         showSelectedIcon: false,
-        onSelectionChanged: (values) =>
-            setState(() => _section = values.first),
+        onSelectionChanged: (values) => setState(() => _section = values.first),
       ),
     );
   }
@@ -611,15 +612,9 @@ class _NoticeCard extends StatelessWidget {
                   children: [
                     _MetaChip(icon: Icons.groups_outlined, label: scopeLabel),
                     if (authorLabel.isNotEmpty)
-                      _MetaChip(
-                        icon: Icons.person_outline,
-                        label: authorLabel,
-                      ),
+                      _MetaChip(icon: Icons.person_outline, label: authorLabel),
                     if (created.isNotEmpty)
-                      _MetaChip(
-                        icon: Icons.schedule_outlined,
-                        label: created,
-                      ),
+                      _MetaChip(icon: Icons.schedule_outlined, label: created),
                   ],
                 ),
               ],
@@ -1076,8 +1071,7 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
             ? DateUtils.dateOnly(termStart)
             : today);
     _endDate = event?.endDate;
-    _multiDay =
-        _endDate != null && !DateUtils.isSameDay(_startDate, _endDate!);
+    _multiDay = _endDate != null && !DateUtils.isSameDay(_startDate, _endDate!);
     if (!_multiDay) _endDate = null;
     _kind = event?.kind ?? 'EVENT';
     _timed = event != null && !event.isAllDay;
@@ -1146,8 +1140,12 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
         startDate: _startDate,
         endDate: _multiDay ? (_endDate ?? _startDate) : null,
         kind: _kind,
-        startTime: _timed ? _formatClock(_startClock ?? const TimeOfDay(hour: 9, minute: 0)) : null,
-        endTime: _timed ? _formatClock(_endClock ?? const TimeOfDay(hour: 10, minute: 0)) : null,
+        startTime: _timed
+            ? _formatClock(_startClock ?? const TimeOfDay(hour: 9, minute: 0))
+            : null,
+        endTime: _timed
+            ? _formatClock(_endClock ?? const TimeOfDay(hour: 10, minute: 0))
+            : null,
         publishAnnouncement: _publishAnnouncement,
         showOnTimetable: _showOnTimetable,
       ),
@@ -1226,10 +1224,7 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                '종류',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+              Text('종류', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
@@ -1274,7 +1269,8 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
                           final picked = await showTimePicker(
                             context: context,
                             initialTime:
-                                _startClock ?? const TimeOfDay(hour: 9, minute: 0),
+                                _startClock ??
+                                const TimeOfDay(hour: 9, minute: 0),
                           );
                           if (picked != null && mounted) {
                             setState(() => _startClock = picked);
@@ -1294,7 +1290,8 @@ class _EventEditorSheetState extends State<_EventEditorSheet> {
                           final picked = await showTimePicker(
                             context: context,
                             initialTime:
-                                _endClock ?? const TimeOfDay(hour: 10, minute: 0),
+                                _endClock ??
+                                const TimeOfDay(hour: 10, minute: 0),
                           );
                           if (picked != null && mounted) {
                             setState(() => _endClock = picked);
