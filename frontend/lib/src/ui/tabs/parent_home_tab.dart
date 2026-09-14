@@ -329,11 +329,19 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '$classGroupName · $when',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.5),
-                  fontSize: 11,
+              // 반 이름이 길어도 이 칸이 줄을 밀어내지 않게 상한을 둔다.
+              // Flexible 로 두면 제목과 폭을 반씩 나눠 가져 제목이 먼저 접힌다.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 96),
+                child: Text(
+                  '$classGroupName · $when',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.5),
+                    fontSize: 11,
+                  ),
                 ),
               ),
               if (announcements.length > 1) ...[
