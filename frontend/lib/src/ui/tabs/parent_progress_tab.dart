@@ -26,17 +26,16 @@ class ParentProgressTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final childLogs =
-        selectedChildId == null
-              ? const <StudentActivityLog>[]
-              : controller
-                    .activityLogsForChild(selectedChildId!)
-                    .toList()
-          ..sort((a, b) {
-            final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
-            final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
-            return right.compareTo(left);
-          });
+    // 정렬 캐스케이드가 삼항식 전체에 걸리면 자녀를 아직 고르지 않았을 때
+    // const 빈 목록을 정렬하려다 터진다. 실제 목록 쪽에만 붙인다.
+    final childLogs = selectedChildId == null
+        ? const <StudentActivityLog>[]
+        : (controller.activityLogsForChild(selectedChildId!).toList()
+            ..sort((a, b) {
+              final left = a.recordedAt?.millisecondsSinceEpoch ?? 0;
+              final right = b.recordedAt?.millisecondsSinceEpoch ?? 0;
+              return right.compareTo(left);
+            }));
 
     final countsByType = <String, int>{};
     for (final log in childLogs) {
@@ -80,11 +79,13 @@ class ParentProgressTab extends StatelessWidget {
         NestSkeletonCard(),
       ]);
     } else if (selectedChildId == null) {
-      items.add(const NestEmptyState(
-        icon: Icons.trending_up,
-        title: '아이를 먼저 선택하세요',
-        subtitle: '상단에서 아이를 선택하면 학습 현황을 확인할 수 있습니다.',
-      ));
+      items.add(
+        const NestEmptyState(
+          icon: Icons.trending_up,
+          title: '아이를 먼저 선택하세요',
+          subtitle: '상단에서 아이를 선택하면 학습 현황을 확인할 수 있습니다.',
+        ),
+      );
     } else {
       items.add(
         LayoutBuilder(
@@ -120,11 +121,13 @@ class ParentProgressTab extends StatelessWidget {
       items.add(const SizedBox(height: 12));
 
       if (childLogs.isEmpty) {
-        items.add(const NestEmptyState(
-          icon: Icons.trending_up,
-          title: '등록된 상태 로그가 없습니다',
-          subtitle: '선생님이 기록을 남기면 여기서 확인할 수 있습니다.',
-        ));
+        items.add(
+          const NestEmptyState(
+            icon: Icons.trending_up,
+            title: '등록된 상태 로그가 없습니다',
+            subtitle: '선생님이 기록을 남기면 여기서 확인할 수 있습니다.',
+          ),
+        );
       }
       // Log rows are rendered directly by itemBuilder below for lazy loading.
     }
@@ -134,65 +137,66 @@ class ParentProgressTab extends StatelessWidget {
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
-      itemCount: items.length + (selectedChildId != null && childLogs.isNotEmpty ? displayLogs.length : 0),
-      itemBuilder: (context, index) {
-        if (index < items.length) return items[index];
+        itemCount:
+            items.length +
+            (selectedChildId != null && childLogs.isNotEmpty
+                ? displayLogs.length
+                : 0),
+        itemBuilder: (context, index) {
+          if (index < items.length) return items[index];
 
-        final log = displayLogs[index - items.length];
-        final when = log.recordedAt == null
-            ? '-'
-            : DateFormat('yyyy-MM-dd HH:mm').format(log.recordedAt!);
-        final className = log.classSessionId == null
-            ? '세션 미지정'
-            : sessionClassNameById[log.classSessionId!] ?? '연결 반 확인 필요';
+          final log = displayLogs[index - items.length];
+          final when = log.recordedAt == null
+              ? '-'
+              : DateFormat('yyyy-MM-dd HH:mm').format(log.recordedAt!);
+          final className = log.classSessionId == null
+              ? '세션 미지정'
+              : sessionClassNameById[log.classSessionId!] ?? '연결 반 확인 필요';
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: NestColors.roseMist),
-              color: Colors.white,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    EntityAvatar(
-                      label: controller.findTeacherName(
-                        log.recordedByTeacherId,
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: NestColors.roseMist),
+                color: Colors.white,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      EntityAvatar(
+                        label: controller.findTeacherName(
+                          log.recordedByTeacherId,
+                        ),
+                        icon: _activityIcon(log.activityType),
+                        size: 30,
                       ),
-                      icon: _activityIcon(log.activityType),
-                      size: 30,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${_activityTypeLabel(log.activityType)} · $className',
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${_activityTypeLabel(log.activityType)} · $className',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
                       ),
-                    ),
-                    Text(
-                      when,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(log.content),
-                const SizedBox(height: 4),
-                _MetaText(
-                  icon: Icons.school_outlined,
-                  text: controller.findTeacherName(log.recordedByTeacherId),
-                ),
-              ],
+                      Text(when, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(log.content),
+                  const SizedBox(height: 4),
+                  _MetaText(
+                    icon: Icons.school_outlined,
+                    text: controller.findTeacherName(log.recordedByTeacherId),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
       ),
     );
   }

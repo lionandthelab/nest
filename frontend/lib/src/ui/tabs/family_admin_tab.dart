@@ -2246,23 +2246,25 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 accountQueryController.text,
                 maxResults: 8,
               );
-              final blocks =
-                  editingTeacher == null
-                        ? const <MemberUnavailabilityBlock>[]
-                        : controller.memberUnavailabilityBlocks
-                              .where(
-                                (block) =>
-                                    block.ownerKind == 'TEACHER_PROFILE' &&
-                                    block.ownerId == editingTeacher!.id,
-                              )
-                              .toList()
-                    ..sort((a, b) {
-                      final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-                      if (day != 0) {
-                        return day;
-                      }
-                      return a.startTime.compareTo(b.startTime);
-                    });
+              // 캐스케이드(..sort)를 삼항식 전체에 걸면 "선생님 추가"처럼
+              // const 빈 목록이 고른 쪽에서도 정렬을 시도해 터진다.
+              // 정렬은 실제 목록을 만든 쪽에만 붙인다.
+              final blocks = editingTeacher == null
+                  ? const <MemberUnavailabilityBlock>[]
+                  : (controller.memberUnavailabilityBlocks
+                        .where(
+                          (block) =>
+                              block.ownerKind == 'TEACHER_PROFILE' &&
+                              block.ownerId == editingTeacher!.id,
+                        )
+                        .toList()
+                      ..sort((a, b) {
+                        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+                        if (day != 0) {
+                          return day;
+                        }
+                        return a.startTime.compareTo(b.startTime);
+                      }));
 
               Future<void> saveTeacher() async {
                 if (nameController.text.trim().isEmpty || isSaving) {
