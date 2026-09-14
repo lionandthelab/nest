@@ -5,8 +5,8 @@ import '../../models/nest_models.dart';
 import '../../services/schedule_occurrence.dart';
 import '../../services/schedule_overlap.dart';
 import '../../state/nest_controller.dart';
-import '../nest_theme.dart';
 import 'calendar_connect_card.dart';
+import 'nest_quiet_card.dart';
 import 'personal_event_sheet.dart';
 
 Future<void> openPersonalEventForChild({
@@ -110,11 +110,8 @@ class PersonalWeekList extends StatelessWidget {
           ],
         ),
         if (events.isEmpty)
-          Text(
+          const NestQuietCard(
             '학원·병원처럼 학기 시간표 밖의 약속을 넣을 수 있습니다. 수업과 겹치면 칸에 표시됩니다.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.6),
-            ),
           )
         else
           ...events.map((event) {

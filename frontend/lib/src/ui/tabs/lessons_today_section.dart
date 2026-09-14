@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
+import '../widgets/nest_quiet_card.dart';
 import '../widgets/schedule_badges.dart';
 import 'timetable/course_lesson_sheet.dart';
 
@@ -72,8 +73,7 @@ class LessonsTodaySection extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (resolved.rows.isEmpty)
-          _quietCard(
-            context,
+          NestQuietCard(
             bundles.isEmpty
                 ? '반이 배정되면 수업과 진도를 여기서 볼 수 있어요.'
                 : '앞으로 예정된 수업이 없어요.',
@@ -113,11 +113,7 @@ class LessonsTodaySection extends StatelessWidget {
       }
       final rows = _rowsOn(cursor);
       if (rows.isNotEmpty) {
-        return _ResolvedDay(
-          date: cursor,
-          rows: rows,
-          isToday: cursor == today,
-        );
+        return _ResolvedDay(date: cursor, rows: rows, isToday: cursor == today);
       }
       cursor = _dateOnly(cursor.add(const Duration(days: 1)));
     }
@@ -461,25 +457,10 @@ String _weekdayLabel(int dayOfWeek) {
   return labels[dayOfWeek] ?? '$dayOfWeek';
 }
 
-Widget _quietCard(BuildContext context, String message) {
-  return Card(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: NestColors.deepWood.withValues(alpha: 0.7),
-        ),
-      ),
-    ),
-  );
-}
-
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
-String _dayLabel(DateTime date) =>
-    DateFormat('M월 d일 (E)', 'ko').format(date);
+String _dayLabel(DateTime date) => DateFormat('M월 d일 (E)', 'ko').format(date);
 
 String _shortTime(String value) {
   final parts = value.trim().split(':');

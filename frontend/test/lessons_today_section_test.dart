@@ -332,5 +332,39 @@ void main() {
         },
       );
     }
+
+    // 실기기(iPhone 16)에서 이 빈 카드만 글자 폭만큼 줄어들어, 폭을 꽉 채우는
+    // 다른 카드들 사이에서 혼자 좁게 떠 보였다.
+    testWidgets('수업이 없을 때 빈 카드가 다른 카드처럼 폭을 채운다', (tester) async {
+      await _setSize(tester, const Size(360, 780));
+      final controller = _fallController();
+      // 이번 학기에 수업이 아예 없는 상태로 만든다.
+      controller.timeSlots = [];
+      controller.allTermSessions = [];
+
+      await tester.pumpWidget(
+        _mobileApp(
+          LessonsTodaySection(
+            controller: controller,
+            childId: 'child-1',
+            bundles: _bundles(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final card = find.ancestor(
+        of: find.textContaining('수업이 없어요'),
+        matching: find.byType(Card),
+      );
+      expect(card, findsOneWidget);
+
+      // Card 기본 좌우 여백만 빼고 섹션 폭을 다 쓴다(글자 폭만큼 줄어들지 않는다).
+      final sectionWidth = tester
+          .getSize(find.byType(LessonsTodaySection))
+          .width;
+      expect(tester.getSize(card).width, greaterThan(sectionWidth - 10));
+      expect(tester.takeException(), isNull);
+    });
   });
 }

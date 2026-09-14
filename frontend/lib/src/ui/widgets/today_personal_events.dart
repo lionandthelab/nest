@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../services/schedule_overlap.dart';
 import '../nest_theme.dart';
 import 'nest_motion.dart';
+import 'nest_quiet_card.dart';
 
 class TodayPersonalEvents extends StatelessWidget {
   const TodayPersonalEvents({
@@ -43,11 +44,10 @@ class TodayPersonalEvents extends StatelessWidget {
           ],
         ),
         if (events.isEmpty)
-          Text(
+          // 일정이 생기면 아래처럼 카드로 바뀐다. 비어 있을 때만 맨 텍스트로 두면
+          // 카드로 채워진 나머지 홈 화면에서 이 블록만 떠 보인다.
+          const NestQuietCard(
             '아직 없어요. 병원·학원처럼 학기 시간표 밖의 약속을 넣을 수 있습니다.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: NestColors.deepWood.withValues(alpha: 0.6),
-            ),
           )
         else
           ...events.map((event) {
