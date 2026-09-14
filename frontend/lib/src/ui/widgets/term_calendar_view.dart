@@ -6,6 +6,7 @@ import '../../services/schedule_occurrence.dart';
 import '../../services/schedule_overlap.dart';
 import '../nest_theme.dart';
 import 'nest_motion.dart';
+import 'nest_sheet.dart';
 
 /// 학기 한 달을 격자로 보여 주고, 날을 누르면 수업·학사·개인 일정을 펼친다.
 class TermCalendarView extends StatefulWidget {
@@ -218,17 +219,11 @@ class _DayCell extends StatelessWidget {
     showNestSheet<void>(
       context: context,
       builder: (sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: SingleChildScrollView(
-            child: Column(
+        return NestSheet(
+          title: DateFormat('M월 d일 (E)', 'ko').format(date),
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  DateFormat('M월 d일 (E)', 'ko').format(date),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
                 if (academic.isEmpty && classes.isEmpty && personal.isEmpty)
                   const Text('이 날에는 아직 일정이 없습니다.'),
                 ...academic.map(
@@ -318,7 +313,6 @@ class _DayCell extends StatelessWidget {
                 ],
               ],
             ),
-          ),
         );
       },
     );

@@ -339,23 +339,6 @@ class _DockItem extends StatelessWidget {
   }
 }
 
-Future<T?> showNestSheet<T>({
-  required BuildContext context,
-  required WidgetBuilder builder,
-  bool isScrollControlled = true,
-}) {
-  NestHaptics.light();
-  return showModalBottomSheet<T>(
-    context: context,
-    isScrollControlled: isScrollControlled,
-    showDragHandle: true,
-    useSafeArea: true,
-    barrierColor: NestColors.deepWood.withValues(alpha: 0.28),
-    backgroundColor: Colors.white,
-    builder: builder,
-  );
-}
-
 class NestLoadingScreen extends StatelessWidget {
   const NestLoadingScreen({super.key, this.message = 'Nest를 준비하고 있습니다...'});
 

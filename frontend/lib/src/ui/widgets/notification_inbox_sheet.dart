@@ -6,6 +6,7 @@ import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import 'nest_empty_state.dart';
 import 'nest_motion.dart';
+import 'nest_sheet.dart';
 
 Future<void> showNotificationInboxSheet({
   required BuildContext context,
@@ -19,28 +20,15 @@ Future<void> showNotificationInboxSheet({
         animation: controller,
         builder: (context, _) {
           final items = controller.notificationInbox;
-          return SafeArea(
+          return NestSheet(
+            title: '알림',
+            subtitle: '수업 변경·결석·오늘 일정·수업 30분 전 알림',
+            scrollable: false,
             child: SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.72,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              height: MediaQuery.sizeOf(context).height * 0.62,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '알림',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '수업 변경·결석·오늘 일정·수업 30분 전 알림',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     Expanded(
                       child: items.isEmpty
                           ? const NestEmptyState(
@@ -67,7 +55,6 @@ Future<void> showNotificationInboxSheet({
                     ),
                   ],
                 ),
-              ),
             ),
           );
         },
@@ -95,13 +82,13 @@ class _InboxTile extends StatelessWidget {
           leading: Icon(_iconFor(item.eventType), color: NestColors.clay),
           title: Text(
             item.title.isEmpty ? _fallbackTitle(item.eventType) : item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+            softWrap: true,
           ),
           subtitle: Text(
             [item.body, when].where((part) => part.isNotEmpty).join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            maxLines: 4,
+            softWrap: true,
           ),
         ),
       ),

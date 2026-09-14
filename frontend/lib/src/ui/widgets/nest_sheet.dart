@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../nest_theme.dart';
+import 'nest_motion.dart';
 
 /// 이 너비 미만에서는 모달을 화면 아래에서 전체 너비로 올라오는 바텀시트로 띄운다.
 /// 태블릿/데스크톱은 가운데 정렬 다이얼로그를 유지한다.
@@ -24,6 +25,7 @@ Future<T?> showNestSheet<T>({
   bool isDismissible = true,
   bool useRootNavigator = true,
 }) {
+  NestHaptics.light();
   if (!nestIsCompact(context)) {
     return showDialog<T>(
       context: context,
@@ -355,7 +357,7 @@ class _NestSheetActionBar extends StatelessWidget {
       final rows = <Widget>[];
       if (actions.length == 1) {
         rows.add(SizedBox(width: double.infinity, child: actions.single));
-      } else if (actions.length > 1) {
+      } else if (actions.length == 2) {
         rows.add(
           Row(
             children: [
@@ -366,6 +368,13 @@ class _NestSheetActionBar extends StatelessWidget {
             ],
           ),
         );
+      } else if (actions.length > 2) {
+        // 3개 이상은 가로로 나누면 글자가 죄다 말줄임된다.
+        // 주 액션(마지막)이 위로 오도록 뒤집어 세로로 쌓는다.
+        for (var i = actions.length - 1; i >= 0; i--) {
+          if (i < actions.length - 1) rows.add(const SizedBox(height: 8));
+          rows.add(SizedBox(width: double.infinity, child: actions[i]));
+        }
       }
       if (destructiveAction != null) {
         if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../nest_theme.dart';
-import 'nest_motion.dart';
+import 'nest_sheet.dart';
 
 class SelectSheetOption<T> {
   const SelectSheetOption({
@@ -46,21 +46,14 @@ Future<T?> showSelectSheet<T>({
                   return haystack.contains(normalizedQuery);
                 }).toList();
 
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          return NestSheet(
+            title: title,
+            subtitle: helpText,
+            scrollable: false,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 4),
-                Text(
-                  helpText,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 10),
                 TextField(
                   onChanged: (value) => setSheetState(() => query = value),
                   decoration: const InputDecoration(
@@ -72,22 +65,31 @@ Future<T?> showSelectSheet<T>({
                 const SizedBox(height: 10),
                 Flexible(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('검색 결과가 없습니다.'))
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 28),
+                          child: Center(child: Text('검색 결과가 없습니다.')),
+                        )
                       : ListView.builder(
                           shrinkWrap: true,
+                          primary: false,
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
                             final option = filtered[index];
                             final selected = option.value == currentValue;
                             return ListTile(
-                              dense: true,
+                              contentPadding: EdgeInsets.zero,
                               leading: selected
                                   ? const Icon(Icons.check_circle)
                                   : const Icon(Icons.circle_outlined),
-                              title: Text(option.title),
+                              // 목록에서 이름이 잘리지 않도록 두 줄까지 허용한다.
+                              title: Text(
+                                option.title,
+                                maxLines: 2,
+                                softWrap: true,
+                              ),
                               subtitle: option.subtitle.isEmpty
                                   ? null
-                                  : Text(option.subtitle),
+                                  : Text(option.subtitle, maxLines: 3),
                               onTap: () =>
                                   Navigator.of(context).pop(option.value),
                             );

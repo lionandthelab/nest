@@ -6,7 +6,7 @@ import '../../services/schedule_occurrence.dart';
 import '../../services/schedule_overlap.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
-import 'nest_motion.dart';
+import 'nest_sheet.dart';
 
 class PersonalEventDraft {
   const PersonalEventDraft({
@@ -218,23 +218,18 @@ class _PersonalEventSheetState extends State<PersonalEventSheet> {
       classes: widget.overlappingClasses,
     );
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        8,
-        20,
-        20 + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
+    return NestSheet(
+      title: isEdit ? '개인 일정 수정' : '개인 일정 추가',
+      actions: [
+        FilledButton(
+          onPressed: _title.text.trim().isEmpty ? null : _submit,
+          child: Text(isEdit ? '수정 저장' : '일정 추가'),
+        ),
+      ],
+      child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              isEdit ? '개인 일정 수정' : '개인 일정 추가',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 14),
             TextField(
               controller: _title,
               autofocus: !isEdit,
@@ -338,18 +333,8 @@ class _PersonalEventSheetState extends State<PersonalEventSheet> {
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: FilledButton(
-                onPressed: _title.text.trim().isEmpty ? null : _submit,
-                child: Text(isEdit ? '수정 저장' : '일정 추가'),
-              ),
-            ),
           ],
         ),
-      ),
     );
   }
 }
