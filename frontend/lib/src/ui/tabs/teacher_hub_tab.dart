@@ -405,6 +405,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             final compactFont = scale < 0.85;
 
             final board = Container(
+              // 머리글 셀의 각진 모서리가 둥근 모서리를 덮지 않게 자식까지 잘라낸다.
+              clipBehavior: Clip.antiAlias,
               width: boardWidth,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
