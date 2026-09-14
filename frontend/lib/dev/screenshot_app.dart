@@ -183,10 +183,10 @@ final _teacherProfiles = [
 ];
 
 String _teacherFor(String courseId) => switch (courseId) {
-      'c-math' || 'c-sci' => 'tp-boram',
-      'c-kor' || 'c-eng' => 'tp-sol',
-      _ => 'tp-han',
-    };
+  'c-math' || 'c-sci' => 'tp-boram',
+  'c-kor' || 'c-eng' => 'tp-sol',
+  _ => 'tp-han',
+};
 
 final _assignments = [
   for (final session in _sessions)
@@ -303,7 +303,8 @@ final _communityPosts = [
     'class_group_id': null,
     'author_user_id': 'u-sol',
     'author_display_name': '김솔 선생님',
-    'content': '오늘 국어 시간에 아이들이 직접 쓴 짧은 동시를 발표했어요. 표현이 정말 반짝반짝합니다. 사진은 갤러리에 올려두었어요 🌱',
+    'content':
+        '오늘 국어 시간에 아이들이 직접 쓴 짧은 동시를 발표했어요. 표현이 정말 반짝반짝합니다. 사진은 갤러리에 올려두었어요 🌱',
     'is_hidden': false,
     'is_pinned': true,
     'created_at': '2026-07-20T13:20:00Z',
@@ -336,29 +337,29 @@ final _communityPosts = [
 ];
 
 Membership _membership(String userId, String role) => Membership.fromMap({
-      'user_id': userId,
-      'homeschool_id': _hsId,
-      'role': role,
-      'status': 'ACTIVE',
-      'homeschools': {
-        'id': _hsId,
-        'name': '우리집 홈스쿨',
-        'join_code': 'DEMO01',
-        'timezone': 'Asia/Seoul',
-      },
-    });
+  'user_id': userId,
+  'homeschool_id': _hsId,
+  'role': role,
+  'status': 'ACTIVE',
+  'homeschools': {
+    'id': _hsId,
+    'name': '우리집 홈스쿨',
+    'join_code': 'DEMO01',
+    'timezone': 'Asia/Seoul',
+  },
+});
 
 // ── 가짜 리포지토리 ─────────────────────────────────────────────────────
 
 class _FakeNestRepository extends NestRepository {
   _FakeNestRepository()
-      : super(
-          SupabaseClient(
-            'http://localhost',
-            'demo-key',
-            authOptions: const AuthClientOptions(autoRefreshToken: false),
-          ),
-        );
+    : super(
+        SupabaseClient(
+          'http://localhost',
+          'demo-key',
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+        ),
+      );
 
   @override
   Future<List<Term>> fetchTerms({required String homeschoolId}) async => _terms;
@@ -382,8 +383,7 @@ class _FakeNestRepository extends NestRepository {
   @override
   Future<List<ClassSession>> fetchSessions({
     required String classGroupId,
-  }) async =>
-      _sessions.where((s) => s.classGroupId == classGroupId).toList();
+  }) async => _sessions.where((s) => s.classGroupId == classGroupId).toList();
 
   @override
   Future<List<ClassSession>> fetchSessionsForClassGroups({
@@ -394,8 +394,7 @@ class _FakeNestRepository extends NestRepository {
   @override
   Future<TermSchedulePack> fetchTermSchedulePack({
     required String termId,
-  }) async =>
-      TermSchedulePack(sessions: _sessions, assignments: _assignments);
+  }) async => TermSchedulePack(sessions: _sessions, assignments: _assignments);
 
   @override
   Future<List<Proposal>> fetchProposals({required String termId}) async =>
@@ -404,35 +403,40 @@ class _FakeNestRepository extends NestRepository {
   @override
   Future<List<ClassEnrollment>> fetchClassEnrollments({
     required List<String> classGroupIds,
-  }) async =>
-      _enrollments.where((e) => classGroupIds.contains(e.classGroupId)).toList();
+  }) async => _enrollments
+      .where((e) => classGroupIds.contains(e.classGroupId))
+      .toList();
 
   @override
   Future<List<SessionTeacherAssignment>> fetchSessionTeacherAssignments({
     required List<String> classSessionIds,
-  }) async =>
-      _assignments
-          .where((a) => classSessionIds.contains(a.classSessionId))
-          .toList();
+  }) async => _assignments
+      .where((a) => classSessionIds.contains(a.classSessionId))
+      .toList();
 
   @override
   Future<List<TeachingPlan>> fetchTeachingPlans({
     required List<String> classSessionIds,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<List<Announcement>> fetchAnnouncements({
     required String homeschoolId,
-  }) async =>
-      _announcements;
+  }) async => _announcements;
 
   @override
   Future<List<AcademicEvent>> fetchAcademicEvents({
     required String homeschoolId,
     String? termId,
-  }) async =>
-      const [];
+  }) async => const [];
+
+  // ── 개인 일정: 유일하게 쓰기까지 흉내내는 영역 ──────────────────────────
+  //
+  // 나머지 기능은 읽기만 가짜로 바꿔도 화면이 나오는데, 개인 일정은 "추가" 를
+  // 눌러 넣어 보는 것이 곧 확인이다. 쓰기를 그대로 두면 진짜 SupabaseClient 가
+  // http://localhost 로 나가서 연결 거부(errno 61)로 떨어진다.
+  final List<PersonalEvent> _personalEvents = [];
+  int _personalEventSeq = 0;
 
   @override
   Future<List<PersonalEvent>> fetchPersonalEvents({
@@ -440,8 +444,73 @@ class _FakeNestRepository extends NestRepository {
     String? childId,
     DateTime? from,
     DateTime? to,
-  }) async =>
-      const [];
+  }) async => _personalEvents
+      .where((event) => childId == null || event.childId == childId)
+      .where((event) => from == null || event.endsAt.isAfter(from))
+      .where((event) => to == null || event.startsAt.isBefore(to))
+      .toList();
+
+  @override
+  Future<PersonalEvent> createPersonalEvent({
+    required String homeschoolId,
+    required String ownerUserId,
+    required String childId,
+    required String title,
+    required String notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    required String conflictPolicy,
+  }) async {
+    final event = PersonalEvent.fromMap({
+      'id': 'pe-demo-${_personalEventSeq++}',
+      'homeschool_id': homeschoolId,
+      'owner_user_id': ownerUserId,
+      'child_id': childId,
+      'title': title.trim(),
+      'notes': notes.trim(),
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'ends_at': endsAt.toUtc().toIso8601String(),
+      'conflict_policy': conflictPolicy,
+      'source': 'NEST',
+    });
+    _personalEvents.add(event);
+    return event;
+  }
+
+  @override
+  Future<PersonalEvent> updatePersonalEvent({
+    required String eventId,
+    required String title,
+    required String notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    required String conflictPolicy,
+  }) async {
+    final index = _personalEvents.indexWhere((event) => event.id == eventId);
+    if (index < 0) {
+      throw StateError('데모 데이터에 없는 일정입니다: $eventId');
+    }
+    final old = _personalEvents[index];
+    final updated = PersonalEvent.fromMap({
+      'id': old.id,
+      'homeschool_id': old.homeschoolId,
+      'owner_user_id': old.ownerUserId,
+      'child_id': old.childId,
+      'title': title.trim(),
+      'notes': notes.trim(),
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'ends_at': endsAt.toUtc().toIso8601String(),
+      'conflict_policy': conflictPolicy,
+      'source': old.source,
+    });
+    _personalEvents[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> deletePersonalEvent({required String eventId}) async {
+    _personalEvents.removeWhere((event) => event.id == eventId);
+  }
 
   @override
   Future<CalendarIntegration?> fetchCalendarIntegration() async => null;
@@ -450,44 +519,37 @@ class _FakeNestRepository extends NestRepository {
   Future<List<GalleryItem>> fetchGalleryItems({
     required String homeschoolId,
     required String? classGroupId,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<Map<String, List<String>>> fetchMediaChildrenByAsset({
     required List<String> mediaAssetIds,
-  }) async =>
-      const {};
+  }) async => const {};
 
   @override
   Future<List<CommunityPost>> fetchCommunityPosts({
     required String homeschoolId,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<List<SelfStudyPlan>> fetchSelfStudyPlans({
     required String termId,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<List<SelfStudySlot>> fetchSelfStudySlots({
     required List<String> planIds,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<List<SelfStudySlotExclusion>> fetchSelfStudyExclusions({
     required List<String> slotIds,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<List<SelfStudySupervision>> fetchSelfStudySupervisions({
     required List<String> planIds,
-  }) async =>
-      const [];
+  }) async => const [];
 }
 
 // ── 엔트리포인트 ────────────────────────────────────────────────────────
@@ -554,10 +616,7 @@ Future<void> main() async {
       theme: NestTheme.light(),
       // 프로덕션(nest_app.dart)과 동일한 로케일 설정 — 'ko' 날짜 심볼 초기화용.
       locale: const Locale('ko', 'KR'),
-      supportedLocales: const [
-        Locale('ko', 'KR'),
-        Locale('en', 'US'),
-      ],
+      supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
