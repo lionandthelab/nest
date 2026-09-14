@@ -31,30 +31,45 @@ const _hsId = 'hs-demo';
 const _parentUserId = 'u-parent';
 const _teacherUserId = 'u-teacher';
 
+// 학기 날짜는 오늘을 기준으로 잡는다.
+//
+// 고정 날짜로 두면 그 날짜가 지나는 순간 데모가 조용히 망가진다. 수업이 걸린
+// 학기가 "지난 학기"가 되어 오늘의 수업·개인 일정이 비어 버리고, 개인 일정을
+// 넣어도 학기 범위 밖이라 목록에 나타나지 않는다.
+final _today = DateTime.now();
+String _isoDate(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
+
+/// 수업이 걸려 있는 "현재" 학기. 오늘이 항상 이 안에 들어온다.
+final _currentTermStart = DateTime(_today.year, _today.month, 1);
+final _currentTermEnd = DateTime(_today.year, _today.month + 4, 0);
+
 final _terms = [
   Term.fromMap({
     'id': 'term-spring',
     'homeschool_id': _hsId,
-    'name': '2026-봄학기',
+    'name': '지난 학기',
     'status': 'ACTIVE',
-    'start_date': '2026-03-02',
-    'end_date': '2026-06-30',
+    'start_date': _isoDate(DateTime(_today.year, _today.month - 8, 1)),
+    'end_date': _isoDate(DateTime(_today.year, _today.month - 4, 0)),
   }),
   Term.fromMap({
     'id': 'term-summer',
     'homeschool_id': _hsId,
-    'name': '2026-여름학기',
+    'name': '이번 학기',
     'status': 'ACTIVE',
-    'start_date': '2026-07-01',
-    'end_date': '2026-08-31',
+    'start_date': _isoDate(_currentTermStart),
+    'end_date': _isoDate(_currentTermEnd),
   }),
   Term.fromMap({
     'id': 'term-fall',
     'homeschool_id': _hsId,
-    'name': '2026-가을학기',
+    'name': '다음 학기',
     'status': 'DRAFT',
-    'start_date': '2026-09-01',
-    'end_date': '2026-11-30',
+    'start_date': _isoDate(DateTime(_today.year, _today.month + 4, 1)),
+    'end_date': _isoDate(DateTime(_today.year, _today.month + 8, 0)),
   }),
 ];
 
@@ -252,8 +267,8 @@ final _announcements = [
     'homeschool_id': _hsId,
     'class_group_id': null,
     'author_user_id': _teacherUserId,
-    'title': '여름학기 운영 안내',
-    'body': '7월 1일부터 여름학기 시간표로 운영합니다. 준비물은 반별 공지를 확인해 주세요.',
+    'title': '이번 학기 운영 안내',
+    'body': '이번 주부터 새 시간표로 운영합니다. 준비물은 반별 공지를 확인해 주세요.',
     'pinned': true,
     'created_at': '2026-07-01T09:00:00Z',
   }),
@@ -274,25 +289,25 @@ final _academicEvents = [
     'id': 'ae-1',
     'homeschool_id': _hsId,
     'term_id': 'term-summer',
-    'title': '여름학기 개강',
+    'title': '이번 학기 개강',
     'description': '',
-    'event_date': '2026-07-01',
+    'event_date': _isoDate(_currentTermStart),
   }),
   AcademicEvent.fromMap({
     'id': 'ae-2',
     'homeschool_id': _hsId,
     'term_id': 'term-summer',
-    'title': '물놀이 현장학습',
-    'description': '전교생 계곡 물놀이 — 여벌 옷과 수건을 챙겨 주세요.',
-    'event_date': '2026-07-24',
+    'title': '가을 현장학습',
+    'description': '전교생 숲 체험 — 여벌 옷과 수건을 챙겨 주세요.',
+    'event_date': _isoDate(_currentTermStart.add(const Duration(days: 23))),
   }),
   AcademicEvent.fromMap({
     'id': 'ae-3',
     'homeschool_id': _hsId,
     'term_id': 'term-summer',
-    'title': '여름학기 발표회',
+    'title': '이번 학기 발표회',
     'description': '',
-    'event_date': '2026-08-28',
+    'event_date': _isoDate(_currentTermEnd.subtract(const Duration(days: 3))),
   }),
 ];
 
