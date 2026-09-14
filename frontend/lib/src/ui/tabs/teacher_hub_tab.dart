@@ -416,25 +416,14 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: timeColWidth,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: NestColors.creamyWhite,
-                          border: Border(
-                            left: BorderSide(
-                                color: NestColors.roseMist
-                                    .withValues(alpha: 0.5)),
-                          ),
-                        ),
-                      ),
-                      ...sortedDays.map(
-                        (day) => Container(
-                          width: dayColWidth,
-                          alignment: Alignment.center,
+                  // 좌상단 빈 칸은 패딩뿐이라 행 높이를 못 채운다. 배경을 행 전체에
+                  // 깔아야 그 틈으로 격자 흰 배경이 비쳐 모서리가 파여 보이지 않는다.
+                  Container(
+                    color: NestColors.creamyWhite,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: timeColWidth,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 12),
                           decoration: BoxDecoration(
@@ -445,16 +434,32 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                                       .withValues(alpha: 0.5)),
                             ),
                           ),
-                          child: Text(
-                            _dayLabel(day),
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        ...sortedDays.map(
+                          (day) => Container(
+                            width: dayColWidth,
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: NestColors.creamyWhite,
+                              border: Border(
+                                left: BorderSide(
+                                    color: NestColors.roseMist
+                                        .withValues(alpha: 0.5)),
+                              ),
+                            ),
+                            child: Text(
+                              _dayLabel(day),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const Divider(height: 1, thickness: 1),
                   ...sortedPeriods.map((periodKey) {
