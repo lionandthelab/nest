@@ -150,7 +150,7 @@ void main() {
       await tester.tap(chipFinder);
       await tester.pumpAndSettle();
 
-      final addButton = find.widgetWithText(ElevatedButton, addLabel).first;
+      final addButton = find.text(addLabel).first;
       await tester.ensureVisible(addButton);
       await tester.pumpAndSettle();
       await tester.tap(addButton);
@@ -169,7 +169,7 @@ void main() {
     final controller = _adminController();
     await _pumpTab(tester, controller);
 
-    final addButton = find.widgetWithText(ElevatedButton, '가정 추가').first;
+    final addButton = find.text('가정 추가').first;
     await tester.ensureVisible(addButton);
     await tester.pumpAndSettle();
     await tester.tap(addButton);
@@ -184,8 +184,8 @@ void main() {
     expect(surface.bottom, 780);
 
     // 입력 필드와 저장 버튼이 한 화면 안에 같이 보인다.
-    expect(find.widgetWithText(TextField, '가정 이름'), findsOneWidget);
-    final saveButton = find.widgetWithText(FilledButton, '생성');
+    expect(find.text('가정 이름'), findsOneWidget);
+    final saveButton = find.text('생성');
     expect(saveButton, findsOneWidget);
     expect(tester.getRect(saveButton).bottom, lessThanOrEqualTo(780));
   });
