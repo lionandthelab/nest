@@ -11,6 +11,7 @@ class NestEmptyState extends StatelessWidget {
     this.subtitle,
     this.actionLabel,
     this.onAction,
+    this.compact = false,
   });
 
   final IconData icon;
@@ -19,32 +20,51 @@ class NestEmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// 섹션 카드 안에 넣을 때 쓰는 축약형.
+  ///
+  /// 기본 크기는 탭 전체가 비었을 때(커뮤니티·갤러리 등) 화면 가운데를 채우라고
+  /// 잡은 값이라 세로 200pt 가 넘는다. 그대로 카드 안에 넣으면 한 줄짜리 안내에
+  /// 휴대폰 화면의 3분의 1을 쓰게 된다.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final iconBox = compact ? 44.0 : 72.0;
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 20 : 32,
+          vertical: compact ? 18 : 40,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: iconBox,
+              height: iconBox,
               decoration: BoxDecoration(
                 color: NestColors.roseMist.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(compact ? 14 : 20),
               ),
-              child: Icon(icon, size: 36, color: NestColors.deepWood.withValues(alpha: 0.6)),
+              child: Icon(
+                icon,
+                size: compact ? 22 : 36,
+                color: NestColors.deepWood.withValues(alpha: 0.6),
+              ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: compact ? 10 : 20),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.85),
-              ),
+              style:
+                  (compact
+                          ? theme.textTheme.bodyMedium
+                          : theme.textTheme.titleMedium)
+                      ?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.85),
+                      ),
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 8),

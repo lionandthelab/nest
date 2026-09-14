@@ -1505,9 +1505,11 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   }
 
   Widget _buildEmptyHint(String message) {
+    // 탭 전체가 아니라 섹션 카드 안에 들어가는 자리라 축약형을 쓴다.
     return NestEmptyState(
       icon: Icons.school_outlined,
       title: message,
+      compact: true,
     );
   }
 
