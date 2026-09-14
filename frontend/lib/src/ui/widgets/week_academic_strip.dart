@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../services/schedule_occurrence.dart';
 import '../../services/schedule_overlap.dart';
 import '../nest_theme.dart';
+import 'nest_sheet.dart';
 
 Future<void> showAcademicEventPreview(
   BuildContext context,
@@ -19,34 +20,34 @@ Future<void> showAcademicEventPreview(
       ? '종일'
       : '${(event.startTime ?? '').split(':').take(2).join(':')}'
           '${(event.endTime ?? '').trim().isEmpty ? '' : ' – ${(event.endTime ?? '').split(':').take(2).join(':')}'}';
-  return showDialog<void>(
+  return showNestSheet<void>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(event.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('${academicKindLabel(event.kind)} · $range · $time'),
-          if (event.description.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(event.description.trim()),
-          ],
-          const SizedBox(height: 8),
-          Text(
-            event.publishAnnouncement
-                ? '소식 탭 공지에도 같이 올라갑니다.'
-                : '공지 없이 달력·시간표에만 표시됩니다.',
-            style: Theme.of(ctx).textTheme.bodySmall,
-          ),
-        ],
-      ),
+    builder: (ctx) => NestSheet(
+      title: event.title,
       actions: [
-        TextButton(
+        FilledButton(
           onPressed: () => Navigator.pop(ctx),
           child: const Text('닫기'),
         ),
       ],
+      child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('${academicKindLabel(event.kind)} · $range · $time'),
+        if (event.description.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(event.description.trim()),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          event.publishAnnouncement
+              ? '소식 탭 공지에도 같이 올라갑니다.'
+              : '공지 없이 달력·시간표에만 표시됩니다.',
+          style: Theme.of(ctx).textTheme.bodySmall,
+        ),
+      ],
+    ),
     ),
   );
 }

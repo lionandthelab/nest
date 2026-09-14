@@ -31,6 +31,7 @@ import 'widgets/nest_motion.dart';
 import 'widgets/notification_inbox_sheet.dart';
 import 'widgets/term_navigator_bar.dart';
 import 'widgets/term_select_chip.dart';
+import 'widgets/nest_sheet.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller, this.initialTab = 0});
@@ -499,15 +500,12 @@ class _HomePageState extends State<HomePage> {
         !_isScheduleTabLabel(tabs[nextIndex].label);
 
     if (leavingSchedule && _hasUnsavedScheduleChanges) {
-      final discard = await showDialog<bool>(
+      final discard = await showNestSheet<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('수정사항 경고'),
-          content: const Text(
-            '시간표 탭에 저장되지 않은 수정사항이 있습니다. 탭을 이동하면 현재 수정사항이 사라집니다. 이동할까요?',
-          ),
+        builder: (context) => NestSheet(
+          title: '수정사항 경고',
           actions: [
-            TextButton(
+            OutlinedButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('취소'),
             ),
@@ -516,6 +514,9 @@ class _HomePageState extends State<HomePage> {
               child: const Text('이동'),
             ),
           ],
+          child: const Text(
+          '시간표 탭에 저장되지 않은 수정사항이 있습니다. 탭을 이동하면 현재 수정사항이 사라집니다. 이동할까요?',
+        ),
         ),
       );
 
@@ -1631,21 +1632,12 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
   Future<void> _showNicknameEditDialog(NestController controller) async {
     final current = _displayName(controller);
     final textController = TextEditingController(text: current);
-    final result = await showDialog<String>(
+    final result = await showNestSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('닉네임 변경'),
-        content: TextField(
-          controller: textController,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: '닉네임',
-            hintText: '앱에서 표시될 이름',
-            prefixIcon: Icon(Icons.person_outlined, size: 20),
-          ),
-        ),
+      builder: (ctx) => NestSheet(
+        title: '닉네임 변경',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('취소'),
           ),
@@ -1654,6 +1646,15 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
             child: const Text('저장'),
           ),
         ],
+        child: TextField(
+        controller: textController,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: '닉네임',
+          hintText: '앱에서 표시될 이름',
+          prefixIcon: Icon(Icons.person_outlined, size: 20),
+        ),
+      ),
       ),
     );
     textController.dispose();
@@ -1671,17 +1672,17 @@ class _MobileSettingsPageState extends State<_MobileSettingsPage> {
     required String title,
     required String content,
   }) {
-    showDialog<void>(
+    showNestSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
+      builder: (ctx) => NestSheet(
+        title: title,
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('확인'),
           ),
         ],
+        child: Text(content),
       ),
     );
   }

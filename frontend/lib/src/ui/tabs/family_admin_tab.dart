@@ -8,6 +8,7 @@ import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import 'timetable/course_lesson_sheet.dart';
+import '../widgets/nest_sheet.dart';
 
 class FamilyAdminTab extends StatefulWidget {
   const FamilyAdminTab({
@@ -776,7 +777,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -865,13 +866,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   return;
                 }
                 final label = controller.findMemberDisplayName(userId);
-                final confirmed = await showDialog<bool>(
+                final confirmed = await showNestSheet<bool>(
                   context: context,
-                  builder: (confirmContext) => AlertDialog(
-                    title: const Text('학부모 연결 해제'),
-                    content: Text('"$label" 계정을 이 가정에서 연결 해제할까요?'),
+                  builder: (confirmContext) => NestSheet(
+                    title: '학부모 연결 해제',
                     actions: [
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () =>
                             Navigator.of(confirmContext).pop(false),
                         child: const Text('취소'),
@@ -881,6 +881,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         child: const Text('해제'),
                       ),
                     ],
+                    child: Text('"$label" 계정을 이 가정에서 연결 해제할까요?'),
                   ),
                 );
                 if (confirmed != true) {
@@ -941,16 +942,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 final childCount = controller
                     .childrenForFamily(target.id)
                     .length;
-                final confirmed = await showDialog<bool>(
+                final confirmed = await showNestSheet<bool>(
                   context: context,
-                  builder: (confirmContext) => AlertDialog(
-                    title: const Text('가정 삭제'),
-                    content: Text(
-                      '"${target.familyName}" 가정을 삭제할까요?\n'
-                      '소속 아이 $childCount명과 연결된 배정/기록이 함께 정리될 수 있습니다.',
-                    ),
+                  builder: (confirmContext) => NestSheet(
+                    title: '가정 삭제',
                     actions: [
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () =>
                             Navigator.of(confirmContext).pop(false),
                         child: const Text('취소'),
@@ -960,6 +957,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         child: const Text('삭제'),
                       ),
                     ],
+                    child: Text(
+                    '"${target.familyName}" 가정을 삭제할까요?\n'
+                    '소속 아이 $childCount명과 연결된 배정/기록이 함께 정리될 수 있습니다.',
+                  ),
                   ),
                 );
                 if (confirmed != true) {
@@ -990,262 +991,258 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 }
               }
 
-              return AlertDialog(
-                title: Text(initial == null ? '가정 추가' : '가정 수정'),
-                content: SizedBox(
-                  width: 640,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextField(
-                          controller: nameController,
-                          decoration: const InputDecoration(labelText: '가정 이름'),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: noteController,
-                          decoration: const InputDecoration(labelText: '메모'),
-                          minLines: 1,
-                          maxLines: 3,
-                        ),
-                        const SizedBox(height: 12),
-                        if (initial == null)
-                          _buildEmptyHint('가정을 먼저 생성하면 학부모 계정 연결 기능이 열립니다.')
-                        else ...[
-                          Text(
-                            '학부모 계정 연결',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '계정을 검색해 이 가정의 보호자로 연결합니다. '
-                            '학부모(PARENT) 권한이 없으면 연결 시 자동으로 부여됩니다.',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: NestColors.deepWood.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: accountQueryController,
-                            decoration: const InputDecoration(
-                              labelText: '학부모 계정 검색',
-                              hintText: '이름, 이메일, UUID',
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
-                          const SizedBox(height: 8),
-                          if (guardianCandidates.isEmpty)
-                            _buildEmptyHint(
-                              accountQueryController.text.trim().isEmpty
-                                  ? '이름·이메일로 계정을 검색하세요.'
-                                  : '검색 결과가 없습니다. 이 계정이 홈스쿨 구성원인지 확인하세요.',
-                            )
-                          else
-                            Container(
-                              constraints: const BoxConstraints(maxHeight: 180),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: NestColors.roseMist),
-                              ),
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: guardianCandidates.length,
-                                itemBuilder: (context, index) {
-                                  final member = guardianCandidates[index];
-                                  final selected =
-                                      selectedGuardianAccount?.userId ==
-                                      member.userId;
-                                  final willGrantParent =
-                                      !member.roles.contains('PARENT');
-                                  return ListTile(
-                                    dense: true,
-                                    leading: Icon(
-                                      selected
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      size: 18,
-                                    ),
-                                    title: Text(
-                                      member.fullName.trim().isEmpty
-                                          ? member.email
-                                          : member.fullName,
-                                    ),
-                                    subtitle: Text(
-                                      willGrantParent
-                                          ? '${member.email.isEmpty ? member.userId : member.email} · 연결 시 학부모 권한 부여'
-                                          : (member.email.isEmpty
-                                                ? member.userId
-                                                : member.email),
-                                    ),
-                                    onTap: isSaving
-                                        ? null
-                                        : () {
-                                            setDialogState(() {
-                                              selectedGuardianAccount = member;
-                                            });
-                                          },
-                                  );
-                                },
-                              ),
-                            ),
-                          const SizedBox(height: 8),
-                          if (selectedGuardianAccount != null)
-                            Chip(
-                              avatar: const Icon(
-                                Icons.person_outline,
-                                size: 16,
-                              ),
-                              label: Text(
-                                selectedGuardianAccount!.displayLabel,
-                              ),
-                              onDeleted: isSaving
-                                  ? null
-                                  : () {
-                                      setDialogState(() {
-                                        selectedGuardianAccount = null;
-                                      });
-                                    },
-                            ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  initialValue: guardianType,
-                                  decoration: const InputDecoration(
-                                    labelText: '보호자 유형',
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'FATHER',
-                                      child: Text('아버지'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'MOTHER',
-                                      child: Text('어머니'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'GUARDIAN',
-                                      child: Text('보호자'),
-                                    ),
-                                  ],
-                                  onChanged: isSaving
-                                      ? null
-                                      : (value) {
-                                          if (value == null) {
-                                            return;
-                                          }
-                                          setDialogState(() {
-                                            guardianType = value;
-                                          });
-                                        },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed: isSaving ? null : connectGuardian,
-                                icon: const Icon(Icons.link),
-                                label: const Text('연결'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            '연결된 학부모',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          if (linkedGuardianUserIds.isEmpty)
-                            _buildEmptyHint('연결된 학부모 계정이 없습니다.')
-                          else
-                            ...linkedGuardianUserIds.map((userId) {
-                              final entry = _directoryEntryForUserId(userId);
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: NestColors.roseMist,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.family_restroom_outlined,
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              entry.fullName.trim().isEmpty
-                                                  ? entry.email
-                                                  : entry.fullName,
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.titleSmall,
-                                            ),
-                                            Text(
-                                              entry.email.isEmpty
-                                                  ? entry.userId
-                                                  : entry.email,
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      FilledButton.tonalIcon(
-                                        onPressed: isSaving
-                                            ? null
-                                            : () => disconnectGuardian(userId),
-                                        icon: const Icon(Icons.link_off),
-                                        label: const Text('연결 해제'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-                        ],
-                      ],
+              return NestSheet(
+                title: initial == null ? '가정 추가' : '가정 수정',
+                destructiveAction: initial != null
+  ? OutlinedButton.icon(
+                    onPressed: isSaving ? null : deleteFamily,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
                     ),
-                  ),
-                ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('삭제'),
+                  )
+  : null,
                 actions: [
-                  if (initial != null)
-                    TextButton.icon(
-                      onPressed: isSaving ? null : deleteFamily,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red.shade700,
-                      ),
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('삭제'),
-                    ),
-                  TextButton(
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('닫기'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving ? null : saveFamily,
                     icon: const Icon(Icons.save_outlined),
                     label: Text(initial == null ? '생성' : '저장'),
                   ),
                 ],
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '가정 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: noteController,
+                        decoration: const InputDecoration(labelText: '메모'),
+                        minLines: 1,
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 12),
+                      if (initial == null)
+                        _buildEmptyHint('가정을 먼저 생성하면 학부모 계정 연결 기능이 열립니다.')
+                      else ...[
+                        Text(
+                          '학부모 계정 연결',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '계정을 검색해 이 가정의 보호자로 연결합니다. '
+                          '학부모(PARENT) 권한이 없으면 연결 시 자동으로 부여됩니다.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: NestColors.deepWood.withValues(
+                                  alpha: 0.72,
+                                ),
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: accountQueryController,
+                          decoration: const InputDecoration(
+                            labelText: '학부모 계정 검색',
+                            hintText: '이름, 이메일, UUID',
+                          ),
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        if (guardianCandidates.isEmpty)
+                          _buildEmptyHint(
+                            accountQueryController.text.trim().isEmpty
+                                ? '이름·이메일로 계정을 검색하세요.'
+                                : '검색 결과가 없습니다. 이 계정이 홈스쿨 구성원인지 확인하세요.',
+                          )
+                        else
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 180),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: NestColors.roseMist),
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: guardianCandidates.length,
+                              itemBuilder: (context, index) {
+                                final member = guardianCandidates[index];
+                                final selected =
+                                    selectedGuardianAccount?.userId ==
+                                    member.userId;
+                                final willGrantParent =
+                                    !member.roles.contains('PARENT');
+                                return ListTile(
+                                  dense: true,
+                                  leading: Icon(
+                                    selected
+                                        ? Icons.radio_button_checked
+                                        : Icons.radio_button_unchecked,
+                                    size: 18,
+                                  ),
+                                  title: Text(
+                                    member.fullName.trim().isEmpty
+                                        ? member.email
+                                        : member.fullName,
+                                  ),
+                                  subtitle: Text(
+                                    willGrantParent
+                                        ? '${member.email.isEmpty ? member.userId : member.email} · 연결 시 학부모 권한 부여'
+                                        : (member.email.isEmpty
+                                              ? member.userId
+                                              : member.email),
+                                  ),
+                                  onTap: isSaving
+                                      ? null
+                                      : () {
+                                          setDialogState(() {
+                                            selectedGuardianAccount = member;
+                                          });
+                                        },
+                                );
+                              },
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        if (selectedGuardianAccount != null)
+                          Chip(
+                            avatar: const Icon(
+                              Icons.person_outline,
+                              size: 16,
+                            ),
+                            label: Text(
+                              selectedGuardianAccount!.displayLabel,
+                            ),
+                            onDeleted: isSaving
+                                ? null
+                                : () {
+                                    setDialogState(() {
+                                      selectedGuardianAccount = null;
+                                    });
+                                  },
+                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: guardianType,
+                                decoration: const InputDecoration(
+                                  labelText: '보호자 유형',
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'FATHER',
+                                    child: Text('아버지'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'MOTHER',
+                                    child: Text('어머니'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'GUARDIAN',
+                                    child: Text('보호자'),
+                                  ),
+                                ],
+                                onChanged: isSaving
+                                    ? null
+                                    : (value) {
+                                        if (value == null) {
+                                          return;
+                                        }
+                                        setDialogState(() {
+                                          guardianType = value;
+                                        });
+                                      },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: isSaving ? null : connectGuardian,
+                              icon: const Icon(Icons.link),
+                              label: const Text('연결'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '연결된 학부모',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        if (linkedGuardianUserIds.isEmpty)
+                          _buildEmptyHint('연결된 학부모 계정이 없습니다.')
+                        else
+                          ...linkedGuardianUserIds.map((userId) {
+                            final entry = _directoryEntryForUserId(userId);
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: NestColors.roseMist,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.family_restroom_outlined,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            entry.fullName.trim().isEmpty
+                                                ? entry.email
+                                                : entry.fullName,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
+                                          Text(
+                                            entry.email.isEmpty
+                                                ? entry.userId
+                                                : entry.email,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    FilledButton.tonalIcon(
+                                      onPressed: isSaving
+                                          ? null
+                                          : () => disconnectGuardian(userId),
+                                      icon: const Icon(Icons.link_off),
+                                      label: const Text('연결 해제'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                    ],
+                  ),
               );
             },
           );
@@ -1286,7 +1283,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     HomeschoolMemberDirectoryEntry? selectedAccount;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -1334,16 +1331,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 if (child == null || isSaving) {
                   return;
                 }
-                final confirmed = await showDialog<bool>(
+                final confirmed = await showNestSheet<bool>(
                   context: context,
-                  builder: (confirmContext) => AlertDialog(
-                    title: const Text('학생 계정 연결 해제'),
-                    content: Text(
-                      '"${child.name}"과(와) 연결된 학생 계정을 해제할까요?\n'
-                      '해제하면 그 계정에서는 더 이상 학생 화면을 볼 수 없습니다.',
-                    ),
+                  builder: (confirmContext) => NestSheet(
+                    title: '학생 계정 연결 해제',
                     actions: [
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () =>
                             Navigator.of(confirmContext).pop(false),
                         child: const Text('취소'),
@@ -1353,6 +1346,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         child: const Text('해제'),
                       ),
                     ],
+                    child: Text(
+                    '"${child.name}"과(와) 연결된 학생 계정을 해제할까요?\n'
+                    '해제하면 그 계정에서는 더 이상 학생 화면을 볼 수 없습니다.',
+                  ),
                   ),
                 );
                 if (confirmed != true) {
@@ -1439,16 +1436,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   return;
                 }
 
-                final confirmed = await showDialog<bool>(
+                final confirmed = await showNestSheet<bool>(
                   context: context,
-                  builder: (confirmContext) => AlertDialog(
-                    title: const Text('아이 삭제'),
-                    content: Text(
-                      '"${target.name}" 정보를 삭제할까요?\n'
-                      '반 배정, 활동 기록, 태깅된 미디어 연결이 함께 정리될 수 있습니다.',
-                    ),
+                  builder: (confirmContext) => NestSheet(
+                    title: '아이 삭제',
                     actions: [
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () =>
                             Navigator.of(confirmContext).pop(false),
                         child: const Text('취소'),
@@ -1458,6 +1451,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         child: const Text('삭제'),
                       ),
                     ],
+                    child: Text(
+                    '"${target.name}" 정보를 삭제할까요?\n'
+                    '반 배정, 활동 기록, 태깅된 미디어 연결이 함께 정리될 수 있습니다.',
+                  ),
                   ),
                 );
                 if (confirmed != true) {
@@ -1498,270 +1495,266 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   .map((row) => row.familyName)
                   .firstOrNull;
 
-              return AlertDialog(
-                title: Text(initial == null ? '아이 추가' : '아이 수정'),
-                content: SizedBox(
-                  width: 620,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildFamilySelectionCards(
-                          controller: controller,
-                          title: '소속 가정',
-                          selectedFamilyId: selectedFamilyId,
-                          onSelect: (familyId) {
-                            if (isSaving || controller.isBusy) {
-                              return;
-                            }
-                            setDialogState(() {
-                              selectedFamilyId = familyId;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        if (selectedFamilyName != null)
-                          Chip(
-                            avatar: const Icon(Icons.home_outlined, size: 16),
-                            label: Text('선택됨: $selectedFamilyName'),
-                          ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: nameController,
-                          decoration: const InputDecoration(labelText: '아이 이름'),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: birthController,
-                          decoration: const InputDecoration(
-                            labelText: '생년월일 (YYYY-MM-DD)',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: noteController,
-                          decoration: const InputDecoration(
-                            labelText: '프로필 메모',
-                          ),
-                          minLines: 1,
-                          maxLines: 3,
-                        ),
-                        const SizedBox(height: 14),
-                        const Divider(height: 1),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Icon(Icons.link, size: 18),
-                            const SizedBox(width: 6),
-                            Text(
-                              '학생 계정 연결',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '아이가 직접 회원가입한 계정을 연결하면, 아이 본인이 시간표를 보고 결석을 '
-                          '신고할 수 있습니다.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: NestColors.deepWood.withValues(
-                                  alpha: 0.7,
-                                ),
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (editingChild == null)
-                          _buildEmptyHint(
-                            '아이를 먼저 저장한 뒤 카드를 다시 열면 학생 계정을 연결할 수 있습니다.',
-                          )
-                        else if (editingChild!.hasAccount) ...[
-                          Builder(
-                            builder: (context) {
-                              final entry = _directoryEntryForUserId(
-                                editingChild!.userId!,
-                              );
-                              final name = entry.fullName.trim().isEmpty
-                                  ? entry.email
-                                  : entry.fullName;
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: NestColors.mutedSage,
-                                  ),
-                                  color: NestColors.mutedSage.withValues(
-                                    alpha: 0.12,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.verified_user_outlined,
-                                      size: 18,
-                                      color: NestColors.mutedSage,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            name.trim().isEmpty
-                                                ? entry.userId
-                                                : name,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodyMedium,
-                                          ),
-                                          Text(
-                                            entry.email.isEmpty
-                                                ? entry.userId
-                                                : entry.email,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed:
-                                          isSaving || controller.isBusy
-                                          ? null
-                                          : unlinkAccount,
-                                      icon: const Icon(
-                                        Icons.link_off,
-                                        size: 18,
-                                      ),
-                                      label: const Text('연결 해제'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ] else ...[
-                          TextField(
-                            controller: accountQueryController,
-                            decoration: const InputDecoration(
-                              labelText: '계정 검색',
-                              hintText: '이름, 이메일, UUID로 검색',
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
-                          const SizedBox(height: 8),
-                          if (accountMatches.isEmpty)
-                            const NestEmptyState(
-                              icon: Icons.search_off_outlined,
-                              title: '검색 결과가 없습니다.',
-                            )
-                          else
-                            Container(
-                              constraints: const BoxConstraints(
-                                maxHeight: 180,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: NestColors.roseMist),
-                              ),
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: accountMatches.length,
-                                itemBuilder: (context, index) {
-                                  final member = accountMatches[index];
-                                  final selected =
-                                      selectedAccount?.userId == member.userId;
-                                  return ListTile(
-                                    dense: true,
-                                    leading: Icon(
-                                      selected
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      size: 18,
-                                    ),
-                                    title: Text(
-                                      member.fullName.trim().isEmpty
-                                          ? member.email
-                                          : member.fullName,
-                                    ),
-                                    subtitle: Text(
-                                      member.email.isEmpty
-                                          ? member.userId
-                                          : member.email,
-                                    ),
-                                    onTap: isSaving
-                                        ? null
-                                        : () {
-                                            setDialogState(() {
-                                              selectedAccount = member;
-                                            });
-                                          },
-                                  );
-                                },
-                              ),
-                            ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              if (selectedAccount != null)
-                                Expanded(
-                                  child: Chip(
-                                    avatar: const Icon(Icons.link, size: 16),
-                                    label: Text(selectedAccount!.displayLabel),
-                                    onDeleted: isSaving
-                                        ? null
-                                        : () {
-                                            setDialogState(() {
-                                              selectedAccount = null;
-                                            });
-                                          },
-                                  ),
-                                )
-                              else
-                                const Spacer(),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed:
-                                    isSaving ||
-                                        controller.isBusy ||
-                                        selectedAccount == null
-                                    ? null
-                                    : linkAccount,
-                                icon: const Icon(Icons.link, size: 18),
-                                label: const Text('계정 연결'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
+              return NestSheet(
+                title: initial == null ? '아이 추가' : '아이 수정',
+                destructiveAction: initial != null
+  ? OutlinedButton.icon(
+                    onPressed: isSaving ? null : deleteChild,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
                     ),
-                  ),
-                ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('삭제'),
+                  )
+  : null,
                 actions: [
-                  if (initial != null)
-                    TextButton.icon(
-                      onPressed: isSaving ? null : deleteChild,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red.shade700,
-                      ),
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('삭제'),
-                    ),
-                  TextButton(
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('닫기'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving ? null : saveChild,
                     icon: const Icon(Icons.save_outlined),
                     label: Text(initial == null ? '생성' : '저장'),
                   ),
                 ],
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildFamilySelectionCards(
+                        controller: controller,
+                        title: '소속 가정',
+                        selectedFamilyId: selectedFamilyId,
+                        onSelect: (familyId) {
+                          if (isSaving || controller.isBusy) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedFamilyId = familyId;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      if (selectedFamilyName != null)
+                        Chip(
+                          avatar: const Icon(Icons.home_outlined, size: 16),
+                          label: Text('선택됨: $selectedFamilyName'),
+                        ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '아이 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: birthController,
+                        decoration: const InputDecoration(
+                          labelText: '생년월일 (YYYY-MM-DD)',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: noteController,
+                        decoration: const InputDecoration(
+                          labelText: '프로필 메모',
+                        ),
+                        minLines: 1,
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 14),
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.link, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            '학생 계정 연결',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '아이가 직접 회원가입한 계정을 연결하면, 아이 본인이 시간표를 보고 결석을 '
+                        '신고할 수 있습니다.',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(
+                              color: NestColors.deepWood.withValues(
+                                alpha: 0.7,
+                              ),
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (editingChild == null)
+                        _buildEmptyHint(
+                          '아이를 먼저 저장한 뒤 카드를 다시 열면 학생 계정을 연결할 수 있습니다.',
+                        )
+                      else if (editingChild!.hasAccount) ...[
+                        Builder(
+                          builder: (context) {
+                            final entry = _directoryEntryForUserId(
+                              editingChild!.userId!,
+                            );
+                            final name = entry.fullName.trim().isEmpty
+                                ? entry.email
+                                : entry.fullName;
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: NestColors.mutedSage,
+                                ),
+                                color: NestColors.mutedSage.withValues(
+                                  alpha: 0.12,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.verified_user_outlined,
+                                    size: 18,
+                                    color: NestColors.mutedSage,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          name.trim().isEmpty
+                                              ? entry.userId
+                                              : name,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodyMedium,
+                                        ),
+                                        Text(
+                                          entry.email.isEmpty
+                                              ? entry.userId
+                                              : entry.email,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed:
+                                        isSaving || controller.isBusy
+                                        ? null
+                                        : unlinkAccount,
+                                    icon: const Icon(
+                                      Icons.link_off,
+                                      size: 18,
+                                    ),
+                                    label: const Text('연결 해제'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ] else ...[
+                        TextField(
+                          controller: accountQueryController,
+                          decoration: const InputDecoration(
+                            labelText: '계정 검색',
+                            hintText: '이름, 이메일, UUID로 검색',
+                          ),
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        if (accountMatches.isEmpty)
+                          const NestEmptyState(
+                            icon: Icons.search_off_outlined,
+                            title: '검색 결과가 없습니다.',
+                          )
+                        else
+                          Container(
+                            constraints: const BoxConstraints(
+                              maxHeight: 180,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: NestColors.roseMist),
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: accountMatches.length,
+                              itemBuilder: (context, index) {
+                                final member = accountMatches[index];
+                                final selected =
+                                    selectedAccount?.userId == member.userId;
+                                return ListTile(
+                                  dense: true,
+                                  leading: Icon(
+                                    selected
+                                        ? Icons.radio_button_checked
+                                        : Icons.radio_button_unchecked,
+                                    size: 18,
+                                  ),
+                                  title: Text(
+                                    member.fullName.trim().isEmpty
+                                        ? member.email
+                                        : member.fullName,
+                                  ),
+                                  subtitle: Text(
+                                    member.email.isEmpty
+                                        ? member.userId
+                                        : member.email,
+                                  ),
+                                  onTap: isSaving
+                                      ? null
+                                      : () {
+                                          setDialogState(() {
+                                            selectedAccount = member;
+                                          });
+                                        },
+                                );
+                              },
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (selectedAccount != null)
+                              Expanded(
+                                child: Chip(
+                                  avatar: const Icon(Icons.link, size: 16),
+                                  label: Text(selectedAccount!.displayLabel),
+                                  onDeleted: isSaving
+                                      ? null
+                                      : () {
+                                          setDialogState(() {
+                                            selectedAccount = null;
+                                          });
+                                        },
+                                ),
+                              )
+                            else
+                              const Spacer(),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed:
+                                  isSaving ||
+                                      controller.isBusy ||
+                                      selectedAccount == null
+                                  ? null
+                                  : linkAccount,
+                              icon: const Icon(Icons.link, size: 18),
+                              label: const Text('계정 연결'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
               );
             },
           );
@@ -1895,7 +1888,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -1992,16 +1985,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 final childCount = controller
                     .enrolledChildIdsForClassGroup(target.id)
                     .length;
-                final confirmed = await showDialog<bool>(
+                final confirmed = await showNestSheet<bool>(
                   context: context,
-                  builder: (confirmContext) => AlertDialog(
-                    title: const Text('반 삭제'),
-                    content: Text(
-                      '반 "${target.name}" 을(를) 삭제할까요?\n'
-                      '배정된 아이 $childCount명과 연결된 시간표/배정 데이터가 함께 정리될 수 있습니다.',
-                    ),
+                  builder: (confirmContext) => NestSheet(
+                    title: '반 삭제',
                     actions: [
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () =>
                             Navigator.of(confirmContext).pop(false),
                         child: const Text('취소'),
@@ -2011,6 +2000,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         child: const Text('삭제'),
                       ),
                     ],
+                    child: Text(
+                    '반 "${target.name}" 을(를) 삭제할까요?\n'
+                    '배정된 아이 $childCount명과 연결된 시간표/배정 데이터가 함께 정리될 수 있습니다.',
+                  ),
                   ),
                 );
                 if (confirmed != true) {
@@ -2041,159 +2034,155 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 }
               }
 
-              return AlertDialog(
-                title: Text(initial == null ? '반 추가' : '반 수정'),
-                content: SizedBox(
-                  width: 720,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: nameController,
-                                decoration: const InputDecoration(
-                                  labelText: '반 이름',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 140,
-                              child: TextField(
-                                controller: capacityController,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: '정원',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '아이 배정 (복수 선택)',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 6),
-                        if (controller.children.isEmpty)
-                          _buildEmptyHint('등록된 아이가 없습니다. 가정 탭에서 아이를 먼저 추가하세요.')
-                        else ...[
-                          TextField(
-                            controller: queryController,
-                            decoration: const InputDecoration(
-                              labelText: '아이 검색',
-                              hintText: '아이 이름 또는 가정 이름',
-                              prefixIcon: Icon(Icons.search),
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Chip(
-                                avatar: const Icon(Icons.checklist, size: 16),
-                                label: Text('선택 ${selectedChildIds.length}명'),
-                              ),
-                              TextButton.icon(
-                                onPressed: isSaving
-                                    ? null
-                                    : () {
-                                        setDialogState(() {
-                                          selectedChildIds
-                                            ..clear()
-                                            ..addAll(
-                                              controller.children.map(
-                                                (row) => row.id,
-                                              ),
-                                            );
-                                        });
-                                      },
-                                icon: const Icon(Icons.select_all, size: 16),
-                                label: const Text('전체 선택'),
-                              ),
-                              TextButton.icon(
-                                onPressed: isSaving
-                                    ? null
-                                    : () {
-                                        setDialogState(() {
-                                          selectedChildIds.clear();
-                                        });
-                                      },
-                                icon: const Icon(Icons.deselect, size: 16),
-                                label: const Text('선택 해제'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 300),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: NestColors.roseMist),
-                            ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: children.length,
-                              itemBuilder: (context, index) {
-                                final child = children[index];
-                                final checked = selectedChildIds.contains(
-                                  child.id,
-                                );
-                                return CheckboxListTile(
-                                  dense: true,
-                                  value: checked,
-                                  title: Text(child.name),
-                                  subtitle: Text(
-                                    '${child.familyName} · ${_childStatusLabel(child.status)}',
-                                  ),
-                                  onChanged: isSaving
-                                      ? null
-                                      : (value) {
-                                          setDialogState(() {
-                                            if (value == true) {
-                                              selectedChildIds.add(child.id);
-                                            } else {
-                                              selectedChildIds.remove(child.id);
-                                            }
-                                          });
-                                        },
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ],
+              return NestSheet(
+                title: initial == null ? '반 추가' : '반 수정',
+                destructiveAction: initial != null
+  ? OutlinedButton.icon(
+                    onPressed: isSaving ? null : deleteClass,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
                     ),
-                  ),
-                ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('삭제'),
+                  )
+  : null,
                 actions: [
-                  if (initial != null)
-                    TextButton.icon(
-                      onPressed: isSaving ? null : deleteClass,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red.shade700,
-                      ),
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('삭제'),
-                    ),
-                  TextButton(
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('닫기'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving ? null : saveClass,
                     icon: const Icon(Icons.save_outlined),
                     label: Text(initial == null ? '생성' : '저장'),
                   ),
                 ],
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: nameController,
+                              decoration: const InputDecoration(
+                                labelText: '반 이름',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 140,
+                            child: TextField(
+                              controller: capacityController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: '정원',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '아이 배정 (복수 선택)',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      if (controller.children.isEmpty)
+                        _buildEmptyHint('등록된 아이가 없습니다. 가정 탭에서 아이를 먼저 추가하세요.')
+                      else ...[
+                        TextField(
+                          controller: queryController,
+                          decoration: const InputDecoration(
+                            labelText: '아이 검색',
+                            hintText: '아이 이름 또는 가정 이름',
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Chip(
+                              avatar: const Icon(Icons.checklist, size: 16),
+                              label: Text('선택 ${selectedChildIds.length}명'),
+                            ),
+                            TextButton.icon(
+                              onPressed: isSaving
+                                  ? null
+                                  : () {
+                                      setDialogState(() {
+                                        selectedChildIds
+                                          ..clear()
+                                          ..addAll(
+                                            controller.children.map(
+                                              (row) => row.id,
+                                            ),
+                                          );
+                                      });
+                                    },
+                              icon: const Icon(Icons.select_all, size: 16),
+                              label: const Text('전체 선택'),
+                            ),
+                            TextButton.icon(
+                              onPressed: isSaving
+                                  ? null
+                                  : () {
+                                      setDialogState(() {
+                                        selectedChildIds.clear();
+                                      });
+                                    },
+                              icon: const Icon(Icons.deselect, size: 16),
+                              label: const Text('선택 해제'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 300),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: NestColors.roseMist),
+                          ),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: children.length,
+                            itemBuilder: (context, index) {
+                              final child = children[index];
+                              final checked = selectedChildIds.contains(
+                                child.id,
+                              );
+                              return CheckboxListTile(
+                                dense: true,
+                                value: checked,
+                                title: Text(child.name),
+                                subtitle: Text(
+                                  '${child.familyName} · ${_childStatusLabel(child.status)}',
+                                ),
+                                onChanged: isSaving
+                                    ? null
+                                    : (value) {
+                                        setDialogState(() {
+                                          if (value == true) {
+                                            selectedChildIds.add(child.id);
+                                          } else {
+                                            selectedChildIds.remove(child.id);
+                                          }
+                                        });
+                                      },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
               );
             },
           );
@@ -2369,7 +2358,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -2481,316 +2470,68 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 }
               }
 
-              return AlertDialog(
-                title: Text(editingTeacher == null ? '선생님 추가' : '선생님 수정'),
-                content: SizedBox(
-                  width: 560,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextField(
-                          controller: nameController,
-                          decoration: const InputDecoration(labelText: '표시 이름'),
-                        ),
-                        const SizedBox(height: 8),
-                        SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(
-                              value: 'PARENT_TEACHER',
-                              label: Text('부모 교사'),
-                              icon: Icon(Icons.family_restroom, size: 16),
-                            ),
-                            ButtonSegment(
-                              value: 'GUEST_TEACHER',
-                              label: Text('초청 교사'),
-                              icon: Icon(Icons.badge_outlined, size: 16),
-                            ),
-                          ],
-                          selected: {teacherType},
-                          onSelectionChanged: isSaving
-                              ? null
-                              : (values) {
-                                  if (values.isEmpty) {
-                                    return;
-                                  }
-                                  setDialogState(() {
-                                    teacherType = values.first;
-                                  });
-                                },
-                        ),
-                        const SizedBox(height: 10),
-                        SwitchListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('기존 계정 연결'),
-                          subtitle: const Text('이름/이메일/UUID 검색으로 연결'),
-                          value: linkAccount,
-                          onChanged: isSaving
-                              ? null
-                              : (value) {
-                                  setDialogState(() {
-                                    linkAccount = value;
-                                    if (!value) {
-                                      selectedAccount = null;
-                                      accountQueryController.clear();
-                                    }
-                                  });
-                                },
-                        ),
-                        if (linkAccount) ...[
-                          TextField(
-                            controller: accountQueryController,
-                            decoration: const InputDecoration(
-                              labelText: '계정 검색',
-                              hintText: '이름, 이메일, UUID로 검색',
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
-                          const SizedBox(height: 8),
-                          if (matches.isEmpty)
-                            const NestEmptyState(
-                              icon: Icons.search_off_outlined,
-                              title: '검색 결과가 없습니다.',
-                            )
-                          else
-                            Container(
-                              constraints: const BoxConstraints(maxHeight: 180),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: NestColors.roseMist),
+              return NestSheet(
+                title: editingTeacher == null ? '선생님 추가' : '선생님 수정',
+                destructiveAction: editingTeacher != null
+  ? OutlinedButton.icon(
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            final confirmed = await showNestSheet<bool>(
+                              context: context,
+                              builder: (ctx) => NestSheet(
+                                title: '선생님 삭제',
+                                actions: [
+                                  OutlinedButton(
+                                    onPressed: () =>
+                                        Navigator.of(ctx).pop(false),
+                                    child: const Text('취소'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.of(ctx).pop(true),
+                                    child: const Text('삭제'),
+                                  ),
+                                ],
+                                child: Text(
+                                '"${editingTeacher!.displayName}" 선생님을 삭제할까요?\n'
+                                '시간표에서 사용 중이면 삭제할 수 없습니다.',
                               ),
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: matches.length,
-                                itemBuilder: (context, index) {
-                                  final member = matches[index];
-                                  final selected =
-                                      selectedAccount?.userId == member.userId;
-                                  return ListTile(
-                                    dense: true,
-                                    leading: Icon(
-                                      selected
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      size: 18,
-                                    ),
-                                    title: Text(
-                                      member.fullName.trim().isEmpty
-                                          ? member.email
-                                          : member.fullName,
-                                    ),
-                                    subtitle: Text(
-                                      member.email.isEmpty
-                                          ? member.userId
-                                          : member.email,
-                                    ),
-                                    onTap: isSaving
-                                        ? null
-                                        : () {
-                                            setDialogState(() {
-                                              selectedAccount = member;
-                                              if (nameController.text
-                                                  .trim()
-                                                  .isEmpty) {
-                                                nameController.text =
-                                                    member.fullName
-                                                        .trim()
-                                                        .isNotEmpty
-                                                    ? member.fullName
-                                                    : member.email;
-                                              }
-                                            });
-                                          },
-                                  );
-                                },
                               ),
-                            ),
-                          const SizedBox(height: 8),
-                          if (selectedAccount != null)
-                            Chip(
-                              avatar: const Icon(Icons.link, size: 16),
-                              label: Text(selectedAccount!.displayLabel),
-                              onDeleted: isSaving
-                                  ? null
-                                  : () {
-                                      setDialogState(() {
-                                        selectedAccount = null;
-                                      });
-                                    },
-                            ),
-                        ],
-                        const SizedBox(height: 10),
-                        if (editingTeacher == null)
-                          _buildEmptyHint(
-                            '선생님 정보를 먼저 저장하면 이 아래에서 불가 시간을 바로 설정할 수 있습니다.',
-                          )
-                        else ...[
-                          Text(
-                            '불가 시간 설정',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: List.generate(7, (day) {
-                              return ChoiceChip(
-                                label: Text(_dayLabel(day)),
-                                selected: selectedDay == day,
-                                onSelected: controller.isBusy || isSaving
-                                    ? null
-                                    : (_) {
-                                        setDialogState(() {
-                                          selectedDay = day;
-                                        });
-                                      },
+                            );
+                            if (confirmed != true || !context.mounted) {
+                              return;
+                            }
+                            setDialogState(() {
+                              isSaving = true;
+                            });
+                            try {
+                              await controller.deleteTeacherProfile(
+                                teacherProfileId: editingTeacher!.id,
                               );
-                            }),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: startController,
-                                  decoration: const InputDecoration(
-                                    labelText: '시작 (HH:MM)',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: endController,
-                                  decoration: const InputDecoration(
-                                    labelText: '종료 (HH:MM)',
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: noteController,
-                            decoration: const InputDecoration(labelText: '메모'),
-                            minLines: 1,
-                            maxLines: 2,
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: controller.isBusy || isSaving
-                                ? null
-                                : addUnavailability,
-                            icon: const Icon(Icons.block),
-                            label: const Text('불가 시간 추가'),
-                          ),
-                          const SizedBox(height: 10),
-                          if (blocks.isEmpty)
-                            const NestEmptyState(
-                              icon: Icons.event_busy_outlined,
-                              title: '등록된 불가 시간이 없습니다.',
-                            )
-                          else
-                            ...blocks.map((block) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: NestColors.roseMist,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          '${_dayLabel(block.dayOfWeek)} ${_shortTime(block.startTime)}-${_shortTime(block.endTime)}'
-                                          '${block.note.trim().isEmpty ? '' : ' · ${block.note.trim()}'}',
-                                        ),
-                                      ),
-                                      IconButton(
-                                        onPressed: controller.isBusy || isSaving
-                                            ? null
-                                            : () => removeUnavailability(
-                                                block.id,
-                                              ),
-                                        icon: const Icon(Icons.delete_outline),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                actionsAlignment: editingTeacher != null
-                    ? MainAxisAlignment.spaceBetween
-                    : MainAxisAlignment.end,
+                              _showMessage('선생님을 삭제했습니다.');
+                              if (mounted) {
+                                setState(() {});
+                              }
+                              if (context.mounted) {
+                                Navigator.of(context).pop();
+                              }
+                            } catch (error) {
+                              _showActionError(controller, error);
+                              if (context.mounted) {
+                                setDialogState(() {
+                                  isSaving = false;
+                                });
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.delete_outline,
+                        color: Colors.red),
+                    label: const Text('삭제',
+                        style: TextStyle(color: Colors.red)),
+                  )
+  : null,
                 actions: [
-                  if (editingTeacher != null)
-                    TextButton.icon(
-                      onPressed: isSaving
-                          ? null
-                          : () async {
-                              final confirmed = await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('선생님 삭제'),
-                                  content: Text(
-                                    '"${editingTeacher!.displayName}" 선생님을 삭제할까요?\n'
-                                    '시간표에서 사용 중이면 삭제할 수 없습니다.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(ctx).pop(false),
-                                      child: const Text('취소'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(ctx).pop(true),
-                                      child: const Text('삭제'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirmed != true || !context.mounted) {
-                                return;
-                              }
-                              setDialogState(() {
-                                isSaving = true;
-                              });
-                              try {
-                                await controller.deleteTeacherProfile(
-                                  teacherProfileId: editingTeacher!.id,
-                                );
-                                _showMessage('선생님을 삭제했습니다.');
-                                if (mounted) {
-                                  setState(() {});
-                                }
-                                if (context.mounted) {
-                                  Navigator.of(context).pop();
-                                }
-                              } catch (error) {
-                                _showActionError(controller, error);
-                                if (context.mounted) {
-                                  setDialogState(() {
-                                    isSaving = false;
-                                  });
-                                }
-                              }
-                            },
-                      icon: const Icon(Icons.delete_outline,
-                          color: Colors.red),
-                      label: const Text('삭제',
-                          style: TextStyle(color: Colors.red)),
-                    ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -2809,6 +2550,247 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     ],
                   ),
                 ],
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '표시 이름'),
+                      ),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                            value: 'PARENT_TEACHER',
+                            label: Text('부모 교사'),
+                            icon: Icon(Icons.family_restroom, size: 16),
+                          ),
+                          ButtonSegment(
+                            value: 'GUEST_TEACHER',
+                            label: Text('초청 교사'),
+                            icon: Icon(Icons.badge_outlined, size: 16),
+                          ),
+                        ],
+                        selected: {teacherType},
+                        onSelectionChanged: isSaving
+                            ? null
+                            : (values) {
+                                if (values.isEmpty) {
+                                  return;
+                                }
+                                setDialogState(() {
+                                  teacherType = values.first;
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 10),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('기존 계정 연결'),
+                        subtitle: const Text('이름/이메일/UUID 검색으로 연결'),
+                        value: linkAccount,
+                        onChanged: isSaving
+                            ? null
+                            : (value) {
+                                setDialogState(() {
+                                  linkAccount = value;
+                                  if (!value) {
+                                    selectedAccount = null;
+                                    accountQueryController.clear();
+                                  }
+                                });
+                              },
+                      ),
+                      if (linkAccount) ...[
+                        TextField(
+                          controller: accountQueryController,
+                          decoration: const InputDecoration(
+                            labelText: '계정 검색',
+                            hintText: '이름, 이메일, UUID로 검색',
+                          ),
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        if (matches.isEmpty)
+                          const NestEmptyState(
+                            icon: Icons.search_off_outlined,
+                            title: '검색 결과가 없습니다.',
+                          )
+                        else
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 180),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: NestColors.roseMist),
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: matches.length,
+                              itemBuilder: (context, index) {
+                                final member = matches[index];
+                                final selected =
+                                    selectedAccount?.userId == member.userId;
+                                return ListTile(
+                                  dense: true,
+                                  leading: Icon(
+                                    selected
+                                        ? Icons.radio_button_checked
+                                        : Icons.radio_button_unchecked,
+                                    size: 18,
+                                  ),
+                                  title: Text(
+                                    member.fullName.trim().isEmpty
+                                        ? member.email
+                                        : member.fullName,
+                                  ),
+                                  subtitle: Text(
+                                    member.email.isEmpty
+                                        ? member.userId
+                                        : member.email,
+                                  ),
+                                  onTap: isSaving
+                                      ? null
+                                      : () {
+                                          setDialogState(() {
+                                            selectedAccount = member;
+                                            if (nameController.text
+                                                .trim()
+                                                .isEmpty) {
+                                              nameController.text =
+                                                  member.fullName
+                                                      .trim()
+                                                      .isNotEmpty
+                                                  ? member.fullName
+                                                  : member.email;
+                                            }
+                                          });
+                                        },
+                                );
+                              },
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        if (selectedAccount != null)
+                          Chip(
+                            avatar: const Icon(Icons.link, size: 16),
+                            label: Text(selectedAccount!.displayLabel),
+                            onDeleted: isSaving
+                                ? null
+                                : () {
+                                    setDialogState(() {
+                                      selectedAccount = null;
+                                    });
+                                  },
+                          ),
+                      ],
+                      const SizedBox(height: 10),
+                      if (editingTeacher == null)
+                        _buildEmptyHint(
+                          '선생님 정보를 먼저 저장하면 이 아래에서 불가 시간을 바로 설정할 수 있습니다.',
+                        )
+                      else ...[
+                        Text(
+                          '불가 시간 설정',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: List.generate(7, (day) {
+                            return ChoiceChip(
+                              label: Text(_dayLabel(day)),
+                              selected: selectedDay == day,
+                              onSelected: controller.isBusy || isSaving
+                                  ? null
+                                  : (_) {
+                                      setDialogState(() {
+                                        selectedDay = day;
+                                      });
+                                    },
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: startController,
+                                decoration: const InputDecoration(
+                                  labelText: '시작 (HH:MM)',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: endController,
+                                decoration: const InputDecoration(
+                                  labelText: '종료 (HH:MM)',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: noteController,
+                          decoration: const InputDecoration(labelText: '메모'),
+                          minLines: 1,
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: controller.isBusy || isSaving
+                              ? null
+                              : addUnavailability,
+                          icon: const Icon(Icons.block),
+                          label: const Text('불가 시간 추가'),
+                        ),
+                        const SizedBox(height: 10),
+                        if (blocks.isEmpty)
+                          const NestEmptyState(
+                            icon: Icons.event_busy_outlined,
+                            title: '등록된 불가 시간이 없습니다.',
+                          )
+                        else
+                          ...blocks.map((block) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: NestColors.roseMist,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${_dayLabel(block.dayOfWeek)} ${_shortTime(block.startTime)}-${_shortTime(block.endTime)}'
+                                        '${block.note.trim().isEmpty ? '' : ' · ${block.note.trim()}'}',
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: controller.isBusy || isSaving
+                                          ? null
+                                          : () => removeUnavailability(
+                                              block.id,
+                                            ),
+                                      icon: const Icon(Icons.delete_outline),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                    ],
+                  ),
               );
             },
           );
@@ -3246,7 +3228,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -3332,17 +3314,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 if (target == null || isSaving || usedInTerm) {
                   return;
                 }
-                final confirmed = await showDialog<bool>(
+                final confirmed = await showNestSheet<bool>(
                   context: context,
-                  builder: (confirmContext) => AlertDialog(
-                    title: const Text('과목 삭제'),
-                    content: Text(
-                      '"${target.name}" 과목을 삭제할까요?\n'
-                      '${lessonCount > 0 ? '이 과목의 수업 회차 내용 $lessonCount건도 함께 삭제되며 되돌릴 수 없습니다.\n' : ''}'
-                      '다른 학기 시간표에서 사용 중이면 삭제되지 않습니다.',
-                    ),
+                  builder: (confirmContext) => NestSheet(
+                    title: '과목 삭제',
                     actions: [
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () =>
                             Navigator.of(confirmContext).pop(false),
                         child: const Text('취소'),
@@ -3352,6 +3329,11 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         child: const Text('삭제'),
                       ),
                     ],
+                    child: Text(
+                    '"${target.name}" 과목을 삭제할까요?\n'
+                    '${lessonCount > 0 ? '이 과목의 수업 회차 내용 $lessonCount건도 함께 삭제되며 되돌릴 수 없습니다.\n' : ''}'
+                    '다른 학기 시간표에서 사용 중이면 삭제되지 않습니다.',
+                  ),
                   ),
                 );
                 if (confirmed != true) {
@@ -3382,80 +3364,28 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 }
               }
 
-              return AlertDialog(
-                title: Text(initial == null ? '과목 추가' : '과목 수정'),
-                // 모바일에서 기본 여백(40)이면 다이얼로그가 좁아 입력 필드와
-                // 회차 진입점이 답답하게 눌린다.
-                insetPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 24,
-                ),
-                contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                content: SizedBox(
-                  width: 480,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextField(
-                          controller: nameController,
-                          decoration: const InputDecoration(
-                            labelText: '과목 이름',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: durationController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: '기본 수업 시간(분)',
-                          ),
-                        ),
-                        // 회차별 진도 내용. 회차는 과목+날짜로 저장되므로 이 과목을
-                        // 쓰는 모든 반/교시 시간표에 같은 내용이 함께 보인다.
-                        // 이 다이얼로그에서 가장 자주 쓰는 동작이라 맨 위로 올리고
-                        // 카드 형태로 키웠다(작은 아웃라인 버튼은 눈에 띄지 않았다).
-                        if (initial != null &&
-                            controller.canManageCourseLessons) ...[
-                          const SizedBox(height: 14),
-                          _buildCourseLessonEntryTile(
-                            controller: controller,
-                            course: initial,
-                            enabled: !isSaving,
-                            onChanged: () => setDialogState(() {}),
-                          ),
-                        ],
-                        if (usedInTerm) ...[
-                          const SizedBox(height: 10),
-                          _buildInlineNotice(
-                            '이 학기 시간표에서 사용 중이라 삭제할 수 없습니다. 이름·시간 수정은 가능합니다.',
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                      ],
+              return NestSheet(
+                title: initial == null ? '과목 추가' : '과목 수정',
+                destructiveAction: initial != null
+  ? OutlinedButton.icon(
+                    onPressed: isSaving || controller.isBusy || usedInTerm
+                        ? null
+                        : deleteCourse,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
                     ),
-                  ),
-                ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('삭제'),
+                  )
+  : null,
                 actions: [
-                  if (initial != null)
-                    TextButton.icon(
-                      onPressed: isSaving || controller.isBusy || usedInTerm
-                          ? null
-                          : deleteCourse,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red.shade700,
-                      ),
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('삭제'),
-                    ),
-                  TextButton(
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('닫기'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving || controller.isBusy
                         ? null
                         : saveCourse,
@@ -3463,6 +3393,47 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     label: Text(initial == null ? '생성' : '저장'),
                   ),
                 ],
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: '과목 이름',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: durationController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '기본 수업 시간(분)',
+                        ),
+                      ),
+                      // 회차별 진도 내용. 회차는 과목+날짜로 저장되므로 이 과목을
+                      // 쓰는 모든 반/교시 시간표에 같은 내용이 함께 보인다.
+                      // 이 다이얼로그에서 가장 자주 쓰는 동작이라 맨 위로 올리고
+                      // 카드 형태로 키웠다(작은 아웃라인 버튼은 눈에 띄지 않았다).
+                      if (initial != null &&
+                          controller.canManageCourseLessons) ...[
+                        const SizedBox(height: 14),
+                        _buildCourseLessonEntryTile(
+                          controller: controller,
+                          course: initial,
+                          enabled: !isSaving,
+                          onChanged: () => setDialogState(() {}),
+                        ),
+                      ],
+                      if (usedInTerm) ...[
+                        const SizedBox(height: 10),
+                        _buildInlineNotice(
+                          '이 학기 시간표에서 사용 중이라 삭제할 수 없습니다. 이름·시간 수정은 가능합니다.',
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                    ],
+                  ),
               );
             },
           );
@@ -3591,7 +3562,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -3673,16 +3644,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 if (target == null || isSaving || usedBySession) {
                   return;
                 }
-                final confirmed = await showDialog<bool>(
+                final confirmed = await showNestSheet<bool>(
                   context: context,
-                  builder: (confirmContext) => AlertDialog(
-                    title: const Text('교실 삭제'),
-                    content: Text(
-                      '"${target.name}" 교실을 삭제할까요?\n'
-                      '시간표에서 사용 중인 교실은 삭제할 수 없습니다.',
-                    ),
+                  builder: (confirmContext) => NestSheet(
+                    title: '교실 삭제',
                     actions: [
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () =>
                             Navigator.of(confirmContext).pop(false),
                         child: const Text('취소'),
@@ -3692,6 +3659,10 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         child: const Text('삭제'),
                       ),
                     ],
+                    child: Text(
+                    '"${target.name}" 교실을 삭제할까요?\n'
+                    '시간표에서 사용 중인 교실은 삭제할 수 없습니다.',
+                  ),
                   ),
                 );
                 if (confirmed != true) {
@@ -3723,59 +3694,28 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 }
               }
 
-              return AlertDialog(
-                title: Text(initial == null ? '교실 추가' : '교실 수정'),
-                content: SizedBox(
-                  width: 500,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: '교실 이름'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: capacityController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '수용 인원'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: noteController,
-                        decoration: const InputDecoration(labelText: '메모'),
-                        minLines: 1,
-                        maxLines: 3,
-                      ),
-                      if (usedBySession) ...[
-                        const SizedBox(height: 8),
-                        _buildEmptyHint(
-                          '현재 시간표에서 사용 중인 교실입니다. 이름/정보 수정은 가능하지만 삭제는 제한됩니다.',
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                actions: [
-                  if (initial != null)
-                    TextButton.icon(
-                      onPressed: isSaving || controller.isBusy || usedBySession
-                          ? null
-                          : deleteClassroom,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red.shade700,
-                      ),
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('삭제'),
+              return NestSheet(
+                title: initial == null ? '교실 추가' : '교실 수정',
+                destructiveAction: initial != null
+  ? OutlinedButton.icon(
+                    onPressed: isSaving || controller.isBusy || usedBySession
+                        ? null
+                        : deleteClassroom,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
                     ),
-                  TextButton(
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('삭제'),
+                  )
+  : null,
+                actions: [
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('닫기'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving || controller.isBusy
                         ? null
                         : saveClassroom,
@@ -3783,6 +3723,35 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     label: Text(initial == null ? '생성' : '저장'),
                   ),
                 ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: '교실 이름'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: capacityController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: '수용 인원'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: noteController,
+                      decoration: const InputDecoration(labelText: '메모'),
+                      minLines: 1,
+                      maxLines: 3,
+                    ),
+                    if (usedBySession) ...[
+                      const SizedBox(height: 8),
+                      _buildEmptyHint(
+                        '현재 시간표에서 사용 중인 교실입니다. 이름/정보 수정은 가능하지만 삭제는 제한됩니다.',
+                      ),
+                    ],
+                  ],
+                ),
               );
             },
           );

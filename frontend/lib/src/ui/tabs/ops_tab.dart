@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_sheet.dart';
 
 class OpsTab extends StatefulWidget {
   const OpsTab({super.key, required this.controller});
@@ -125,26 +126,26 @@ class _OpsTabState extends State<OpsTab> {
         ? '-'
         : DateFormat('yyyy-MM-dd HH:mm:ss').format(log.createdAt!);
 
-    showDialog(
+    showNestSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${log.actionType} · ${log.resourceType}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _detailRow('작업', log.actionType),
-            _detailRow('대상 유형', log.resourceType),
-            _detailRow('대상 ID', log.resourceId),
-            _detailRow('시간', timeText),
-          ],
-        ),
+      builder: (ctx) => NestSheet(
+        title: '${log.actionType} · ${log.resourceType}',
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('닫기'),
           ),
         ],
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _detailRow('작업', log.actionType),
+          _detailRow('대상 유형', log.resourceType),
+          _detailRow('대상 ID', log.resourceId),
+          _detailRow('시간', timeText),
+        ],
+      ),
       ),
     );
   }

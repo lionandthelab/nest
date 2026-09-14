@@ -9,6 +9,7 @@ import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
+import '../widgets/nest_sheet.dart';
 import '../widgets/term_calendar_view.dart';
 
 /// 관리자 소식 탭 — 공지사항과 학사일정을 한 화면에서 관리한다.
@@ -421,24 +422,24 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
     required String title,
     required String message,
   }) {
-    return showDialog<bool>(
+    return showNestSheet<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
+      builder: (dialogContext) => NestSheet(
+        title: title,
+        destructiveAction: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(dialogContext).colorScheme.error,
+          ),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('삭제'),
+        ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('취소'),
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialogContext).colorScheme.error,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('삭제'),
-          ),
         ],
+        child: Text(message),
       ),
     );
   }

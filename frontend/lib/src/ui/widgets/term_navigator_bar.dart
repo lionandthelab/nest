@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import 'nest_sheet.dart';
 
 /// 관리자용 상단 고정 학기 네비게이터 바.
 ///
@@ -494,38 +495,38 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
     final classCount =
         isSelected ? widget.controller.classGroups.length : null;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showNestSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('학기 삭제'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('‘${term.name}’ 학기를 삭제할까요?'),
-            const SizedBox(height: 10),
-            Text(
-              '이 학기의 반${classCount != null ? ' $classCount개' : ''}·수업 시간표·'
-              '자습 계획·교실이 모두 함께 삭제됩니다. 되돌릴 수 없습니다.',
-              style: TextStyle(
-                fontSize: 13,
-                color: NestColors.clay,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+      builder: (ctx) => NestSheet(
+        title: '학기 삭제',
+        destructiveAction: FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('삭제'),
         ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('취소'),
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('삭제'),
+        ],
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('‘${term.name}’ 학기를 삭제할까요?'),
+          const SizedBox(height: 10),
+          Text(
+            '이 학기의 반${classCount != null ? ' $classCount개' : ''}·수업 시간표·'
+            '자습 계획·교실이 모두 함께 삭제됩니다. 되돌릴 수 없습니다.',
+            style: TextStyle(
+              fontSize: 13,
+              color: NestColors.clay,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
+      ),
       ),
     );
     if (confirmed != true) return;
@@ -550,93 +551,10 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
         !term.isArchived &&
         widget.controller.terms.length > 1;
 
-    return AlertDialog(
-      title: Text(widget.isCreate ? '예정 학기 추가' : '학기 정보 수정'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (archivedLock)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  '보관된 학기입니다. 이름·기간은 잠겨 있어요. 상태를 바꿔 보관을 해제하면 수정할 수 있습니다.',
-                  style: TextStyle(fontSize: 12, color: NestColors.clay),
-                ),
-              ),
-            TextField(
-              controller: _nameController,
-              autofocus: widget.isCreate,
-              readOnly: archivedLock,
-              decoration: const InputDecoration(
-                labelText: '학기 이름',
-                hintText: '예: 2026-2학기',
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _DateField(
-                    label: '시작일',
-                    value: _fmtDate(_start),
-                    onTap: _saving || archivedLock ? null : () => _pickDate(true),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _DateField(
-                    label: '종료일',
-                    value: _fmtDate(_end),
-                    onTap:
-                        _saving || archivedLock ? null : () => _pickDate(false),
-                  ),
-                ),
-              ],
-            ),
-            if (!widget.isCreate) ...[
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
-                initialValue: _statuses.contains(_status) ? _status : 'DRAFT',
-                decoration: const InputDecoration(labelText: '상태'),
-                items: [
-                  for (final s in _statuses)
-                    DropdownMenuItem(value: s, child: Text(_statusLabel(s))),
-                ],
-                onChanged: _saving
-                    ? null
-                    : (value) {
-                        if (value != null) setState(() => _status = value);
-                      },
-              ),
-              if (_status == 'ARCHIVED')
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    '보관 학기는 편집·삭제가 잠깁니다(DB 트리거로 보호).',
-                    style: TextStyle(fontSize: 12, color: NestColors.clay),
-                  ),
-                ),
-            ],
-            if (canDelete) ...[
-              const Divider(height: 28),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _saving ? null : _confirmDelete,
-                  icon: Icon(Icons.delete_outline,
-                      size: 18, color: Colors.red.shade600),
-                  label: Text('이 학기 삭제',
-                      style: TextStyle(color: Colors.red.shade600)),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return NestSheet(
+      title: widget.isCreate ? '예정 학기 추가' : '학기 정보 수정',
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
           child: const Text('취소'),
         ),
@@ -651,6 +569,87 @@ class _TermEditorDialogState extends State<_TermEditorDialog> {
               : Text(widget.isCreate ? '만들기' : '저장'),
         ),
       ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (archivedLock)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                '보관된 학기입니다. 이름·기간은 잠겨 있어요. 상태를 바꿔 보관을 해제하면 수정할 수 있습니다.',
+                style: TextStyle(fontSize: 12, color: NestColors.clay),
+              ),
+            ),
+          TextField(
+            controller: _nameController,
+            autofocus: widget.isCreate,
+            readOnly: archivedLock,
+            decoration: const InputDecoration(
+              labelText: '학기 이름',
+              hintText: '예: 2026-2학기',
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _DateField(
+                  label: '시작일',
+                  value: _fmtDate(_start),
+                  onTap: _saving || archivedLock ? null : () => _pickDate(true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DateField(
+                  label: '종료일',
+                  value: _fmtDate(_end),
+                  onTap:
+                      _saving || archivedLock ? null : () => _pickDate(false),
+                ),
+              ),
+            ],
+          ),
+          if (!widget.isCreate) ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _statuses.contains(_status) ? _status : 'DRAFT',
+              decoration: const InputDecoration(labelText: '상태'),
+              items: [
+                for (final s in _statuses)
+                  DropdownMenuItem(value: s, child: Text(_statusLabel(s))),
+              ],
+              onChanged: _saving
+                  ? null
+                  : (value) {
+                      if (value != null) setState(() => _status = value);
+                    },
+            ),
+            if (_status == 'ARCHIVED')
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '보관 학기는 편집·삭제가 잠깁니다(DB 트리거로 보호).',
+                  style: TextStyle(fontSize: 12, color: NestColors.clay),
+                ),
+              ),
+          ],
+          if (canDelete) ...[
+            const Divider(height: 28),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _saving ? null : _confirmDelete,
+                icon: Icon(Icons.delete_outline,
+                    size: 18, color: Colors.red.shade600),
+                label: Text('이 학기 삭제',
+                    style: TextStyle(color: Colors.red.shade600)),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

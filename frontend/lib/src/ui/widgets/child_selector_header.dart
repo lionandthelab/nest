@@ -6,6 +6,7 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import 'entity_visuals.dart';
+import 'nest_sheet.dart';
 import 'search_select_field.dart';
 
 class ChildSelectorHeader extends StatelessWidget {
@@ -227,58 +228,15 @@ class ChildSelectorHeader extends StatelessWidget {
       familyNameCtrl.text = '${fullName.trim()} 가정';
     }
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showNestSheet<bool>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('내 아이 등록 요청'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: familyNameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: '가정 이름',
-                        hintText: '예: 홍길동 가정',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: childNameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: '아이 이름',
-                        hintText: '예: 홍길순',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        birthDate == null
-                            ? '생년월일 (선택)'
-                            : DateFormat('yyyy-MM-dd').format(birthDate!),
-                      ),
-                      trailing: const Icon(Icons.calendar_today, size: 18),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime(2018, 1, 1),
-                          firstDate: DateTime(2005),
-                          lastDate: DateTime.now(),
-                        );
-                        if (picked != null) {
-                          setDialogState(() => birthDate = picked);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
+            return NestSheet(
+              title: '내 아이 등록 요청',
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: () => Navigator.of(dialogContext).pop(false),
                   child: const Text('취소'),
                 ),
@@ -287,6 +245,47 @@ class ChildSelectorHeader extends StatelessWidget {
                   child: const Text('요청'),
                 ),
               ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: familyNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '가정 이름',
+                      hintText: '예: 홍길동 가정',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: childNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '아이 이름',
+                      hintText: '예: 홍길순',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      birthDate == null
+                          ? '생년월일 (선택)'
+                          : DateFormat('yyyy-MM-dd').format(birthDate!),
+                    ),
+                    trailing: const Icon(Icons.calendar_today, size: 18),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime(2018, 1, 1),
+                        firstDate: DateTime(2005),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => birthDate = picked);
+                      }
+                    },
+                  ),
+                ],
+              ),
             );
           },
         );

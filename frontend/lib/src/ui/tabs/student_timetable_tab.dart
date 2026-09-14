@@ -13,6 +13,7 @@ import '../widgets/schedule_personal_section.dart';
 import '../widgets/schedule_week_bar.dart';
 import '../widgets/term_calendar_view.dart';
 import 'timetable/course_lesson_sheet.dart';
+import '../widgets/nest_sheet.dart';
 
 /// 학생 본인 계정의 시간표 탭.
 ///
@@ -963,31 +964,12 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
   /// 사유 입력(선택). 취소하면 null.
   Future<String?> _askReason(DateTime date) async {
     final textController = TextEditingController();
-    final result = await showDialog<String>(
+    final result = await showNestSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('결석 신고'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${DateFormat('M월 d일 (E)', 'ko').format(date)} 수업을 결석한다고 알릴까요?',
-              style: Theme.of(ctx).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: '사유 (선택)',
-                hintText: '예: 병원 진료',
-              ),
-            ),
-          ],
-        ),
+      builder: (ctx) => NestSheet(
+        title: '결석 신고',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('닫기'),
           ),
@@ -996,6 +978,25 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
             child: const Text('신고하기'),
           ),
         ],
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${DateFormat('M월 d일 (E)', 'ko').format(date)} 수업을 결석한다고 알릴까요?',
+            style: Theme.of(ctx).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: textController,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: '사유 (선택)',
+              hintText: '예: 병원 진료',
+            ),
+          ),
+        ],
+      ),
       ),
     );
     textController.dispose();
@@ -1003,16 +1004,12 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
   }
 
   Future<void> _cancelAbsence(AbsenceReport report, VoidCallback refresh) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showNestSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('결석 신고 취소'),
-        content: Text(
-          '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
-          '결석 신고를 취소할까요?',
-        ),
+      builder: (ctx) => NestSheet(
+        title: '결석 신고 취소',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('닫기'),
           ),
@@ -1021,6 +1018,10 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
             child: const Text('취소하기'),
           ),
         ],
+        child: Text(
+        '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
+        '결석 신고를 취소할까요?',
+      ),
       ),
     );
     if (confirmed != true) return;

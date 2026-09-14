@@ -22,6 +22,7 @@ import 'timetable/room_normalizer.dart';
 import 'timetable/timetable_excel_export.dart';
 import 'timetable/timetable_export_board.dart';
 import 'timetable/whole_school_overlay_board.dart';
+import '../widgets/nest_sheet.dart';
 
 /// Board view mode: per-class editable build, read-only whole-school overlay,
 /// or the read-only "빈 강의실 찾기" picker.
@@ -454,7 +455,7 @@ class _TimetableTabState extends State<TimetableTab> {
         : <int>{1, 2, 3, 4, 5}; // Default: Mon-Fri
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (dialogContext) {
           return StatefulBuilder(
@@ -486,176 +487,10 @@ class _TimetableTabState extends State<TimetableTab> {
                 }
               }
 
-              return AlertDialog(
-                title: Text(resetToDefaults ? '교시 설정 초기화' : '교시/요일 설정'),
-                content: SizedBox(
-                  width: 420,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          resetToDefaults
-                              ? '기본값(평일 09:00~15:00 · 50분 교시)으로 되돌립니다. '
-                                  '적용하면 현재 교시가 모두 지워지고 아래 미리보기대로 다시 만들어집니다.'
-                              : '시간 범위와 교시 길이를 설정하면 자동으로 교시가 생성됩니다. '
-                                  '적용하면 기존 교시는 새 설정으로 교체됩니다.',
-                          style: Theme.of(dialogContext)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: NestColors.deepWood
-                                    .withValues(alpha: 0.72),
-                              ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Time range
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: dayStartCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '시작 시간',
-                                  hintText: '09:00',
-                                  isDense: true,
-                                ),
-                                onChanged: (_) => setDialogState(() {}),
-                              ),
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8),
-                              child: Text('~'),
-                            ),
-                            Expanded(
-                              child: TextField(
-                                controller: dayEndCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '종료 시간',
-                                  hintText: '15:00',
-                                  isDense: true,
-                                ),
-                                onChanged: (_) => setDialogState(() {}),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Duration & break
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: durationCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '교시 길이 (분)',
-                                  hintText: '50',
-                                  isDense: true,
-                                ),
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) => setDialogState(() {}),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextField(
-                                controller: breakCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '쉬는 시간 (분)',
-                                  hintText: '10',
-                                  isDense: true,
-                                ),
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) => setDialogState(() {}),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Active days
-                        Text(
-                          '수업 요일',
-                          style: Theme.of(dialogContext)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [1, 2, 3, 4, 5, 6, 0].map((day) {
-                            final active = selectedDays.contains(day);
-                            return FilterChip(
-                              label: Text(_dayLabel(day)),
-                              selected: active,
-                              onSelected: (selected) {
-                                setDialogState(() {
-                                  if (selected) {
-                                    selectedDays.add(day);
-                                  } else {
-                                    selectedDays.remove(day);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Preview
-                        const Divider(),
-                        Text(
-                          '미리보기 (${previewPeriods.length}교시)',
-                          style: Theme.of(dialogContext)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        if (previewPeriods.isEmpty)
-                          Text(
-                            '설정을 입력하면 교시가 표시됩니다.',
-                            style: Theme.of(dialogContext)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: NestColors.deepWood
-                                      .withValues(alpha: 0.6),
-                                ),
-                          )
-                        else
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: previewPeriods
-                                .asMap()
-                                .entries
-                                .map((entry) {
-                              return Chip(
-                                avatar: CircleAvatar(
-                                  radius: 12,
-                                  child: Text(
-                                    '${entry.key + 1}',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                ),
-                                label: Text(
-                                    '${entry.value.$1} - ${entry.value.$2}'),
-                                visualDensity: VisualDensity.compact,
-                              );
-                            }).toList(),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
+              return NestSheet(
+                title: resetToDefaults ? '교시 설정 초기화' : '교시/요일 설정',
                 actions: [
-                  TextButton(
+                  OutlinedButton(
                     onPressed: () => Navigator.of(dialogContext).pop(),
                     child: const Text('취소'),
                   ),
@@ -689,6 +524,167 @@ class _TimetableTabState extends State<TimetableTab> {
                     child: const Text('적용'),
                   ),
                 ],
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        resetToDefaults
+                            ? '기본값(평일 09:00~15:00 · 50분 교시)으로 되돌립니다. '
+                                '적용하면 현재 교시가 모두 지워지고 아래 미리보기대로 다시 만들어집니다.'
+                            : '시간 범위와 교시 길이를 설정하면 자동으로 교시가 생성됩니다. '
+                                '적용하면 기존 교시는 새 설정으로 교체됩니다.',
+                        style: Theme.of(dialogContext)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(
+                              color: NestColors.deepWood
+                                  .withValues(alpha: 0.72),
+                            ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Time range
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: dayStartCtrl,
+                              decoration: const InputDecoration(
+                                labelText: '시작 시간',
+                                hintText: '09:00',
+                                isDense: true,
+                              ),
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text('~'),
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: dayEndCtrl,
+                              decoration: const InputDecoration(
+                                labelText: '종료 시간',
+                                hintText: '15:00',
+                                isDense: true,
+                              ),
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Duration & break
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: durationCtrl,
+                              decoration: const InputDecoration(
+                                labelText: '교시 길이 (분)',
+                                hintText: '50',
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: breakCtrl,
+                              decoration: const InputDecoration(
+                                labelText: '쉬는 시간 (분)',
+                                hintText: '10',
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Active days
+                      Text(
+                        '수업 요일',
+                        style: Theme.of(dialogContext)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [1, 2, 3, 4, 5, 6, 0].map((day) {
+                          final active = selectedDays.contains(day);
+                          return FilterChip(
+                            label: Text(_dayLabel(day)),
+                            selected: active,
+                            onSelected: (selected) {
+                              setDialogState(() {
+                                if (selected) {
+                                  selectedDays.add(day);
+                                } else {
+                                  selectedDays.remove(day);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Preview
+                      const Divider(),
+                      Text(
+                        '미리보기 (${previewPeriods.length}교시)',
+                        style: Theme.of(dialogContext)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      if (previewPeriods.isEmpty)
+                        Text(
+                          '설정을 입력하면 교시가 표시됩니다.',
+                          style: Theme.of(dialogContext)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: NestColors.deepWood
+                                    .withValues(alpha: 0.6),
+                              ),
+                        )
+                      else
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: previewPeriods
+                              .asMap()
+                              .entries
+                              .map((entry) {
+                            return Chip(
+                              avatar: CircleAvatar(
+                                radius: 12,
+                                child: Text(
+                                  '${entry.key + 1}',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                              label: Text(
+                                  '${entry.value.$1} - ${entry.value.$2}'),
+                              visualDensity: VisualDensity.compact,
+                            );
+                          }).toList(),
+                        ),
+                    ],
+                  ),
               );
             },
           );
@@ -1551,12 +1547,14 @@ class _TimetableTabState extends State<TimetableTab> {
     var isExporting = false;
     String? status;
 
-    await showDialog<void>(
+    await showNestSheet<void>(
       context: context,
+      maxWidth: 1180,
       builder: (context) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             final media = MediaQuery.sizeOf(dialogContext);
+            final compact = nestIsCompact(dialogContext);
             final canExport = table.hasEntries && !isExporting;
 
             Future<void> runExport(Future<String> Function() task) async {
@@ -1574,100 +1572,10 @@ class _TimetableTabState extends State<TimetableTab> {
               });
             }
 
-            return AlertDialog(
-              title: Text(dialogTitle),
-              content: SizedBox(
-                width: math.min(media.width * 0.94, 1180),
-                height: math.min(media.height * 0.74, 780),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 18,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Checkbox(
-                              value: hideEmptyPeriods,
-                              onChanged: isExporting
-                                  ? null
-                                  : (value) => setDialogState(() {
-                                      hideEmptyPeriods = value ?? true;
-                                      status = null;
-                                    }),
-                            ),
-                            const Text('빈 시간대 숨기기'),
-                          ],
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('글자 크기'),
-                            const SizedBox(width: 8),
-                            SegmentedButton<TimetableExportScale>(
-                              style: _kViewToggleStyle,
-                              showSelectedIcon: false,
-                              segments: TimetableExportScale.values
-                                  .map(
-                                    (value) =>
-                                        ButtonSegment<TimetableExportScale>(
-                                      value: value,
-                                      label: Text(value.label),
-                                    ),
-                                  )
-                                  .toList(),
-                              selected: <TimetableExportScale>{scale},
-                              onSelectionChanged: isExporting
-                                  ? null
-                                  : (values) => setDialogState(() {
-                                      scale = values.first;
-                                      status = null;
-                                    }),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: NestColors.creamyWhite,
-                          border: Border.all(color: NestColors.roseMist),
-                        ),
-                        child: SingleChildScrollView(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: TimetableExportBoard(
-                              table: table,
-                              scale: scale,
-                              hideEmptyPeriods: hideEmptyPeriods,
-                              repaintKey: repaintKey,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      status ??
-                          '미리보기 그대로 저장됩니다. 엑셀은 "표"·"목록" 두 시트로 저장돼 바로 편집할 수 있습니다.',
-                      style: Theme.of(dialogContext).textTheme.bodySmall
-                          ?.copyWith(
-                            color: NestColors.deepWood.withValues(alpha: 0.75),
-                          ),
-                    ),
-                  ],
-                ),
-              ),
+            return NestSheet(
+              title: dialogTitle,
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: isExporting
                       ? null
                       : () => Navigator.of(dialogContext).pop(),
@@ -1686,7 +1594,7 @@ class _TimetableTabState extends State<TimetableTab> {
                   icon: const Icon(Icons.table_view_outlined),
                   label: const Text('엑셀 저장'),
                 ),
-                ElevatedButton.icon(
+                FilledButton.icon(
                   onPressed: canExport
                       ? () => runExport(
                           () => _exportBoardImage(
@@ -1699,6 +1607,96 @@ class _TimetableTabState extends State<TimetableTab> {
                   label: const Text('PNG 저장'),
                 ),
               ],
+              child: SizedBox(
+              width: double.infinity,
+              height: math.min(media.height * (compact ? 0.5 : 0.74), 780),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 18,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Checkbox(
+                            value: hideEmptyPeriods,
+                            onChanged: isExporting
+                                ? null
+                                : (value) => setDialogState(() {
+                                    hideEmptyPeriods = value ?? true;
+                                    status = null;
+                                  }),
+                          ),
+                          const Text('빈 시간대 숨기기'),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('글자 크기'),
+                          const SizedBox(width: 8),
+                          SegmentedButton<TimetableExportScale>(
+                            style: _kViewToggleStyle,
+                            showSelectedIcon: false,
+                            segments: TimetableExportScale.values
+                                .map(
+                                  (value) =>
+                                      ButtonSegment<TimetableExportScale>(
+                                    value: value,
+                                    label: Text(value.label),
+                                  ),
+                                )
+                                .toList(),
+                            selected: <TimetableExportScale>{scale},
+                            onSelectionChanged: isExporting
+                                ? null
+                                : (values) => setDialogState(() {
+                                    scale = values.first;
+                                    status = null;
+                                  }),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: NestColors.creamyWhite,
+                        border: Border.all(color: NestColors.roseMist),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: TimetableExportBoard(
+                            table: table,
+                            scale: scale,
+                            hideEmptyPeriods: hideEmptyPeriods,
+                            repaintKey: repaintKey,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    status ??
+                        '미리보기 그대로 저장됩니다. 엑셀은 "표"·"목록" 두 시트로 저장돼 바로 편집할 수 있습니다.',
+                    style: Theme.of(dialogContext).textTheme.bodySmall
+                        ?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.75),
+                        ),
+                  ),
+                ],
+              ),
+            ),
             );
           },
         );
@@ -2251,7 +2249,7 @@ class _TimetableTabState extends State<TimetableTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -2295,41 +2293,38 @@ class _TimetableTabState extends State<TimetableTab> {
                 Navigator.of(context).pop();
               }
 
-              return AlertDialog(
-                title: const Text('과목 추가'),
-                content: SizedBox(
-                  width: 420,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: '과목 이름'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: durationController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: '기본 수업 시간(분)',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              return NestSheet(
+                title: '과목 추가',
                 actions: [
-                  TextButton(
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('취소'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving ? null : saveCourse,
                     icon: const Icon(Icons.save_outlined),
                     label: const Text('생성'),
                   ),
                 ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: '과목 이름'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: durationController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '기본 수업 시간(분)',
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -2388,7 +2383,7 @@ class _TimetableTabState extends State<TimetableTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -2427,60 +2422,57 @@ class _TimetableTabState extends State<TimetableTab> {
                 Navigator.of(context).pop();
               }
 
-              return AlertDialog(
-                title: const Text('선생님 추가'),
-                content: SizedBox(
-                  width: 460,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: '표시 이름'),
-                      ),
-                      const SizedBox(height: 10),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'PARENT_TEACHER',
-                            label: Text('부모 교사'),
-                            icon: Icon(Icons.family_restroom, size: 16),
-                          ),
-                          ButtonSegment(
-                            value: 'GUEST_TEACHER',
-                            label: Text('초청 교사'),
-                            icon: Icon(Icons.badge_outlined, size: 16),
-                          ),
-                        ],
-                        selected: {teacherType},
-                        onSelectionChanged: isSaving
-                            ? null
-                            : (values) {
-                                if (values.isEmpty) {
-                                  return;
-                                }
-                                setDialogState(() {
-                                  teacherType = values.first;
-                                });
-                              },
-                      ),
-                    ],
-                  ),
-                ),
+              return NestSheet(
+                title: '선생님 추가',
                 actions: [
-                  TextButton(
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('취소'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving ? null : saveTeacher,
                     icon: const Icon(Icons.save_outlined),
                     label: const Text('생성'),
                   ),
                 ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: '표시 이름'),
+                    ),
+                    const SizedBox(height: 10),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'PARENT_TEACHER',
+                          label: Text('부모 교사'),
+                          icon: Icon(Icons.family_restroom, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: 'GUEST_TEACHER',
+                          label: Text('초청 교사'),
+                          icon: Icon(Icons.badge_outlined, size: 16),
+                        ),
+                      ],
+                      selected: {teacherType},
+                      onSelectionChanged: isSaving
+                          ? null
+                          : (values) {
+                              if (values.isEmpty) {
+                                return;
+                              }
+                              setDialogState(() {
+                                teacherType = values.first;
+                              });
+                            },
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -2540,7 +2532,7 @@ class _TimetableTabState extends State<TimetableTab> {
     var isSaving = false;
 
     try {
-      await showDialog<void>(
+      await showNestSheet<void>(
         context: context,
         builder: (context) {
           return StatefulBuilder(
@@ -2590,39 +2582,36 @@ class _TimetableTabState extends State<TimetableTab> {
                 Navigator.of(context).pop();
               }
 
-              return AlertDialog(
-                title: const Text('교실 추가'),
-                content: SizedBox(
-                  width: 420,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: '교실 이름'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: capacityController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '수용 인원'),
-                      ),
-                    ],
-                  ),
-                ),
+              return NestSheet(
+                title: '교실 추가',
                 actions: [
-                  TextButton(
+                  OutlinedButton(
                     onPressed: isSaving
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('취소'),
                   ),
-                  ElevatedButton.icon(
+                  FilledButton.icon(
                     onPressed: isSaving ? null : saveClassroom,
                     icon: const Icon(Icons.save_outlined),
                     label: const Text('생성'),
                   ),
                 ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: '교실 이름'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: capacityController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: '수용 인원'),
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -2704,13 +2693,12 @@ class _TimetableTabState extends State<TimetableTab> {
     required String message,
     String confirmLabel = '삭제',
   }) {
-    return showDialog<bool>(
+    return showNestSheet<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
+      builder: (context) => NestSheet(
+        title: title,
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('취소'),
           ),
@@ -2719,6 +2707,7 @@ class _TimetableTabState extends State<TimetableTab> {
             child: Text(confirmLabel),
           ),
         ],
+        child: Text(message),
       ),
     );
   }
@@ -3508,34 +3497,31 @@ class _TimetableTabState extends State<TimetableTab> {
     List<_EditableSession> candidates,
     String title,
   ) async {
-    return showDialog<_EditableSession>(
+    return showNestSheet<_EditableSession>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: candidates
-                .map(
-                  (session) => ListTile(
-                    dense: true,
-                    title: Text(
-                      widget.controller.findCourseName(session.courseId),
-                    ),
-                    subtitle: Text(_slotLabel(session.timeSlotId)),
-                    onTap: () => Navigator.of(context).pop(session),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
+      builder: (context) => NestSheet(
+        title: title,
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('취소'),
           ),
         ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: candidates
+              .map(
+                (session) => ListTile(
+                  dense: true,
+                  title: Text(
+                    widget.controller.findCourseName(session.courseId),
+                  ),
+                  subtitle: Text(_slotLabel(session.timeSlotId)),
+                  onTap: () => Navigator.of(context).pop(session),
+                ),
+              )
+              .toList(),
+        ),
       ),
     );
   }
@@ -3566,7 +3552,7 @@ class _TimetableTabState extends State<TimetableTab> {
         .map((row) => row.teacherProfileId)
         .toSet();
 
-    await showDialog<void>(
+    await showNestSheet<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -3579,201 +3565,14 @@ class _TimetableTabState extends State<TimetableTab> {
               roomOptions.sort();
             }
 
-            return AlertDialog(
-              title: const Text('수업 설정'),
-              content: SizedBox(
-                width: 460,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.controller.findCourseName(session.courseId),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(_slotLabel(session.timeSlotId)),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String?>(
-                        initialValue: mainTeacherId,
-                        decoration: const InputDecoration(labelText: '주강사'),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('미지정'),
-                          ),
-                          ...controller.teacherProfiles.map(
-                            (teacher) => DropdownMenuItem<String?>(
-                              value: teacher.id,
-                              child: Text(teacher.displayName),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setLocalState(() {
-                            mainTeacherId = value;
-                            if (value != null) {
-                              assistantIds.remove(value);
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '보조강사',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 6),
-                      if (controller.teacherProfiles.isEmpty)
-                        const Text('선택 가능한 교사가 없습니다.')
-                      else
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: controller.teacherProfiles
-                              .map((teacher) {
-                                final selected = assistantIds.contains(
-                                  teacher.id,
-                                );
-                                final disabled = mainTeacherId == teacher.id;
-                                return FilterChip(
-                                  label: Text(teacher.displayName),
-                                  selected: selected,
-                                  onSelected: disabled
-                                      ? null
-                                      : (value) {
-                                          setLocalState(() {
-                                            if (value) {
-                                              assistantIds.add(teacher.id);
-                                            } else {
-                                              assistantIds.remove(teacher.id);
-                                            }
-                                          });
-                                        },
-                                );
-                              })
-                              .toList(),
-                        ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String?>(
-                        initialValue: selectedClassroom,
-                        decoration: const InputDecoration(labelText: '교실'),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('미지정'),
-                          ),
-                          ...roomOptions.map(
-                            (room) => DropdownMenuItem<String?>(
-                              value: room,
-                              child: Text(room),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setLocalState(() {
-                            selectedClassroom = value;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      if (roomOptions.isNotEmpty)
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: roomOptions
-                              .map(
-                                (room) => ActionChip(
-                                  label: Text(room),
-                                  onPressed: () {
-                                    setLocalState(() {
-                                      selectedClassroom = room;
-                                    });
-                                  },
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      // 휴강·시간/장소 변경·보강 교사 공지. 시간표 자체를 바꾸는
-                      // 것이 아니라 특정 날짜/기간에만 적용되는 변경 이력이라
-                      // 초안 편집과 분리해 서버에 바로 저장한다. 아직 커밋되지
-                      // 않은(tmp) 세션은 서버에 없으므로 진입할 수 없다.
-                      if (!session.isNew &&
-                          controller.canManageClassSessionChanges) ...[
-                        const Divider(height: 26),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: () => showClassSessionChangeSheet(
-                              context: context,
-                              controller: controller,
-                              classSessionId: session.id,
-                            ),
-                            icon: const Icon(Icons.published_with_changes),
-                            label: Text(
-                              controller.changesForSession(session.id).isEmpty
-                                  ? '수업 변경 공지'
-                                  : '수업 변경 공지 '
-                                        '(${controller.changesForSession(session.id).length})',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '휴강·시간/장소 변경·보강 교사를 등록하고 학생·학부모에게 문자로 알립니다.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: NestColors.deepWood.withValues(
-                                  alpha: 0.6,
-                                ),
-                              ),
-                        ),
-                      ],
-                      // 회차별 진도 내용. 회차는 세션이 아니라 과목에 매달려 있으므로
-                      // 아직 커밋되지 않은(tmp) 세션에서도 바로 입력할 수 있다.
-                      if (controller.canManageCourseLessons) ...[
-                        const Divider(height: 26),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: () => showCourseLessonSheet(
-                              context: context,
-                              controller: controller,
-                              courseId: session.courseId,
-                            ),
-                            icon: const Icon(Icons.auto_stories_outlined),
-                            label: Text(
-                              controller
-                                      .lessonsForCourse(session.courseId)
-                                      .isEmpty
-                                  ? '수업 회차 내용'
-                                  : '수업 회차 내용 '
-                                        '(${controller.lessonsForCourse(session.courseId).length})',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '날짜별 진도(제목·담당·준비물)를 입력합니다. 같은 과목의 모든 반 시간표에 함께 보입니다.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: NestColors.deepWood.withValues(
-                                  alpha: 0.6,
-                                ),
-                              ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+            return NestSheet(
+              title: '수업 설정',
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('취소'),
                 ),
-                ElevatedButton(
+                FilledButton(
                   onPressed: () {
                     _replaceAssignments(
                       sessionId,
@@ -3786,6 +3585,188 @@ class _TimetableTabState extends State<TimetableTab> {
                   child: const Text('적용'),
                 ),
               ],
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.controller.findCourseName(session.courseId),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(_slotLabel(session.timeSlotId)),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      initialValue: mainTeacherId,
+                      decoration: const InputDecoration(labelText: '주강사'),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('미지정'),
+                        ),
+                        ...controller.teacherProfiles.map(
+                          (teacher) => DropdownMenuItem<String?>(
+                            value: teacher.id,
+                            child: Text(teacher.displayName),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setLocalState(() {
+                          mainTeacherId = value;
+                          if (value != null) {
+                            assistantIds.remove(value);
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '보조강사',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    if (controller.teacherProfiles.isEmpty)
+                      const Text('선택 가능한 교사가 없습니다.')
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: controller.teacherProfiles
+                            .map((teacher) {
+                              final selected = assistantIds.contains(
+                                teacher.id,
+                              );
+                              final disabled = mainTeacherId == teacher.id;
+                              return FilterChip(
+                                label: Text(teacher.displayName),
+                                selected: selected,
+                                onSelected: disabled
+                                    ? null
+                                    : (value) {
+                                        setLocalState(() {
+                                          if (value) {
+                                            assistantIds.add(teacher.id);
+                                          } else {
+                                            assistantIds.remove(teacher.id);
+                                          }
+                                        });
+                                      },
+                              );
+                            })
+                            .toList(),
+                      ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      initialValue: selectedClassroom,
+                      decoration: const InputDecoration(labelText: '교실'),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('미지정'),
+                        ),
+                        ...roomOptions.map(
+                          (room) => DropdownMenuItem<String?>(
+                            value: room,
+                            child: Text(room),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setLocalState(() {
+                          selectedClassroom = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    if (roomOptions.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: roomOptions
+                            .map(
+                              (room) => ActionChip(
+                                label: Text(room),
+                                onPressed: () {
+                                  setLocalState(() {
+                                    selectedClassroom = room;
+                                  });
+                                },
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    // 휴강·시간/장소 변경·보강 교사 공지. 시간표 자체를 바꾸는
+                    // 것이 아니라 특정 날짜/기간에만 적용되는 변경 이력이라
+                    // 초안 편집과 분리해 서버에 바로 저장한다. 아직 커밋되지
+                    // 않은(tmp) 세션은 서버에 없으므로 진입할 수 없다.
+                    if (!session.isNew &&
+                        controller.canManageClassSessionChanges) ...[
+                      const Divider(height: 26),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: () => showClassSessionChangeSheet(
+                            context: context,
+                            controller: controller,
+                            classSessionId: session.id,
+                          ),
+                          icon: const Icon(Icons.published_with_changes),
+                          label: Text(
+                            controller.changesForSession(session.id).isEmpty
+                                ? '수업 변경 공지'
+                                : '수업 변경 공지 '
+                                      '(${controller.changesForSession(session.id).length})',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '휴강·시간/장소 변경·보강 교사를 등록하고 학생·학부모에게 문자로 알립니다.',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(
+                              color: NestColors.deepWood.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                      ),
+                    ],
+                    // 회차별 진도 내용. 회차는 세션이 아니라 과목에 매달려 있으므로
+                    // 아직 커밋되지 않은(tmp) 세션에서도 바로 입력할 수 있다.
+                    if (controller.canManageCourseLessons) ...[
+                      const Divider(height: 26),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: () => showCourseLessonSheet(
+                            context: context,
+                            controller: controller,
+                            courseId: session.courseId,
+                          ),
+                          icon: const Icon(Icons.auto_stories_outlined),
+                          label: Text(
+                            controller
+                                    .lessonsForCourse(session.courseId)
+                                    .isEmpty
+                                ? '수업 회차 내용'
+                                : '수업 회차 내용 '
+                                      '(${controller.lessonsForCourse(session.courseId).length})',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '날짜별 진도(제목·담당·준비물)를 입력합니다. 같은 과목의 모든 반 시간표에 함께 보입니다.',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(
+                              color: NestColors.deepWood.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
             );
           },
         );
@@ -4447,21 +4428,21 @@ class _TimetableTabState extends State<TimetableTab> {
     required String title,
     required String message,
   }) {
-    return showDialog<bool>(
+    return showNestSheet<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
+      builder: (context) => NestSheet(
+        title: title,
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('취소'),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('롤백'),
           ),
         ],
+        child: Text(message),
       ),
     );
   }

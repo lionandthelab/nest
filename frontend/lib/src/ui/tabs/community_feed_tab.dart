@@ -9,6 +9,7 @@ import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_sheet.dart';
 
 class CommunityFeedTab extends StatefulWidget {
   const CommunityFeedTab({
@@ -322,44 +323,15 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
     String reasonCategory = 'OTHER';
     final detailController = TextEditingController();
 
-    final submitted = await showDialog<bool>(
+    final submitted = await showNestSheet<bool>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setLocalState) {
-            return AlertDialog(
-              title: const Text('게시글 신고'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: reasonCategory,
-                    decoration: const InputDecoration(labelText: '사유'),
-                    items: const [
-                      DropdownMenuItem(value: 'SPAM', child: Text('스팸')),
-                      DropdownMenuItem(value: 'ABUSE', child: Text('비방/욕설')),
-                      DropdownMenuItem(
-                          value: 'SAFETY', child: Text('안전 문제')),
-                      DropdownMenuItem(
-                          value: 'INAPPROPRIATE', child: Text('부적절한 내용')),
-                      DropdownMenuItem(value: 'OTHER', child: Text('기타')),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setLocalState(() => reasonCategory = value);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: detailController,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(labelText: '상세 내용'),
-                  ),
-                ],
-              ),
+            return NestSheet(
+              title: '게시글 신고',
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(false),
                   child: const Text('취소'),
                 ),
@@ -368,6 +340,35 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                   child: const Text('신고 제출'),
                 ),
               ],
+              child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: reasonCategory,
+                  decoration: const InputDecoration(labelText: '사유'),
+                  items: const [
+                    DropdownMenuItem(value: 'SPAM', child: Text('스팸')),
+                    DropdownMenuItem(value: 'ABUSE', child: Text('비방/욕설')),
+                    DropdownMenuItem(
+                        value: 'SAFETY', child: Text('안전 문제')),
+                    DropdownMenuItem(
+                        value: 'INAPPROPRIATE', child: Text('부적절한 내용')),
+                    DropdownMenuItem(value: 'OTHER', child: Text('기타')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setLocalState(() => reasonCategory = value);
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: detailController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: '상세 내용'),
+                ),
+              ],
+            ),
             );
           },
         );

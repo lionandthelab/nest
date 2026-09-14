@@ -12,6 +12,7 @@ import '../state/nest_controller.dart';
 import 'nest_theme.dart';
 import 'widgets/nest_motion.dart';
 import 'widgets/nest_social_login_buttons.dart';
+import 'widgets/nest_sheet.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.controller});
@@ -160,35 +161,12 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _onForgotPassword() async {
     final emailController = TextEditingController(text: _emailController.text);
-    final requestedEmail = await showDialog<String>(
+    final requestedEmail = await showNestSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('비밀번호 재설정'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '가입한 이메일 주소를 입력하면 비밀번호 재설정 링크를 보내드립니다.',
-              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.65),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: '이메일',
-                hintText: 'you@example.com',
-                prefixIcon: Icon(Icons.email_outlined, size: 20),
-              ),
-              autofocus: true,
-            ),
-          ],
-        ),
+      builder: (ctx) => NestSheet(
+        title: '비밀번호 재설정',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('취소'),
           ),
@@ -197,6 +175,29 @@ class _LoginPageState extends State<LoginPage> {
             child: const Text('메일 보내기'),
           ),
         ],
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '가입한 이메일 주소를 입력하면 비밀번호 재설정 링크를 보내드립니다.',
+            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.65),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: '이메일',
+              hintText: 'you@example.com',
+              prefixIcon: Icon(Icons.email_outlined, size: 20),
+            ),
+            autofocus: true,
+          ),
+        ],
+      ),
       ),
     );
     emailController.dispose();

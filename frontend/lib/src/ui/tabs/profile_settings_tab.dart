@@ -9,6 +9,7 @@ import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/calendar_connect_card.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_sheet.dart';
 
 class ProfileSettingsTab extends StatefulWidget {
   const ProfileSettingsTab({
@@ -743,18 +744,12 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
     TextInputType keyboardType = TextInputType.text,
   }) async {
     final textController = TextEditingController(text: currentValue);
-    final result = await showDialog<String>(
+    final result = await showNestSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: textController,
-          autofocus: true,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(hintText: hint),
-        ),
+      builder: (ctx) => NestSheet(
+        title: title,
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('취소'),
           ),
@@ -764,6 +759,12 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
             child: const Text('저장'),
           ),
         ],
+        child: TextField(
+        controller: textController,
+        autofocus: true,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(hintText: hint),
+      ),
       ),
     );
     textController.dispose();
@@ -793,16 +794,12 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
         .homeschool
         .name;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showNestSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('홈스쿨 탈퇴'),
-        content: Text(
-          '$homeschoolName에서 탈퇴하시겠습니까?\n\n'
-          '탈퇴하면 이 홈스쿨의 모든 데이터에 접근할 수 없게 됩니다.',
-        ),
+      builder: (ctx) => NestSheet(
+        title: '홈스쿨 탈퇴',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('취소'),
           ),
@@ -814,6 +811,10 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
             child: const Text('탈퇴'),
           ),
         ],
+        child: Text(
+        '$homeschoolName에서 탈퇴하시겠습니까?\n\n'
+        '탈퇴하면 이 홈스쿨의 모든 데이터에 접근할 수 없게 됩니다.',
+      ),
       ),
     );
 

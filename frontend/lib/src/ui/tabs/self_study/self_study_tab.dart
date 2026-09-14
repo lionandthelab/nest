@@ -5,6 +5,7 @@ import '../../../services/self_study_planner.dart';
 import '../../../state/nest_controller.dart';
 import '../../nest_theme.dart';
 import '../../widgets/nest_empty_state.dart';
+import '../../widgets/nest_sheet.dart';
 import '../../widgets/search_select_field.dart';
 import 'self_study_sheet.dart';
 import 'supervision_schedule_view.dart';
@@ -488,18 +489,12 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
 
   Future<void> _confirmRegenerate() async {
     final hasSlots = controller.selectedPlanSelfStudySlots.isNotEmpty;
-    final ok = await showDialog<bool>(
+    final ok = await showNestSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('자습 자동 배치'),
-        content: Text(
-          hasSlots
-              ? '수업 시간표의 공강을 다시 계산해 자습 슬롯을 새로 만듭니다.\n'
-                  '방/감독/제외 명단은 시간이 같은 슬롯에 한해 최대한 유지됩니다.'
-              : '수업 시간표의 공강을 계산해 반별 자습 슬롯을 만듭니다.',
-        ),
+      builder: (ctx) => NestSheet(
+        title: '자습 자동 배치',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('취소'),
           ),
@@ -508,6 +503,12 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             child: const Text('배치'),
           ),
         ],
+        child: Text(
+        hasSlots
+            ? '수업 시간표의 공강을 다시 계산해 자습 슬롯을 새로 만듭니다.\n'
+                '방/감독/제외 명단은 시간이 같은 슬롯에 한해 최대한 유지됩니다.'
+            : '수업 시간표의 공강을 계산해 반별 자습 슬롯을 만듭니다.',
+      ),
       ),
     );
     if (ok != true) return;
@@ -529,46 +530,13 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
   Future<void> _openRoomEditor(SelfStudySlot slot) async {
     final controller0 = TextEditingController(text: slot.room);
     final rooms = controller.classrooms.map((c) => c.name).toList()..sort();
-    final result = await showDialog<String>(
+    final result = await showNestSheet<String>(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('자습 장소'),
-          content: StatefulBuilder(
-            builder: (ctx, setInner) => Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: controller0,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: '방 이름',
-                    hintText: '예: 중예배실, 304호',
-                  ),
-                ),
-                if (rooms.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  const Text('등록된 강의실', style: TextStyle(fontSize: 12)),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final r in rooms)
-                        ActionChip(
-                          label: Text(r),
-                          onPressed: () =>
-                              setInner(() => controller0.text = r),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
+        return NestSheet(
+          title: '자습 장소',
           actions: [
-            TextButton(
+            OutlinedButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('취소'),
             ),
@@ -577,6 +545,39 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
               child: const Text('저장'),
             ),
           ],
+          child: StatefulBuilder(
+          builder: (ctx, setInner) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: controller0,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '방 이름',
+                  hintText: '예: 중예배실, 304호',
+                ),
+              ),
+              if (rooms.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('등록된 강의실', style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final r in rooms)
+                      ActionChip(
+                        label: Text(r),
+                        onPressed: () =>
+                            setInner(() => controller0.text = r),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
         );
       },
     );
@@ -628,13 +629,12 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
   }
 
   Future<void> _confirmDeletePlan(SelfStudyPlan plan) async {
-    final ok = await showDialog<bool>(
+    final ok = await showNestSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('자습 계획 삭제'),
-        content: Text('"${plan.name}" 계획과 그 안의 모든 자습 슬롯을 삭제할까요?'),
+      builder: (ctx) => NestSheet(
+        title: '자습 계획 삭제',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('취소'),
           ),
@@ -644,6 +644,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
             child: const Text('삭제'),
           ),
         ],
+        child: Text('"${plan.name}" 계획과 그 안의 모든 자습 슬롯을 삭제할까요?'),
       ),
     );
     if (ok != true) return;
@@ -665,7 +666,7 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
     DateTime? periodEnd = plan?.periodEnd;
     var minGap = plan?.minGapMinutes ?? 60;
 
-    final saved = await showDialog<bool>(
+    final saved = await showNestSheet<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
@@ -723,94 +724,10 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
               }
             }
 
-            return AlertDialog(
-              title: Text(plan == null ? '새 자습 계획' : '자습 계획 수정'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(labelText: '계획 이름'),
-                    ),
-                    const SizedBox(height: 14),
-                    const Text('채울 요일', style: TextStyle(fontSize: 12)),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      children: [for (final d in _dayOrder) dayChip(d)],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _dialogField(
-                            '시작',
-                            _fmtTime(start),
-                            Icons.schedule,
-                            () => pickTime(true),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _dialogField(
-                            '종료',
-                            _fmtTime(end),
-                            Icons.schedule,
-                            () => pickTime(false),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _dialogField(
-                            '기간 시작',
-                            periodStart == null ? '학기 기준' : _fmtDate(periodStart!),
-                            Icons.date_range,
-                            () => pickDate(true),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _dialogField(
-                            '기간 종료',
-                            periodEnd == null ? '학기 기준' : _fmtDate(periodEnd!),
-                            Icons.date_range,
-                            () => pickDate(false),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    const Text('최소 공강(이보다 짧은 빈 시간은 자습으로 만들지 않음)',
-                        style: TextStyle(fontSize: 12)),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      children: [
-                        for (final g in [30, 60, 90, 120])
-                          ChoiceChip(
-                            label: Text('$g분'),
-                            selected: minGap == g,
-                            onSelected: (_) => setInner(() => minGap = g),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: noteController,
-                      decoration: const InputDecoration(labelText: '메모(선택)'),
-                      maxLines: 2,
-                    ),
-                  ],
-                ),
-              ),
+            return NestSheet(
+              title: plan == null ? '새 자습 계획' : '자습 계획 수정',
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: () => Navigator.pop(ctx, false),
                   child: const Text('취소'),
                 ),
@@ -819,6 +736,88 @@ class _SelfStudyTabState extends State<SelfStudyTab> {
                   child: const Text('저장'),
                 ),
               ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: '계획 이름'),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('채울 요일', style: TextStyle(fontSize: 12)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [for (final d in _dayOrder) dayChip(d)],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _dialogField(
+                          '시작',
+                          _fmtTime(start),
+                          Icons.schedule,
+                          () => pickTime(true),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _dialogField(
+                          '종료',
+                          _fmtTime(end),
+                          Icons.schedule,
+                          () => pickTime(false),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _dialogField(
+                          '기간 시작',
+                          periodStart == null ? '학기 기준' : _fmtDate(periodStart!),
+                          Icons.date_range,
+                          () => pickDate(true),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _dialogField(
+                          '기간 종료',
+                          periodEnd == null ? '학기 기준' : _fmtDate(periodEnd!),
+                          Icons.date_range,
+                          () => pickDate(false),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('최소 공강(이보다 짧은 빈 시간은 자습으로 만들지 않음)',
+                      style: TextStyle(fontSize: 12)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final g in [30, 60, 90, 120])
+                        ChoiceChip(
+                          label: Text('$g분'),
+                          selected: minGap == g,
+                          onSelected: (_) => setInner(() => minGap = g),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    decoration: const InputDecoration(labelText: '메모(선택)'),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
             );
           },
         );

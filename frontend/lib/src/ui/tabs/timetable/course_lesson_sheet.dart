@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../models/nest_models.dart';
 import '../../../state/nest_controller.dart';
 import '../../nest_theme.dart';
+import '../../widgets/nest_sheet.dart';
 import 'class_change_dialog.dart' show dayLabel;
 
 /// 수업 회차 내용(course_lessons) 조회·입력 UI.
@@ -333,9 +334,9 @@ Future<bool> showCourseLessonEditor({
   var saved = false;
   try {
     saved =
-        await showDialog<bool>(
+        await showNestSheet<bool>(
           context: context,
-          barrierDismissible: false,
+          isDismissible: false,
           builder: (dialogContext) {
             var isSaving = false;
 
@@ -432,15 +433,12 @@ Future<bool> showCourseLessonEditor({
                   if (target == null) {
                     return;
                   }
-                  final confirmed = await showDialog<bool>(
+                  final confirmed = await showNestSheet<bool>(
                     context: localContext,
-                    builder: (confirmContext) => AlertDialog(
-                      title: const Text('회차 내용 삭제'),
-                      content: Text(
-                        '${_dateLabel(target.lessonDate)} 회차 내용을 삭제합니다.',
-                      ),
+                    builder: (confirmContext) => NestSheet(
+                      title: '회차 내용 삭제',
                       actions: [
-                        TextButton(
+                        OutlinedButton(
                           onPressed: () =>
                               Navigator.of(confirmContext).pop(false),
                           child: const Text('취소'),
@@ -451,6 +449,9 @@ Future<bool> showCourseLessonEditor({
                           child: const Text('삭제'),
                         ),
                       ],
+                      child: Text(
+                      '${_dateLabel(target.lessonDate)} 회차 내용을 삭제합니다.',
+                    ),
                     ),
                   );
                   if (confirmed != true || !localContext.mounted) {
@@ -478,147 +479,21 @@ Future<bool> showCourseLessonEditor({
                   }
                 }
 
-                return AlertDialog(
-                  title: Text(existing == null ? '회차 내용 등록' : '회차 내용 수정'),
-                  content: SizedBox(
-                    width: 460,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _courseHeadline(controller, courseId),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: NestColors.deepWood.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: isSaving ? null : pickDate,
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                10,
-                                12,
-                                10,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: NestColors.roseMist),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.event_outlined,
-                                    size: 20,
-                                    color: NestColors.clay,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '수업 날짜',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color: NestColors.deepWood
-                                                    .withValues(alpha: 0.6),
-                                              ),
-                                        ),
-                                        Text(
-                                          _dateLabel(lessonDate),
-                                          style: theme.textTheme.titleSmall
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Icon(
-                                    Icons.edit_calendar_outlined,
-                                    size: 18,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: titleController,
-                            enabled: !isSaving,
-                            decoration: const InputDecoration(
-                              labelText: '제목',
-                              hintText: '예: 창세기 36장',
-                              prefixIcon: Icon(Icons.menu_book_outlined),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: subtitleController,
-                            enabled: !isSaving,
-                            decoration: const InputDecoration(
-                              labelText: '부제',
-                              hintText: '예: 에서의 자손',
-                              prefixIcon: Icon(Icons.short_text),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: presenterController,
-                            enabled: !isSaving,
-                            decoration: const InputDecoration(
-                              labelText: '담당',
-                              hintText: '예: 리아 (선생님·학부모·학생 이름)',
-                              prefixIcon: Icon(Icons.person_outline),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: contentController,
-                            enabled: !isSaving,
-                            minLines: 2,
-                            maxLines: 6,
-                            decoration: const InputDecoration(
-                              labelText: '상세 내용 / 준비물',
-                              hintText: '학생·학부모에게 함께 보여줄 안내를 적어주세요.',
-                              prefixIcon: Icon(Icons.edit_note),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          CheckboxListTile(
-                            value: isConfirmed,
-                            onChanged: isSaving
-                                ? null
-                                : (value) => setLocalState(
-                                    () => isConfirmed = value ?? false,
-                                  ),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('담당·내용 확정'),
-                            subtitle: const Text('확정된 회차에는 체크 표시가 붙습니다.'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  actions: [
-                    if (existing != null)
-                      TextButton(
-                        onPressed: isSaving ? null : remove,
-                        child: Text(
-                          '삭제',
-                          style: TextStyle(
-                            color: Theme.of(dialogContext).colorScheme.error,
-                          ),
+                return NestSheet(
+                  title: existing == null ? '회차 내용 등록' : '회차 내용 수정',
+                  destructiveAction: existing != null
+  ? OutlinedButton(
+                      onPressed: isSaving ? null : remove,
+                      child: Text(
+                        '삭제',
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
                         ),
                       ),
-                    TextButton(
+                    )
+  : null,
+                  actions: [
+                    OutlinedButton(
                       onPressed: isSaving
                           ? null
                           : () => Navigator.of(dialogContext).pop(false),
@@ -629,6 +504,128 @@ Future<bool> showCourseLessonEditor({
                       child: Text(existing == null ? '등록' : '수정'),
                     ),
                   ],
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _courseHeadline(controller, courseId),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: NestColors.deepWood.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: isSaving ? null : pickDate,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.fromLTRB(
+                              12,
+                              10,
+                              12,
+                              10,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: NestColors.roseMist),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.event_outlined,
+                                  size: 20,
+                                  color: NestColors.clay,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '수업 날짜',
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: NestColors.deepWood
+                                                  .withValues(alpha: 0.6),
+                                            ),
+                                      ),
+                                      Text(
+                                        _dateLabel(lessonDate),
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.edit_calendar_outlined,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: titleController,
+                          enabled: !isSaving,
+                          decoration: const InputDecoration(
+                            labelText: '제목',
+                            hintText: '예: 창세기 36장',
+                            prefixIcon: Icon(Icons.menu_book_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: subtitleController,
+                          enabled: !isSaving,
+                          decoration: const InputDecoration(
+                            labelText: '부제',
+                            hintText: '예: 에서의 자손',
+                            prefixIcon: Icon(Icons.short_text),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: presenterController,
+                          enabled: !isSaving,
+                          decoration: const InputDecoration(
+                            labelText: '담당',
+                            hintText: '예: 리아 (선생님·학부모·학생 이름)',
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: contentController,
+                          enabled: !isSaving,
+                          minLines: 2,
+                          maxLines: 6,
+                          decoration: const InputDecoration(
+                            labelText: '상세 내용 / 준비물',
+                            hintText: '학생·학부모에게 함께 보여줄 안내를 적어주세요.',
+                            prefixIcon: Icon(Icons.edit_note),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        CheckboxListTile(
+                          value: isConfirmed,
+                          onChanged: isSaving
+                              ? null
+                              : (value) => setLocalState(
+                                  () => isConfirmed = value ?? false,
+                                ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('담당·내용 확정'),
+                          subtitle: const Text('확정된 회차에는 체크 표시가 붙습니다.'),
+                        ),
+                      ],
+                    ),
                 );
               },
             );

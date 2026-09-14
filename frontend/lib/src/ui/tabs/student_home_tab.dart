@@ -6,10 +6,11 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_motion.dart';
 import '../widgets/nest_refresh.dart';
+import '../widgets/nest_sheet.dart';
 import '../widgets/nest_skeleton.dart';
 import '../widgets/schedule_badges.dart';
-import '../widgets/nest_motion.dart';
 import '../widgets/schedule_personal_section.dart';
 import '../widgets/today_personal_events.dart';
 import '../widgets/today_schedule_card.dart';
@@ -557,16 +558,12 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
   }
 
   Future<void> _cancelAbsence(AbsenceReport report) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showNestSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('결석 신고 취소'),
-        content: Text(
-          '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
-          '결석 신고를 취소할까요?',
-        ),
+      builder: (ctx) => NestSheet(
+        title: '결석 신고 취소',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('닫기'),
           ),
@@ -575,6 +572,10 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             child: const Text('취소하기'),
           ),
         ],
+        child: Text(
+        '${DateFormat('M월 d일 (E)', 'ko').format(report.occurrenceDate)} '
+        '결석 신고를 취소할까요?',
+      ),
       ),
     );
     if (confirmed != true) return;

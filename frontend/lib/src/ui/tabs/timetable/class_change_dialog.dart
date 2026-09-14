@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../models/nest_models.dart';
 import '../../../state/nest_controller.dart';
 import '../../nest_theme.dart';
+import '../../widgets/nest_sheet.dart';
 import '../../widgets/search_select_field.dart';
 
 /// 수업 변경(class_session_changes) 등록·수정·발송 UI.
@@ -245,9 +246,9 @@ Future<bool> showClassSessionChangeEditor({
 
   ClassSessionChange? saved;
   try {
-    saved = await showDialog<ClassSessionChange>(
+    saved = await showNestSheet<ClassSessionChange>(
       context: context,
-      barrierDismissible: false,
+      isDismissible: false,
       builder: (dialogContext) {
         var isSaving = false;
 
@@ -370,238 +371,10 @@ Future<bool> showClassSessionChangeEditor({
               }
             }
 
-            return AlertDialog(
-              title: Text(existing == null ? '수업 변경 등록' : '수업 변경 수정'),
-              content: SizedBox(
-                width: 460,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        classSessionHeadline(controller, session),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SelectFieldCard(
-                        label: '변경 유형',
-                        hintText: '유형을 선택하세요',
-                        icon: typeOption.icon,
-                        enabled: !isSaving,
-                        value: typeOption.label,
-                        helpText: typeOption.description,
-                        onTap: () async {
-                          final selected = await showSelectSheet<String>(
-                            context: localContext,
-                            title: '변경 유형 선택',
-                            helpText: '학생·학부모에게 보낼 문자 문구가 유형에 따라 달라집니다.',
-                            options: _changeTypeOptions
-                                .map(
-                                  (option) => SelectSheetOption<String>(
-                                    value: option.value,
-                                    title: option.label,
-                                    subtitle: option.description,
-                                    keywords: '${option.label} ${option.value}',
-                                  ),
-                                )
-                                .toList(),
-                            currentValue: changeType,
-                          );
-                          if (selected == null) {
-                            return;
-                          }
-                          setLocalState(() => changeType = selected);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Text('적용 범위', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _scopeChip(
-                            label: '이번 주만',
-                            selected: scope == _ChangeScope.singleDay,
-                            enabled: !isSaving,
-                            onSelected: () {
-                              setLocalState(() {
-                                scope = _ChangeScope.singleDay;
-                                effectiveFrom = _alignToDayOfWeek(
-                                  effectiveFrom,
-                                  baseSlot?.dayOfWeek,
-                                );
-                                effectiveTo = effectiveFrom;
-                              });
-                            },
-                          ),
-                          _scopeChip(
-                            label: '학기 남은 기간',
-                            selected: scope == _ChangeScope.restOfTerm,
-                            enabled: !isSaving,
-                            onSelected: () {
-                              setLocalState(() {
-                                scope = _ChangeScope.restOfTerm;
-                                effectiveTo = null;
-                              });
-                            },
-                          ),
-                          _scopeChip(
-                            label: '기간 지정',
-                            selected: scope == _ChangeScope.custom,
-                            enabled: !isSaving,
-                            onSelected: () {
-                              setLocalState(() {
-                                scope = _ChangeScope.custom;
-                                effectiveTo ??= effectiveFrom;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SelectFieldCard(
-                        label: scope == _ChangeScope.singleDay
-                            ? '변경 날짜'
-                            : '시작일',
-                        hintText: '날짜를 선택하세요',
-                        icon: Icons.event_outlined,
-                        enabled: !isSaving,
-                        value: _dateLabel(effectiveFrom),
-                        helpText: scope == _ChangeScope.singleDay
-                            ? '이 날짜 하루만 변경이 적용됩니다.'
-                            : (scope == _ChangeScope.restOfTerm
-                                  ? '이 날짜부터 학기가 끝날 때까지 적용됩니다.'
-                                  : null),
-                        onTap: () => pickDate(isEndDate: false),
-                      ),
-                      if (scope == _ChangeScope.custom) ...[
-                        const SizedBox(height: 8),
-                        SelectFieldCard(
-                          label: '종료일',
-                          hintText: '날짜를 선택하세요',
-                          icon: Icons.event_available_outlined,
-                          enabled: !isSaving,
-                          value: _dateLabel(effectiveTo ?? effectiveFrom),
-                          helpText: '종료일까지 포함해서 적용됩니다.',
-                          onTap: () => pickDate(isEndDate: true),
-                        ),
-                      ],
-                      if (changeType == 'TIME_MOVED') ...[
-                        const SizedBox(height: 10),
-                        SelectFieldCard(
-                          label: '바뀐 교시',
-                          hintText: '교시를 선택하세요',
-                          icon: Icons.schedule_outlined,
-                          enabled: !isSaving,
-                          value: newTimeSlotId == null
-                              ? null
-                              : timeSlotLabel(
-                                  controller.findTimeSlot(newTimeSlotId!),
-                                ),
-                          helpText: '옮겨서 진행할 교시를 고르세요.',
-                          onTap: () async {
-                            final slots = controller.timeSlots.toList()
-                              ..sort((a, b) {
-                                final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-                                if (day != 0) {
-                                  return day;
-                                }
-                                return a.startTime.compareTo(b.startTime);
-                              });
-                            final selected = await showSelectSheet<String>(
-                              context: localContext,
-                              title: '바뀐 교시 선택',
-                              helpText: '학기에 등록된 교시 중에서 고릅니다.',
-                              options: slots
-                                  .map(
-                                    (slot) => SelectSheetOption<String>(
-                                      value: slot.id,
-                                      title: timeSlotLabel(slot),
-                                      keywords: timeSlotLabel(slot),
-                                    ),
-                                  )
-                                  .toList(),
-                              currentValue: newTimeSlotId,
-                            );
-                            if (selected == null) {
-                              return;
-                            }
-                            setLocalState(() => newTimeSlotId = selected);
-                          },
-                        ),
-                      ],
-                      if (changeType == 'ROOM_MOVED') ...[
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: locationController,
-                          enabled: !isSaving,
-                          decoration: const InputDecoration(
-                            labelText: '바뀐 장소',
-                            hintText: '예: 3층 다목적실',
-                            prefixIcon: Icon(Icons.meeting_room_outlined),
-                          ),
-                        ),
-                      ],
-                      if (changeType == 'TEACHER_SUBSTITUTE') ...[
-                        const SizedBox(height: 10),
-                        SelectFieldCard(
-                          label: '보강 교사',
-                          hintText: '교사를 선택하세요',
-                          icon: Icons.person_outline,
-                          enabled: !isSaving,
-                          value: substituteTeacherId == null
-                              ? null
-                              : controller.findTeacherName(
-                                  substituteTeacherId!,
-                                ),
-                          helpText: '대신 수업에 들어갈 선생님을 고르세요.',
-                          onTap: () async {
-                            final selected = await showSelectSheet<String>(
-                              context: localContext,
-                              title: '보강 교사 선택',
-                              helpText: '검색으로 선생님을 빠르게 찾을 수 있습니다.',
-                              options: controller.teacherProfiles
-                                  .map(
-                                    (teacher) => SelectSheetOption<String>(
-                                      value: teacher.id,
-                                      title: teacher.displayName,
-                                      subtitle: teacher.teacherType,
-                                      keywords:
-                                          '${teacher.displayName} ${teacher.teacherType}',
-                                    ),
-                                  )
-                                  .toList(),
-                              currentValue: substituteTeacherId,
-                            );
-                            if (selected == null) {
-                              return;
-                            }
-                            setLocalState(() => substituteTeacherId = selected);
-                          },
-                        ),
-                      ],
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: reasonController,
-                        enabled: !isSaving,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: '사유 / 안내 문구',
-                          hintText: '학생·학부모에게 함께 전달할 내용을 적어주세요.',
-                          prefixIcon: Icon(Icons.edit_note),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            return NestSheet(
+              title: existing == null ? '수업 변경 등록' : '수업 변경 수정',
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: isSaving
                       ? null
                       : () => Navigator.of(dialogContext).pop(),
@@ -612,6 +385,229 @@ Future<bool> showClassSessionChangeEditor({
                   child: Text(existing == null ? '등록' : '수정'),
                 ),
               ],
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      classSessionHeadline(controller, session),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SelectFieldCard(
+                      label: '변경 유형',
+                      hintText: '유형을 선택하세요',
+                      icon: typeOption.icon,
+                      enabled: !isSaving,
+                      value: typeOption.label,
+                      helpText: typeOption.description,
+                      onTap: () async {
+                        final selected = await showSelectSheet<String>(
+                          context: localContext,
+                          title: '변경 유형 선택',
+                          helpText: '학생·학부모에게 보낼 문자 문구가 유형에 따라 달라집니다.',
+                          options: _changeTypeOptions
+                              .map(
+                                (option) => SelectSheetOption<String>(
+                                  value: option.value,
+                                  title: option.label,
+                                  subtitle: option.description,
+                                  keywords: '${option.label} ${option.value}',
+                                ),
+                              )
+                              .toList(),
+                          currentValue: changeType,
+                        );
+                        if (selected == null) {
+                          return;
+                        }
+                        setLocalState(() => changeType = selected);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Text('적용 범위', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _scopeChip(
+                          label: '이번 주만',
+                          selected: scope == _ChangeScope.singleDay,
+                          enabled: !isSaving,
+                          onSelected: () {
+                            setLocalState(() {
+                              scope = _ChangeScope.singleDay;
+                              effectiveFrom = _alignToDayOfWeek(
+                                effectiveFrom,
+                                baseSlot?.dayOfWeek,
+                              );
+                              effectiveTo = effectiveFrom;
+                            });
+                          },
+                        ),
+                        _scopeChip(
+                          label: '학기 남은 기간',
+                          selected: scope == _ChangeScope.restOfTerm,
+                          enabled: !isSaving,
+                          onSelected: () {
+                            setLocalState(() {
+                              scope = _ChangeScope.restOfTerm;
+                              effectiveTo = null;
+                            });
+                          },
+                        ),
+                        _scopeChip(
+                          label: '기간 지정',
+                          selected: scope == _ChangeScope.custom,
+                          enabled: !isSaving,
+                          onSelected: () {
+                            setLocalState(() {
+                              scope = _ChangeScope.custom;
+                              effectiveTo ??= effectiveFrom;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SelectFieldCard(
+                      label: scope == _ChangeScope.singleDay
+                          ? '변경 날짜'
+                          : '시작일',
+                      hintText: '날짜를 선택하세요',
+                      icon: Icons.event_outlined,
+                      enabled: !isSaving,
+                      value: _dateLabel(effectiveFrom),
+                      helpText: scope == _ChangeScope.singleDay
+                          ? '이 날짜 하루만 변경이 적용됩니다.'
+                          : (scope == _ChangeScope.restOfTerm
+                                ? '이 날짜부터 학기가 끝날 때까지 적용됩니다.'
+                                : null),
+                      onTap: () => pickDate(isEndDate: false),
+                    ),
+                    if (scope == _ChangeScope.custom) ...[
+                      const SizedBox(height: 8),
+                      SelectFieldCard(
+                        label: '종료일',
+                        hintText: '날짜를 선택하세요',
+                        icon: Icons.event_available_outlined,
+                        enabled: !isSaving,
+                        value: _dateLabel(effectiveTo ?? effectiveFrom),
+                        helpText: '종료일까지 포함해서 적용됩니다.',
+                        onTap: () => pickDate(isEndDate: true),
+                      ),
+                    ],
+                    if (changeType == 'TIME_MOVED') ...[
+                      const SizedBox(height: 10),
+                      SelectFieldCard(
+                        label: '바뀐 교시',
+                        hintText: '교시를 선택하세요',
+                        icon: Icons.schedule_outlined,
+                        enabled: !isSaving,
+                        value: newTimeSlotId == null
+                            ? null
+                            : timeSlotLabel(
+                                controller.findTimeSlot(newTimeSlotId!),
+                              ),
+                        helpText: '옮겨서 진행할 교시를 고르세요.',
+                        onTap: () async {
+                          final slots = controller.timeSlots.toList()
+                            ..sort((a, b) {
+                              final day = a.dayOfWeek.compareTo(b.dayOfWeek);
+                              if (day != 0) {
+                                return day;
+                              }
+                              return a.startTime.compareTo(b.startTime);
+                            });
+                          final selected = await showSelectSheet<String>(
+                            context: localContext,
+                            title: '바뀐 교시 선택',
+                            helpText: '학기에 등록된 교시 중에서 고릅니다.',
+                            options: slots
+                                .map(
+                                  (slot) => SelectSheetOption<String>(
+                                    value: slot.id,
+                                    title: timeSlotLabel(slot),
+                                    keywords: timeSlotLabel(slot),
+                                  ),
+                                )
+                                .toList(),
+                            currentValue: newTimeSlotId,
+                          );
+                          if (selected == null) {
+                            return;
+                          }
+                          setLocalState(() => newTimeSlotId = selected);
+                        },
+                      ),
+                    ],
+                    if (changeType == 'ROOM_MOVED') ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: locationController,
+                        enabled: !isSaving,
+                        decoration: const InputDecoration(
+                          labelText: '바뀐 장소',
+                          hintText: '예: 3층 다목적실',
+                          prefixIcon: Icon(Icons.meeting_room_outlined),
+                        ),
+                      ),
+                    ],
+                    if (changeType == 'TEACHER_SUBSTITUTE') ...[
+                      const SizedBox(height: 10),
+                      SelectFieldCard(
+                        label: '보강 교사',
+                        hintText: '교사를 선택하세요',
+                        icon: Icons.person_outline,
+                        enabled: !isSaving,
+                        value: substituteTeacherId == null
+                            ? null
+                            : controller.findTeacherName(
+                                substituteTeacherId!,
+                              ),
+                        helpText: '대신 수업에 들어갈 선생님을 고르세요.',
+                        onTap: () async {
+                          final selected = await showSelectSheet<String>(
+                            context: localContext,
+                            title: '보강 교사 선택',
+                            helpText: '검색으로 선생님을 빠르게 찾을 수 있습니다.',
+                            options: controller.teacherProfiles
+                                .map(
+                                  (teacher) => SelectSheetOption<String>(
+                                    value: teacher.id,
+                                    title: teacher.displayName,
+                                    subtitle: teacher.teacherType,
+                                    keywords:
+                                        '${teacher.displayName} ${teacher.teacherType}',
+                                  ),
+                                )
+                                .toList(),
+                            currentValue: substituteTeacherId,
+                          );
+                          if (selected == null) {
+                            return;
+                          }
+                          setLocalState(() => substituteTeacherId = selected);
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: reasonController,
+                      enabled: !isSaving,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: '사유 / 안내 문구',
+                        hintText: '학생·학부모에게 함께 전달할 내용을 적어주세요.',
+                        prefixIcon: Icon(Icons.edit_note),
+                      ),
+                    ),
+                  ],
+                ),
             );
           },
         );
@@ -666,13 +662,12 @@ Future<void> confirmAndNotifyClassChange({
   }
   buffer.write('문자 요금이 실제로 발생하며 되돌릴 수 없습니다.');
 
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showNestSheet<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(isResend ? '알림 재발송' : '알림 발송'),
-      content: Text(buffer.toString()),
+    builder: (dialogContext) => NestSheet(
+      title: isResend ? '알림 재발송' : '알림 발송',
       actions: [
-        TextButton(
+        OutlinedButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
           child: const Text('나중에'),
         ),
@@ -681,6 +676,7 @@ Future<void> confirmAndNotifyClassChange({
           child: Text(isResend ? '재발송' : '문자 보내기'),
         ),
       ],
+      child: Text(buffer.toString()),
     ),
   );
 
@@ -834,15 +830,12 @@ class ClassSessionChangeTile extends StatelessWidget {
         );
         return;
       case 'delete':
-        final confirmed = await showDialog<bool>(
+        final confirmed = await showNestSheet<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('수업 변경 삭제'),
-            content: const Text(
-              '등록한 수업 변경을 삭제합니다.\n이미 보낸 문자는 취소되지 않습니다.',
-            ),
+          builder: (dialogContext) => NestSheet(
+            title: '수업 변경 삭제',
             actions: [
-              TextButton(
+              OutlinedButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
                 child: const Text('취소'),
               ),
@@ -851,6 +844,9 @@ class ClassSessionChangeTile extends StatelessWidget {
                 child: const Text('삭제'),
               ),
             ],
+            child: const Text(
+            '등록한 수업 변경을 삭제합니다.\n이미 보낸 문자는 취소되지 않습니다.',
+          ),
           ),
         );
         if (confirmed != true || !context.mounted) {

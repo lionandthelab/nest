@@ -6,6 +6,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_sheet.dart';
 import '../widgets/search_select_field.dart';
 
 class MembersTab extends StatefulWidget {
@@ -146,15 +147,12 @@ class _MembersTabState extends State<MembersTab> {
   }
 
   Future<void> _regenerateCode() async {
-    final ok = await showDialog<bool>(
+    final ok = await showNestSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('참여 코드 재발급'),
-        content: const Text(
-          '새 코드를 만들면 기존 코드는 더 이상 쓸 수 없어요. 계속할까요?',
-        ),
+      builder: (ctx) => NestSheet(
+        title: '참여 코드 재발급',
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('취소'),
           ),
@@ -163,6 +161,9 @@ class _MembersTabState extends State<MembersTab> {
             child: const Text('재발급'),
           ),
         ],
+        child: const Text(
+        '새 코드를 만들면 기존 코드는 더 이상 쓸 수 없어요. 계속할까요?',
+      ),
       ),
     );
     if (ok != true) return;
@@ -360,144 +361,15 @@ class _MembersTabState extends State<MembersTab> {
     final TeacherProfile? matched = found;
     var linkTeacher = matched != null;
 
-    final ok = await showDialog<bool>(
+    final ok = await showNestSheet<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setInner) {
-            return AlertDialog(
-              title: const Text('가입 승인'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      (req.requesterRealName ?? '').trim().isNotEmpty
-                          ? req.requesterRealName!
-                          : (req.requesterName ?? req.requesterEmail),
-                      style: Theme.of(ctx).textTheme.titleSmall,
-                    ),
-                    if ((req.requesterName ?? '').trim().isNotEmpty)
-                      Text('닉네임: ${req.requesterName}',
-                          style: Theme.of(ctx).textTheme.bodySmall),
-                    Text(req.requesterEmail,
-                        style: Theme.of(ctx).textTheme.bodySmall),
-                    if ((req.requestNote ?? '').trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text('메모: ${req.requestNote}',
-                            style: Theme.of(ctx).textTheme.bodySmall),
-                      ),
-                    const SizedBox(height: 14),
-                    const Text('역할'),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final r in roleOptions)
-                          ChoiceChip(
-                            label: Text(_joinRoleLabel(r)),
-                            selected: role == r,
-                            onSelected: (_) => setInner(() => role = r),
-                          ),
-                      ],
-                    ),
-                    if (role == 'PARENT') ...[
-                      const SizedBox(height: 14),
-                      const Text('연결할 가정'),
-                      const SizedBox(height: 6),
-                      if (families.isEmpty)
-                        Text(
-                          '등록된 가정이 없습니다. 학기 설정 › 가정에서 먼저 만들어 주세요.',
-                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: NestColors.clay,
-                              ),
-                        )
-                      else
-                        DropdownButtonFormField<String>(
-                          initialValue: familyId,
-                          isExpanded: true,
-                          decoration:
-                              const InputDecoration(hintText: '가정 선택'),
-                          items: [
-                            for (final f in families)
-                              DropdownMenuItem(
-                                value: f.id,
-                                child: Text(f.familyName,
-                                    overflow: TextOverflow.ellipsis),
-                              ),
-                          ],
-                          onChanged: (v) => setInner(() => familyId = v),
-                        ),
-                    ],
-                    if (role == 'STUDENT') ...[
-                      const SizedBox(height: 14),
-                      const Text('연결할 자녀'),
-                      const SizedBox(height: 6),
-                      if (linkableChildren.isEmpty)
-                        Text(
-                          '연결할 수 있는 아이가 없습니다. 학기 설정 › 가정에서 아이를 먼저 등록해 주세요.',
-                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: NestColors.clay,
-                              ),
-                        )
-                      else
-                        SelectFieldCard(
-                          label: '자녀',
-                          hintText: '아이 선택',
-                          icon: Icons.child_care_outlined,
-                          enabled: true,
-                          value: _childLabel(linkableChildren, studentChildId),
-                          helpText: '이미 계정이 연결된 아이는 목록에 나오지 않습니다.',
-                          onTap: () async {
-                            final picked = await showSelectSheet<String>(
-                              context: ctx,
-                              title: '연결할 자녀 선택',
-                              helpText: '이 계정을 학생 본인 계정으로 이어줄 아이를 고르세요.',
-                              currentValue: studentChildId,
-                              options: [
-                                for (final child in linkableChildren)
-                                  SelectSheetOption(
-                                    value: child.id,
-                                    title: child.name,
-                                    subtitle: child.familyName,
-                                    keywords:
-                                        '${child.name} ${child.familyName}',
-                                  ),
-                              ],
-                            );
-                            if (picked != null) {
-                              setInner(() => studentChildId = picked);
-                            }
-                          },
-                        ),
-                    ],
-                    if (matched != null && role != 'STUDENT') ...[
-                      const SizedBox(height: 14),
-                      const Divider(height: 1),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        value: linkTeacher,
-                        onChanged: (v) =>
-                            setInner(() => linkTeacher = v ?? false),
-                        title: Text(
-                          "'${matched.displayName}' 선생님 프로필과 연결",
-                          style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        subtitle: const Text(
-                          '기존 감독/교사 프로필과 이 계정을 이어, 감독 시간표가 보이게 합니다.',
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+            return NestSheet(
+              title: '가입 승인',
               actions: [
-                TextButton(
+                OutlinedButton(
                   onPressed: () => Navigator.pop(ctx, false),
                   child: const Text('취소'),
                 ),
@@ -509,6 +381,133 @@ class _MembersTabState extends State<MembersTab> {
                   child: const Text('승인'),
                 ),
               ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    (req.requesterRealName ?? '').trim().isNotEmpty
+                        ? req.requesterRealName!
+                        : (req.requesterName ?? req.requesterEmail),
+                    style: Theme.of(ctx).textTheme.titleSmall,
+                  ),
+                  if ((req.requesterName ?? '').trim().isNotEmpty)
+                    Text('닉네임: ${req.requesterName}',
+                        style: Theme.of(ctx).textTheme.bodySmall),
+                  Text(req.requesterEmail,
+                      style: Theme.of(ctx).textTheme.bodySmall),
+                  if ((req.requestNote ?? '').trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('메모: ${req.requestNote}',
+                          style: Theme.of(ctx).textTheme.bodySmall),
+                    ),
+                  const SizedBox(height: 14),
+                  const Text('역할'),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final r in roleOptions)
+                        ChoiceChip(
+                          label: Text(_joinRoleLabel(r)),
+                          selected: role == r,
+                          onSelected: (_) => setInner(() => role = r),
+                        ),
+                    ],
+                  ),
+                  if (role == 'PARENT') ...[
+                    const SizedBox(height: 14),
+                    const Text('연결할 가정'),
+                    const SizedBox(height: 6),
+                    if (families.isEmpty)
+                      Text(
+                        '등록된 가정이 없습니다. 학기 설정 › 가정에서 먼저 만들어 주세요.',
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                              color: NestColors.clay,
+                            ),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue: familyId,
+                        isExpanded: true,
+                        decoration:
+                            const InputDecoration(hintText: '가정 선택'),
+                        items: [
+                          for (final f in families)
+                            DropdownMenuItem(
+                              value: f.id,
+                              child: Text(f.familyName,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                        ],
+                        onChanged: (v) => setInner(() => familyId = v),
+                      ),
+                  ],
+                  if (role == 'STUDENT') ...[
+                    const SizedBox(height: 14),
+                    const Text('연결할 자녀'),
+                    const SizedBox(height: 6),
+                    if (linkableChildren.isEmpty)
+                      Text(
+                        '연결할 수 있는 아이가 없습니다. 학기 설정 › 가정에서 아이를 먼저 등록해 주세요.',
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                              color: NestColors.clay,
+                            ),
+                      )
+                    else
+                      SelectFieldCard(
+                        label: '자녀',
+                        hintText: '아이 선택',
+                        icon: Icons.child_care_outlined,
+                        enabled: true,
+                        value: _childLabel(linkableChildren, studentChildId),
+                        helpText: '이미 계정이 연결된 아이는 목록에 나오지 않습니다.',
+                        onTap: () async {
+                          final picked = await showSelectSheet<String>(
+                            context: ctx,
+                            title: '연결할 자녀 선택',
+                            helpText: '이 계정을 학생 본인 계정으로 이어줄 아이를 고르세요.',
+                            currentValue: studentChildId,
+                            options: [
+                              for (final child in linkableChildren)
+                                SelectSheetOption(
+                                  value: child.id,
+                                  title: child.name,
+                                  subtitle: child.familyName,
+                                  keywords:
+                                      '${child.name} ${child.familyName}',
+                                ),
+                            ],
+                          );
+                          if (picked != null) {
+                            setInner(() => studentChildId = picked);
+                          }
+                        },
+                      ),
+                  ],
+                  if (matched != null && role != 'STUDENT') ...[
+                    const SizedBox(height: 14),
+                    const Divider(height: 1),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: linkTeacher,
+                      onChanged: (v) =>
+                          setInner(() => linkTeacher = v ?? false),
+                      title: Text(
+                        "'${matched.displayName}' 선생님 프로필과 연결",
+                        style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      subtitle: const Text(
+                        '기존 감독/교사 프로필과 이 계정을 이어, 감독 시간표가 보이게 합니다.',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             );
           },
         );
@@ -771,7 +770,7 @@ class _MembersTabState extends State<MembersTab> {
   }
 
   void _showInviteStatusDialog(List<HomeschoolInvite> invites) {
-    showDialog(
+    showNestSheet<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -782,47 +781,42 @@ class _MembersTabState extends State<MembersTab> {
                     .where((i) => i.status != 'CANCELED')
                     .toList();
 
-            return AlertDialog(
-              title: Row(
-                children: [
-                  const Expanded(child: Text('초대 현황')),
-                  FilterChip(
-                    selected: _showCancelled,
-                    label: const Text('취소됨 포함'),
-                    onSelected: (v) {
-                      setState(() => _showCancelled = v);
-                      setDialogState(() {});
-                    },
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: filtered.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: NestEmptyState(
-                          icon: Icons.mail_outline,
-                          title: '초대 내역이 없습니다.',
-                        ),
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final invite = filtered[index];
-                          return _buildInviteRow(invite);
-                        },
-                      ),
+            return NestSheet(
+              title: '초대 현황',
+              subtitle: '보낸 초대의 상태와 만료일을 확인할 수 있어요.',
+              headerTrailing: FilterChip(
+                selected: _showCancelled,
+                label: const Text('취소됨 포함'),
+                onSelected: (v) {
+                  setState(() => _showCancelled = v);
+                  setDialogState(() {});
+                },
               ),
               actions: [
-                TextButton(
+                FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('닫기'),
                 ),
               ],
+              child: filtered.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: NestEmptyState(
+                        icon: Icons.mail_outline,
+                        title: '초대 내역이 없습니다.',
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      primary: false,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final invite = filtered[index];
+                        return _buildInviteRow(invite);
+                      },
+                    ),
             );
           },
         );
