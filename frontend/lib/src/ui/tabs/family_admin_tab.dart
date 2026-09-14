@@ -8,6 +8,7 @@ import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import 'timetable/course_lesson_sheet.dart';
+import '../widgets/nest_section_header.dart';
 import '../widgets/nest_sheet.dart';
 
 class FamilyAdminTab extends StatefulWidget {
@@ -505,26 +506,15 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '가정 관리',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      _buildSectionCountBadge(
-                        value: families.length,
-                        unit: '가정',
-                        icon: Icons.home_work_outlined,
-                      ),
-                    ],
-                  ),
-                ),
+            NestSectionHeader(
+              title: '가정 관리',
+              badge: _buildSectionCountBadge(
+                value: families.length,
+                unit: '가정',
+                icon: Icons.home_work_outlined,
+              ),
+              description: '카드를 클릭하면 가정 정보 수정으로 바로 이동합니다.',
+              actions: [
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
                       ? null
@@ -532,20 +522,12 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   icon: const Icon(Icons.group_add),
                   label: const Text('가정 추가'),
                 ),
-                const SizedBox(width: 8),
                 FilledButton.tonalIcon(
                   onPressed: controller.isBusy ? null : _refreshFamilyDomain,
                   icon: const Icon(Icons.refresh),
                   label: const Text('새로고침'),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '카드를 클릭하면 가정 정보 수정으로 바로 이동합니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
             ),
             const SizedBox(height: 10),
             if (families.isEmpty)
@@ -650,26 +632,15 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '아이 관리',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      _buildSectionCountBadge(
-                        value: controller.children.length,
-                        unit: '명',
-                        icon: Icons.child_friendly_outlined,
-                      ),
-                    ],
-                  ),
-                ),
+            NestSectionHeader(
+              title: '아이 관리',
+              badge: _buildSectionCountBadge(
+                value: controller.children.length,
+                unit: '명',
+                icon: Icons.child_friendly_outlined,
+              ),
+              description: '가정을 선택하고 카드를 클릭하면 아이 정보를 바로 수정할 수 있습니다.',
+              actions: [
                 ElevatedButton.icon(
                   onPressed: controller.isBusy || controller.families.isEmpty
                       ? null
@@ -682,13 +653,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   label: const Text('아이 추가'),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '가정을 선택하고 카드를 클릭하면 아이 정보를 바로 수정할 수 있습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
             ),
             const SizedBox(height: 10),
             if (controller.families.isEmpty)
@@ -1746,26 +1710,15 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '반 관리',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      _buildSectionCountBadge(
-                        value: classGroups.length,
-                        unit: '반',
-                        icon: Icons.groups_2_outlined,
-                      ),
-                    ],
-                  ),
-                ),
+            NestSectionHeader(
+              title: '반 관리',
+              badge: _buildSectionCountBadge(
+                value: classGroups.length,
+                unit: '반',
+                icon: Icons.groups_2_outlined,
+              ),
+              description: '반 카드를 클릭하면 반 정보 수정과 아이 복수 배정을 한 번에 처리할 수 있습니다.',
+              actions: [
                 ElevatedButton.icon(
                   onPressed:
                       controller.isBusy || controller.isSelectedTermReadOnly
@@ -1775,13 +1728,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   label: const Text('반 추가'),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '반 카드를 클릭하면 반 정보 수정과 아이 복수 배정을 한 번에 처리할 수 있습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
             ),
             const SizedBox(height: 10),
             if (classGroups.isEmpty)
@@ -2194,26 +2140,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '선생님 관리',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      _buildSectionCountBadge(
-                        value: teachers.length,
-                        unit: '명',
-                        icon: Icons.school_outlined,
-                      ),
-                    ],
-                  ),
-                ),
+            NestSectionHeader(
+              title: '선생님 관리',
+              badge: _buildSectionCountBadge(
+                value: teachers.length,
+                unit: '명',
+                icon: Icons.school_outlined,
+              ),
+              description: canScope
+                  ? '이 학기 시간표에 배정된 선생님만 보여줍니다. 지난 학기에만 맡았던 선생님은 "전체"에서 볼 수 있습니다.'
+                  : '카드를 클릭하면 선생님 정보 수정, 기존 계정 연결/해제, 불가 시간 설정을 한 번에 처리할 수 있습니다.',
+              actions: [
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
                       ? null
@@ -2222,15 +2159,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   label: const Text('선생님 추가'),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              canScope
-                  ? '이 학기 시간표에 배정된 선생님만 보여줍니다. 지난 학기에만 맡았던 선생님은 "전체"에서 볼 수 있습니다.'
-                  : '카드를 클릭하면 선생님 정보 수정, 기존 계정 연결/해제, 불가 시간 설정을 한 번에 처리할 수 있습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
             ),
             if (canScope) ...[
               const SizedBox(height: 10),
@@ -2961,25 +2889,20 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                stat.title,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: NestColors.deepWood.withValues(alpha: 0.84),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                stat.subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                  color: NestColors.deepWood.withValues(alpha: 0.56),
+              Expanded(
+                child: Text(
+                  stat.title,
+                  maxLines: 2,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: NestColors.deepWood.withValues(alpha: 0.84),
+                  ),
                 ),
               ),
             ],
           ),
+          // 부제는 제목과 폭을 다투지 않도록 값 아래 줄로 내린다.
+          // 휴대폰(2열)에서 카드 폭이 150px대로 줄면 한 줄에 같이 둘 수 없다.
           const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -3009,6 +2932,16 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ),
             ],
           ),
+          if (stat.subtitle.trim().isNotEmpty)
+            Text(
+              stat.subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 11,
+                color: NestColors.deepWood.withValues(alpha: 0.56),
+              ),
+            ),
         ],
       ),
     );
@@ -3064,26 +2997,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '과목 관리',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      _buildSectionCountBadge(
-                        value: courses.length,
-                        unit: '개',
-                        icon: Icons.menu_book_outlined,
-                      ),
-                    ],
-                  ),
-                ),
+            NestSectionHeader(
+              title: '과목 관리',
+              badge: _buildSectionCountBadge(
+                value: courses.length,
+                unit: '개',
+                icon: Icons.menu_book_outlined,
+              ),
+              description: canScope
+                  ? '이 학기 시간표에 쓰는 과목만 보여줍니다. 지난 학기에만 쓰던 과목은 "전체"에서 볼 수 있습니다.'
+                  : '과목 카드를 클릭하면 기본 수업 시간 수정과 삭제를 한 번에 처리할 수 있습니다.',
+              actions: [
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
                       ? null
@@ -3092,15 +3016,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   label: const Text('과목 추가'),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              canScope
-                  ? '이 학기 시간표에 쓰는 과목만 보여줍니다. 지난 학기에만 쓰던 과목은 "전체"에서 볼 수 있습니다.'
-                  : '과목 카드를 클릭하면 기본 수업 시간 수정과 삭제를 한 번에 처리할 수 있습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
             ),
             if (canScope) ...[
               const SizedBox(height: 10),
@@ -3402,26 +3317,15 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '교실 관리',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      _buildSectionCountBadge(
-                        value: classrooms.length,
-                        unit: '개',
-                        icon: Icons.meeting_room_outlined,
-                      ),
-                    ],
-                  ),
-                ),
+            NestSectionHeader(
+              title: '교실 관리',
+              badge: _buildSectionCountBadge(
+                value: classrooms.length,
+                unit: '개',
+                icon: Icons.meeting_room_outlined,
+              ),
+              description: '교실 카드를 클릭하면 수용 인원/메모 수정과 삭제를 한 번에 처리할 수 있습니다.',
+              actions: [
                 ElevatedButton.icon(
                   onPressed:
                       controller.isBusy || controller.isSelectedTermReadOnly
@@ -3432,13 +3336,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   label: const Text('교실 추가'),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '교실 카드를 클릭하면 수용 인원/메모 수정과 삭제를 한 번에 처리할 수 있습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
             ),
             const SizedBox(height: 10),
             if (classrooms.isEmpty)
