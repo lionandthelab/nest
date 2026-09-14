@@ -312,7 +312,7 @@ class _TermStatusHeader extends StatelessWidget {
           Expanded(
             child: Text(
               period.isEmpty ? term.name : '${term.name} · $period',
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
@@ -609,7 +609,7 @@ class _ChecklistTile extends StatelessWidget {
                         Flexible(
                           child: Text(
                             step.title,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
@@ -1089,7 +1089,7 @@ class _UpcomingEventsCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               event.title,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
@@ -1143,7 +1143,7 @@ class _RecentNoticesCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               notice.title,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),

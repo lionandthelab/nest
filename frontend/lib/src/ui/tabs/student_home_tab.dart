@@ -659,7 +659,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                   children: [
                     Text(
                       latest.title,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -668,7 +668,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                     if (latest.body.trim().isNotEmpty)
                       Text(
                         latest.body,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: NestColors.deepWood.withValues(alpha: 0.65),

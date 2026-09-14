@@ -96,7 +96,8 @@ class LabeledEntityTile extends StatelessWidget {
           style: Theme.of(
             context,
           ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          maxLines: 1,
+          // 휴대폰 폭에서 이름이 "초등 통합…"처럼 잘리지 않도록 두 줄까지 쓴다.
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
         if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
@@ -106,7 +107,7 @@ class LabeledEntityTile extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: NestColors.deepWood.withValues(alpha: 0.72),
             ),
-            maxLines: compact ? 1 : 2,
+            maxLines: compact ? 2 : 3,
             overflow: TextOverflow.ellipsis,
           ),
         ],
