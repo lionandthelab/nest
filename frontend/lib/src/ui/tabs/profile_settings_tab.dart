@@ -10,6 +10,7 @@ import '../nest_theme.dart';
 import '../widgets/calendar_connect_card.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_sheet.dart';
+import '../widgets/notification_settings_panel.dart';
 
 class ProfileSettingsTab extends StatefulWidget {
   const ProfileSettingsTab({
@@ -282,42 +283,10 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           ),
         ),
         const SizedBox(height: 12),
-        _SettingsSwitch(
-          icon: Icons.notifications_outlined,
-          label: '푸시 알림',
-          subtitle: '수업 변경·결석을 기기로 받습니다',
-          value: controller.notificationPrefs.pushEnabled,
-          onChanged: controller.isBusy
-              ? null
-              : (value) => controller.updateNotificationPrefs(
-                  controller.notificationPrefs.copyWith(pushEnabled: value),
-                ),
-        ),
-        _SettingsSwitch(
-          icon: Icons.wb_sunny_outlined,
-          label: '아침 오늘 일정',
-          subtitle: '매일 아침 7시 30분에 오늘 수업을 알려줍니다',
-          value: controller.notificationPrefs.morningDigestEnabled,
-          onChanged: controller.isBusy
-              ? null
-              : (value) => controller.updateNotificationPrefs(
-                  controller.notificationPrefs.copyWith(
-                    morningDigestEnabled: value,
-                  ),
-                ),
-        ),
-        _SettingsSwitch(
-          icon: Icons.alarm_outlined,
-          label: '수업 30분 전',
-          subtitle: '수업이 시작하기 30분 전에 알려줍니다',
-          value: controller.notificationPrefs.classReminderEnabled,
-          onChanged: controller.isBusy
-              ? null
-              : (value) => controller.updateNotificationPrefs(
-                  controller.notificationPrefs.copyWith(
-                    classReminderEnabled: value,
-                  ),
-                ),
+        NotificationSettingsPanel(
+          prefs: controller.notificationPrefs,
+          enabled: !controller.isBusy,
+          onChanged: controller.updateNotificationPrefs,
         ),
 
         // ── Parent: 내 불가 시간 section ──
@@ -856,58 +825,6 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
   }
 }
 
-class _SettingsSwitch extends StatelessWidget {
-  const _SettingsSwitch({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: NestColors.roseMist.withValues(alpha: 0.5)),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 22,
-            color: NestColors.deepWood.withValues(alpha: 0.7),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: Theme.of(context).textTheme.bodyMedium),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.55),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch.adaptive(value: value, onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}
 
 class _SettingsTile extends StatelessWidget {
   const _SettingsTile({

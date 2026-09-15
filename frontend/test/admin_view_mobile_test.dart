@@ -295,7 +295,7 @@ void main() {
       expect(find.text('수업 변경·결석·오늘 일정·수업 30분 전 알림'), findsOneWidget);
     });
 
-    testWidgets('설정 화면에 푸시·아침 일정·30분 전 토글이 있다', (tester) async {
+    testWidgets('설정 화면에 알림 설정 패널이 있다', (tester) async {
       await _setMobileSize(tester);
       final controller = _adminController();
 
@@ -304,14 +304,16 @@ void main() {
       );
       await tester.pump();
 
+      // 리드타임을 고를 수 있게 되면서 '수업 30분 전'이 '수업 전 알림' + 분 칩으로 바뀌었다.
       await tester.scrollUntilVisible(
-        find.text('수업 30분 전'),
+        find.text('수업 전 알림'),
         240,
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('푸시 알림', skipOffstage: false), findsOneWidget);
       expect(find.text('아침 오늘 일정'), findsOneWidget);
-      expect(find.text('수업 30분 전'), findsOneWidget);
+      expect(find.text('수업 전 알림'), findsOneWidget);
+      expect(find.text('조용한 시간'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
