@@ -41,3 +41,29 @@ export function shouldSendClassReminder(
   if (minutesUntilStart > leadMin) return false;
   return minutesUntilStart > leadMin - SEND_WINDOW;
 }
+
+/** 조용한 시간 판정에 필요한 만큼만. */
+export interface QuietHours {
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+}
+
+function minutesFromTime(value: string): number {
+  const [h, m] = value.split(":");
+  return (Number(h) || 0) * 60 + (Number(m) || 0);
+}
+
+/**
+ * 지금이 이 사람의 조용한 시간인지.
+ *
+ * 기본값이 21:00~07:00 이라 자정을 넘는 구간이 보통이다. 시작과 끝이 같으면
+ * "구간 없음"으로 본다 — 하루 종일 막히는 쪽보다 안 막히는 쪽이 덜 위험하다.
+ */
+export function inQuietHours(prefs: QuietHours, minutes: number): boolean {
+  if (!prefs.quiet_hours_start || !prefs.quiet_hours_end) return false;
+  const start = minutesFromTime(prefs.quiet_hours_start);
+  const end = minutesFromTime(prefs.quiet_hours_end);
+  if (start === end) return false;
+  if (start < end) return minutes >= start && minutes < end;
+  return minutes >= start || minutes < end;
+}

@@ -10,6 +10,7 @@ import { createAdminClient, json } from "../_shared/supabase.ts";
 import { sendFcmToTokens } from "../_shared/fcm.ts";
 import {
   DEFAULT_LEAD,
+  inQuietHours,
   LEAD_CHOICES,
   normalizeLead,
   SEND_WINDOW,
@@ -130,14 +131,6 @@ function shortTime(value: string): string {
   return `${(h ?? "00").padStart(2, "0")}:${(m ?? "00").padStart(2, "0")}`;
 }
 
-function inQuietHours(prefs: Prefs, minutes: number): boolean {
-  if (!prefs.quiet_hours_start || !prefs.quiet_hours_end) return false;
-  const start = minutesFromTime(prefs.quiet_hours_start);
-  const end = minutesFromTime(prefs.quiet_hours_end);
-  if (start === end) return false;
-  if (start < end) return minutes >= start && minutes < end;
-  return minutes >= start || minutes < end;
-}
 
 function appliesOn(
   from: string,
@@ -455,6 +448,13 @@ async function sendClassReminders(
       // 창을 벗어난 건 아직 이르거나 이미 지난 것이라 "건너뜀"이 아니다.
       const lead = pref ? pref.class_reminder_lead_min : DEFAULT_LEAD;
       if (!shouldSendClassReminder(delta, lead)) {
+        continue;
+      }
+      // 조용한 시간은 아침 다이제스트에만 걸려 있었다. 설정 화면이 "이 시간엔
+      // 보내지 않습니다"라고 약속하는 이상 수업 알림도 지켜야 한다.
+      // 저녁 수업(예: 19:00~20:30)이 있는 학교에서는 실제로 겹친다.
+      if (pref && inQuietHours(pref, seoul.minutes)) {
+        skipped += 1;
         continue;
       }
       if (

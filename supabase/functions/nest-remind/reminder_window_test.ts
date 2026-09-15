@@ -10,6 +10,7 @@ import {
   DEFAULT_LEAD,
   LEAD_CHOICES,
   normalizeLead,
+  inQuietHours,
   SEND_WINDOW,
   shouldSendClassReminder,
 } from "./reminder_window.ts";
@@ -55,6 +56,34 @@ Deno.test("서로 다른 리드타임이 같은 수업에서 각자 제 때 걸�
   assertEquals(shouldSendClassReminder(60, 30), false);
   assertEquals(shouldSendClassReminder(30, 30), true);
   assertEquals(shouldSendClassReminder(30, 60), false);
+});
+
+Deno.test("조용한 시간: 자정을 넘는 구간도 판정한다", () => {
+  // 21:00~07:00 처럼 날짜를 넘기는 구간이 기본값이다.
+  const night = { quiet_hours_start: "21:00", quiet_hours_end: "07:00" };
+  assertEquals(inQuietHours(night, 22 * 60), true); // 22:00
+  assertEquals(inQuietHours(night, 3 * 60), true); // 03:00
+  assertEquals(inQuietHours(night, 12 * 60), false); // 12:00
+  assertEquals(inQuietHours(night, 7 * 60), false); // 07:00 정각은 깨어난다
+});
+
+Deno.test("조용한 시간: 같은 날 안의 구간도 판정한다", () => {
+  const nap = { quiet_hours_start: "13:00", quiet_hours_end: "15:00" };
+  assertEquals(inQuietHours(nap, 14 * 60), true);
+  assertEquals(inQuietHours(nap, 12 * 60), false);
+  assertEquals(inQuietHours(nap, 15 * 60), false);
+});
+
+Deno.test("조용한 시간이 없으면 언제든 보낸다", () => {
+  assertEquals(
+    inQuietHours({ quiet_hours_start: null, quiet_hours_end: null }, 3 * 60),
+    false,
+  );
+  // 시작과 끝이 같으면 "구간 없음"으로 본다.
+  assertEquals(
+    inQuietHours({ quiet_hours_start: "21:00", quiet_hours_end: "21:00" }, 21 * 60),
+    false,
+  );
 });
 
 Deno.test("normalizeLead 는 허용 목록 밖 값을 기본값으로 되돌린다", () => {
