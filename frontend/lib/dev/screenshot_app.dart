@@ -530,6 +530,17 @@ class _FakeNestRepository extends NestRepository {
   @override
   Future<CalendarIntegration?> fetchCalendarIntegration() async => null;
 
+  NotificationPrefs _notificationPrefs = const NotificationPrefs();
+
+  @override
+  Future<NotificationPrefs> fetchNotificationPrefs() async =>
+      _notificationPrefs;
+
+  @override
+  Future<void> upsertNotificationPrefs(NotificationPrefs prefs) async {
+    _notificationPrefs = prefs;
+  }
+
   @override
   Future<List<GalleryItem>> fetchGalleryItems({
     required String homeschoolId,
@@ -603,6 +614,21 @@ Future<void> main() async {
   ];
   controller.selectedHomeschoolId = _hsId;
   controller.currentRole = isTeacher ? 'TEACHER' : 'PARENT';
+
+  // 알림 화면을 확인하려면 상태를 골라 넣어야 한다.
+  //   --dart-define=NOTIF=onboarding  첫 로그인 전체화면
+  //   --dart-define=NOTIF=banner      홈 상단 권유 배너
+  //   (기본)                          알림을 받고 있는 평소 상태
+  const notif = String.fromEnvironment('NOTIF');
+  controller.notificationPrefsLoaded = true;
+  controller.notificationPrefs = switch (notif) {
+    'onboarding' => const NotificationPrefs(),
+    'banner' => NotificationPrefs(
+      pushEnabled: false,
+      notifOnboardedAt: DateTime.now(),
+    ),
+    _ => NotificationPrefs(notifOnboardedAt: DateTime.now()),
+  };
   controller.terms = _terms;
   controller.selectedTermId = 'term-summer';
   controller.classGroups = _classGroups;
