@@ -16,6 +16,7 @@ class NotificationSettingsPanel extends StatelessWidget {
     required this.prefs,
     required this.onChanged,
     this.enabled = true,
+    this.onSendTest,
   });
 
   final NotificationPrefs prefs;
@@ -23,6 +24,10 @@ class NotificationSettingsPanel extends StatelessWidget {
 
   /// 저장 중에는 꺼서 연타를 막는다.
   final bool enabled;
+
+  /// 본인 기기로 확인용 푸시를 보낸다. null 이면 버튼을 숨긴다
+  /// (온보딩은 아직 저장 전이라 보낼 수 없다).
+  final VoidCallback? onSendTest;
 
   /// 기본 조용한 시간. 켤 때 이 값으로 시작한다.
   static const String defaultQuietStart = '21:00';
@@ -107,6 +112,18 @@ class NotificationSettingsPanel extends StatelessWidget {
                 )
               : null,
         ),
+
+        if (onSendTest != null) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: subEnabled ? onSendTest : null,
+              icon: const Icon(Icons.send_outlined, size: 18),
+              label: const Text('테스트 알림 보내기'),
+            ),
+          ),
+        ],
 
         const SizedBox(height: 12),
         Text(

@@ -146,10 +146,34 @@ Deno.serve(async (req) => {
   }
 
   const event = body?.event;
+
+  // TEST — 자기 자신에게만 보내는 확인용 푸시.
+  //
+  // 수신자를 클라이언트가 지정하지 않는다는 이 함수의 원칙을 지킨다. 대상은
+  // 언제나 호출자 본인이고, 본문에 아무 것도 받지 않는다.
+  //
+  // 왜 필요한가: 알림은 "켰는데 안 오는" 경우가 가장 흔한 고장이다. 기기 권한,
+  // 토큰 등록, 방해 금지 모드 중 어디서 막혔는지 사용자는 알 수 없고, 그냥
+  // 앱이 고장났다고 여긴다. 직접 한 번 받아보게 해야 신뢰하고 켜 둔다.
+  if (event === "TEST") {
+    const sent = await pushToSelf(admin, callerId);
+    return json(
+      200,
+      {
+        accepted: true,
+        sent,
+        error: sent === 0
+          ? "이 기기에 등록된 알림 토큰이 없습니다. 기기 알림 권한을 확인해 주세요."
+          : null
+      },
+      corsHeaders
+    );
+  }
+
   if (event !== "CLASS_CHANGE" && event !== "ABSENCE") {
     return json(
       400,
-      { error: "event 는 'CLASS_CHANGE' 또는 'ABSENCE' 여야 합니다." },
+      { error: "event 는 'CLASS_CHANGE', 'ABSENCE', 'TEST' 중 하나여야 합니다." },
       corsHeaders
     );
   }
@@ -1252,4 +1276,31 @@ function isMissingFunction(error: { code?: string; message?: string }): boolean 
     message.includes("does not exist") ||
     message.includes("could not find the function")
   );
+}
+
+
+/**
+ * 호출자 본인의 기기에만 확인용 푸시를 보낸다.
+ * 반환값은 실제로 전달된 기기 수. 0 이면 토큰이 없다는 뜻이다.
+ */
+async function pushToSelf(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<number> {
+  const { data: tokens } = await admin
+    .from("push_tokens")
+    .select("user_id, token, platform")
+    .eq("user_id", userId)
+    .is("revoked_at", null);
+  if (!tokens || tokens.length === 0) return 0;
+
+  const results = await sendFcmToTokens({
+    tokens: tokens as Array<{ user_id: string; token: string; platform: string }>,
+    payload: {
+      title: "알림이 잘 오고 있어요",
+      body: "이렇게 수업 변경·시작 전 안내를 보내드립니다.",
+      data: { event: "TEST", tab: "시간표" }
+    }
+  });
+  return results.filter((row) => row.ok).length;
 }

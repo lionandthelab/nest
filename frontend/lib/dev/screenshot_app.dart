@@ -24,6 +24,7 @@ import '../src/services/nest_repository.dart';
 import '../src/state/nest_controller.dart';
 import '../src/ui/home_page.dart';
 import '../src/ui/nest_theme.dart';
+import '../src/ui/widgets/notification_onboarding.dart';
 
 // ── 픽스처 ──────────────────────────────────────────────────────────────
 
@@ -663,7 +664,17 @@ Future<void> main() async {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: HomePage(controller: controller, initialTab: initialTab),
+      // 프로덕션(nest_app.dart)과 같은 갈림길을 태운다. 데모가 HomePage 를 바로
+      // 띄우면 알림 온보딩은 영영 확인할 수 없다.
+      home: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) => controller.needsNotifOnboarding
+            ? NotificationOnboardingSheet(
+                initial: controller.notificationPrefs,
+                onDone: controller.updateNotificationPrefs,
+              )
+            : HomePage(controller: controller, initialTab: initialTab),
+      ),
     ),
   );
 }

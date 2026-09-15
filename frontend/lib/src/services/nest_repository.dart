@@ -1552,6 +1552,18 @@ class NestRepository {
     return _asMap(response.data);
   }
 
+  /// 호출자 본인 기기에만 확인용 푸시를 보낸다.
+  /// 전달된 기기 수를 돌려준다. 0 이면 등록된 토큰이 없다는 뜻이다.
+  Future<int> sendTestPush() async {
+    final response = await client.functions.invoke(
+      'nest-notify',
+      body: {'event': 'TEST'},
+    );
+    final data = _asMap(response.data);
+    final sent = data['sent'];
+    return sent is int ? sent : int.tryParse('${sent ?? ''}') ?? 0;
+  }
+
   Future<void> disconnectGoogleCalendar() async {
     await client.functions.invoke(
       'google-calendar-sync',

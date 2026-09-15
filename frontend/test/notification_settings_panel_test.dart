@@ -132,6 +132,58 @@ void main() {
     expect(find.textContaining('07:00'), findsWidgets);
   });
 
+  // "켰는데 안 오는" 게 가장 흔한 고장이라, 직접 받아볼 수 있어야 신뢰한다.
+  testWidgets('테스트 알림 버튼을 주면 보인다', (tester) async {
+    var tapped = 0;
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        NotificationSettingsPanel(
+          prefs: const NotificationPrefs(),
+          onChanged: (_) {},
+          onSendTest: () => tapped += 1,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('테스트 알림 보내기'));
+    await tester.pumpAndSettle();
+    expect(tapped, 1);
+  });
+
+  testWidgets('테스트 알림 콜백이 없으면 버튼도 없다', (tester) async {
+    // 온보딩에서는 아직 저장 전이라 보낼 수 없다.
+    await _pump(tester);
+    expect(find.text('테스트 알림 보내기'), findsNothing);
+  });
+
+  testWidgets('푸시가 꺼져 있으면 테스트 알림을 누를 수 없다', (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        NotificationSettingsPanel(
+          prefs: const NotificationPrefs(pushEnabled: false),
+          onChanged: (_) {},
+          onSendTest: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<OutlinedButton>(
+      find.ancestor(
+        of: find.text('테스트 알림 보내기'),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
+    expect(button.onPressed, isNull);
+  });
+
   for (final size in const [Size(360, 780), Size(393, 852)]) {
     testWidgets('${size.width.toInt()}폭에서 넘치지 않는다', (tester) async {
       await _pump(tester, size: size);

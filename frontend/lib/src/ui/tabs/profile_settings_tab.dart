@@ -287,6 +287,7 @@ class _ProfileSettingsTabState extends State<ProfileSettingsTab> {
           prefs: controller.notificationPrefs,
           enabled: !controller.isBusy,
           onChanged: controller.updateNotificationPrefs,
+          onSendTest: controller.sendTestPush,
         ),
 
         // ── Parent: 내 불가 시간 section ──

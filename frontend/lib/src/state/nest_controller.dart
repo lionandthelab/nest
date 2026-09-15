@@ -2210,6 +2210,22 @@ class NestController extends ChangeNotifier {
     _notifyIfIdle();
   }
 
+  /// 본인 기기로 확인용 푸시를 보낸다.
+  ///
+  /// 알림은 "켰는데 안 오는" 고장이 가장 흔하다. 기기 권한·토큰 등록·방해 금지
+  /// 중 어디서 막혔는지 사용자는 알 수 없고 그냥 앱이 고장났다고 여긴다.
+  /// 직접 한 번 받아보게 해야 신뢰하고 켜 둔다.
+  Future<void> sendTestPush() async {
+    await _runBusy('테스트 알림을 보내는 중...', () async {
+      final sent = await _repository.sendTestPush();
+      _setStatus(
+        sent > 0
+            ? '테스트 알림을 보냈습니다. 잠시 후 도착합니다.'
+            : '이 기기에 등록된 알림 토큰이 없습니다. 휴대폰의 알림 권한을 확인해 주세요.',
+      );
+    }, blockUi: false);
+  }
+
   Future<void> loadNotificationPrefs() async {
     if (user == null) {
       notificationPrefs = const NotificationPrefs();
