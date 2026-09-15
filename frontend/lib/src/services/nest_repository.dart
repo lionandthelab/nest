@@ -3210,10 +3210,20 @@ class NestRepository {
     if (userId == null) {
       throw StateError('로그인이 필요합니다.');
     }
-    await client.from('notification_prefs').upsert({
-      'user_id': userId,
-      ...prefs.toMap(),
-    });
+    final payload = {'user_id': userId, ...prefs.toMap()};
+    try {
+      await client.from('notification_prefs').upsert(payload);
+    } on PostgrestException catch (error) {
+      // 웹은 main 푸시로 바로 나가고 마이그레이션은 따로 돌린다. 그 사이에는
+      // 새 컬럼이 없어 42703 으로 튕기는데, 그렇다고 알림 설정 저장 자체가
+      // 막히면 안 된다. 예전 컬럼만으로 한 번 더 시도한다.
+      if (error.code != '42703') {
+        rethrow;
+      }
+      await client
+          .from('notification_prefs')
+          .upsert(legacyNotificationPrefsPayload(payload));
+    }
   }
 
   Future<List<NotificationInboxItem>> fetchNotificationInbox({
@@ -3901,6 +3911,16 @@ bool _isMissingChildUserIdColumn(PostgrestException error) {
 ///
 /// PGRST202 = RPC not found, PGRST205 = table not found,
 /// 42P01 = undefined_table, 42883 = undefined_function.
+/// 20260916 마이그레이션 이전 스키마로 되돌린 알림 설정 페이로드.
+/// 그 마이그레이션이 모든 환경에 적용되면 이 함수와 호출부를 지운다.
+Map<String, dynamic> legacyNotificationPrefsPayload(
+  Map<String, dynamic> payload,
+) {
+  return {...payload}
+    ..remove('class_reminder_lead_min')
+    ..remove('notif_onboarded_at');
+}
+
 bool _isMissingSchemaObject(PostgrestException error, String name) {
   final code = error.code;
   if (code == 'PGRST202' ||

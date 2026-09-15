@@ -792,6 +792,83 @@ void main() {
       expect(prefs.pushEnabled, isTrue);
       expect(prefs.morningDigestEnabled, isTrue);
       expect(prefs.classReminderEnabled, isTrue);
+      // 서버 기본값과 같아야 기존 사용자의 체감이 바뀌지 않는다.
+      expect(prefs.classReminderLeadMin, 30);
+      expect(prefs.notifOnboardedAt, isNull);
+    });
+
+    test('NotificationPrefs.fromMap reads lead time and onboarding mark', () {
+      final prefs = NotificationPrefs.fromMap({
+        'class_reminder_lead_min': 10,
+        'notif_onboarded_at': '2026-09-16T00:00:00Z',
+        'quiet_hours_start': '21:00',
+        'quiet_hours_end': '07:00',
+      });
+      expect(prefs.classReminderLeadMin, 10);
+      expect(prefs.notifOnboardedAt, isNotNull);
+      expect(prefs.quietHoursStart, '21:00');
+      expect(prefs.hasSeenNotifOnboarding, isTrue);
+    });
+
+    test('NotificationPrefs 는 허용되지 않은 리드타임을 기본값으로 되돌린다', () {
+      // 서버 check 제약(10/20/30/60)과 어긋나는 값이 오면 저장 때 튕긴다.
+      // 화면에서 고를 수 없는 값이 들어오는 경로도 없어야 하지만, 방어해 둔다.
+      expect(
+        NotificationPrefs.fromMap({'class_reminder_lead_min': 45})
+            .classReminderLeadMin,
+        30,
+      );
+      expect(
+        NotificationPrefs.fromMap({'class_reminder_lead_min': 0})
+            .classReminderLeadMin,
+        30,
+      );
+    });
+
+    test('NotificationPrefs.toMap 은 리드타임을 함께 보낸다', () {
+      const prefs = NotificationPrefs(classReminderLeadMin: 60);
+      expect(prefs.toMap()['class_reminder_lead_min'], 60);
+    });
+
+    test('copyWith 는 조용한 시간과 리드타임도 바꿀 수 있다', () {
+      const prefs = NotificationPrefs();
+      final quiet = prefs.copyWith(
+        quietHoursStart: '22:00',
+        quietHoursEnd: '07:00',
+        classReminderLeadMin: 20,
+      );
+      expect(quiet.quietHoursStart, '22:00');
+      expect(quiet.quietHoursEnd, '07:00');
+      expect(quiet.classReminderLeadMin, 20);
+      // 안 넘긴 값은 그대로다.
+      expect(quiet.pushEnabled, isTrue);
+    });
+
+    test('clearQuietHours 로 조용한 시간을 끌 수 있다', () {
+      // copyWith 로는 null 을 넘겨도 "안 바꿈"과 구분되지 않는다.
+      const prefs = NotificationPrefs(
+        quietHoursStart: '22:00',
+        quietHoursEnd: '07:00',
+      );
+      final cleared = prefs.clearQuietHours();
+      expect(cleared.quietHoursStart, isNull);
+      expect(cleared.hasQuietHours, isFalse);
+      expect(prefs.hasQuietHours, isTrue);
+    });
+
+    test('receivesNothing 은 알림을 하나도 못 받는 상태를 알려준다', () {
+      expect(const NotificationPrefs().receivesNothing, isFalse);
+      expect(
+        const NotificationPrefs(pushEnabled: false).receivesNothing,
+        isTrue,
+      );
+      expect(
+        const NotificationPrefs(
+          morningDigestEnabled: false,
+          classReminderEnabled: false,
+        ).receivesNothing,
+        isTrue,
+      );
     });
 
     test('NotificationInboxItem.deepLinkTab falls back by event', () {

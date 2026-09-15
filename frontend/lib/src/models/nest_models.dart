@@ -2376,17 +2376,38 @@ class NotificationPrefs {
     this.pushEnabled = true,
     this.morningDigestEnabled = true,
     this.classReminderEnabled = true,
+    this.classReminderLeadMin = defaultLeadMin,
     this.quietHoursStart,
     this.quietHoursEnd,
+    this.notifOnboardedAt,
   });
+
+  /// 수업 전 알림으로 고를 수 있는 값(분).
+  ///
+  /// 자유 입력을 받지 않는 이유: 발송 잡이 5분마다 돌면서 10분 폭으로 훑기
+  /// 때문에, 그 격자와 어긋나는 값은 조용히 한 번씩 빠진다. 서버 check 제약도
+  /// 같은 목록이다.
+  static const List<int> leadMinChoices = [10, 20, 30, 60];
+  static const int defaultLeadMin = 30;
 
   final bool pushEnabled;
   final bool morningDigestEnabled;
   final bool classReminderEnabled;
+
+  /// 수업 시작 몇 분 전에 알릴지.
+  final int classReminderLeadMin;
+
   final String? quietHoursStart;
   final String? quietHoursEnd;
 
+  /// 알림 온보딩(전체화면)을 보여준 시각. null 이면 아직 안 봤다.
+  final DateTime? notifOnboardedAt;
+
   factory NotificationPrefs.fromMap(Map<String, dynamic> map) {
+    final rawLead = map['class_reminder_lead_min'];
+    final lead = rawLead is int
+        ? rawLead
+        : int.tryParse('${rawLead ?? ''}') ?? defaultLeadMin;
     return NotificationPrefs(
       pushEnabled: parseBool(map['push_enabled'], fallback: true),
       morningDigestEnabled: parseBool(
@@ -2397,8 +2418,12 @@ class NotificationPrefs {
         map['class_reminder_enabled'],
         fallback: true,
       ),
+      classReminderLeadMin: leadMinChoices.contains(lead)
+          ? lead
+          : defaultLeadMin,
       quietHoursStart: map['quiet_hours_start'] as String?,
       quietHoursEnd: map['quiet_hours_end'] as String?,
+      notifOnboardedAt: parseDateTime(map['notif_onboarded_at']),
     );
   }
 
@@ -2406,21 +2431,54 @@ class NotificationPrefs {
     'push_enabled': pushEnabled,
     'morning_digest_enabled': morningDigestEnabled,
     'class_reminder_enabled': classReminderEnabled,
-    if (quietHoursStart != null) 'quiet_hours_start': quietHoursStart,
-    if (quietHoursEnd != null) 'quiet_hours_end': quietHoursEnd,
+    'class_reminder_lead_min': classReminderLeadMin,
+    'quiet_hours_start': quietHoursStart,
+    'quiet_hours_end': quietHoursEnd,
+    if (notifOnboardedAt != null)
+      'notif_onboarded_at': notifOnboardedAt!.toUtc().toIso8601String(),
   };
+
+  /// 조용한 시간이 설정돼 있는지.
+  bool get hasQuietHours =>
+      (quietHoursStart ?? '').isNotEmpty && (quietHoursEnd ?? '').isNotEmpty;
+
+  /// 알림 온보딩을 이미 봤는지(건너뛰기 포함).
+  bool get hasSeenNotifOnboarding => notifOnboardedAt != null;
+
+  /// 지금 설정으로는 알림이 하나도 오지 않는 상태인지.
+  /// 홈 배너로 다시 권할지 판단하는 데 쓴다.
+  bool get receivesNothing =>
+      !pushEnabled || (!morningDigestEnabled && !classReminderEnabled);
 
   NotificationPrefs copyWith({
     bool? pushEnabled,
     bool? morningDigestEnabled,
     bool? classReminderEnabled,
+    int? classReminderLeadMin,
+    String? quietHoursStart,
+    String? quietHoursEnd,
+    DateTime? notifOnboardedAt,
   }) {
     return NotificationPrefs(
       pushEnabled: pushEnabled ?? this.pushEnabled,
       morningDigestEnabled: morningDigestEnabled ?? this.morningDigestEnabled,
       classReminderEnabled: classReminderEnabled ?? this.classReminderEnabled,
-      quietHoursStart: quietHoursStart,
-      quietHoursEnd: quietHoursEnd,
+      classReminderLeadMin: classReminderLeadMin ?? this.classReminderLeadMin,
+      quietHoursStart: quietHoursStart ?? this.quietHoursStart,
+      quietHoursEnd: quietHoursEnd ?? this.quietHoursEnd,
+      notifOnboardedAt: notifOnboardedAt ?? this.notifOnboardedAt,
+    );
+  }
+
+  /// 조용한 시간을 끈다.
+  /// copyWith 로는 null 을 넘겨도 "안 바꿈"과 구분되지 않아 따로 둔다.
+  NotificationPrefs clearQuietHours() {
+    return NotificationPrefs(
+      pushEnabled: pushEnabled,
+      morningDigestEnabled: morningDigestEnabled,
+      classReminderEnabled: classReminderEnabled,
+      classReminderLeadMin: classReminderLeadMin,
+      notifOnboardedAt: notifOnboardedAt,
     );
   }
 }
