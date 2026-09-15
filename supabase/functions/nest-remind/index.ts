@@ -8,6 +8,13 @@
 
 import { createAdminClient, json } from "../_shared/supabase.ts";
 import { sendFcmToTokens } from "../_shared/fcm.ts";
+import {
+  DEFAULT_LEAD,
+  LEAD_CHOICES,
+  normalizeLead,
+  SEND_WINDOW,
+  shouldSendClassReminder,
+} from "./reminder_window.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,9 +40,12 @@ interface Prefs {
   push_enabled: boolean;
   morning_digest_enabled: boolean;
   class_reminder_enabled: boolean;
+  /** 수업 시작 몇 분 전에 알릴지. 10/20/30/60 만 저장된다. */
+  class_reminder_lead_min: number;
   quiet_hours_start: string | null;
   quiet_hours_end: string | null;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -278,7 +288,7 @@ async function loadPrefs(admin: Admin, userIds: string[]): Promise<Map<string, P
   const { data } = await admin
     .from("notification_prefs")
     .select(
-      "user_id, push_enabled, morning_digest_enabled, class_reminder_enabled, quiet_hours_start, quiet_hours_end",
+      "user_id, push_enabled, morning_digest_enabled, class_reminder_enabled, class_reminder_lead_min, quiet_hours_start, quiet_hours_end",
     )
     .in("user_id", userIds);
   for (const row of data ?? []) {
@@ -286,6 +296,7 @@ async function loadPrefs(admin: Admin, userIds: string[]): Promise<Map<string, P
       push_enabled: row.push_enabled !== false,
       morning_digest_enabled: row.morning_digest_enabled !== false,
       class_reminder_enabled: row.class_reminder_enabled !== false,
+      class_reminder_lead_min: normalizeLead(row.class_reminder_lead_min),
       quiet_hours_start: (row.quiet_hours_start as string | null) ?? null,
       quiet_hours_end: (row.quiet_hours_end as string | null) ?? null,
     });
@@ -414,16 +425,21 @@ async function sendClassReminders(
   seoul: { date: string; minutes: number },
   occurrences: Occurrence[],
 ): Promise<{ sent: number; skipped: number }> {
-  const due = occurrences.filter((row) => {
-    if (row.canceled) return false;
-    const delta = minutesFromTime(row.startTime) - seoul.minutes;
-    return delta >= 25 && delta < 35;
-  });
+  // 리드타임이 사용자마다 달라서, 가장 긴 선택지까지 덮는 넓은 창으로 먼저
+  // 추린 뒤 사람별로 자기 리드타임에 맞는지 다시 본다.
+  const maxLead = Math.max(...LEAD_CHOICES);
+  const due = occurrences
+    .filter((row) => !row.canceled)
+    .map((row) => ({
+      row,
+      delta: minutesFromTime(row.startTime) - seoul.minutes,
+    }))
+    .filter(({ delta }) => delta >= 0 && delta < maxLead + SEND_WINDOW);
   if (due.length === 0) return { sent: 0, skipped: 0 };
 
   let sent = 0;
   let skipped = 0;
-  for (const occurrence of due) {
+  for (const { row: occurrence, delta } of due) {
     const recipients = await recipientsForSession(admin, occurrence.sessionId);
     const prefs = await loadPrefs(
       admin,
@@ -433,6 +449,12 @@ async function sendClassReminders(
       const pref = prefs.get(recipient.userId);
       if (pref && (!pref.push_enabled || !pref.class_reminder_enabled)) {
         skipped += 1;
+        continue;
+      }
+      // 이 사람이 고른 리드타임의 창 안에 들어왔을 때만 보낸다.
+      // 창을 벗어난 건 아직 이르거나 이미 지난 것이라 "건너뜀"이 아니다.
+      const lead = pref ? pref.class_reminder_lead_min : DEFAULT_LEAD;
+      if (!shouldSendClassReminder(delta, lead)) {
         continue;
       }
       if (
@@ -448,8 +470,9 @@ async function sendClassReminders(
         continue;
       }
       const where = occurrence.location ? ` · ${occurrence.location}` : "";
-      const title = `${occurrence.courseName} 30분 전`;
-      const body = `${occurrence.classGroupName} ${occurrence.courseName}이 30분 뒤 시작해요${where}`;
+      const title = `${occurrence.courseName} ${lead}분 전`;
+      const body =
+        `${occurrence.classGroupName} ${occurrence.courseName}이 ${lead}분 뒤 시작해요${where}`;
       sent += await pushToUsers(
         admin,
         [recipient.userId],
