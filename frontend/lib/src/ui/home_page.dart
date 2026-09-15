@@ -28,6 +28,7 @@ import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'tabs/timetable_workspace_tab.dart';
 import 'widgets/nest_motion.dart';
+import 'widgets/notification_onboarding.dart';
 import 'widgets/notification_inbox_sheet.dart';
 import 'widgets/term_navigator_bar.dart';
 import 'widgets/term_select_chip.dart';
@@ -1089,6 +1090,16 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                         controller: controller,
                         onSelectTerm: widget.onSelectTerm,
                       ),
+                    ),
+                  ),
+                // 온보딩에서 건너뛰었거나 나중에 다 꺼 버린 사람에게 한 번 더 권한다.
+                // 역할별 홈마다 따로 붙이지 않고 셸에 한 번만 둔다.
+                if (controller.showsNotifNudge)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                    child: NotificationNudgeBanner(
+                      onOpen: () => _openParentSettingsPage(controller),
+                      onDismiss: controller.dismissNotifNudge,
                     ),
                   ),
                 Expanded(

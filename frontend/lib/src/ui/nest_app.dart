@@ -11,6 +11,7 @@ import '../state/nest_controller.dart';
 import 'home_page.dart';
 import 'login_page.dart';
 import 'nest_theme.dart';
+import 'widgets/notification_onboarding.dart';
 import 'widgets/nest_motion.dart';
 
 class NestAppRoot extends StatefulWidget {
@@ -75,13 +76,26 @@ class _NestAppRootState extends State<NestAppRoot> {
       home: AnimatedBuilder(
         animation: controller,
         builder: (context, _) {
+          // 첫 로그인 뒤 알림 안내를 한 번 끼워 넣는다. 홈에 들어간 뒤 배너로만
+          // 권하면 대부분 지나쳐서, 알림을 한 번도 안 켜 본 채로 남는다.
+          final needsNotif =
+              controller.isBootstrapped &&
+              controller.isLoggedIn &&
+              controller.needsNotifOnboarding;
+
           final page = switch ((
             controller.isBootstrapped,
             controller.isLoggedIn,
           )) {
             (false, _) => const NestLoadingScreen(),
             (true, false) => LoginPage(controller: controller),
-            (true, true) => HomePage(controller: controller),
+            (true, true) =>
+              needsNotif
+                  ? NotificationOnboardingSheet(
+                      initial: controller.notificationPrefs,
+                      onDone: controller.updateNotificationPrefs,
+                    )
+                  : HomePage(controller: controller),
           };
 
           final key = switch ((
@@ -90,7 +104,9 @@ class _NestAppRootState extends State<NestAppRoot> {
           )) {
             (false, _) => const ValueKey<String>('boot'),
             (true, false) => const ValueKey<String>('login'),
-            (true, true) => const ValueKey<String>('home'),
+            (true, true) => needsNotif
+                ? const ValueKey<String>('notif-onboarding')
+                : const ValueKey<String>('home'),
           };
 
           return AnimatedSwitcher(

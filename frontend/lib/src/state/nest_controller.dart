@@ -2183,9 +2183,37 @@ class NestController extends ChangeNotifier {
     _galleryLoaded = true;
   }
 
+  /// 알림 설정을 서버에서 한 번이라도 읽어왔는지.
+  ///
+  /// 읽기 전에는 기본값(notifOnboardedAt = null)이라 "아직 온보딩 안 함"과
+  /// 구분되지 않는다. 그 사이에 판단하면 이미 끝낸 사람에게도 전체화면 안내가
+  /// 다시 떠서, 앱을 열 때마다 막아서는 꼴이 된다.
+  bool notificationPrefsLoaded = false;
+
+  /// 이번 세션에 알림 권유 배너를 닫았는지.
+  /// 계정이 아니라 세션에만 남긴다 — 다음에 열 때 알림이 여전히 꺼져 있으면
+  /// 한 번 더 권하는 편이 맞다.
+  bool notifNudgeDismissed = false;
+
+  /// 첫 알림 온보딩(전체화면)을 띄울 차례인지.
+  bool get needsNotifOnboarding =>
+      notificationPrefsLoaded && notificationPrefs.needsNotifOnboarding;
+
+  /// 홈 상단에 알림 권유 배너를 띄울 차례인지.
+  bool get showsNotifNudge =>
+      notificationPrefsLoaded &&
+      !notifNudgeDismissed &&
+      notificationPrefs.needsNotifNudge;
+
+  void dismissNotifNudge() {
+    notifNudgeDismissed = true;
+    _notifyIfIdle();
+  }
+
   Future<void> loadNotificationPrefs() async {
     if (user == null) {
       notificationPrefs = const NotificationPrefs();
+      notificationPrefsLoaded = true;
       return;
     }
     try {
@@ -2193,6 +2221,7 @@ class NestController extends ChangeNotifier {
     } catch (_) {
       notificationPrefs = const NotificationPrefs();
     }
+    notificationPrefsLoaded = true;
     _notifyIfIdle();
   }
 

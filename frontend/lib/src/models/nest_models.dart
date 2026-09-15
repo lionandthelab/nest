@@ -2450,6 +2450,16 @@ class NotificationPrefs {
   bool get receivesNothing =>
       !pushEnabled || (!morningDigestEnabled && !classReminderEnabled);
 
+  /// 첫 알림 온보딩(전체화면)을 띄울 차례인지.
+  /// 계정에 한 번 표시하고 끝낸다. 건너뛰기도 표시로 친다 — 안내는 한 번이면
+  /// 충분하고, 그 뒤로는 알림이 꺼져 있을 때만 배너로 가볍게 다시 권한다.
+  bool get needsNotifOnboarding => !hasSeenNotifOnboarding;
+
+  /// 홈 상단에 알림 권유 배너를 띄울 차례인지.
+  /// 온보딩을 아직 안 본 사람에게는 띄우지 않는다 — 곧 전체화면이 뜰 차례라
+  /// 배너까지 겹치면 시끄럽다.
+  bool get needsNotifNudge => hasSeenNotifOnboarding && receivesNothing;
+
   NotificationPrefs copyWith({
     bool? pushEnabled,
     bool? morningDigestEnabled,
