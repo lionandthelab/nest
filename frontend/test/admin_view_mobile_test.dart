@@ -295,6 +295,65 @@ void main() {
       expect(find.text('수업 변경·결석·오늘 일정·수업 30분 전 알림'), findsOneWidget);
     });
 
+    // 온보딩을 건너뛰었거나 나중에 다 꺼 버린 사람에게 한 번 더 권하는 자리다.
+    // 역할별 홈마다 따로 붙이지 않고 셸에 한 번만 두었으므로 여기서 확인한다.
+    testWidgets('알림이 꺼져 있으면 셸에 권유 배너가 뜬다', (tester) async {
+      await _setMobileSize(tester);
+      final controller = _adminController();
+      controller.notificationPrefsLoaded = true;
+      controller.notificationPrefs = NotificationPrefs(
+        pushEnabled: false,
+        notifOnboardedAt: DateTime(2026, 9, 16),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ko', 'KR'),
+          supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: HomePage(controller: controller),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('알림이 꺼져 있어요'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // 닫으면 이번 세션에는 사라진다.
+      await tester.tap(find.byTooltip('닫기'));
+      await tester.pump();
+      expect(find.text('알림이 꺼져 있어요'), findsNothing);
+    });
+
+    testWidgets('알림을 받고 있으면 배너가 뜨지 않는다', (tester) async {
+      await _setMobileSize(tester);
+      final controller = _adminController();
+      controller.notificationPrefsLoaded = true;
+      controller.notificationPrefs = NotificationPrefs(
+        notifOnboardedAt: DateTime(2026, 9, 16),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ko', 'KR'),
+          supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: HomePage(controller: controller),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('알림이 꺼져 있어요'), findsNothing);
+    });
+
     testWidgets('설정 화면에 알림 설정 패널이 있다', (tester) async {
       await _setMobileSize(tester);
       final controller = _adminController();
