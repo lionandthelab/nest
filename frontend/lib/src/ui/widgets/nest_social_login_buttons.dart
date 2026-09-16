@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lion_auth/lion_auth.dart';
 
 import '../nest_theme.dart';
+import 'brand_marks.dart';
 import 'nest_motion.dart';
 
 /// lion_auth 버튼 API와 무관하게, Nest가 소셜 탭을 직접 받는다.
@@ -44,41 +45,25 @@ class _BrandCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 배경·테두리 색과 로고는 각 사 브랜드 가이드를 따른다.
+    // NestColors 로 바꾸면 안 되는 유일한 곳이다.
     final spec = switch (provider) {
       LionAuthProviderId.google => (
         color: Colors.white,
         border: const Color(0xFF747775),
-        child: Text(
-          'G',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: const Color(0xFF4285F4),
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        child: const GoogleMark(),
         label: 'Google로 로그인',
       ),
       LionAuthProviderId.kakao => (
         color: const Color(0xFFFEE500),
         border: null,
-        child: Text(
-          '카',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: NestColors.deepWood,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        child: const KakaoMark(),
         label: '카카오로 로그인',
       ),
       LionAuthProviderId.naver => (
         color: const Color(0xFF03C75A),
         border: null,
-        child: Text(
-          'N',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        child: const NaverMark(),
         label: '네이버로 로그인',
       ),
       LionAuthProviderId.apple => (
