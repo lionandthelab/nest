@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lion_auth/lion_auth.dart';
 import 'package:nest_frontend/src/services/browser_social_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -65,5 +66,68 @@ void main() {
     );
 
     expect(messages.length, 2);
+  });
+
+  // 카카오 id_token 경로는 Supabase 가 거절하면 "로그인에 실패했습니다"만 남고
+  // 사용자가 할 수 있는 게 없다(aud/OIDC 는 콘솔 문제다). 서버 리다이렉트로
+  // 보내면 코드 교환을 Supabase 가 자기 REST 키로 하므로 그 실패가 사라진다.
+  //
+  // 인앱 Safari 가 아니라 시스템 브라우저를 쓰는 이유는 네이버에서 이미
+  // 겪었다 — 시트가 앱 위에 남아 로그인 화면을 가린다.
+  group('모바일 소셜 라우팅', () {
+    test('카카오는 시스템 브라우저로 보낸다', () {
+      expect(
+        BrowserSocialAuth.shouldUseBrowser(
+          LionAuthProviderId.kakao,
+          isWeb: false,
+          canUseNativeGoogle: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('네이버는 계속 브라우저로 보낸다', () {
+      expect(
+        BrowserSocialAuth.shouldUseBrowser(
+          LionAuthProviderId.naver,
+          isWeb: false,
+          canUseNativeGoogle: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('구글은 네이티브 클라이언트가 있으면 네이티브를 쓴다', () {
+      expect(
+        BrowserSocialAuth.shouldUseBrowser(
+          LionAuthProviderId.google,
+          isWeb: false,
+          canUseNativeGoogle: true,
+        ),
+        isFalse,
+      );
+      expect(
+        BrowserSocialAuth.shouldUseBrowser(
+          LionAuthProviderId.google,
+          isWeb: false,
+          canUseNativeGoogle: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('웹은 어떤 공급자도 이 경로를 쓰지 않는다', () {
+      for (final id in LionAuthProviderId.values) {
+        expect(
+          BrowserSocialAuth.shouldUseBrowser(
+            id,
+            isWeb: true,
+            canUseNativeGoogle: false,
+          ),
+          isFalse,
+          reason: '$id',
+        );
+      }
+    });
   });
 }

@@ -70,13 +70,14 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _onSocial(LionAuthProviderId id) async {
-    // 카카오: 공식 loginWithKakaoAccount (Safari/Custom Tabs, 카카오톡 앱투앱 없음).
+    // 카카오: Supabase OAuth 리다이렉트 + 앱 딥링크 복귀.
     // 네이버: 브라우저 인가 코드 + social-broker.
     // 구글: iOS GIDClientID가 있을 때만 네이티브 시트, 없으면 브라우저 OAuth.
-    final useBrowserGoogle =
-        !kIsWeb && id == LionAuthProviderId.google && !_canUseNativeGoogle;
-    final useBrowser =
-        !kIsWeb && (id == LionAuthProviderId.naver || useBrowserGoogle);
+    final useBrowser = BrowserSocialAuth.shouldUseBrowser(
+      id,
+      isWeb: kIsWeb,
+      canUseNativeGoogle: _canUseNativeGoogle,
+    );
     try {
       if (useBrowser) {
         await BrowserSocialAuth.start(id);
