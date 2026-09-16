@@ -22,6 +22,18 @@ class BrowserSocialAuth {
   static const naverRedirectUri =
       'https://avursvhmilcsssabqtkx.supabase.co/functions/v1/naver-oauth-bridge';
   static const naverAppScheme = 'nestnaverlogin://callback';
+
+  /// 브릿지에 "새 앱이다"라고 알리는 state 표식.
+  ///
+  /// supabase_flutter 는 PKCE 모드에서 `?code=` 가 붙은 **모든** 딥링크를
+  /// 자기 콜백으로 착각해 코드 교환을 시도한다. 네이버 코드가 Supabase 로
+  /// 날아가고, 직전 구글/카카오 시도가 남긴 code_verifier 가 있으면 실제로
+  /// 교환이 수행된다. 그래서 네이버는 `code` 가 아닌 이름으로 받는다.
+  ///
+  /// 브릿지가 이름을 한 번에 바꾸면 이미 설치된 앱이 `code` 를 못 찾아
+  /// 네이버 로그인이 즉시 죽는다. 표식이 있는 요청에만 새 이름을 쓰게 해서
+  /// 신·구 앱이 함께 동작한다. (브릿지 쪽 APP_STATE_MARKER 와 같은 값)
+  static const naverStateMarker = 'nestv2';
   static const _naverStateKey = 'nest.naver.browser.state';
 
   static StreamSubscription<Uri>? _sub;
@@ -130,7 +142,7 @@ class BrowserSocialAuth {
     if (clientId.isEmpty) {
       throw StateError('네이버 클라이언트 ID가 없습니다.');
     }
-    final state = _randomState();
+    final state = newState();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_naverStateKey, state);
 
@@ -166,7 +178,7 @@ class BrowserSocialAuth {
     }
     if (!isNaverCallback(uri)) return;
     // 같은 코드는 한 번만 — 중복 전달이 성공한 로그인을 실패로 덮지 않도록.
-    if (!_handledCodes.add(uri.queryParameters['code'] ?? '')) return;
+    if (!_handledCodes.add(_codeOf(uri))) return;
     try {
       await _completeNaver(uri);
     } catch (error) {
@@ -180,7 +192,15 @@ class BrowserSocialAuth {
 
   static bool isNaverCallback(Uri uri) {
     if (uri.scheme != 'nestnaverlogin') return false;
-    return (uri.queryParameters['code'] ?? '').isNotEmpty;
+    return _codeOf(uri).isNotEmpty;
+  }
+
+  /// 새 이름을 먼저 보고, 없으면 예전 이름을 본다.
+  /// (구버전 브릿지가 아직 살아 있는 전환기 동안의 호환)
+  static String _codeOf(Uri uri) {
+    final fresh = uri.queryParameters['naver_code'] ?? '';
+    if (fresh.isNotEmpty) return fresh;
+    return uri.queryParameters['code'] ?? '';
   }
 
   static Future<void> _completeNaver(Uri uri) async {
@@ -229,11 +249,15 @@ class BrowserSocialAuth {
 
   static ({String code, String state})? parseNaverCallback(Uri uri) {
     if (!isNaverCallback(uri)) return null;
-    final code = uri.queryParameters['code'] ?? '';
+    final code = _codeOf(uri);
     final state = uri.queryParameters['state'] ?? '';
     if (code.isEmpty || state.isEmpty) return null;
     return (code: code, state: state);
   }
+
+  /// 브릿지가 새 앱임을 알아볼 수 있게 표식을 붙인 CSRF state.
+  @visibleForTesting
+  static String newState() => '$naverStateMarker${_randomState()}';
 
   static String _randomState([int length = 24]) {
     const charset =

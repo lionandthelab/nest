@@ -17,15 +17,30 @@ export function sanitize(value: string): string {
 
 export const APP_CALLBACK = "nestnaverlogin://callback";
 
+/// 새 앱이 state 앞에 붙이는 표식.
+///
+/// supabase_flutter 는 PKCE 모드에서 `?code=` 가 붙은 **모든** 딥링크를 자기
+/// 콜백으로 착각한다(_isAuthCallbackDeeplink). 그래서 네이버 코드는 `code` 가
+/// 아닌 이름으로 넘겨야 한다.
+///
+/// 이름을 한 번에 바꾸면 이미 설치된 앱이 `code` 를 못 찾아 네이버 로그인이
+/// 즉시 죽는다. 표식이 있는 요청(=새 앱)에만 새 이름을 쓰고, 없으면 예전대로
+/// 둔다. 새 앱이 충분히 퍼지면 이 분기를 지운다.
+///
+/// sanitize 를 통과해야 하므로 영숫자만 쓴다.
+export const APP_STATE_MARKER = "nestv2";
+
 /// 요청 URL 의 code/state/error 를 앱 스킴으로 넘기는 302 응답을 만든다.
 export function buildCallbackRedirect(url: URL): Response {
   const code = sanitize(url.searchParams.get("code") ?? "");
   const state = sanitize(url.searchParams.get("state") ?? "");
   const error = sanitize(url.searchParams.get("error") ?? "");
 
+  const codeParam = state.startsWith(APP_STATE_MARKER) ? "naver_code" : "code";
+
   const dest = new URL(APP_CALLBACK);
   if (error) dest.searchParams.set("error", error);
-  if (code) dest.searchParams.set("code", code);
+  if (code) dest.searchParams.set(codeParam, code);
   if (state) dest.searchParams.set("state", state);
 
   return new Response(null, {

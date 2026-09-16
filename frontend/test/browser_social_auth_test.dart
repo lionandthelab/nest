@@ -130,4 +130,35 @@ void main() {
       }
     });
   });
+
+  // supabase_flutter 는 PKCE 모드에서 `?code=` 가 붙은 모든 딥링크를 자기
+  // 콜백으로 착각해 코드 교환을 시도한다. 네이버 코드가 Supabase 로 날아가고,
+  // 직전 구글/카카오 시도가 남긴 code_verifier 가 있으면 실제로 교환된다.
+  // 그래서 네이버는 `code` 가 아닌 이름으로 받는다.
+  group('네이버 콜백 파라미터 이름', () {
+    test('새 이름(naver_code)을 읽는다', () {
+      final uri = Uri.parse(
+        'nestnaverlogin://callback?naver_code=abc123&state=nestv2xyz',
+      );
+      expect(BrowserSocialAuth.isNaverCallback(uri), isTrue);
+      final parsed = BrowserSocialAuth.parseNaverCallback(uri);
+      expect(parsed?.code, 'abc123');
+      expect(parsed?.state, 'nestv2xyz');
+    });
+
+    test('예전 이름(code)도 계속 읽는다 (구버전 브릿지 호환)', () {
+      final uri = Uri.parse(
+        'nestnaverlogin://callback?code=abc123&state=old1',
+      );
+      expect(BrowserSocialAuth.isNaverCallback(uri), isTrue);
+      expect(BrowserSocialAuth.parseNaverCallback(uri)?.code, 'abc123');
+    });
+
+    test('새로 만드는 state 에는 브릿지가 읽을 표식이 붙는다', () {
+      final state = BrowserSocialAuth.newState();
+      expect(state, startsWith('nestv2'));
+      expect(state.length, greaterThan('nestv2'.length));
+      expect(BrowserSocialAuth.newState(), isNot(state), reason: '매번 달라야 한다');
+    });
+  });
 }
