@@ -2455,11 +2455,13 @@ class NotificationPrefs {
       'notif_onboarded_at': notifOnboardedAt!.toUtc().toIso8601String(),
   };
 
-  /// 아침 알림 시각을 'HH:MM' 으로. 화면에 그대로 쓴다.
+  /// 아침 알림 시각을 'H:MM' 으로. 화면에 그대로 쓴다.
+  ///
+  /// 앞자리 0 을 붙이지 않는 이유: 이 값이 칩 4개로 늘어서는데, 한 글자가
+  /// 늘면 좁은 폰에서 한 줄에 못 들어가 3+1 로 접힌다.
   String get morningDigestLabel {
-    final hour = (morningDigestMin ~/ 60).toString().padLeft(2, '0');
     final minute = (morningDigestMin % 60).toString().padLeft(2, '0');
-    return '$hour:$minute';
+    return '${morningDigestMin ~/ 60}:$minute';
   }
 
   /// 조용한 시간이 설정돼 있는지.

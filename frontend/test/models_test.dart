@@ -833,13 +833,13 @@ void main() {
     test('아침 알림 시각 기본값은 07:30 (지금 동작과 같다)', () {
       final prefs = NotificationPrefs.fromMap({});
       expect(prefs.morningDigestMin, 7 * 60 + 30);
-      expect(prefs.morningDigestLabel, '07:30');
+      expect(prefs.morningDigestLabel, '7:30');
     });
 
     test('아침 알림 시각을 읽고 쓴다', () {
       final prefs = NotificationPrefs.fromMap({'morning_digest_min': 390});
       expect(prefs.morningDigestMin, 390);
-      expect(prefs.morningDigestLabel, '06:30');
+      expect(prefs.morningDigestLabel, '6:30');
       expect(prefs.toMap()['morning_digest_min'], 390);
     });
 

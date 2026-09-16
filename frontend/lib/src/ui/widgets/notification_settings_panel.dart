@@ -288,18 +288,31 @@ class _ChipRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Wrap 으로 두면 칩 폭이 글자에 따라 들쭉날쭉해서, 4개가 가용 폭을 아슬아슬
+    // 넘길 때 3+1 로 접힌다(실측 385.2 vs 385.0). 폭을 똑같이 나눠 가지면
+    // 폰 크기와 글꼴에 상관없이 한 줄로 유지된다.
     return Padding(
-      padding: const EdgeInsets.only(left: 56, right: 4),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      padding: const EdgeInsets.only(left: 4, right: 4),
+      child: Row(
         children: [
-          for (final entry in labels.entries)
-            ChoiceChip(
-              label: Text(entry.value),
-              selected: entry.key == value,
-              onSelected: enabled ? (_) => onSelected(entry.key) : null,
+          for (final entry in labels.entries) ...[
+            if (entry.key != labels.keys.first) const SizedBox(width: 6),
+            Expanded(
+              child: ChoiceChip(
+                label: SizedBox(
+                  width: double.infinity,
+                  child: Text(entry.value, textAlign: TextAlign.center),
+                ),
+                selected: entry.key == value,
+                onSelected: enabled ? (_) => onSelected(entry.key) : null,
+                // 선택 표시를 체크마크로 하면 그 칩만 넓어진다. 색으로 구분한다.
+                showCheckmark: false,
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+              ),
             ),
+          ],
         ],
       ),
     );

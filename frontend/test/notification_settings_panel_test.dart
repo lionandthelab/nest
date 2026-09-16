@@ -70,19 +70,40 @@ void main() {
     }
   });
 
+  // 4개가 3+1 로 접히면 어정쩡하게 한 줄을 더 먹고, 온보딩에서는 그만큼 아래
+  // 항목이 화면 밖으로 밀린다. 좁은 폰에서도 한 줄에 들어가야 한다.
+  for (final width in const [360.0, 393.0]) {
+    testWidgets('${width.toInt()}폭에서 아침 시각 칩이 한 줄에 놓인다', (tester) async {
+      await _pump(tester, size: Size(width, 900));
+
+      final tops = NotificationPrefs.morningMinChoices
+          .map(
+            (at) => tester
+                .getTopLeft(
+                  find.text(
+                    NotificationPrefs(morningDigestMin: at).morningDigestLabel,
+                  ),
+                )
+                .dy,
+          )
+          .toSet();
+      expect(tops, hasLength(1), reason: '칩이 여러 줄로 접혔다');
+    });
+  }
+
   testWidgets('아침 알림을 끄면 시각 선택은 감춘다', (tester) async {
     await _pump(
       tester,
       prefs: const NotificationPrefs(morningDigestEnabled: false),
     );
-    expect(find.text('07:30'), findsNothing);
+    expect(find.text('7:30'), findsNothing);
   });
 
   testWidgets('아침 시각을 고르면 그 값으로 콜백이 온다', (tester) async {
     NotificationPrefs? saved;
     await _pump(tester, onChanged: (value) => saved = value);
 
-    await tester.tap(find.text('06:30'));
+    await tester.tap(find.text('6:30'));
     await tester.pumpAndSettle();
 
     expect(saved, isNotNull);
@@ -95,7 +116,7 @@ void main() {
       prefs: const NotificationPrefs(morningDigestMin: 480),
     );
     // "매일 아침 7시 30분" 처럼 굳어 있으면 고른 값과 어긋나 보인다.
-    expect(find.textContaining('08:00'), findsWidgets);
+    expect(find.textContaining('8:00'), findsWidgets);
   });
 
   testWidgets('수업 전 알림을 켜면 리드타임을 고를 수 있다', (tester) async {
