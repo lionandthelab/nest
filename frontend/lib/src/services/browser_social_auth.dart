@@ -28,6 +28,18 @@ class BrowserSocialAuth {
   static AppLinks? _links;
   static void Function(String message)? onMessage;
 
+  /// 이미 처리한 콜백 코드. app_links 는 콜드 스타트에서 초기 링크를
+  /// `getInitialLink()` 와 `uriLinkStream` 양쪽으로 흘린다. 같은 콜백을 두 번
+  /// 처리하면 두 번째는 state 가 이미 소비돼, 로그인에 성공하고도 사용자에게는
+  /// "상태 검증에 실패했습니다" 가 뜬다.
+  static final Set<String> _handledCodes = <String>{};
+
+  @visibleForTesting
+  static void resetForTest() {
+    _handledCodes.clear();
+    onMessage = null;
+  }
+
   /// 앱 시작 시 한 번. 네이버 브라우저 복귀(콜드 스타트 포함)를 받는다.
   static Future<void> bindDeepLinks() async {
     if (kIsWeb) return;
@@ -130,6 +142,8 @@ class BrowserSocialAuth {
       return;
     }
     if (!isNaverCallback(uri)) return;
+    // 같은 코드는 한 번만 — 중복 전달이 성공한 로그인을 실패로 덮지 않도록.
+    if (!_handledCodes.add(uri.queryParameters['code'] ?? '')) return;
     try {
       await _completeNaver(uri);
     } catch (error) {
