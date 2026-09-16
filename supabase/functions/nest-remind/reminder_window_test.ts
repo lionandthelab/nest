@@ -10,7 +10,12 @@ import {
   DEFAULT_LEAD,
   LEAD_CHOICES,
   normalizeLead,
+  DEFAULT_MORNING_MIN,
   inQuietHours,
+  MORNING_CHOICES,
+  MORNING_WINDOW,
+  normalizeMorningMin,
+  shouldSendMorningDigest,
   SEND_WINDOW,
   shouldSendClassReminder,
 } from "./reminder_window.ts";
@@ -56,6 +61,48 @@ Deno.test("서로 다른 리드타임이 같은 수업에서 각자 제 때 걸�
   assertEquals(shouldSendClassReminder(60, 30), false);
   assertEquals(shouldSendClassReminder(30, 30), true);
   assertEquals(shouldSendClassReminder(30, 60), false);
+});
+
+Deno.test("아침 알림: 고른 시각에 딱 맞으면 보낸다", () => {
+  for (const at of MORNING_CHOICES) {
+    assertEquals(shouldSendMorningDigest(at, at), true, `at=${at}`);
+  }
+});
+
+Deno.test("아침 알림: 고른 시각보다 이르면 보내지 않는다", () => {
+  const seven = 7 * 60;
+  assertEquals(shouldSendMorningDigest(seven - 1, seven), false);
+  assertEquals(shouldSendMorningDigest(6 * 60, seven), false);
+});
+
+Deno.test("아침 알림: 잡이 한 번 밀려도 다음 회차가 건진다", () => {
+  // cron 은 30분마다 돈다. 한 번 걸렀을 때 다음 회차(+30분)가 창 안에 들어와야
+  // 그 날 아침을 통째로 놓치지 않는다. 중복은 claimSend 가 막는다.
+  const seven = 7 * 60;
+  assertEquals(shouldSendMorningDigest(seven + 30, seven), true);
+});
+
+Deno.test("아침 알림: 창을 지나면 보내지 않는다", () => {
+  // 오후에 "오늘 수업 3개"가 오면 안 된다.
+  const seven = 7 * 60;
+  assertEquals(shouldSendMorningDigest(seven + MORNING_WINDOW, seven), false);
+  assertEquals(shouldSendMorningDigest(12 * 60, seven), false);
+});
+
+Deno.test("아침 알림: 서로 다른 시각을 고른 사람이 각자 제 때 받는다", () => {
+  const sixThirty = 6 * 60 + 30;
+  const eight = 8 * 60;
+  assertEquals(shouldSendMorningDigest(sixThirty, sixThirty), true);
+  assertEquals(shouldSendMorningDigest(sixThirty, eight), false);
+  assertEquals(shouldSendMorningDigest(eight, eight), true);
+});
+
+Deno.test("normalizeMorningMin 은 허용 목록 밖 값을 기본값으로 되돌린다", () => {
+  assertEquals(normalizeMorningMin(999), DEFAULT_MORNING_MIN);
+  assertEquals(normalizeMorningMin(null), DEFAULT_MORNING_MIN);
+  assertEquals(normalizeMorningMin("420"), 420);
+  // 기본값은 지금 동작(07:30)과 같아야 한다.
+  assertEquals(DEFAULT_MORNING_MIN, 7 * 60 + 30);
 });
 
 Deno.test("조용한 시간: 자정을 넘는 구간도 판정한다", () => {

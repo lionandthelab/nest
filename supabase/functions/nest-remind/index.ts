@@ -10,10 +10,13 @@ import { createAdminClient, json } from "../_shared/supabase.ts";
 import { sendFcmToTokens } from "../_shared/fcm.ts";
 import {
   DEFAULT_LEAD,
+  DEFAULT_MORNING_MIN,
   inQuietHours,
   LEAD_CHOICES,
   normalizeLead,
+  normalizeMorningMin,
   SEND_WINDOW,
+  shouldSendMorningDigest,
   shouldSendClassReminder,
 } from "./reminder_window.ts";
 
@@ -43,6 +46,8 @@ interface Prefs {
   class_reminder_enabled: boolean;
   /** 수업 시작 몇 분 전에 알릴지. 10/20/30/60 만 저장된다. */
   class_reminder_lead_min: number;
+  /** 아침 알림을 보낼 시각(자정부터 분, KST). */
+  morning_digest_min: number;
   quiet_hours_start: string | null;
   quiet_hours_end: string | null;
 }
@@ -281,7 +286,7 @@ async function loadPrefs(admin: Admin, userIds: string[]): Promise<Map<string, P
   const { data } = await admin
     .from("notification_prefs")
     .select(
-      "user_id, push_enabled, morning_digest_enabled, class_reminder_enabled, class_reminder_lead_min, quiet_hours_start, quiet_hours_end",
+      "user_id, push_enabled, morning_digest_enabled, class_reminder_enabled, class_reminder_lead_min, morning_digest_min, quiet_hours_start, quiet_hours_end",
     )
     .in("user_id", userIds);
   for (const row of data ?? []) {
@@ -290,6 +295,7 @@ async function loadPrefs(admin: Admin, userIds: string[]): Promise<Map<string, P
       morning_digest_enabled: row.morning_digest_enabled !== false,
       class_reminder_enabled: row.class_reminder_enabled !== false,
       class_reminder_lead_min: normalizeLead(row.class_reminder_lead_min),
+      morning_digest_min: normalizeMorningMin(row.morning_digest_min),
       quiet_hours_start: (row.quiet_hours_start as string | null) ?? null,
       quiet_hours_end: (row.quiet_hours_end as string | null) ?? null,
     });
@@ -387,6 +393,12 @@ async function sendMorningDigest(
     const pref = prefs.get(userId);
     if (pref && (!pref.push_enabled || !pref.morning_digest_enabled)) {
       skipped += 1;
+      continue;
+    }
+    // 잡은 아침 구간 내내 30분마다 깨어 있고, 보낼지는 여기서 사람별로 정한다.
+    // 고른 시각보다 이르게는 보내지 않는다.
+    const digestAt = pref ? pref.morning_digest_min : DEFAULT_MORNING_MIN;
+    if (!shouldSendMorningDigest(seoul.minutes, digestAt)) {
       continue;
     }
     if (pref && inQuietHours(pref, seoul.minutes)) {

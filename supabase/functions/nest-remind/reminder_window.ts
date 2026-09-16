@@ -67,3 +67,52 @@ export function inQuietHours(prefs: QuietHours, minutes: number): boolean {
   if (start < end) return minutes >= start && minutes < end;
   return minutes >= start || minutes < end;
 }
+
+// ── 아침 오늘 일정 ──────────────────────────────────────────────────────
+
+/**
+ * 아침 알림으로 고를 수 있는 시각(자정부터 분).
+ * 06:30 / 07:00 / 07:30 / 08:00. DB check 제약과 같은 목록이다.
+ *
+ * 자유 입력을 안 받는 이유는 리드타임과 같다. 발송 잡이 30분 격자로 돌기
+ * 때문에, 격자에 없는 시각은 제 때 걸리지 않는다.
+ */
+export const MORNING_CHOICES = [
+  6 * 60 + 30,
+  7 * 60,
+  7 * 60 + 30,
+  8 * 60,
+];
+
+/** 지금 동작과 같은 07:30. 이미 쓰고 있는 사람은 아무것도 바뀌지 않는다. */
+export const DEFAULT_MORNING_MIN = 7 * 60 + 30;
+
+/**
+ * 아침 잡이 한 번에 훑는 폭(분).
+ *
+ * cron 주기(30분)보다 커야 한 번 걸렀을 때 다음 회차가 건진다. 그렇지 않으면
+ * 그 날 아침을 통째로 놓친다. 창이 겹쳐 두 번 걸려도 claimSend 가 막는다.
+ */
+export const MORNING_WINDOW = 35;
+
+export function normalizeMorningMin(value: unknown): number {
+  const at = typeof value === "number" ? value : Number(value);
+  return MORNING_CHOICES.includes(at) ? at : DEFAULT_MORNING_MIN;
+}
+
+/**
+ * 지금 이 사람에게 아침 알림을 보낼 때인지.
+ *
+ * [nowMinutes] 서울 기준 지금 시각(자정부터 분).
+ * [digestMinutes] 이 사람이 고른 시각.
+ *
+ * 고른 시각보다 이르게는 보내지 않는다. 대신 잡이 밀렸을 때를 위해 한 창만큼
+ * 늦게까지 허용한다 — 아침 알림은 조금 늦더라도 오는 편이 안 오는 것보다 낫다.
+ */
+export function shouldSendMorningDigest(
+  nowMinutes: number,
+  digestMinutes: number,
+): boolean {
+  const delta = nowMinutes - digestMinutes;
+  return delta >= 0 && delta < MORNING_WINDOW;
+}
