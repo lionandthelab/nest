@@ -830,6 +830,40 @@ void main() {
       expect(prefs.toMap()['class_reminder_lead_min'], 60);
     });
 
+    test('아침 알림 시각 기본값은 07:30 (지금 동작과 같다)', () {
+      final prefs = NotificationPrefs.fromMap({});
+      expect(prefs.morningDigestMin, 7 * 60 + 30);
+      expect(prefs.morningDigestLabel, '07:30');
+    });
+
+    test('아침 알림 시각을 읽고 쓴다', () {
+      final prefs = NotificationPrefs.fromMap({'morning_digest_min': 390});
+      expect(prefs.morningDigestMin, 390);
+      expect(prefs.morningDigestLabel, '06:30');
+      expect(prefs.toMap()['morning_digest_min'], 390);
+    });
+
+    test('허용되지 않은 아침 시각은 기본값으로 되돌린다', () {
+      // 서버 check 제약(390/420/450/480)과 어긋나면 저장 때 튕긴다.
+      expect(
+        NotificationPrefs.fromMap({'morning_digest_min': 400}).morningDigestMin,
+        7 * 60 + 30,
+      );
+    });
+
+    test('고를 수 있는 아침 시각은 30분 격자다', () {
+      // 발송 잡이 30분 간격으로 돌아서, 격자 밖 시각은 제 때 걸리지 않는다.
+      expect(NotificationPrefs.morningMinChoices, [390, 420, 450, 480]);
+      for (final at in NotificationPrefs.morningMinChoices) {
+        expect(at % 30, 0);
+      }
+    });
+
+    test('copyWith 로 아침 시각을 바꿀 수 있다', () {
+      const prefs = NotificationPrefs();
+      expect(prefs.copyWith(morningDigestMin: 480).morningDigestMin, 480);
+    });
+
     test('copyWith 는 조용한 시간과 리드타임도 바꿀 수 있다', () {
       const prefs = NotificationPrefs();
       final quiet = prefs.copyWith(

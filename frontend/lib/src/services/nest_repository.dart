@@ -3930,6 +3930,7 @@ Map<String, dynamic> legacyNotificationPrefsPayload(
 ) {
   return {...payload}
     ..remove('class_reminder_lead_min')
+    ..remove('morning_digest_min')
     ..remove('notif_onboarded_at');
 }
 

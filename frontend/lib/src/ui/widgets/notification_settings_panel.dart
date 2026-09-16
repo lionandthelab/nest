@@ -61,15 +61,27 @@ class NotificationSettingsPanel extends StatelessWidget {
         _Tile(
           icon: Icons.wb_sunny_outlined,
           title: '아침 오늘 일정',
-          subtitle: '매일 아침 7시 30분',
+          subtitle: '매일 아침 ${prefs.morningDigestLabel}',
           value: prefs.morningDigestEnabled,
           onChanged: subEnabled
               ? (value) =>
                     onChanged(prefs.copyWith(morningDigestEnabled: value))
               : null,
         ),
-        // 어떤 알림이 오는지 보여줘야 켤 이유가 생긴다.
-        const _Preview('오늘 수업 3개 · 첫 수업 9:00 국어'),
+        if (prefs.morningDigestEnabled) ...[
+          // 어떤 알림이 오는지 보여줘야 켤 이유가 생긴다.
+          const _Preview('오늘 수업 3개 · 첫 수업 9:00 국어'),
+          const SizedBox(height: 6),
+          _ChipRow(
+            labels: {
+              for (final at in NotificationPrefs.morningMinChoices)
+                at: NotificationPrefs(morningDigestMin: at).morningDigestLabel,
+            },
+            value: prefs.morningDigestMin,
+            enabled: subEnabled,
+            onSelected: (at) => onChanged(prefs.copyWith(morningDigestMin: at)),
+          ),
+        ],
 
         const SizedBox(height: 8),
         _Tile(
@@ -85,7 +97,11 @@ class NotificationSettingsPanel extends StatelessWidget {
         if (prefs.classReminderEnabled) ...[
           _Preview('국어 ${prefs.classReminderLeadMin}분 전 · 3층 사랑방'),
           const SizedBox(height: 6),
-          _LeadPicker(
+          _ChipRow(
+            labels: {
+              for (final lead in NotificationPrefs.leadMinChoices)
+                lead: '$lead분',
+            },
             value: prefs.classReminderLeadMin,
             enabled: subEnabled,
             onSelected: (lead) =>
@@ -255,14 +271,17 @@ class _Notice extends StatelessWidget {
   }
 }
 
-/// 수업 전 몇 분에 알릴지 고르는 칩 줄.
-class _LeadPicker extends StatelessWidget {
-  const _LeadPicker({
+/// 값 하나를 고르는 칩 줄. 아침 시각과 수업 전 분수가 같이 쓴다.
+class _ChipRow extends StatelessWidget {
+  const _ChipRow({
+    required this.labels,
     required this.value,
     required this.enabled,
     required this.onSelected,
   });
 
+  /// 값 → 화면에 보일 라벨. 순서가 그대로 칩 순서가 된다.
+  final Map<int, String> labels;
   final int value;
   final bool enabled;
   final ValueChanged<int> onSelected;
@@ -275,11 +294,11 @@ class _LeadPicker extends StatelessWidget {
         spacing: 8,
         runSpacing: 8,
         children: [
-          for (final lead in NotificationPrefs.leadMinChoices)
+          for (final entry in labels.entries)
             ChoiceChip(
-              label: Text('$lead분'),
-              selected: lead == value,
-              onSelected: enabled ? (_) => onSelected(lead) : null,
+              label: Text(entry.value),
+              selected: entry.key == value,
+              onSelected: enabled ? (_) => onSelected(entry.key) : null,
             ),
         ],
       ),

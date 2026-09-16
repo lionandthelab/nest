@@ -60,6 +60,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('아침 알림을 켜면 시각을 고를 수 있다', (tester) async {
+    await _pump(tester);
+    for (final at in NotificationPrefs.morningMinChoices) {
+      final label = NotificationPrefs(
+        morningDigestMin: at,
+      ).morningDigestLabel;
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+  });
+
+  testWidgets('아침 알림을 끄면 시각 선택은 감춘다', (tester) async {
+    await _pump(
+      tester,
+      prefs: const NotificationPrefs(morningDigestEnabled: false),
+    );
+    expect(find.text('07:30'), findsNothing);
+  });
+
+  testWidgets('아침 시각을 고르면 그 값으로 콜백이 온다', (tester) async {
+    NotificationPrefs? saved;
+    await _pump(tester, onChanged: (value) => saved = value);
+
+    await tester.tap(find.text('06:30'));
+    await tester.pumpAndSettle();
+
+    expect(saved, isNotNull);
+    expect(saved!.morningDigestMin, 390);
+  });
+
+  testWidgets('아침 알림 설명이 고른 시각을 따라간다', (tester) async {
+    await _pump(
+      tester,
+      prefs: const NotificationPrefs(morningDigestMin: 480),
+    );
+    // "매일 아침 7시 30분" 처럼 굳어 있으면 고른 값과 어긋나 보인다.
+    expect(find.textContaining('08:00'), findsWidgets);
+  });
+
   testWidgets('수업 전 알림을 켜면 리드타임을 고를 수 있다', (tester) async {
     await _pump(tester);
     for (final lead in NotificationPrefs.leadMinChoices) {

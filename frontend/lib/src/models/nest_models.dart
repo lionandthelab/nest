@@ -2377,6 +2377,7 @@ class NotificationPrefs {
     this.morningDigestEnabled = true,
     this.classReminderEnabled = true,
     this.classReminderLeadMin = defaultLeadMin,
+    this.morningDigestMin = defaultMorningMin,
     this.quietHoursStart,
     this.quietHoursEnd,
     this.notifOnboardedAt,
@@ -2390,12 +2391,20 @@ class NotificationPrefs {
   static const List<int> leadMinChoices = [10, 20, 30, 60];
   static const int defaultLeadMin = 30;
 
+  /// 아침 알림으로 고를 수 있는 시각(자정부터 분).
+  /// 06:30 / 07:00 / 07:30 / 08:00 — 발송 잡이 30분 격자로 돌기 때문이다.
+  static const List<int> morningMinChoices = [390, 420, 450, 480];
+  static const int defaultMorningMin = 450; // 07:30, 지금 동작과 같다
+
   final bool pushEnabled;
   final bool morningDigestEnabled;
   final bool classReminderEnabled;
 
   /// 수업 시작 몇 분 전에 알릴지.
   final int classReminderLeadMin;
+
+  /// 아침 알림을 받을 시각(자정부터 분).
+  final int morningDigestMin;
 
   final String? quietHoursStart;
   final String? quietHoursEnd;
@@ -2408,6 +2417,10 @@ class NotificationPrefs {
     final lead = rawLead is int
         ? rawLead
         : int.tryParse('${rawLead ?? ''}') ?? defaultLeadMin;
+    final rawMorning = map['morning_digest_min'];
+    final morning = rawMorning is int
+        ? rawMorning
+        : int.tryParse('${rawMorning ?? ''}') ?? defaultMorningMin;
     return NotificationPrefs(
       pushEnabled: parseBool(map['push_enabled'], fallback: true),
       morningDigestEnabled: parseBool(
@@ -2421,6 +2434,9 @@ class NotificationPrefs {
       classReminderLeadMin: leadMinChoices.contains(lead)
           ? lead
           : defaultLeadMin,
+      morningDigestMin: morningMinChoices.contains(morning)
+          ? morning
+          : defaultMorningMin,
       quietHoursStart: map['quiet_hours_start'] as String?,
       quietHoursEnd: map['quiet_hours_end'] as String?,
       notifOnboardedAt: parseDateTime(map['notif_onboarded_at']),
@@ -2432,11 +2448,19 @@ class NotificationPrefs {
     'morning_digest_enabled': morningDigestEnabled,
     'class_reminder_enabled': classReminderEnabled,
     'class_reminder_lead_min': classReminderLeadMin,
+    'morning_digest_min': morningDigestMin,
     'quiet_hours_start': quietHoursStart,
     'quiet_hours_end': quietHoursEnd,
     if (notifOnboardedAt != null)
       'notif_onboarded_at': notifOnboardedAt!.toUtc().toIso8601String(),
   };
+
+  /// 아침 알림 시각을 'HH:MM' 으로. 화면에 그대로 쓴다.
+  String get morningDigestLabel {
+    final hour = (morningDigestMin ~/ 60).toString().padLeft(2, '0');
+    final minute = (morningDigestMin % 60).toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
 
   /// 조용한 시간이 설정돼 있는지.
   bool get hasQuietHours =>
@@ -2465,6 +2489,7 @@ class NotificationPrefs {
     bool? morningDigestEnabled,
     bool? classReminderEnabled,
     int? classReminderLeadMin,
+    int? morningDigestMin,
     String? quietHoursStart,
     String? quietHoursEnd,
     DateTime? notifOnboardedAt,
@@ -2474,6 +2499,7 @@ class NotificationPrefs {
       morningDigestEnabled: morningDigestEnabled ?? this.morningDigestEnabled,
       classReminderEnabled: classReminderEnabled ?? this.classReminderEnabled,
       classReminderLeadMin: classReminderLeadMin ?? this.classReminderLeadMin,
+      morningDigestMin: morningDigestMin ?? this.morningDigestMin,
       quietHoursStart: quietHoursStart ?? this.quietHoursStart,
       quietHoursEnd: quietHoursEnd ?? this.quietHoursEnd,
       notifOnboardedAt: notifOnboardedAt ?? this.notifOnboardedAt,
@@ -2488,6 +2514,7 @@ class NotificationPrefs {
       morningDigestEnabled: morningDigestEnabled,
       classReminderEnabled: classReminderEnabled,
       classReminderLeadMin: classReminderLeadMin,
+      morningDigestMin: morningDigestMin,
       notifOnboardedAt: notifOnboardedAt,
     );
   }
