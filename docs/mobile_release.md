@@ -1,6 +1,6 @@
 # Mobile Release Checklist (Android/iOS)
 
-Last updated: 2026-09-08
+Last updated: 2026-09-17
 
 ## 0) Fastlane 배포 (권장)
 
@@ -216,6 +216,12 @@ version: MAJOR.MINOR.PATCH+BUILD
 | 2026-09-08 | 2.0.16 | 18 | Android | Internal | 모바일 셸·푸시 리마인더. 프로덕션은 내부테스트 확인 후 promote |
 | 2026-09-09 | 2.0.16 | 18 | Android | Closed (alpha) | 내부 18을 비공개 트랙으로 승격. 프로덕션 12명/14일 조건용 |
 | 2026-09-08 | 2.0.16 | 18 | iOS | App Store 심사 제출 | 승인 시 자동 출시. `whatsNew` 필수라 release_notes 업로드 후 submit |
+| 2026-09-12 | 2.0.17 | 19 | Android | Internal | 우리집 홈스쿨 온보딩·개인 일정·학기 팩 로드 |
+| 2026-09-12 | 2.0.17 | 19 | Android | Closed (alpha) | 내부 19를 비공개 트랙으로 승격 |
+| 2026-09-12 | 2.0.17 | 19 | iOS | App Store 심사 제출 | 승인 시 자동 출시. objective_c.framework 시뮬레이터 태그/MinimumOSVersion 패치 후 제출 |
+| 2026-09-17 | 2.0.18 | 20 | Android | Internal | 소셜 로그인 복귀 수정(카카오 서버 리다이렉트·네이버 브릿지 302)·브랜드 로고 버튼 |
+| 2026-09-17 | 2.0.18 | 20 | Android | Closed (alpha) | 내부 20을 비공개 트랙으로 승격. 프로덕션 조건(테스터 12명/14일) 미충족으로 프로덕션 보류 |
+| 2026-09-17 | 2.0.18 | 20 | iOS | App Store 심사 제출 | 승인 시 자동 출시. 소셜 로그인 복귀 수정 + 브랜드 로고 버튼 |
 
 ## 7) Signing Configuration Reminders
 

@@ -23,6 +23,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 스토어 상태 조회 (라이브 버전 / TestFlight 최신 빌드)
 
+### ios repair_archive
+
+```sh
+[bundle exec] fastlane ios repair_archive
+```
+
+이미 있는 xcarchive의 objective_c 시뮬레이터 태그를 고치고 IPA를 다시 보낸다
+
 ### ios build
 
 ```sh
@@ -38,6 +46,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 ```
 
 메타데이터/스크린샷만 업로드 (바이너리·심사 제출 없음)
+
+### ios release_upload
+
+```sh
+[bundle exec] fastlane ios release_upload
+```
+
+이미 빌드된 IPA를 프로덕션 심사 제출 (options: ipa). 빌드는 다시 하지 않는다
 
 ### ios upload
 

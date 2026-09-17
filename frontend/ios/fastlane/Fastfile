@@ -21,6 +21,13 @@ default_platform(:ios)
 # dotenv 로딩이 인코딩 확정보다 늦어 소용없다). 여기서 UTF-8을 강제해 deliver의
 # 메타데이터 파일 읽기가 항상 UTF-8이 되게 한다.
 Encoding.default_external = Encoding::UTF_8 if Encoding.default_external != Encoding::UTF_8
+require "fileutils"
+require "shellwords"
+
+# Xcode 26 altool은 같은 prefix의 다른 앱으로 업로드가 새는 버그가 있다.
+# Nest의 App Store Connect 숫자 ID를 명시하고, 가능하면 레거시 uploader를 쓴다.
+ENV["DELIVER_ALTOOL_ADDITIONAL_UPLOAD_PARAMETERS"] ||=
+  "--apple-id 6760330123 --use-old-altool --bundle-id com.lionandthelab.nest"
 
 FLUTTER_ROOT = File.expand_path("../..", __dir__)
 BUNDLE_ID = "com.lionandthelab.nest"
@@ -95,10 +102,73 @@ def flutter_build_ipa(api_key)
        "flutter", "build", "ipa", "--release",
        "--export-options-plist=#{EXPORT_OPTIONS}")
   end
+  archive = File.join(FLUTTER_ROOT, "build", "ios", "archive", "Runner.xcarchive")
+  if File.directory?(archive)
+    # path_provider_foundation 2.6+ 가 넣는 objective_c native asset이
+    # 기기 아카이브에서도 LC_BUILD_VERSION=IOSSIMULATOR로 남는 경우가 있다.
+    # Apple 91169로 거절되므로 xcarchive에서 고친 뒤 재수출(재서명)한다.
+    patched = patch_objective_c_framework!(archive)
+    reexport_ipa!(archive) if patched
+  end
+  latest_ipa
+end
+
+def latest_ipa
   ipa = Dir.glob(File.join(FLUTTER_ROOT, "build", "ios", "ipa", "*.ipa"))
            .max_by { |f| File.mtime(f) }
   UI.user_error!("build/ios/ipa/ 아래에 IPA가 생성되지 않았습니다") unless ipa
   ipa
+end
+
+def patch_objective_c_framework!(archive_path)
+  fw = File.join(
+    archive_path,
+    "Products/Applications/Runner.app/Frameworks/objective_c.framework/objective_c",
+  )
+  return false unless File.exist?(fw)
+
+  changed = false
+  archs = `lipo -archs #{fw.shellescape}`.to_s
+  if archs.include?("x86_64")
+    sh("lipo", "-remove", "x86_64", fw, "-output", "#{fw}.tmp")
+    File.rename("#{fw}.tmp", fw)
+    changed = true
+  end
+
+  show = `vtool -show-build #{fw.shellescape}`
+  if show.include?("IOSSIMULATOR") || !show.match?(/platform IOS\b/)
+    sdk = `xcrun --sdk iphoneos --show-sdk-version`.to_s.strip
+    sdk = "18.0" if sdk.empty?
+    sh("vtool", "-set-build-version", "ios", "15.0", sdk, "-replace",
+       "-output", "#{fw}.tmp", fw)
+    File.rename("#{fw}.tmp", fw)
+    changed = true
+    UI.success("objective_c.framework 플랫폼 태그를 iOS #{sdk}로 고쳤습니다")
+  end
+
+  plist = File.join(File.dirname(fw), "Info.plist")
+  if File.exist?(plist)
+    current = `/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' #{plist.shellescape}`.to_s.strip
+    if current != "15.0"
+      system("/usr/libexec/PlistBuddy", "-c", "Set :MinimumOSVersion 15.0", plist) ||
+        sh("/usr/libexec/PlistBuddy", "-c", "Add :MinimumOSVersion string 15.0", plist)
+      changed = true
+      UI.success("objective_c.framework MinimumOSVersion을 15.0으로 맞췄습니다 (was #{current})")
+    end
+  end
+  changed
+end
+
+def reexport_ipa!(archive_path)
+  ipa_dir = File.join(FLUTTER_ROOT, "build", "ios", "ipa")
+  FileUtils.mkdir_p(ipa_dir)
+  sh(
+    "xcodebuild",
+    "-exportArchive",
+    "-archivePath", archive_path,
+    "-exportPath", ipa_dir,
+    "-exportOptionsPlist", EXPORT_OPTIONS,
+  )
 end
 
 # 업로드 전에 pubspec 빌드 넘버가 TestFlight 최신보다 큰지 확인한다.
@@ -136,6 +206,16 @@ platform :ios do
     UI.important("pubspec: #{version}+#{build} | TestFlight 최신 빌드: #{tf} | App Store 라이브: #{live}")
   end
 
+  desc "이미 있는 xcarchive의 objective_c 시뮬레이터 태그를 고치고 IPA를 다시 보낸다"
+  lane :repair_archive do
+    archive = File.join(FLUTTER_ROOT, "build", "ios", "archive", "Runner.xcarchive")
+    UI.user_error!("xcarchive가 없습니다: #{archive}") unless File.directory?(archive)
+    patched = patch_objective_c_framework!(archive)
+    UI.important(patched ? "framework를 고쳤습니다. IPA를 다시 보냅니다." : "고칠 내용이 없습니다. IPA를 다시 보냅니다.")
+    reexport_ipa!(archive)
+    UI.success("재수출 완료: #{latest_ipa}")
+  end
+
   desc "서명된 릴리스 IPA 빌드만 (업로드 없음)"
   lane :build do
     ipa = flutter_build_ipa(asc_key)
@@ -154,6 +234,30 @@ platform :ios do
       force: true,
     )
     UI.success("메타데이터/스크린샷 업로드 완료")
+  end
+
+  desc "이미 빌드된 IPA를 프로덕션 심사 제출 (options: ipa). 빌드는 다시 하지 않는다"
+  lane :release_upload do |options|
+    api_key = asc_key
+    ipa = options[:ipa] || latest_ipa
+    version, build = pubspec_version
+    upload_to_app_store(
+      api_key: api_key,
+      ipa: ipa,
+      app_version: version,
+      submit_for_review: true,
+      automatic_release: true,
+      skip_metadata: false,
+      skip_screenshots: true,
+      precheck_include_in_app_purchases: false,
+      run_precheck_before_submit: false,
+      force: true,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false,
+      },
+    )
+    UI.success("프로덕션 심사 제출 완료: #{version} (#{build}) — 승인 시 자동 출시")
   end
 
   desc "이미 빌드된 IPA를 TestFlight에 업로드만 (options: ipa)"
