@@ -556,8 +556,8 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isLoadingChildClasses = true);
 
     try {
-      // Ensure courses & timeSlots are loaded (may be empty after view switch)
-      if (controller.courses.isEmpty || controller.timeSlots.isEmpty) {
+      if (!controller.hasTermSchedulePack &&
+          (controller.courses.isEmpty || controller.timeSlots.isEmpty)) {
         await controller.refreshAll();
         if (!isCurrent()) return;
       }
@@ -565,23 +565,20 @@ class _HomePageState extends State<HomePage> {
       final classGroups = controller.classGroupsForChild(childId).toList()
         ..sort((a, b) => a.name.compareTo(b.name));
 
-      final allAnnouncements = await controller
-          .fetchAnnouncementsForHomeschool();
+      var allAnnouncements = controller.allAnnouncements;
+      if (allAnnouncements.isEmpty) {
+        allAnnouncements = await controller.fetchAnnouncementsForHomeschool();
+      }
       final bundleMap = <String, ChildClassBundle>{};
 
       for (final classGroup in classGroups) {
         if (!isCurrent()) return;
-        final sessions = await controller.fetchSessionsForClassGroup(
-          classGroupId: classGroup.id,
-        );
+        final sessions = controller.sessionsInClassGroup(classGroup.id);
         final sessionIds = sessions
             .map((s) => s.id)
             .where((id) => id.isNotEmpty)
             .toList();
-        final assignments = await controller
-            .fetchSessionTeacherAssignmentsForSessions(
-              classSessionIds: sessionIds,
-            );
+        final assignments = controller.assignmentsForSessionIds(sessionIds);
         final classAnnouncements = allAnnouncements
             .where(
               (row) =>
@@ -1428,12 +1425,10 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          NestPressable(
-            child: IconButton(
-              tooltip: '알림',
-              visualDensity: VisualDensity.standard,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: '알림',
+            child: NestPressable(
               onPressed: () async {
                 controller.markInboxOpened();
                 unawaited(controller.loadNotificationInbox());
@@ -1443,36 +1438,50 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                   onOpenItem: widget.onOpenInboxItem,
                 );
               },
-              icon: Badge(
-                isLabelVisible: controller.inboxBadgeCount > 0,
-                label: Text(
-                  controller.inboxBadgeCount > 9
-                      ? '9+'
-                      : '${controller.inboxBadgeCount}',
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Badge(
+                    isLabelVisible: controller.inboxBadgeCount > 0,
+                    label: Text(
+                      controller.inboxBadgeCount > 9
+                          ? '9+'
+                          : '${controller.inboxBadgeCount}',
+                    ),
+                    child: const Icon(Icons.notifications_outlined),
+                  ),
                 ),
-                child: const Icon(Icons.notifications_outlined),
               ),
             ),
           ),
+          const SizedBox(width: 10),
           PopupMenuButton<String>(
             tooltip: displayName,
-            icon: CircleAvatar(
-              radius: 16,
-              backgroundColor: NestColors.dustyRose,
-              backgroundImage: controller.myAvatarUrl.isNotEmpty
-                  ? NetworkImage(controller.myAvatarUrl)
-                  : null,
-              child: controller.myAvatarUrl.isNotEmpty
-                  ? null
-                  : Text(
-                      displayName.isNotEmpty
-                          ? displayName[0].toUpperCase()
-                          : '?',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: NestColors.deepWood,
-                      ),
-                    ),
+            padding: EdgeInsets.zero,
+            icon: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: NestColors.dustyRose,
+                  backgroundImage: controller.myAvatarUrl.isNotEmpty
+                      ? NetworkImage(controller.myAvatarUrl)
+                      : null,
+                  child: controller.myAvatarUrl.isNotEmpty
+                      ? null
+                      : Text(
+                          displayName.isNotEmpty
+                              ? displayName[0].toUpperCase()
+                              : '?',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: NestColors.deepWood,
+                          ),
+                        ),
+                ),
+              ),
             ),
             onSelected: (value) async {
               if (value == 'settings') {

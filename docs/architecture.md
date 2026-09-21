@@ -620,6 +620,15 @@ Admin dashboard onboarding:
 - 마이그레이션 배포 전에도 삭제된 척하지 않는다 — 리포지토리가 `.select('id')`로 실제 삭제 행 수를 돌려받고, 0건이면 컨트롤러가 한국어 안내로 던진다.
 - `NestController.allAnnouncements` 추가 — 기존 `announcements`는 선택된 반으로 걸러진 목록(학부모·학생·교사 화면용)이라, 반을 골라둔 관리자가 다른 반 공지를 관리할 수 없었다.
 
+**공지 첨부파일 (2026-09)**
+
+- `announcement_attachments` 테이블(`20260920090000_announcement_attachments.sql`). 파일 자체는 갤러리와 같은 공개 `media` 스토리지 버킷의 `announcements/{homeschoolId}/{announcementId}/` 경로에 저장하고, 이 테이블은 경로·원본 파일명·MIME 타입·크기만 기록한다. 버킷 정책이 이미 인증된 사용자의 임의 경로 read/write/delete를 허용하므로 스토리지 정책은 추가하지 않았다.
+- RLS는 `announcements`와 같은 기준이다 — 조회는 그 공지가 속한 홈스쿨 구성원, 삽입/삭제는 그 공지의 작성자 본인 또는 ADMIN/STAFF(둘 다 `exists`로 부모 공지를 조인해 확인).
+- `NestController.loadAnnouncements()`가 공지 목록과 함께 첨부파일을 `announcement_id` 기준으로 한 번에 불러와 `announcementAttachmentsByAnnouncement`에 채운다. `attachmentsForAnnouncement(id)`로 조회한다.
+- `createAnnouncement`/`updateAnnouncement`는 `List<PendingMediaFile>` 파라미터(`attachments`/`newAttachments`)를 받아, 공지 행을 만들거나 수정한 **뒤** 같은 `_runBusy` 블록 안에서 업로드·삽입까지 마친다. 파일 선택 자체(`pickAnnouncementAttachments`)는 컨트롤러 상태를 바꾸지 않는 순수 호출이고, 고른 파일은 호출부(편집 시트)가 로컬 상태로 들고 있다가 저장 시점에 넘긴다.
+- 삭제는 `deleteAnnouncement`와 같은 이유로 `.select('id')`로 실제 삭제 행 수를 돌려받는다. 스토리지 객체 삭제는 best-effort(실패해도 DB 행 삭제는 진행) — 고아 파일보다 "삭제가 안 되는 것처럼 보이는 것"이 더 나쁘다.
+- UI는 `widgets/announcement_attachments.dart`의 `AnnouncementAttachmentList`(칩 목록, 탭하면 `url_launcher`로 공개 URL을 연다)를 관리자 소식 탭·교사 반 공지 위젯·학부모/학생 홈 공지 배너가 공유한다. 삭제 버튼은 `onDelete`를 넘긴 편집 화면에서만 나타난다.
+
 ### 6.20 수업 회차 내용 (Course Lessons, 2026-08)
 
 날짜별 진도표("9월 15일 = 창세기 36장 / 에서의 자손 / 담당 리아")를 앱 안에서 관리한다. 마이그레이션 `20260824090000_course_lessons.sql`.

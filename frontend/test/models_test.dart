@@ -990,4 +990,58 @@ void main() {
       expect(pack.assignments, isEmpty);
     });
   });
+
+  group('AnnouncementAttachment', () {
+    test('fromMap parses a full row', () {
+      final attachment = AnnouncementAttachment.fromMap({
+        'id': 'att-1',
+        'announcement_id': 'notice-1',
+        'storage_path': 'announcements/hs-1/notice-1/123_abc.pdf',
+        'file_name': '가정통신문.pdf',
+        'mime_type': 'application/pdf',
+        'size_bytes': 204800,
+        'created_at': '2026-09-20T09:00:00Z',
+      });
+
+      expect(attachment.id, 'att-1');
+      expect(attachment.announcementId, 'notice-1');
+      expect(attachment.storagePath, 'announcements/hs-1/notice-1/123_abc.pdf');
+      expect(attachment.fileName, '가정통신문.pdf');
+      expect(attachment.mimeType, 'application/pdf');
+      expect(attachment.sizeBytes, 204800);
+      expect(attachment.createdAt, isNotNull);
+    });
+
+    test('fromMap falls back to safe defaults for missing fields', () {
+      final attachment = AnnouncementAttachment.fromMap(const {});
+
+      expect(attachment.id, '');
+      expect(attachment.announcementId, '');
+      expect(attachment.storagePath, '');
+      expect(attachment.fileName, '');
+      expect(attachment.mimeType, 'application/octet-stream');
+      expect(attachment.sizeBytes, 0);
+      expect(attachment.createdAt, isNull);
+    });
+
+    test('toMap round-trips through fromMap', () {
+      const attachment = AnnouncementAttachment(
+        id: 'att-2',
+        announcementId: 'notice-2',
+        storagePath: 'announcements/hs-1/notice-2/456_def.jpg',
+        fileName: '준비물.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 51200,
+        createdAt: null,
+      );
+
+      final roundTripped = AnnouncementAttachment.fromMap(attachment.toMap());
+
+      expect(roundTripped.id, attachment.id);
+      expect(roundTripped.storagePath, attachment.storagePath);
+      expect(roundTripped.fileName, attachment.fileName);
+      expect(roundTripped.mimeType, attachment.mimeType);
+      expect(roundTripped.sizeBytes, attachment.sizeBytes);
+    });
+  });
 }

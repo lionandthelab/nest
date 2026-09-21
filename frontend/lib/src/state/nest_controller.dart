@@ -63,6 +63,10 @@ class NestController extends ChangeNotifier {
   /// 반 필터를 적용하기 전의 홈스쿨 전체 공지.
   /// 관리자 소식 탭은 반을 골라둔 상태에서도 모든 공지를 관리해야 하므로 이쪽을 본다.
   List<Announcement> allAnnouncements = [];
+
+  /// 공지 id → 첨부파일 목록. `loadAnnouncements()`가 함께 채운다.
+  Map<String, List<AnnouncementAttachment>> announcementAttachmentsByAnnouncement =
+      const {};
   List<AcademicEvent> academicEvents = [];
   List<PersonalEvent> personalEvents = [];
   CalendarIntegration? calendarIntegration;
@@ -152,11 +156,26 @@ class NestController extends ChangeNotifier {
   /// True on platforms that can run the OAuth popup flow (web).
   bool get isWebOauthSupported => _oauthBridge.supported;
 
-  /// Suppress intermediate UI rebuilds while a [_runBusy] operation is active.
-  /// Standalone calls (outside _runBusy) still notify immediately.
+  /// Suppress intermediate UI rebuilds while a [_runBusy] operation is active
+  /// or a bootstrap/refresh mute is in effect.
+  int _notifyMuteDepth = 0;
+
   void _notifyIfIdle() {
-    if (!_isBusy) notifyListeners();
+    if (_notifyMuteDepth > 0 || _isBusy) return;
+    notifyListeners();
   }
+
+  Future<T> _muteNotifications<T>(Future<T> Function() action) async {
+    _notifyMuteDepth++;
+    try {
+      return await action();
+    } finally {
+      _notifyMuteDepth--;
+    }
+  }
+
+  bool get hasTermSchedulePack =>
+      _termScheduleLoaded || allTermSessions.isNotEmpty;
 
   bool get isBusy => _isBusy;
   bool get blocksUi => _isBusy && _blocksUi;
@@ -2033,8 +2052,16 @@ class NestController extends ChangeNotifier {
     if (user == null) return;
 
     try {
-      await loadPendingInvites();
-      memberships = await _repository.fetchMemberships(userId: user!.id);
+      await _muteNotifications(() async {
+        late final List<Membership> nextMemberships;
+        await Future.wait([
+          loadPendingInvites(),
+          _repository.fetchMemberships(userId: user!.id).then((rows) {
+            nextMemberships = rows;
+          }),
+        ]);
+        memberships = nextMemberships;
+      });
     } catch (_) {
       // Network failure — if cached data exists, keep it and bail out.
       if (memberships.isNotEmpty) {
@@ -2084,6 +2111,7 @@ class NestController extends ChangeNotifier {
       studentActivityLogs = [];
       announcements = [];
       allAnnouncements = [];
+      announcementAttachmentsByAnnouncement = const {};
       academicEvents = [];
       personalEvents = [];
       calendarIntegration = null;
@@ -2119,9 +2147,11 @@ class NestController extends ChangeNotifier {
     currentRole = _resolveViewRole(selectedHomeschoolId);
 
     try {
-      await Future.wait([_loadTermAndBelow(), _loadIndependentContext()]);
-      await _loadOperationalData();
-      _ensureRoleViewTargetSelection();
+      await _muteNotifications(() async {
+        await Future.wait([_loadTermAndBelow(), _loadIndependentContext()]);
+        await _loadOperationalData();
+        _ensureRoleViewTargetSelection();
+      });
 
       _setStatus('운영 컨텍스트 로드 완료');
     } catch (_) {
@@ -2570,21 +2600,21 @@ class NestController extends ChangeNotifier {
     final currentUser = user;
     if (currentUser == null) {
       pendingInvites = [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     final email = _normalizeNullable(currentUser.email);
     if (email == null) {
       pendingInvites = [];
-      notifyListeners();
+      _notifyIfIdle();
       return;
     }
 
     pendingInvites = await _repository.fetchPendingInvitesForEmail(
       email: email,
     );
-    notifyListeners();
+    _notifyIfIdle();
   }
 
   Future<void> loadFamilies() async {
@@ -2713,6 +2743,7 @@ class NestController extends ChangeNotifier {
     if (homeschoolId == null || homeschoolId.isEmpty) {
       announcements = [];
       allAnnouncements = [];
+      announcementAttachmentsByAnnouncement = const {};
       _notifyIfIdle();
       return;
     }
@@ -2733,7 +2764,108 @@ class NestController extends ChangeNotifier {
               )
               .toList();
 
+    final announcementIds = rows
+        .map((row) => row.id)
+        .where((id) => id.isNotEmpty)
+        .toList();
+    announcementAttachmentsByAnnouncement = await _repository
+        .fetchAnnouncementAttachments(announcementIds: announcementIds);
+
     _notifyIfIdle();
+  }
+
+  List<AnnouncementAttachment> attachmentsForAnnouncement(
+    String announcementId,
+  ) {
+    return announcementAttachmentsByAnnouncement[announcementId] ?? const [];
+  }
+
+  /// 공지 첨부용 파일을 고른다. PendingMediaFile로 감싸 반환할 뿐 컨트롤러
+  /// 상태를 바꾸지 않는다 — 실제 업로드는 [createAnnouncement]/[updateAnnouncement]가
+  /// 공지 저장과 함께 처리한다.
+  Future<List<PendingMediaFile>> pickAnnouncementAttachments() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const [
+        'pdf',
+        'doc',
+        'docx',
+        'xls',
+        'xlsx',
+        'ppt',
+        'pptx',
+        'hwp',
+        'hwpx',
+        'png',
+        'jpg',
+        'jpeg',
+        'heic',
+        'zip',
+        'txt',
+      ],
+      allowMultiple: true,
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return const [];
+    }
+
+    return result.files
+        .where((file) => file.bytes != null)
+        .map(
+          (file) => PendingMediaFile(
+            name: file.name,
+            mimeType: _guessMimeType(file.name),
+            bytes: file.bytes!,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> _uploadAnnouncementAttachments({
+    required String homeschoolId,
+    required String announcementId,
+    required List<PendingMediaFile> files,
+  }) async {
+    if (files.isEmpty || user == null) {
+      return;
+    }
+    for (final file in files) {
+      final uploadResult = await _repository.uploadAnnouncementAttachment(
+        homeschoolId: homeschoolId,
+        announcementId: announcementId,
+        file: file,
+      );
+      await _repository.insertAnnouncementAttachment(
+        announcementId: announcementId,
+        uploaderUserId: user!.id,
+        storagePath: uploadResult.storagePath,
+        fileName: file.name,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+      );
+    }
+  }
+
+  Future<void> deleteAnnouncementAttachment({
+    required AnnouncementAttachment attachment,
+  }) async {
+    if (!canWriteAnnouncement || user == null) {
+      throw StateError('교사/관리자 권한이 필요합니다.');
+    }
+
+    await _runBusy('첨부파일을 삭제하는 중...', () async {
+      final deleted = await _repository.deleteAnnouncementAttachment(
+        attachmentId: attachment.id,
+        storagePath: attachment.storagePath,
+      );
+      if (deleted == 0) {
+        throw StateError('첨부파일을 삭제하지 못했습니다. 권한을 확인하세요.');
+      }
+      await loadAnnouncements();
+      _setStatus('첨부파일을 삭제했습니다.');
+    });
   }
 
   // ── Academic Events (학사 일정) ──
@@ -6101,6 +6233,7 @@ class NestController extends ChangeNotifier {
     required String body,
     required String? classGroupId,
     required bool pinned,
+    List<PendingMediaFile> attachments = const [],
   }) async {
     if (!canWriteAnnouncement || user == null) {
       throw StateError('교사/관리자 권한이 필요합니다.');
@@ -6118,13 +6251,18 @@ class NestController extends ChangeNotifier {
     }
 
     await _runBusy('공지사항을 등록하는 중...', () async {
-      await _repository.createAnnouncement(
+      final announcementId = await _repository.createAnnouncement(
         homeschoolId: homeschoolId,
         classGroupId: _normalizeNullable(classGroupId),
         authorUserId: user!.id,
         title: trimmedTitle,
         body: trimmedBody,
         pinned: pinned,
+      );
+      await _uploadAnnouncementAttachments(
+        homeschoolId: homeschoolId,
+        announcementId: announcementId,
+        files: attachments,
       );
       await loadAnnouncements();
       await _logAudit(
@@ -6142,6 +6280,7 @@ class NestController extends ChangeNotifier {
     required String body,
     required String? classGroupId,
     required bool pinned,
+    List<PendingMediaFile> newAttachments = const [],
   }) async {
     if (!canWriteAnnouncement || user == null) {
       throw StateError('교사/관리자 권한이 필요합니다.');
@@ -6161,6 +6300,14 @@ class NestController extends ChangeNotifier {
         body: trimmedBody,
         pinned: pinned,
       );
+      final homeschoolId = selectedHomeschoolId;
+      if (homeschoolId != null && homeschoolId.isNotEmpty) {
+        await _uploadAnnouncementAttachments(
+          homeschoolId: homeschoolId,
+          announcementId: announcementId,
+          files: newAttachments,
+        );
+      }
       await loadAnnouncements();
       await _logAudit(
         actionType: 'ANNOUNCEMENT_UPDATE',
@@ -7051,9 +7198,39 @@ class NestController extends ChangeNotifier {
         '지정 반';
   }
 
+  List<ClassSession> sessionsInClassGroup(String classGroupId) {
+    final rows = allTermSessions.isNotEmpty ? allTermSessions : sessions;
+    return rows
+        .where((session) => session.classGroupId == classGroupId)
+        .toList(growable: false);
+  }
+
+  List<SessionTeacherAssignment> assignmentsForSessionIds(
+    Iterable<String> sessionIds,
+  ) {
+    final idSet = sessionIds.where((id) => id.isNotEmpty).toSet();
+    if (idSet.isEmpty) return const [];
+    final rows = allTermSessionTeacherAssignments.isNotEmpty
+        ? allTermSessionTeacherAssignments
+        : sessionTeacherAssignments;
+    return rows
+        .where((row) => idSet.contains(row.classSessionId))
+        .toList(growable: false);
+  }
+
+  List<TeachingPlan> teachingPlansForSessionIds(Iterable<String> sessionIds) {
+    final idSet = sessionIds.where((id) => id.isNotEmpty).toSet();
+    if (idSet.isEmpty) return const [];
+    return teachingPlans
+        .where((plan) => idSet.contains(plan.classSessionId))
+        .toList(growable: false);
+  }
+
   Future<List<ClassSession>> fetchSessionsForClassGroup({
     required String classGroupId,
   }) {
+    final local = sessionsInClassGroup(classGroupId);
+    if (hasTermSchedulePack) return Future.value(local);
     return _repository.fetchSessions(classGroupId: classGroupId);
   }
 
@@ -7061,6 +7238,9 @@ class NestController extends ChangeNotifier {
   fetchSessionTeacherAssignmentsForSessions({
     required List<String> classSessionIds,
   }) {
+    if (hasTermSchedulePack) {
+      return Future.value(assignmentsForSessionIds(classSessionIds));
+    }
     return _repository.fetchSessionTeacherAssignments(
       classSessionIds: classSessionIds,
     );
@@ -8015,6 +8195,25 @@ class NestController extends ChangeNotifier {
           fromMap: ClassSession.fromMap,
         ) ??
         const [];
+    allTermSessions =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'allTermSessions',
+          fromMap: ClassSession.fromMap,
+        ) ??
+        sessions;
+    allAnnouncements =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'announcements',
+          fromMap: Announcement.fromMap,
+        ) ??
+        const [];
+    if (allAnnouncements.isNotEmpty) {
+      announcements = allAnnouncements;
+    }
     proposals =
         NestCache.loadCollection(
           userId: userId,
@@ -8082,6 +8281,15 @@ class NestController extends ChangeNotifier {
           fromMap: SessionTeacherAssignment.fromMap,
         ) ??
         const [];
+    allTermSessionTeacherAssignments =
+        NestCache.loadCollection(
+          userId: userId,
+          homeschoolId: lastHomeschoolId,
+          collection: 'allTermAssignments',
+          fromMap: SessionTeacherAssignment.fromMap,
+        ) ??
+        sessionTeacherAssignments;
+    _termScheduleLoaded = allTermSessions.isNotEmpty;
     teachingPlans =
         NestCache.loadCollection(
           userId: userId,
@@ -8149,6 +8357,9 @@ class NestController extends ChangeNotifier {
       classrooms = const [];
       timeSlots = const [];
       sessions = const [];
+      allTermSessions = const [];
+      allTermSessionTeacherAssignments = const [];
+      _termScheduleLoaded = false;
       proposals = const [];
       proposalSessionsById = const {};
       classEnrollments = const [];
@@ -8247,6 +8458,27 @@ class NestController extends ChangeNotifier {
         collection: 'sessions',
         items: sessions,
         toMap: (s) => s.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'allTermSessions',
+        items: allTermSessions,
+        toMap: (s) => s.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'allTermAssignments',
+        items: allTermSessionTeacherAssignments,
+        toMap: (a) => a.toMap(),
+      ),
+      NestCache.saveCollection(
+        userId: userId,
+        homeschoolId: homeschoolId,
+        collection: 'announcements',
+        items: allAnnouncements,
+        toMap: (a) => a.toMap(),
       ),
       NestCache.saveCollection(
         userId: userId,
@@ -8381,6 +8613,7 @@ class NestController extends ChangeNotifier {
     studentActivityLogs = [];
     announcements = [];
     allAnnouncements = [];
+    announcementAttachmentsByAnnouncement = const {};
     academicEvents = [];
     personalEvents = [];
     calendarIntegration = null;
@@ -8543,6 +8776,36 @@ String _guessMimeType(String fileName) {
   }
   if (lower.endsWith('.mov')) {
     return 'video/quicktime';
+  }
+  if (lower.endsWith('.pdf')) {
+    return 'application/pdf';
+  }
+  if (lower.endsWith('.doc')) {
+    return 'application/msword';
+  }
+  if (lower.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (lower.endsWith('.xls')) {
+    return 'application/vnd.ms-excel';
+  }
+  if (lower.endsWith('.xlsx')) {
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
+  if (lower.endsWith('.ppt')) {
+    return 'application/vnd.ms-powerpoint';
+  }
+  if (lower.endsWith('.pptx')) {
+    return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+  }
+  if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
+    return 'application/x-hwp';
+  }
+  if (lower.endsWith('.zip')) {
+    return 'application/zip';
+  }
+  if (lower.endsWith('.txt')) {
+    return 'text/plain';
   }
 
   return 'application/octet-stream';

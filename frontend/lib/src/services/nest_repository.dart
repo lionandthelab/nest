@@ -1196,22 +1196,28 @@ class NestRepository {
     return _asRows(data).map(Announcement.fromMap).toList();
   }
 
-  Future<void> createAnnouncement({
+  Future<String> createAnnouncement({
     required String homeschoolId,
     required String? classGroupId,
     required String authorUserId,
     required String title,
     required String body,
     required bool pinned,
-  }) {
-    return client.from('announcements').insert({
-      'homeschool_id': homeschoolId,
-      'class_group_id': _normalizeNullable(classGroupId),
-      'author_user_id': authorUserId,
-      'title': title.trim(),
-      'body': body.trim(),
-      'pinned': pinned,
-    });
+  }) async {
+    final row = await client
+        .from('announcements')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'class_group_id': _normalizeNullable(classGroupId),
+          'author_user_id': authorUserId,
+          'title': title.trim(),
+          'body': body.trim(),
+          'pinned': pinned,
+        })
+        .select('id')
+        .single();
+
+    return _asMap(row)['id'] as String;
   }
 
   Future<void> updateAnnouncement({
@@ -1240,6 +1246,97 @@ class NestRepository {
         .from('announcements')
         .delete()
         .eq('id', announcementId)
+        .select('id');
+    return _asRows(data).length;
+  }
+
+  Future<Map<String, List<AnnouncementAttachment>>>
+  fetchAnnouncementAttachments({required List<String> announcementIds}) async {
+    if (announcementIds.isEmpty) {
+      return const {};
+    }
+
+    final data = await client
+        .from('announcement_attachments')
+        .select(
+          'id, announcement_id, storage_path, file_name, mime_type, size_bytes, created_at',
+        )
+        .inFilter('announcement_id', announcementIds)
+        .order('created_at', ascending: true);
+
+    final out = <String, List<AnnouncementAttachment>>{};
+    for (final row in _asRows(data).map(AnnouncementAttachment.fromMap)) {
+      out.putIfAbsent(row.announcementId, () => <AnnouncementAttachment>[]);
+      out[row.announcementId]!.add(row);
+    }
+    return out;
+  }
+
+  /// 공지 첨부파일을 공개 'media' 버킷의 announcements/{homeschoolId}/{announcementId}/
+  /// 경로에 저장한다. `uploadToStorage`(갤러리 미디어)와 버킷은 같지만, 경로 접두어로
+  /// 용도를 구분해둔다.
+  Future<StorageUploadResult> uploadAnnouncementAttachment({
+    required String homeschoolId,
+    required String announcementId,
+    required PendingMediaFile file,
+  }) async {
+    final ext = file.name.contains('.')
+        ? file.name.substring(file.name.lastIndexOf('.'))
+        : '';
+    final uniqueName =
+        '${DateTime.now().millisecondsSinceEpoch}_${file.name.hashCode.abs()}$ext';
+    final storagePath =
+        'announcements/$homeschoolId/$announcementId/$uniqueName';
+
+    await client.storage
+        .from('media')
+        .uploadBinary(
+          storagePath,
+          file.bytes,
+          fileOptions: FileOptions(contentType: file.mimeType),
+        );
+
+    final publicUrl = client.storage.from('media').getPublicUrl(storagePath);
+
+    return StorageUploadResult(storagePath: storagePath, publicUrl: publicUrl);
+  }
+
+  Future<void> insertAnnouncementAttachment({
+    required String announcementId,
+    required String uploaderUserId,
+    required String storagePath,
+    required String fileName,
+    required String mimeType,
+    required int sizeBytes,
+  }) {
+    return client.from('announcement_attachments').insert({
+      'announcement_id': announcementId,
+      'uploader_user_id': uploaderUserId,
+      'storage_path': storagePath,
+      'file_name': fileName,
+      'mime_type': mimeType,
+      'size_bytes': sizeBytes,
+    });
+  }
+
+  /// 첨부파일 삭제. 스토리지 객체 삭제가 실패해도(이미 지워졌거나 권한 문제)
+  /// DB 행 삭제는 계속 진행한다 — 고아 스토리지 객체보다 "삭제가 안 되는 것처럼
+  /// 보이는 것"이 더 나쁘다. `deleteAnnouncement`와 같이 실제 삭제된 행 수를
+  /// 돌려준다(RLS가 막으면 DELETE가 0행에 예외 없이 성공하므로).
+  Future<int> deleteAnnouncementAttachment({
+    required String attachmentId,
+    required String storagePath,
+  }) async {
+    try {
+      await client.storage.from('media').remove([storagePath]);
+    } catch (_) {
+      // best-effort
+    }
+
+    final data = await client
+        .from('announcement_attachments')
+        .delete()
+        .eq('id', attachmentId)
         .select('id');
     return _asRows(data).length;
   }

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/announcement_attachments.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
@@ -45,6 +46,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   String? _logTeacherProfileId;
   String _logActivityType = 'OBSERVATION';
   bool _announcePinned = false;
+  final List<PendingMediaFile> _announceAttachments = [];
+  bool _isPickingAnnouncementFile = false;
   String? _selectedManagedClassGroupId;
   String? _managedClassLoadSignature;
   bool _isLoadingManagedClasses = false;
@@ -172,16 +175,17 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     unawaited(_refreshChangeAndAbsenceData(controller));
 
     try {
-      final announcements = await controller.fetchAnnouncementsForHomeschool();
+      var announcements = controller.allAnnouncements;
+      if (announcements.isEmpty) {
+        announcements = await controller.fetchAnnouncementsForHomeschool();
+      }
       final bundles = <String, _TeacherClassBundle>{};
 
       final classGroups = controller.classGroups.toList()
         ..sort((a, b) => a.name.compareTo(b.name));
 
       for (final classGroup in classGroups) {
-        final sessions = await controller.fetchSessionsForClassGroup(
-          classGroupId: classGroup.id,
-        );
+        final sessions = controller.sessionsInClassGroup(classGroup.id);
         if (sessions.isEmpty) {
           continue;
         }
@@ -190,10 +194,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             .map((session) => session.id)
             .where((id) => id.isNotEmpty)
             .toList();
-        final assignments = await controller
-            .fetchSessionTeacherAssignmentsForSessions(
-              classSessionIds: sessionIds,
-            );
+        final assignments = controller.assignmentsForSessionIds(sessionIds);
 
         final isAssignedClass = assignments.any(
           (row) => myTeacherIds.contains(row.teacherProfileId),
@@ -202,9 +203,12 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
           continue;
         }
 
-        final plans = await controller.fetchTeachingPlansForSessions(
-          classSessionIds: sessionIds,
-        );
+        var plans = controller.teachingPlansForSessionIds(sessionIds);
+        if (plans.isEmpty && sessionIds.isNotEmpty) {
+          plans = await controller.fetchTeachingPlansForSessions(
+            classSessionIds: sessionIds,
+          );
+        }
         final classAnnouncements = announcements
             .where(
               (row) =>
@@ -887,6 +891,47 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                       },
               ),
               const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _isPickingAnnouncementFile
+                      ? null
+                      : _pickAnnouncementAttachment,
+                  icon: _isPickingAnnouncementFile
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.attach_file, size: 18),
+                  label: const Text('파일 첨부'),
+                ),
+              ),
+              if (_announceAttachments.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < _announceAttachments.length;
+                      index++
+                    )
+                      InputChip(
+                        avatar: const Icon(Icons.upload_file, size: 16),
+                        label: Text(
+                          '${_announceAttachments[index].name} (${formatAttachmentSize(_announceAttachments[index].sizeBytes)})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onDeleted: () => setState(
+                          () => _announceAttachments.removeAt(index),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
               ElevatedButton.icon(
                 onPressed: controller.isBusy ? null : _createAnnouncement,
                 icon: const Icon(Icons.campaign),
@@ -906,17 +951,36 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 final scope = row.classGroupId == null
                     ? '전체'
                     : selectedBundle?.classGroup.name ?? '반';
-                return ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: row.pinned
-                      ? const Icon(Icons.push_pin, size: 18)
-                      : const Icon(Icons.campaign_outlined, size: 18),
-                  title: Text(row.title),
-                  subtitle: Text('$scope · ${row.body}'),
-                  trailing: Text(
-                    when,
-                    style: Theme.of(context).textTheme.bodySmall,
+                final attachments = controller.attachmentsForAnnouncement(
+                  row.id,
+                );
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: row.pinned
+                            ? const Icon(Icons.push_pin, size: 18)
+                            : const Icon(Icons.campaign_outlined, size: 18),
+                        title: Text(row.title),
+                        subtitle: Text('$scope · ${row.body}'),
+                        trailing: Text(
+                          when,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      if (attachments.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 32, bottom: 6),
+                          child: AnnouncementAttachmentList(
+                            attachments: attachments,
+                            resolveUrl: controller.mediaPublicUrl,
+                          ),
+                        ),
+                    ],
                   ),
                 );
               }),
@@ -1800,6 +1864,18 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     }
   }
 
+  Future<void> _pickAnnouncementAttachment() async {
+    if (_isPickingAnnouncementFile) return;
+    setState(() => _isPickingAnnouncementFile = true);
+    try {
+      final picked = await widget.controller.pickAnnouncementAttachments();
+      if (picked.isEmpty || !mounted) return;
+      setState(() => _announceAttachments.addAll(picked));
+    } finally {
+      if (mounted) setState(() => _isPickingAnnouncementFile = false);
+    }
+  }
+
   Future<void> _createAnnouncement() async {
     final classGroupId = _selectedManagedClassGroupId;
     if (classGroupId == null || classGroupId.isEmpty) {
@@ -1813,11 +1889,13 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         body: _announceBodyController.text,
         classGroupId: classGroupId,
         pinned: _announcePinned,
+        attachments: _announceAttachments,
       );
       _announceTitleController.clear();
       _announceBodyController.clear();
       setState(() {
         _announcePinned = false;
+        _announceAttachments.clear();
       });
       await _loadManagedClassBundles();
       _showMessage(widget.controller.statusMessage);

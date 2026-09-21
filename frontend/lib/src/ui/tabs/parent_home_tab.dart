@@ -8,6 +8,7 @@ import '../nest_theme.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
+import '../widgets/announcement_attachments.dart';
 import '../widgets/homeschool_tips_card.dart';
 import '../widgets/nest_motion.dart';
 import '../widgets/today_personal_events.dart';
@@ -405,6 +406,13 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
             if (a.body.trim().isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(a.body, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+            if (controller.attachmentsForAnnouncement(a.id).isNotEmpty) ...[
+              const SizedBox(height: 8),
+              AnnouncementAttachmentList(
+                attachments: controller.attachmentsForAnnouncement(a.id),
+                resolveUrl: controller.mediaPublicUrl,
+              ),
             ],
           ],
         ),

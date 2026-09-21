@@ -754,6 +754,59 @@ class Announcement {
       createdAt: parseDateTime(map['created_at']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'class_group_id': classGroupId,
+    'author_user_id': authorUserId,
+    'title': title,
+    'body': body,
+    'pinned': pinned,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
+}
+
+class AnnouncementAttachment {
+  const AnnouncementAttachment({
+    required this.id,
+    required this.announcementId,
+    required this.storagePath,
+    required this.fileName,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String announcementId;
+  final String storagePath;
+  final String fileName;
+  final String mimeType;
+  final int sizeBytes;
+  final DateTime? createdAt;
+
+  factory AnnouncementAttachment.fromMap(Map<String, dynamic> map) {
+    return AnnouncementAttachment(
+      id: (map['id'] as String?) ?? '',
+      announcementId: (map['announcement_id'] as String?) ?? '',
+      storagePath: (map['storage_path'] as String?) ?? '',
+      fileName: (map['file_name'] as String?) ?? '',
+      mimeType: (map['mime_type'] as String?) ?? 'application/octet-stream',
+      sizeBytes: (map['size_bytes'] as num?)?.toInt() ?? 0,
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'announcement_id': announcementId,
+    'storage_path': storagePath,
+    'file_name': fileName,
+    'mime_type': mimeType,
+    'size_bytes': sizeBytes,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+  };
 }
 
 class AuditLog {

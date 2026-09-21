@@ -7,6 +7,7 @@ import '../../state/nest_controller.dart';
 import '../models/new_term_checklist.dart';
 import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
+import '../widgets/announcement_attachments.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_sheet.dart';
@@ -175,6 +176,8 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
                   ? '전체'
                   : controller.findClassGroupName(notice.classGroupId),
               authorLabel: controller.findMemberName(notice.authorUserId),
+              attachments: controller.attachmentsForAnnouncement(notice.id),
+              resolveUrl: controller.mediaPublicUrl,
               busy: controller.isBusy,
               onEdit: () => _openNoticeEditor(notice: notice),
               onTogglePin: () => _toggleNoticePin(notice),
@@ -198,6 +201,10 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
       builder: (sheetContext) => _NoticeEditorSheet(
         notice: notice,
         classGroups: controller.classGroups,
+        controller: controller,
+        existingAttachments: notice == null
+            ? const []
+            : controller.attachmentsForAnnouncement(notice.id),
       ),
     );
 
@@ -210,6 +217,7 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
           body: result.body,
           classGroupId: result.classGroupId,
           pinned: result.pinned,
+          attachments: result.attachments,
         );
       } else {
         await controller.updateAnnouncement(
@@ -218,6 +226,7 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
           body: result.body,
           classGroupId: result.classGroupId,
           pinned: result.pinned,
+          newAttachments: result.attachments,
         );
       }
       _showMessage(controller.statusMessage);
@@ -508,6 +517,8 @@ class _NoticeCard extends StatelessWidget {
     required this.notice,
     required this.scopeLabel,
     required this.authorLabel,
+    required this.attachments,
+    required this.resolveUrl,
     required this.busy,
     required this.onEdit,
     required this.onTogglePin,
@@ -517,6 +528,8 @@ class _NoticeCard extends StatelessWidget {
   final Announcement notice;
   final String scopeLabel;
   final String authorLabel;
+  final List<AnnouncementAttachment> attachments;
+  final String? Function(String) resolveUrl;
   final bool busy;
   final VoidCallback onEdit;
   final VoidCallback onTogglePin;
@@ -617,6 +630,13 @@ class _NoticeCard extends StatelessWidget {
                       _MetaChip(icon: Icons.schedule_outlined, label: created),
                   ],
                 ),
+                if (attachments.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  AnnouncementAttachmentList(
+                    attachments: attachments,
+                    resolveUrl: resolveUrl,
+                  ),
+                ],
               ],
             ),
           ),
@@ -848,19 +868,28 @@ class _NoticeDraft {
     required this.body,
     required this.classGroupId,
     required this.pinned,
+    this.attachments = const [],
   });
 
   final String title;
   final String body;
   final String? classGroupId;
   final bool pinned;
+  final List<PendingMediaFile> attachments;
 }
 
 class _NoticeEditorSheet extends StatefulWidget {
-  const _NoticeEditorSheet({required this.notice, required this.classGroups});
+  const _NoticeEditorSheet({
+    required this.notice,
+    required this.classGroups,
+    required this.controller,
+    this.existingAttachments = const [],
+  });
 
   final Announcement? notice;
   final List<ClassGroup> classGroups;
+  final NestController controller;
+  final List<AnnouncementAttachment> existingAttachments;
 
   @override
   State<_NoticeEditorSheet> createState() => _NoticeEditorSheetState();
@@ -872,6 +901,9 @@ class _NoticeEditorSheetState extends State<_NoticeEditorSheet> {
   late final TextEditingController _bodyController;
   late String? _classGroupId;
   late bool _pinned;
+  late List<AnnouncementAttachment> _existingAttachments;
+  final List<PendingMediaFile> _pendingAttachments = [];
+  bool _isPickingFile = false;
 
   @override
   void initState() {
@@ -880,6 +912,7 @@ class _NoticeEditorSheetState extends State<_NoticeEditorSheet> {
     _titleController = TextEditingController(text: notice?.title ?? '');
     _bodyController = TextEditingController(text: notice?.body ?? '');
     _pinned = notice?.pinned ?? false;
+    _existingAttachments = List.of(widget.existingAttachments);
     // 삭제된 반을 가리키던 공지는 대상 드롭다운이 값을 못 찾아 터지므로 전체로 되돌린다.
     final classGroupId = notice?.classGroupId;
     _classGroupId =
@@ -904,8 +937,50 @@ class _NoticeEditorSheetState extends State<_NoticeEditorSheet> {
         body: _bodyController.text,
         classGroupId: _classGroupId,
         pinned: _pinned,
+        attachments: _pendingAttachments,
       ),
     );
+  }
+
+  Future<void> _pickAttachments() async {
+    if (_isPickingFile) return;
+    setState(() => _isPickingFile = true);
+    try {
+      final picked = await widget.controller.pickAnnouncementAttachments();
+      if (picked.isEmpty || !mounted) return;
+      setState(() => _pendingAttachments.addAll(picked));
+    } finally {
+      if (mounted) setState(() => _isPickingFile = false);
+    }
+  }
+
+  void _removePendingAttachment(int index) {
+    setState(() => _pendingAttachments.removeAt(index));
+  }
+
+  Future<void> _deleteExistingAttachment(
+    AnnouncementAttachment attachment,
+  ) async {
+    try {
+      await widget.controller.deleteAnnouncementAttachment(
+        attachment: attachment,
+      );
+      if (!mounted) return;
+      setState(
+        () => _existingAttachments.removeWhere((a) => a.id == attachment.id),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is StateError
+                ? error.message
+                : widget.controller.statusMessage,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -988,6 +1063,51 @@ class _NoticeEditorSheetState extends State<_NoticeEditorSheet> {
                 contentPadding: EdgeInsets.zero,
                 onChanged: (value) => setState(() => _pinned = value),
               ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _isPickingFile ? null : _pickAttachments,
+                  icon: _isPickingFile
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.attach_file, size: 18),
+                  label: const Text('파일 첨부'),
+                ),
+              ),
+              if (_existingAttachments.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                AnnouncementAttachmentList(
+                  attachments: _existingAttachments,
+                  resolveUrl: widget.controller.mediaPublicUrl,
+                  onDelete: _deleteExistingAttachment,
+                ),
+              ],
+              if (_pendingAttachments.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < _pendingAttachments.length;
+                      index++
+                    )
+                      InputChip(
+                        avatar: const Icon(Icons.upload_file, size: 16),
+                        label: Text(
+                          '${_pendingAttachments[index].name} (${formatAttachmentSize(_pendingAttachments[index].sizeBytes)})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onDeleted: () => _removePendingAttachment(index),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,

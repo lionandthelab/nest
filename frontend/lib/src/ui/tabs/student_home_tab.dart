@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
+import '../widgets/announcement_attachments.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_motion.dart';
 import '../widgets/nest_refresh.dart';
@@ -746,6 +747,13 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             if (a.body.trim().isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(a.body, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+            if (controller.attachmentsForAnnouncement(a.id).isNotEmpty) ...[
+              const SizedBox(height: 8),
+              AnnouncementAttachmentList(
+                attachments: controller.attachmentsForAnnouncement(a.id),
+                resolveUrl: controller.mediaPublicUrl,
+              ),
             ],
           ],
         ),
