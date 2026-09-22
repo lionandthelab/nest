@@ -92,4 +92,40 @@ void main() {
       expect(await const MediaThumbnailer().buildJpeg(Uint8List(0)), isNull);
     });
   });
+
+  group('probeImageSize', () {
+    test('PNG 헤더에서 크기를 읽는다', () {
+      final png = img.encodePng(img.Image(width: 640, height: 360));
+      expect(probeImageSize(png), (width: 640, height: 360));
+    });
+
+    test('JPEG 헤더에서 크기를 읽는다', () {
+      final jpg = _jpeg(width: 321, height: 123);
+      expect(probeImageSize(jpg), (width: 321, height: 123));
+    });
+
+    test('이미지가 아니면 null (호출부가 다른 경로로 떨어진다)', () {
+      expect(probeImageSize(Uint8List.fromList(List.filled(64, 7))), isNull);
+      expect(probeImageSize(Uint8List(0)), isNull);
+    });
+
+    test('잘린 PNG 헤더에도 던지지 않는다', () {
+      final png = img.encodePng(img.Image(width: 64, height: 64));
+      expect(probeImageSize(Uint8List.fromList(png.take(12).toList())), isNull);
+    });
+  });
+
+  group('MediaThumbnailer.buildJpeg — 세로 사진', () {
+    setUp(TestWidgetsFlutterBinding.ensureInitialized);
+
+    test('세로 사진은 긴 변(높이)이 maxEdge에 맞는다', () async {
+      final source = _jpeg(width: 1200, height: 1600);
+
+      final thumb = await const MediaThumbnailer().buildJpeg(source);
+
+      final decoded = img.decodeJpg(thumb!);
+      expect(decoded!.height, 512);
+      expect(decoded.width, 384);
+    });
+  });
 }
