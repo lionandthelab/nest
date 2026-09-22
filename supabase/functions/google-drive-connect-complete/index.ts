@@ -1,4 +1,5 @@
 import { corsHeaders } from "../_shared/cors.ts";
+import { fetchDriveAccountEmail } from "../_shared/google_drive.ts";
 import { assertRole, createAdminClient, json, requireUser } from "../_shared/supabase.ts";
 
 type Payload = {
@@ -67,20 +68,9 @@ Deno.serve(async (req) => {
 
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
-    // 관리자가 "내 어느 계정의 용량을 쓰는지" 확인할 수 있어야 한다. 계정이
-    // 여러 개인 관리자가 엉뚱한 곳에 붙여 놓고도 알아채지 못하던 문제.
-    let googleEmail: string | null = null;
-    try {
-      const meRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      if (meRes.ok) {
-        const me = await meRes.json();
-        googleEmail = typeof me.email === "string" ? me.email : null;
-      }
-    } catch (_) {
-      googleEmail = null;
-    }
+    // 관리자가 "내 어느 계정의 용량을 쓰는지" 확인할 수 있어야 한다.
+    // userinfo 스코프를 따로 요청하지 않고 Drive에서 받는다.
+    const googleEmail = await fetchDriveAccountEmail(accessToken);
 
     const { error: upsertErr } = await admin.from("drive_integrations").upsert(
       {

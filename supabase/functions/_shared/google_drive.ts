@@ -46,3 +46,22 @@ export function decodeState(state: string): Record<string, unknown> {
   const padded = state.replaceAll("-", "+").replaceAll("_", "/");
   return JSON.parse(atob(padded));
 }
+
+/// 연결된 Google 계정의 이메일. userinfo 스코프 없이 Drive만으로 받는다.
+/// 실패하면 null — 이메일은 화면에 이름을 보여 주기 위한 부가 정보일 뿐이다.
+export async function fetchDriveAccountEmail(
+  accessToken: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) return null;
+    const body = await res.json();
+    const email = body?.user?.emailAddress;
+    return typeof email === "string" && email.length > 0 ? email : null;
+  } catch (_) {
+    return null;
+  }
+}

@@ -70,6 +70,13 @@ class _AlbumTabState extends State<AlbumTab> {
       if (!mounted) return;
       unawaited(widget.controller.ensureAlbumLoaded());
       unawaited(widget.controller.loadAlbumSummaries());
+
+      // 연결 상태는 이 탭이 직접 챙긴다. 예전에는 관리자 홈의 카드만 불러서,
+      // 앨범으로 바로 들어오면 이미 연결돼 있는데도 "미연결"로 보였고 업로드
+      // 때마다 연결 안내가 다시 떴다.
+      if (widget.controller.isAdminLike) {
+        unawaited(widget.controller.loadDriveIntegration());
+      }
     });
   }
 

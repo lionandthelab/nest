@@ -59,12 +59,14 @@ Deno.serve(async (req) => {
       access_type: "offline",
       prompt: "consent",
       include_granted_scopes: "true",
-      // 연결 화면에서 "어느 계정인지" 보여 주려면 이메일이 필요하다.
+      // Google Cloud의 Data Access에 등록된 세 개만 요청한다. 여기 없는 스코프를
+      // 섞으면(userinfo.email 등) 동의 화면이 "확인되지 않은 앱" 경고를 띄운다.
+      // 연결 계정 이메일은 Drive의 about.get(fields=user)으로 받는다 —
+      // drive.file 만으로 호출할 수 있다.
       scope:
         "https://www.googleapis.com/auth/drive.file " +
         "https://www.googleapis.com/auth/drive.appdata " +
-        "https://www.googleapis.com/auth/drive.install " +
-        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/drive.install",
       state
     });
 

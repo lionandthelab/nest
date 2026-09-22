@@ -2,6 +2,7 @@ import {
   decodeState,
   driveDonePageUrl,
   driveRedirectUri,
+  fetchDriveAccountEmail,
 } from "../_shared/google_drive.ts";
 import { createAdminClient } from "../_shared/supabase.ts";
 
@@ -90,7 +91,7 @@ Deno.serve(async (req) => {
     }
 
     const expiresIn = Number(tokenJson.expires_in || 3600);
-    const email = await lookupEmail(accessToken);
+    const email = await fetchDriveAccountEmail(accessToken);
 
     const { error: upsertErr } = await admin.from("drive_integrations").upsert(
       {
@@ -120,16 +121,3 @@ Deno.serve(async (req) => {
     return seeOther(driveDonePageUrl(false, "unexpected"));
   }
 });
-
-async function lookupEmail(accessToken: string): Promise<string | null> {
-  try {
-    const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) return null;
-    const body = await res.json();
-    return typeof body.email === "string" ? body.email : null;
-  } catch (_) {
-    return null;
-  }
-}
