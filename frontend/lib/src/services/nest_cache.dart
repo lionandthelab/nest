@@ -190,6 +190,27 @@ class NestCache {
     return prefs.getString('nest.cache.$userId._selectedChild');
   }
 
+  /// Save the album view mode a user last chose.
+  ///
+  /// 사진첩은 사람마다 보는 방식이 굳는다 — 격자로 훑는 사람은 늘 격자로,
+  /// 날짜로 찾는 사람은 늘 타임라인으로 연다. 탭을 열 때마다 다시 고르게
+  /// 하지 않는다.
+  static Future<void> saveAlbumViewMode({
+    required String userId,
+    required String mode,
+  }) async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    await prefs.setString('nest.cache.$userId._albumViewMode', mode);
+  }
+
+  /// Load the album view mode a user last chose.
+  static String? loadAlbumViewMode({required String userId}) {
+    final prefs = _prefs;
+    if (prefs == null) return null;
+    return prefs.getString('nest.cache.$userId._albumViewMode');
+  }
+
   /// Clear all cache (e.g. on logout).
   static Future<void> clearAll() async {
     final prefs = _prefs;
