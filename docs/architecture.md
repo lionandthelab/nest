@@ -407,13 +407,9 @@ Admin dashboard onboarding:
 - Drive tab is simplified for operators:
   - root folder + folder policy + OAuth actions
   - developer token fields hidden behind explicit advanced toggle
-- Upload flow:
-  1. upload the original to the public `media` bucket
-  2. upload a 512px JPEG thumbnail next to it (`thumb/`)
-  3. insert `media_assets` with term/course/class + file metadata
-  4. mirror to Google Drive in the background (never awaited)
+- Upload flow: see §6.25 — 썸네일만 Supabase, 원본은 관리자 Drive.
 
-> 갤러리 화면 자체는 §6.24 앨범으로 대체되었다.
+> 갤러리 화면은 §6.24 앨범으로, 저장 구조는 §6.25로 대체되었다.
 
 ### 6.8 Invite Acceptance (시작하기)
 
@@ -796,6 +792,48 @@ offset을 쓰지 않는 이유: `captured_at`이 업로드 시각이라 새 사�
 파일: `ui/tabs/album/` (탭·슬리버·타일·업로드 시트·선택 바·뷰어),
 `services/album_organizer.dart`(순수 규칙), `services/media_thumbnailer.dart`
 (dart:ui 디코딩 + `package:image` JPEG 인코딩).
+
+### 6.25 앨범 저장 구조 — 원본은 관리자 Drive, 썸네일만 Supabase (2026-09)
+
+§6.24까지는 원본과 썸네일이 모두 Supabase `media` 버킷에 쌓였다. 홈스쿨이 늘수록
+용량 비용이 프로젝트에 그대로 붙는 구조라, 원본을 관리자 Google Drive로 옮겼다.
+
+**업로드 갈래** (`_uploadOneAlbumFile`)
+1. 512px 썸네일 → 항상 Supabase (`{hs}/{YYYY-MM}/thumb/{key}.jpg`). 그리드 수십
+   칸이 CDN에서 바로 받아야 하고 한 장에 45KB라 용량이 거의 들지 않는다.
+2. 원본 → 관리자 Drive (`google-drive-upload`, 학기/수업/날짜 폴더).
+3. Drive 미연결·업로드 실패·40MB 초과면 **Supabase로 폴백**하고 `storage_path`를
+   채운다. 사진을 잃는 것보다 용량을 쓰는 편이 낫다.
+
+원본 경로와 썸네일 경로는 `AlbumOrganizer.storagePathsFor`가 같은 키에서 함께
+만든다 — 원본이 Supabase에 없을 수 있어 썸네일 경로를 원본에서 유도할 수 없다.
+
+**읽기.** `GalleryItem.isDriveBacked`(`storage_path`가 비고 `drive_file_id`가 있음)
+가 갈래를 정한다. Drive 원본은 공개 주소가 없으므로(아동 사진에 "링크 있는
+누구나" 공유는 쓸 수 없다) `google-drive-file` 엣지 함수가 홈스쿨 구성원인지
+확인하고 바이트를 중계한다. 뷰어는 그 바이트를 `Image.memory`로 그리고,
+내려받기도 같은 경로를 쓴다. 삭제는 같은 함수의 `action: "delete"` 로 Drive
+파일까지 지운다 — 남겨 두면 관리자 용량이 회수되지 않는다.
+
+**Drive 연결** (`ui/tabs/album/album_drive_connect_sheet.dart`)
+원본이 Drive로 가면서 이 연결은 선택 설정이 아니라 앨범을 쓰기 위한 준비가 됐다.
+그래서 루트 폴더 ID 입력란을 연결 경로에서 없애고(폴더는 앱이 만든다), 무엇이
+일어나는지와 Nest가 접근하는 범위(`drive.file` — 앱이 만든 파일만)를 알린 뒤
+버튼 하나로 끝낸다. 연결 뒤에는 계정 이메일·연결 시각·Drive 바로가기와
+'연결 끊기'를 보여 준다.
+
+웹은 기존 팝업 + `callback.html` 핸드셰이크를, 앱은 시스템 브라우저 →
+`google-drive-oauth` → 302 → `nestapp.life/oauth/google/connected.html` 뒤
+DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
+- `google-drive-oauth` 는 **`--no-verify-jwt`** 로 배포해야 한다. Google
+  리다이렉트에는 JWT가 없어 검증을 켜면 401로 막힌다.
+- `redirect_mode` 기본값은 **web**이다. 앱으로 두면 이 값을 보내지 않는 기존
+  배포 빌드가 앱용 주소를 받아 팝업 핸드셰이크가 끊긴다(원격 E2E가 잡아냈다).
+
+`state` 는 서명돼 있지 않으므로 `google-drive-oauth` 가 토큰을 심기 전에 그
+사용자가 정말 그 홈스쿨의 관리자인지 다시 확인한다.
+
+마이그레이션 `20260922150000_drive_integration_email.sql`(연결 계정 이메일).
 
 ## 7. Database and RLS Notes
 
