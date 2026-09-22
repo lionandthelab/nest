@@ -78,7 +78,8 @@ frontend/
           parent_news_tab.dart
           teacher_hub_tab.dart
           timetable_tab.dart
-          gallery_tab.dart
+          album/
+            album_tab.dart
           community_feed_tab.dart
           community_tab.dart
           members_tab.dart
@@ -145,7 +146,7 @@ Tabs are built dynamically in `HomePage._buildTabs`:
   - `Dashboard`
   - role hub (`Parent Hub` or `Teacher Hub`)
   - `Timetable`
-  - `Gallery`
+  - `앨범`
   - `Community`
 - Parent/Teacher hubs share one visual frame (`HubScaffold`):
   - same header + KPI metric tiles
@@ -223,7 +224,7 @@ Tabs are built dynamically in `HomePage._buildTabs`:
 3. Resolve current homeschool and view role.
 4. Load dependent context in two waves:
   - 학기/반/교시와 `fetch_term_schedule_pack`(세션+교사 배정 1회)을, 초대·학사·개인 일정·캘린더와 동시에 읽는다
-  - 가정/아이/수강은 반 목록이 생긴 뒤에 읽는다. 갤러리·커뮤니티는 해당 탭에서 `ensure*`
+  - 가정/아이/수강은 반 목록이 생긴 뒤에 읽는다. 앨범·커뮤니티는 해당 탭에서 `ensure*`
 5. 반만 바꾸면 이미 받은 학기 팩에서 세션을 걸러 쓰고, 시간표 저장 뒤에만 팩을 다시 받는다
 
 Admin dashboard onboarding:
@@ -365,7 +366,7 @@ Admin dashboard onboarding:
   - child switching is centralized in global header and shared across all parent tabs
   - header context area (`홈스쿨/학기/반/뷰 역할`) is always expanded and full-width (no extra collapse open action required)
   - user identity line shows display name + email in header for quick account recognition
-  - IA labels are Korean-first (관리자: `홈`, `학기 설정`, `시간표`, `소식`, `시스템` — §6.19 / 그 외: `교사 허브`, `갤러리`, `커뮤니티`)
+  - IA labels are Korean-first (관리자: `홈`, `학기 설정`, `시간표`, `소식`, `시스템` — §6.19 / 그 외: `교사 허브`, `앨범`, `커뮤니티`)
   - desktop left rail top logo (`assets/logo.png`) is clickable and routes to home tab
   - each tab view includes a bottom micro-caption (`현재 탭: ...`) to clarify current workspace context
 - Shared objective:
@@ -407,10 +408,12 @@ Admin dashboard onboarding:
   - root folder + folder policy + OAuth actions
   - developer token fields hidden behind explicit advanced toggle
 - Upload flow:
-  1. create `media_upload_sessions`
-  2. upload to Drive via edge function
-  3. insert `media_assets` and optional child tagging
-  4. show in gallery and community attachments
+  1. upload the original to the public `media` bucket
+  2. upload a 512px JPEG thumbnail next to it (`thumb/`)
+  3. insert `media_assets` with term/course/class + file metadata
+  4. mirror to Google Drive in the background (never awaited)
+
+> 갤러리 화면 자체는 §6.24 앨범으로 대체되었다.
 
 ### 6.8 Invite Acceptance (시작하기)
 
@@ -712,7 +715,7 @@ Admin dashboard onboarding:
 **역할별 부트** (`_loadRoleScopedContext` / `_loadDeferredContext`)
 
 - 시작 시: 학기·반·세션·아이/배정·공지·학사일정·알림함. 관리자만 가입/초대/아이등록 카운트.
-- 탭 진입 시: 커뮤니티(`ensureCommunityFeed`), 갤러리(`ensureGalleryItems`). 감사로그·자습·교수계획·활동기록은 교사/관리자 지연 로드.
+- 탭 진입 시: 커뮤니티(`ensureCommunityFeed`), 앨범(`ensureAlbumLoaded`). 감사로그·자습·교수계획·활동기록은 교사/관리자 지연 로드.
 
 **푸시**
 
@@ -742,6 +745,57 @@ Admin dashboard onboarding:
 - **Google Calendar**: 사용자별 `calendar_integrations`(토큰은 Edge Function만). 웹은 기존 Drive 콜백(`intent=calendar`), 앱은 `google-calendar-oauth` GET 리다이렉트. 동기화는 Nest 개인·학사 일정을 밀고, `[둥지]`가 아닌 Google 일정을 개인 일정으로 가져온다. Google Cloud에 `GOOGLE_CALENDAR_REDIRECT_URI`를 등록해야 앱 연결이 된다.
 
 마이그레이션 `20260911120000_personal_events_and_calendar.sql`. 겹침 계산은 `schedule_overlap.dart`.
+
+### 6.24 앨범 — 학기·수업별 사진첩 (2026-09)
+
+기존 갤러리는 2~4열 격자 하나였고, `fetchGalleryItems`에 `limit 48`이 박혀 있어
+사진이 49장을 넘으면 나머지는 어떤 방법으로도 열람할 수 없었다. 학기·수업이라는
+축은 화면 어디에도 드러나지 않았고, 사진을 고르거나 내려받을 수 없었다.
+
+**데이터.** `media_assets`에 `term_id` / `course_id` / `thumbnail_path` /
+`file_name` / `mime_type` / `size_bytes` / `drive_folder_id`를 더했다
+(`20260922090000_album_media_metadata.sql`). `term_id`는 `class_group_id`로부터
+유도 가능하지만 일부러 중복 저장한다 — 목록 질의가 조인 없이 단일 인덱스로
+끝나고, 반 없이 학기 앨범에만 올리는 경우도 허용하기 위함이다. 반이 지정된 행은
+트리거가 학기를 채운다(`20260922094000_media_assets_term_sync.sql`).
+
+**목록.** `fetchAlbumPage`는 `(captured_at, id)` 키셋 페이지네이션이다(60장/페이지).
+offset을 쓰지 않는 이유: `captured_at`이 업로드 시각이라 새 사진은 항상 목록 맨
+앞에 끼어들고, 그때마다 페이지 경계가 밀려 스크롤 도중 같은 사진이 두 번 나오거나
+한 장이 통째로 건너뛰어진다.
+
+**폴더 뷰.** `album_summaries(p_homeschool_id)` RPC가 학기/수업/반별 장수와 대표
+이미지를 한 번에 센다(`20260922091000_album_summaries_rpc.sql`). 클라이언트가
+세려면 전체 행을 받아야 해서 수천 장이면 불가능하다.
+
+**보기 방식.** 격자 / 타임라인 / 앨범(폴더) / 크게 보기. 열 수는
+`AlbumOrganizer.gridColumnsFor`가 `LayoutBuilder`의 폭으로 정한다 — 데스크톱 셸의
+왼쪽 레일이 220pt 가까이 먹어서 `MediaQuery` 폭으로 계산하면 늘 한 단계
+빽빽해진다. 고른 방식은 `NestCache`에 사용자별로 남는다.
+
+**업로드.** `_runBusy` **밖에서** 돈다. 그건 프로세스 전역 뮤텍스이고 재진입하면
+던지기 때문에, 그 안에서 돌리면 업로드 한 건이 앱 전체를 막고 두 사람 몫의
+업로드가 동시에 도는 것 자체가 불가능해진다. 동시 3건이고, 썸네일을 먼저 만들어
+목록에 낙관적 타일로 꽂는다. Drive 미러는 `unawaited`다.
+
+**Drive 폴더.** 업로드 시 `루트/학기/수업/날짜` 경로를 단계별로 확보하고, 만든
+폴더 id를 `drive_folder_nodes`에 캐시해 다음 파일은 Drive 왕복 없이 올린다
+(`20260922092000_drive_folder_nodes.sql`). 루트 폴더 ID를 비워 두면 앱이
+`Nest 앨범` 폴더를 직접 만든다.
+
+**레이턴시.** 그리드는 썸네일 + `cacheWidth: 360`, `frameBuilder`(청크마다 다시
+빌드하는 `loadingBuilder` 대신), `cacheExtent: 600`, `addAutomaticKeepAlives: false`.
+업로드에 `cacheControl: 31536000`(경로에 밀리초+해시가 박혀 내용이 불변),
+`index.html`에 Supabase preconnect, `main.dart`에서 이미지 캐시 120MiB(웹 200MiB).
+학기/반 전환에서 갤러리·커뮤니티 로드를 블로킹 `Future.wait`에서 뺐다.
+
+**선택·다운로드.** 길게 눌러 선택(최대 50장), 하단 바에서 일괄 다운로드. 웹은
+`archive`의 `ZipEncoder`로 zip, 파일 저장이 불가능한 플랫폼에서는 한 장만 새 창으로
+연다. 총 300MB 상한.
+
+파일: `ui/tabs/album/` (탭·슬리버·타일·업로드 시트·선택 바·뷰어),
+`services/album_organizer.dart`(순수 규칙), `services/media_thumbnailer.dart`
+(dart:ui 디코딩 + `package:image` JPEG 인코딩).
 
 ## 7. Database and RLS Notes
 
