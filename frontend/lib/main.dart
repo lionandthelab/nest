@@ -23,6 +23,14 @@ Future<void> main() async {
       }
     };
 
+    // 앨범은 한 화면에 썸네일 수십 장을 올린다. 기본 캐시(1000장 / 100MiB)는
+    // 원본을 그대로 붙이던 시절 기준이라, 되돌아 스크롤할 때마다 이미 받은
+    // 이미지를 다시 디코딩했다. 360px 썸네일 한 장이 약 0.5MB이므로 120MiB면
+    // 스무 화면 분량이 남는다.
+    PaintingBinding.instance.imageCache
+      ..maximumSize = 600
+      ..maximumSizeBytes = kIsWeb ? 200 << 20 : 120 << 20;
+
     // Catch errors in the platform dispatcher (e.g. shader compilation).
     PlatformDispatcher.instance.onError = (error, stack) {
       debugPrint('[NestPlatformError] $error\n$stack');

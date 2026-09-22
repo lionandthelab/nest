@@ -26,6 +26,15 @@
   <meta name="apple-mobile-web-app-title" content="Nest">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
+  <!--
+    앨범의 첫 화면은 썸네일 열두 장을 Supabase Storage에서 동시에 받는다. 그
+    전에 DNS 조회 + TLS 핸드셰이크를 미리 끝내 두면 모바일 회선에서 150~300ms를
+    앞당긴다. GitHub Pages는 응답 헤더를 손댈 수 없어, 웹에서 쓸 수 있는 네트워크
+    최적화는 사실상 이 한 줄뿐이다.
+  -->
+  <link rel="preconnect" href="https://avursvhmilcsssabqtkx.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="https://avursvhmilcsssabqtkx.supabase.co">
+
   <!-- Fonts (BlackHanSans / Jua / DoHyeon) are bundled as Flutter assets. -->
 
   <!-- Favicon -->
