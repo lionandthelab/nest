@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
 import '../models/nest_models.dart';
+import 'album_organizer.dart';
 
 class BootstrapResult {
   const BootstrapResult({
@@ -3432,12 +3433,49 @@ class NestRepository {
         .uploadBinary(
           storagePath,
           file.bytes,
-          fileOptions: FileOptions(contentType: file.mimeType),
+          fileOptions: FileOptions(
+            contentType: file.mimeType,
+            // 경로에 밀리초와 해시가 박혀 있어 같은 경로의 내용은 절대 바뀌지
+            // 않는다. 기본값(1시간) 대신 1년을 주면 재방문 시 브라우저가 이미지를
+            // 다시 받지 않는다. GitHub Pages는 응답 헤더를 못 건드리므로 웹에서
+            // 캐시를 얻을 수 있는 곳은 여기뿐이다.
+            cacheControl: '31536000',
+          ),
         );
 
     final publicUrl = client.storage.from('media').getPublicUrl(storagePath);
 
     return StorageUploadResult(storagePath: storagePath, publicUrl: publicUrl);
+  }
+
+  /// 원본 옆 `thumb/` 경로에 축소본을 올린다. 실패해도 던지지 않는다 —
+  /// 썸네일이 없으면 그리드가 원본으로 되돌아가면 그만이다.
+  Future<String?> uploadThumbnail({
+    required String storagePath,
+    required Uint8List bytes,
+  }) async {
+    final thumbPath = AlbumOrganizer.thumbnailPathFor(storagePath);
+    if (thumbPath == null || bytes.isEmpty) {
+      return null;
+    }
+
+    try {
+      await client.storage
+          .from('media')
+          .uploadBinary(
+            thumbPath,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              cacheControl: '31536000',
+              upsert: true,
+            ),
+          );
+      return thumbPath;
+    } catch (error) {
+      debugPrint('[Album] thumbnail upload failed: $error');
+      return null;
+    }
   }
 
   Future<String> insertMediaAsset({
@@ -3449,6 +3487,13 @@ class NestRepository {
     required String title,
     required String description,
     required String mediaType,
+    String? termId,
+    String? courseId,
+    String? thumbnailPath,
+    String fileName = '',
+    String mimeType = '',
+    int sizeBytes = 0,
+    DateTime? capturedAt,
   }) async {
     final row = await client
         .from('media_assets')
@@ -3458,10 +3503,18 @@ class NestRepository {
           'storage_path': uploadResult.storagePath,
           'uploader_user_id': uploaderUserId,
           'class_group_id': classGroupId,
+          'term_id': termId,
+          'course_id': courseId,
+          'thumbnail_path': thumbnailPath,
+          'file_name': fileName,
+          'mime_type': mimeType,
+          'size_bytes': sizeBytes,
           'title': title,
           'description': description,
           'media_type': mediaType,
-          'captured_at': DateTime.now().toUtc().toIso8601String(),
+          // 앨범 업로드는 사용자가 고른 촬영일을 싣는다. 비어 있을 때만 업로드
+          // 시각으로 떨어진다.
+          'captured_at': (capturedAt ?? DateTime.now()).toUtc().toIso8601String(),
         })
         .select('id')
         .single();
@@ -3533,6 +3586,7 @@ class NestRepository {
     required String fileName,
     required String mimeType,
     required List<int> bytes,
+    List<String> folderSegments = const [],
   }) async {
     final response = await client.functions.invoke(
       'google-drive-upload',
@@ -3542,6 +3596,7 @@ class NestRepository {
         'file_name': fileName,
         'mime_type': mimeType,
         'file_base64': base64Encode(bytes),
+        'folder_segments': folderSegments,
       },
     );
 
@@ -3573,29 +3628,97 @@ class NestRepository {
         .eq('id', mediaAssetId);
   }
 
-  Future<List<GalleryItem>> fetchGalleryItems({
+  static const String _albumColumns =
+      'id, title, description, media_type, drive_web_view_link, storage_path, '
+      'thumbnail_path, class_group_id, term_id, course_id, captured_at, '
+      'file_name, mime_type, size_bytes, uploader_user_id';
+
+  /// 앨범 한 페이지. [cursor]가 있으면 그 행 **다음**부터 이어 읽는다.
+  ///
+  /// offset 대신 키셋을 쓴다. 촬영일이 now()로 찍히는 탓에 새 업로드는 항상
+  /// 목록 맨 앞에 끼어드는데, offset 방식이면 그때마다 페이지 경계가 밀려
+  /// 스크롤 중에 같은 사진이 두 번 나오거나 한 장이 통째로 사라진다.
+  Future<List<GalleryItem>> fetchAlbumPage({
     required String homeschoolId,
-    required String? classGroupId,
+    String? termId,
+    String? classGroupId,
+    String? courseId,
+    String? mediaType,
+    AlbumCursor? cursor,
+    int limit = 60,
   }) async {
-    final data = (classGroupId != null && classGroupId.isNotEmpty)
-        ? await client
-              .from('media_assets')
-              .select(
-                'id, title, description, media_type, drive_web_view_link, storage_path, class_group_id, captured_at',
-              )
-              .eq('homeschool_id', homeschoolId)
-              .eq('class_group_id', classGroupId)
-              .order('captured_at', ascending: false)
-              .limit(48)
-        : await client
-              .from('media_assets')
-              .select(
-                'id, title, description, media_type, drive_web_view_link, storage_path, class_group_id, captured_at',
-              )
-              .eq('homeschool_id', homeschoolId)
-              .order('captured_at', ascending: false)
-              .limit(48);
+    var query = client
+        .from('media_assets')
+        .select(_albumColumns)
+        .eq('homeschool_id', homeschoolId);
+
+    if (termId != null && termId.isNotEmpty) {
+      query = query.eq('term_id', termId);
+    }
+    if (classGroupId != null && classGroupId.isNotEmpty) {
+      query = query.eq('class_group_id', classGroupId);
+    }
+    if (courseId != null && courseId.isNotEmpty) {
+      query = query.eq('course_id', courseId);
+    }
+    if (mediaType != null && mediaType.isNotEmpty) {
+      query = query.eq('media_type', mediaType);
+    }
+
+    final keyset = AlbumOrganizer.keysetFilter(cursor);
+    if (keyset != null) {
+      query = query.or(keyset);
+    }
+
+    final data = await query
+        .order('captured_at', ascending: false)
+        .order('id', ascending: false)
+        .limit(limit);
+
     return _asRows(data).map(GalleryItem.fromMap).toList();
+  }
+
+  /// 폴더 뷰용 학기/수업/반별 집계. 서버에서 한 번에 센다.
+  Future<List<AlbumSummary>> fetchAlbumSummaries({
+    required String homeschoolId,
+  }) async {
+    final data = await client.rpc<dynamic>(
+      'album_summaries',
+      params: {'p_homeschool_id': homeschoolId},
+    );
+
+    return _asRows(data).map(AlbumSummary.fromMap).toList();
+  }
+
+  /// 내려받기용 원본 바이트.
+  Future<Uint8List> downloadMediaBytes({required String storagePath}) {
+    return client.storage.from('media').download(storagePath);
+  }
+
+  /// 미디어 한 건을 지운다. DB 행을 먼저 지우고 스토리지 오브젝트를 뒤따라
+  /// 정리한다 — 오브젝트 삭제가 실패해도 앨범에서는 이미 사라졌고, 남은 파일은
+  /// 참조 없는 쓰레기일 뿐 사용자에게 보이지 않는다.
+  Future<void> deleteMediaAsset({
+    required String mediaAssetId,
+    String? storagePath,
+    String? thumbnailPath,
+  }) async {
+    await client.from('media_assets').delete().eq('id', mediaAssetId);
+
+    final paths = <String>[
+      if ((storagePath ?? '').isNotEmpty) storagePath!,
+      if ((thumbnailPath ?? '').isNotEmpty) thumbnailPath!,
+    ];
+
+    if (paths.isEmpty) {
+      return;
+    }
+
+    try {
+      await client.storage.from('media').remove(paths);
+    } catch (error) {
+      debugPrint('[Album] storage cleanup failed: $error');
+    }
   }
 
   Future<Map<String, List<String>>> fetchMediaChildrenByAsset({

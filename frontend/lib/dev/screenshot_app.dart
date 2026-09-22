@@ -20,6 +20,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../src/models/nest_models.dart';
 import '../src/services/nest_cache.dart';
+import '../src/services/album_organizer.dart';
 import '../src/services/nest_repository.dart';
 import '../src/state/nest_controller.dart';
 import '../src/ui/home_page.dart';
@@ -543,9 +544,19 @@ class _FakeNestRepository extends NestRepository {
   }
 
   @override
-  Future<List<GalleryItem>> fetchGalleryItems({
+  Future<List<GalleryItem>> fetchAlbumPage({
     required String homeschoolId,
-    required String? classGroupId,
+    String? termId,
+    String? classGroupId,
+    String? courseId,
+    String? mediaType,
+    AlbumCursor? cursor,
+    int limit = 60,
+  }) async => const [];
+
+  @override
+  Future<List<AlbumSummary>> fetchAlbumSummaries({
+    required String homeschoolId,
   }) async => const [];
 
   @override
