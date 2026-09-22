@@ -135,7 +135,12 @@ Deno.serve(async (req) => {
       status: 200,
       headers: {
         ...corsHeaders,
-        "Content-Type":
+        // 반드시 octet-stream 이어야 한다. supabase 함수 클라이언트는 이 타입일
+        // 때만 바이트를 그대로 주고, image/jpeg 같은 타입은 UTF-8 문자열로
+        // 디코딩해 버려 이미지가 깨진다(뷰어가 "원본을 불러오지 못했습니다"로 떴다).
+        // 실제 타입은 아래 헤더로 따로 알린다.
+        "Content-Type": "application/octet-stream",
+        "X-Nest-Media-Type":
           asset.mime_type || driveRes.headers.get("content-type") ||
           "application/octet-stream",
         // 앨범 원본은 한 번 올라가면 바뀌지 않는다. 뷰어에서 좌우로 넘길 때
