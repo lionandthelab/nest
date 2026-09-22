@@ -36,6 +36,11 @@ supabase secrets set \
 echo "Deploying edge functions..."
 supabase functions deploy timetable-assistant-generate --project-ref "$PROJECT_REF"
 supabase functions deploy google-drive-upload --project-ref "$PROJECT_REF"
+# 앨범 원본 중계·삭제. 로그인한 구성원만 부르므로 JWT 검증을 켠 채로 둔다.
+supabase functions deploy google-drive-file --project-ref "$PROJECT_REF"
+# 앱에서 시작한 Drive 연결이 돌아오는 자리. Google 리다이렉트에는 JWT가
+# 없으므로 검증을 꺼야 한다 — 켜면 401로 막혀 연결이 영영 끝나지 않는다.
+supabase functions deploy google-drive-oauth --project-ref "$PROJECT_REF" --no-verify-jwt
 supabase functions deploy google-drive-connect-start --project-ref "$PROJECT_REF"
 supabase functions deploy google-drive-connect-complete --project-ref "$PROJECT_REF"
 supabase functions deploy nest-notify --project-ref "$PROJECT_REF"
