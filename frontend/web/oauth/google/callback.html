@@ -123,6 +123,24 @@
           return;
         }
 
+        // 앱(모바일)에서 시작한 Drive 연결은 시스템 브라우저로 나갔다가 여기로
+        // 돌아온다. 그 브라우저에는 앱이 심어 둔 localStorage 컨텍스트가 없어
+        // 아래의 팝업 핸드셰이크를 탈 수 없다. 대신 code/state를 엣지 함수로
+        // 넘기면 서버가 교환하고 저장한다.
+        //
+        // 앱 전용 리디렉션 주소를 따로 쓰지 않는 이유: Google은 redirect_uri를
+        // 등록 목록과 정확히 대조하는데, 새 주소는 콘솔에서 사람이 등록해야
+        // 한다. 이미 등록된 이 페이지를 경유하면 그 과정이 필요 없다.
+        const appHop = readAppHop(stateToken);
+        if (appHop) {
+          setStatus('연결을 마무리하는 중입니다...');
+          const hop = new URL(appHop);
+          hop.searchParams.set('code', code);
+          hop.searchParams.set('state', stateToken || '');
+          window.location.replace(hop.toString());
+          return;
+        }
+
         const context = loadContext(stateToken);
         const intent = context.intent === 'calendar' ? 'calendar' : 'drive';
 
@@ -243,6 +261,30 @@
         }
 
         return context;
+      }
+
+      /// state가 앱 모드를 가리키면, 코드를 넘길 엣지 함수 주소를 돌려준다.
+      /// 주소는 state 안에 서버가 넣어 준 값만 쓰고, 그것도 이 프로젝트의
+      /// Supabase 함수 주소일 때만 받아들인다 — state는 서명돼 있지 않아서
+      /// 그대로 믿고 이동하면 열린 리다이렉터가 된다.
+      function readAppHop(stateToken) {
+        if (!stateToken) return null;
+        try {
+          const parsed = JSON.parse(base64UrlDecode(stateToken));
+          if (parsed?.intent !== 'drive_app') return null;
+
+          const raw = String(parsed.oauth_fn || '');
+          if (!raw) return null;
+
+          const url = new URL(raw);
+          const okHost =
+            url.protocol === 'https:' &&
+            /\.supabase\.co$/.test(url.hostname) &&
+            url.pathname === '/functions/v1/google-drive-oauth';
+          return okHost ? url.toString() : null;
+        } catch (_) {
+          return null;
+        }
       }
 
       function base64UrlDecode(input) {

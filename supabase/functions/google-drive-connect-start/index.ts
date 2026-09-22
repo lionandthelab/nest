@@ -1,5 +1,9 @@
 import { corsHeaders } from "../_shared/cors.ts";
-import { driveRedirectUri } from "../_shared/google_drive.ts";
+import {
+  DRIVE_APP_INTENT,
+  driveOauthFunctionUrl,
+  driveRedirectUri,
+} from "../_shared/google_drive.ts";
 import { assertRole, createAdminClient, json, requireUser } from "../_shared/supabase.ts";
 
 type Payload = {
@@ -35,9 +39,14 @@ Deno.serve(async (req) => {
       return json(400, { error: "Missing GOOGLE_CLIENT_ID or GOOGLE_REDIRECT_URI" }, corsHeaders);
     }
 
+    const isApp = payload.redirect_mode === "app";
+
     const stateObj = {
       homeschool_id: payload.homeschool_id,
       user_id: user.id,
+      // 앱 모드면 callback.html 이 이 표식을 보고 엣지 함수로 넘긴다.
+      intent: isApp ? DRIVE_APP_INTENT : "drive",
+      oauth_fn: isApp ? driveOauthFunctionUrl() : undefined,
       ts: Date.now()
     };
 

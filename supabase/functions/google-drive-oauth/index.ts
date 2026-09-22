@@ -44,7 +44,8 @@ Deno.serve(async (req) => {
     const admin = createAdminClient();
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
     const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
-    const redirectUri = driveRedirectUri("app");
+    // 인가 요청에 쓴 것과 같은 주소여야 한다 — 등록된 웹 콜백이다.
+    const redirectUri = driveRedirectUri();
     if (!clientId || !clientSecret || !redirectUri) {
       return seeOther(driveDonePageUrl(false, "server_config"));
     }
