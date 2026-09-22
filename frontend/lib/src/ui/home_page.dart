@@ -17,7 +17,7 @@ import 'tabs/admin_news_tab.dart';
 import 'tabs/community_feed_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/family_admin_tab.dart';
-import 'tabs/gallery_tab.dart';
+import 'tabs/album/album_tab.dart';
 import 'tabs/parent_home_tab.dart';
 import 'tabs/parent_timetable_tab.dart';
 import 'tabs/profile_settings_tab.dart';
@@ -288,6 +288,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         _TabSpec(
+          label: '앨범',
+          page: AlbumTab(
+            controller: controller,
+            onSelectTerm: _handleTermChange,
+          ),
+        ),
+        _TabSpec(
           label: NewTermTabs.system,
           page: SystemAdminTab(controller: controller),
         ),
@@ -315,6 +322,13 @@ class _HomePageState extends State<HomePage> {
             selectedChildId: _selectedChildId,
             childClassBundles: _childClassBundles,
             isLoadingChildClasses: _isLoadingChildClasses,
+          ),
+        ),
+        _TabSpec(
+          label: '앨범',
+          page: AlbumTab(
+            controller: controller,
+            onSelectTerm: _handleTermChange,
           ),
         ),
         _TabSpec(
@@ -348,6 +362,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         _TabSpec(
+          label: '앨범',
+          page: AlbumTab(
+            controller: controller,
+            onSelectTerm: _handleTermChange,
+          ),
+        ),
+        _TabSpec(
           label: '커뮤니티',
           page: CommunityFeedTab(controller: controller, title: '커뮤니티'),
         ),
@@ -375,11 +396,13 @@ class _HomePageState extends State<HomePage> {
             onDirtyChanged: _handleScheduleDirtyChanged,
           ),
         ),
-        if (!isMobileLike)
-          _TabSpec(
-            label: '갤러리',
-            page: GalleryTab(controller: controller),
+        _TabSpec(
+          label: '앨범',
+          page: AlbumTab(
+            controller: controller,
+            onSelectTerm: _handleTermChange,
           ),
+        ),
       ],
     ];
     tabs.add(
@@ -3010,7 +3033,8 @@ Icon _iconForLabel(String label, {required bool filled}) {
     'Members' => Icon(filled ? Icons.group : Icons.group_outlined),
     'Families' => Icon(filled ? Icons.diversity_3 : Icons.diversity_3_outlined),
     'Ops' => Icon(filled ? Icons.manage_search : Icons.manage_search_outlined),
-    '갤러리' => Icon(filled ? Icons.photo_library : Icons.photo_library_outlined),
+    '앨범' || '갤러리' =>
+      Icon(filled ? Icons.photo_library : Icons.photo_library_outlined),
     'Gallery' => Icon(
       filled ? Icons.photo_library : Icons.photo_library_outlined,
     ),

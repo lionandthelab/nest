@@ -8,7 +8,7 @@ import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
 import 'community_feed_tab.dart';
-import 'gallery_tab.dart';
+import 'album/album_tab.dart';
 
 class ParentNewsTab extends StatefulWidget {
   const ParentNewsTab({super.key, required this.controller});
@@ -112,7 +112,7 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
                 children: [
                   Text('소식', style: theme.textTheme.titleLarge),
                   Text(
-                    '공지와 SNS를 먼저 보고, 갤러리는 별도 화면으로 열어 확인합니다.',
+                    '공지와 SNS를 먼저 보고, 앨범은 별도 화면으로 열어 확인합니다.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: NestColors.deepWood.withValues(alpha: 0.72),
                     ),
@@ -123,9 +123,9 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
           ],
         ),
         FilledButton.tonalIcon(
-          onPressed: _openGalleryPage,
+          onPressed: _openAlbumPage,
           icon: const Icon(Icons.photo_library_outlined),
-          label: const Text('갤러리 열기'),
+          label: const Text('앨범 열기'),
         ),
       ],
     );
@@ -156,10 +156,10 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
     };
   }
 
-  Future<void> _openGalleryPage() async {
+  Future<void> _openAlbumPage() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => GalleryPage(controller: widget.controller),
+        builder: (context) => AlbumPage(controller: widget.controller),
       ),
     );
   }
