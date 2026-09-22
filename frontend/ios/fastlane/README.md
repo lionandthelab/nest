@@ -79,6 +79,22 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 빌드 + 업로드 + 프로덕션 심사 제출 (기존 메타데이터/스크린샷 재사용)
 
+### ios review_state
+
+```sh
+[bundle exec] fastlane ios review_state
+```
+
+심사 대기/진행 중인 버전의 상태 조회
+
+### ios withdraw
+
+```sh
+[bundle exec] fastlane ios withdraw
+```
+
+심사 대기 중인 버전을 심사에서 내린다 (새 버전을 올리려면 먼저 필요)
+
 ### ios submit
 
 ```sh

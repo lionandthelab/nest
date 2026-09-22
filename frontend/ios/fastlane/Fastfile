@@ -314,6 +314,45 @@ platform :ios do
     UI.success("프로덕션 심사 제출 완료: #{version} (#{build}) — 승인 시 자동 출시")
   end
 
+  desc "심사 대기/진행 중인 버전의 상태 조회"
+  lane :review_state do
+    api_key = asc_key
+    Spaceship::ConnectAPI.auth(
+      key_id: api_key[:key_id],
+      issuer_id: api_key[:issuer_id],
+      key: api_key[:key],
+    )
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    app.get_app_store_versions.first(4).each do |v|
+      UI.important("#{v.version_string} — #{v.app_store_state}")
+    end
+  end
+
+  desc "심사 대기 중인 버전을 심사에서 내린다 (새 버전을 올리려면 먼저 필요)"
+  lane :withdraw do
+    api_key = asc_key
+    Spaceship::ConnectAPI.auth(
+      key_id: api_key[:key_id],
+      issuer_id: api_key[:issuer_id],
+      key: api_key[:key],
+    )
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+
+    # WAITING_FOR_REVIEW / IN_REVIEW / PENDING_DEVELOPER_RELEASE 중 하나면
+    # 제출을 취소할 수 있다. 취소하면 대기 순번을 잃는다.
+    version = app.get_edit_app_store_version || app.get_live_app_store_version
+    UI.user_error!("심사 중인 버전을 찾지 못했습니다") if version.nil?
+
+    UI.important("대상: #{version.version_string} (#{version.app_store_state})")
+    submission = version.fetch_app_store_version_submission
+    if submission.nil?
+      UI.important("제출 기록이 없습니다 — 이미 내려가 있습니다")
+    else
+      submission.delete!
+      UI.success("#{version.version_string} 를 심사에서 내렸습니다")
+    end
+  end
+
   desc "이미 업로드된 빌드를 심사 제출만 (options: build)"
   lane :submit do |options|
     api_key = asc_key
