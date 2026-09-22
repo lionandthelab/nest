@@ -3,14 +3,19 @@
 /// 웹은 팝업 + localStorage 핸드셰이크(callback.html)를 쓰고, 앱은 시스템
 /// 브라우저로 나갔다가 이 함수로 돌아온다. 캘린더 연결과 같은 구조다.
 
+/// redirect_mode 가 명시적으로 "app" 일 때만 앱용 주소를 준다.
+///
+/// 기본값이 앱이면, redirect_mode 를 보내지 않는 예전 웹 클라이언트가 앱용
+/// 주소를 받아 팝업 핸드셰이크가 끊긴다. 이미 배포된 빌드는 이 값을 보내지
+/// 않으므로 기본은 반드시 웹이어야 한다.
 export function driveRedirectUri(mode: string | undefined) {
-  if (mode === "web") {
-    return Deno.env.get("GOOGLE_REDIRECT_URI") || "";
+  if (mode === "app") {
+    return (
+      Deno.env.get("GOOGLE_DRIVE_REDIRECT_URI") ||
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-drive-oauth`
+    );
   }
-  return (
-    Deno.env.get("GOOGLE_DRIVE_REDIRECT_URI") ||
-    `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-drive-oauth`
-  );
+  return Deno.env.get("GOOGLE_REDIRECT_URI") || "";
 }
 
 /// 앱 사용자가 브라우저에서 인증을 마친 뒤 도착할 안내 페이지.
