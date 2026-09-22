@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../tabs/album/album_drive_connect_sheet.dart';
+import 'nest_motion.dart';
 
-/// Google Drive 연결 카드(관리자 전용).
+/// 관리자 홈의 "사진 저장 위치" 카드.
 ///
-/// 관리자 홈에서는 자주 쓰지 않는 설정이라 기본으로 접혀 있고, 펼치면 루트 폴더
-/// 지정과 연결/재연결을 할 수 있다.
+/// 예전에는 접힌 카드 안에 루트 폴더 ID 입력란이 있었다. 관리자가 Drive에서
+/// 폴더를 만들고 주소창에서 ID를 긁어 붙여 넣어야 시작되는 설정이었는데,
+/// 그건 앨범을 쓰기 위한 요구로는 과했다. 지금은 상태만 보여 주고, 실제
+/// 안내와 연결은 [showDriveConnectSheet]가 맡는다.
 class DriveIntegrationCard extends StatefulWidget {
   const DriveIntegrationCard({
     super.key,
@@ -15,6 +19,8 @@ class DriveIntegrationCard extends StatefulWidget {
   });
 
   final NestController controller;
+
+  /// 더는 쓰이지 않는다. 카드가 접히지 않으므로 호출부 호환을 위해서만 남긴다.
   final bool initiallyExpanded;
 
   @override
@@ -22,17 +28,10 @@ class DriveIntegrationCard extends StatefulWidget {
 }
 
 class _DriveIntegrationCardState extends State<DriveIntegrationCard> {
-  final _rootFolderController = TextEditingController();
-  bool _connecting = false;
-  late bool _expanded = widget.initiallyExpanded;
-
   @override
   void initState() {
     super.initState();
-    _rootFolderController.text =
-        widget.controller.driveIntegration?.rootFolderId ?? '';
-    // 연결 상태 조회는 이 카드가 직접 챙긴다. 예전에는 대시보드 탭의 initState가
-    // 대신 불러줬는데, 카드를 위젯으로 분리하면서 그 호출이 사라졌었다.
+    // 연결 상태 조회는 이 카드가 직접 챙긴다.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (widget.controller.isAdminLike) {
@@ -41,21 +40,10 @@ class _DriveIntegrationCardState extends State<DriveIntegrationCard> {
     });
   }
 
-  @override
-  void dispose() {
-    _rootFolderController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _connect() async {
-    setState(() => _connecting = true);
-    final error = await widget.controller.connectGoogleDrive(
-      rootFolderId: _rootFolderController.text,
-    );
-    if (!mounted) return;
-    setState(() => _connecting = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? 'Google Drive가 연결되었습니다.')),
+  Future<void> _open() async {
+    await showDriveConnectSheet(
+      context: context,
+      controller: widget.controller,
     );
   }
 
@@ -66,112 +54,73 @@ class _DriveIntegrationCardState extends State<DriveIntegrationCard> {
     final integration = controller.driveIntegration;
     final connected = integration?.isConnected ?? false;
     final email = integration?.googleEmail;
-    final supported = controller.isWebOauthSupported;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Row(
-                children: [
-                  const Icon(Icons.add_to_drive, color: NestColors.dustyRose),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Google Drive 연결',
+      child: NestPressable(
+        onPressed: _open,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: NestColors.roseMist.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.add_to_drive,
+                  size: 20,
+                  color: NestColors.clay,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '사진 저장 위치',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-                  if (controller.isLoadingDriveIntegration)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    Chip(
-                      label: Text(connected ? '연결됨' : '미연결'),
-                      visualDensity: VisualDensity.compact,
-                      avatar: Icon(
-                        connected ? Icons.check_circle : Icons.cloud_off,
-                        size: 16,
-                        color: connected
-                            ? NestColors.mutedSage
-                            : NestColors.deepWood.withValues(alpha: 0.4),
+                    const SizedBox(height: 2),
+                    Text(
+                      connected
+                          ? (email != null && email.isNotEmpty
+                                ? '$email 의 Drive에 보관 중'
+                                : '관리자 Drive에 보관 중')
+                          : '아직 연결하지 않았습니다. 지금은 Nest에 저장됩니다.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.72),
+                        height: 1.4,
                       ),
                     ),
-                  AnimatedRotation(
-                    turns: _expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: const Icon(Icons.expand_more),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: !_expanded
-                  ? const SizedBox(width: double.infinity)
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 10),
-                        Text(
-                          connected
-                              ? '연결됨: ${email != null && email.isNotEmpty ? email : '연결됨'}\n'
-                                    '갤러리·커뮤니티에 올린 사진·영상이 Google Drive에도 함께 저장됩니다.'
-                              : '연결하면 갤러리·커뮤니티에 올린 사진·영상이 Google Drive에도 함께 저장됩니다.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: NestColors.deepWood.withValues(alpha: 0.72),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _rootFolderController,
-                          decoration: const InputDecoration(
-                            labelText: '루트 폴더 ID (선택)',
-                            hintText: '비워두면 Drive 최상위에 저장됩니다.',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (!supported)
-                          Text(
-                            '웹에서 연결할 수 있어요.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: NestColors.deepWood.withValues(alpha: 0.5),
-                            ),
-                          )
-                        else
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _connecting ? null : _connect,
-                              icon: _connecting
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(Icons.link, size: 18),
-                              label: Text(connected ? '다시 연결' : '연결하기'),
-                            ),
-                          ),
-                      ],
-                    ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              if (controller.isLoadingDriveIntegration)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  connected ? Icons.check_circle : Icons.chevron_right_rounded,
+                  size: connected ? 20 : 24,
+                  color: connected
+                      ? NestColors.mutedSage
+                      : NestColors.deepWood.withValues(alpha: 0.4),
+                ),
+            ],
+          ),
         ),
       ),
     );

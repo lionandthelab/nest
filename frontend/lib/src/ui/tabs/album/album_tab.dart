@@ -12,6 +12,7 @@ import '../../widgets/nest_motion.dart';
 import '../../widgets/nest_refresh.dart';
 import '../../widgets/nest_sheet.dart';
 import '../../widgets/nest_skeleton.dart';
+import 'album_drive_connect_sheet.dart';
 import 'album_messages.dart';
 import 'album_selection_bar.dart';
 import 'album_slivers.dart';
@@ -120,12 +121,31 @@ class _AlbumTabState extends State<AlbumTab> {
     }
   }
 
+  Future<void> _openDriveSetup() async {
+    await showDriveConnectSheet(
+      context: context,
+      controller: widget.controller,
+    );
+  }
+
   Future<void> _refresh() async {
     await widget.controller.loadAlbumPage(reset: true);
     unawaited(widget.controller.loadAlbumSummaries());
   }
 
   Future<void> _openUploadSheet() async {
+    final controller = widget.controller;
+    // 원본은 관리자 Drive로 간다. 관리자가 아직 연결하지 않았다면 사진을 올리기
+    // 전이 알려 줄 마지막 기회다 — 연결 없이 올리면 Nest 용량에 쌓인다.
+    if (controller.isAdminLike &&
+        !(controller.driveIntegration?.isConnected ?? false)) {
+      final connected = await showDriveConnectSheet(
+        context: context,
+        controller: controller,
+      );
+      if (!mounted || connected == null) return;
+    }
+
     final draft = await showAlbumUploadSheet(
       context: context,
       controller: widget.controller,
@@ -293,6 +313,7 @@ class _AlbumTabState extends State<AlbumTab> {
                           openAlbum: _openAlbum,
                           onPickMode: _pickMode,
                           onCloseAlbum: _closeAlbumCard,
+                          onOpenDriveSetup: _openDriveSetup,
                         ),
                       ),
                       ..._buildBody(controller, constraints.maxWidth),
@@ -494,6 +515,7 @@ class _AlbumHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.openAlbum,
     required this.onPickMode,
     required this.onCloseAlbum,
+    required this.onOpenDriveSetup,
   });
 
   final NestController controller;
@@ -501,6 +523,7 @@ class _AlbumHeaderDelegate extends SliverPersistentHeaderDelegate {
   final AlbumSummary? openAlbum;
   final VoidCallback onPickMode;
   final Future<void> Function() onCloseAlbum;
+  final VoidCallback onOpenDriveSetup;
 
   @override
   double get minExtent => 92;
@@ -516,6 +539,7 @@ class _AlbumHeaderDelegate extends SliverPersistentHeaderDelegate {
   ) {
     final theme = Theme.of(context);
     final summary = openAlbum;
+    final driveConnected = controller.driveIntegration?.isConnected ?? false;
 
     // Container가 아니라 DecoratedBox를 쓴다. Container는 테두리 두께만큼
     // 자식에 패딩을 넣어서, 선언한 maxExtent보다 1pt 더 커지고 슬리버가
@@ -560,6 +584,20 @@ class _AlbumHeaderDelegate extends SliverPersistentHeaderDelegate {
                         else
                           Expanded(child: _MetricRow(controller: controller)),
                         if (summary != null) const Spacer(),
+                        if (controller.isAdminLike)
+                          IconButton(
+                            tooltip: '사진 저장 위치',
+                            onPressed: onOpenDriveSetup,
+                            icon: Icon(
+                              driveConnected
+                                  ? Icons.cloud_done_outlined
+                                  : Icons.cloud_off_outlined,
+                              size: 20,
+                              color: driveConnected
+                                  ? NestColors.mutedSage
+                                  : NestColors.deepWood.withValues(alpha: 0.5),
+                            ),
+                          ),
                         IconButton(
                           tooltip: '보기 방식',
                           onPressed: onPickMode,

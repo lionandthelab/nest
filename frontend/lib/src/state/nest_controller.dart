@@ -2400,9 +2400,6 @@ class NestController extends ChangeNotifier {
   /// Runs the admin Google Drive OAuth popup flow (web only). Returns null on
   /// success or a Korean error message string on failure. Does not throw.
   Future<String?> connectGoogleDrive({String rootFolderId = ''}) async {
-    if (!_oauthBridge.supported) {
-      return '웹에서 연결할 수 있어요.';
-    }
     if (!isAdminLike) {
       return '관리자만 Google Drive를 연결할 수 있습니다.';
     }
@@ -2418,6 +2415,31 @@ class NestController extends ChangeNotifier {
     }
 
     try {
+      // 앱에는 팝업이 없다. 시스템 브라우저로 나갔다가 엣지 함수가 연결을
+      // 저장하면, 앱은 DB를 폴링해 알아챈다 — 캘린더 연결과 같은 구조다.
+      if (!_oauthBridge.supported) {
+        final appAuthUrl = await _repository.driveConnectStart(
+          homeschoolId: homeschoolId,
+          redirectMode: 'app',
+        );
+        if (appAuthUrl == null || appAuthUrl.isEmpty) {
+          return 'Google 인증 주소를 받지 못했습니다. 잠시 후 다시 시도하세요.';
+        }
+
+        final launched = await launchUrl(
+          Uri.parse(appAuthUrl),
+          mode: LaunchMode.externalApplication,
+        );
+        if (!launched) {
+          return '브라우저를 열 수 없습니다.';
+        }
+
+        await _pollDriveConnected();
+        return driveIntegration?.isConnected == true
+            ? null
+            : '브라우저에서 Google 로그인을 마친 뒤, 여기서 다시 시도해 주세요.';
+      }
+
       await _oauthBridge.stashContext(
         homeschoolId: homeschoolId,
         rootFolderId: rootFolderId.trim(),
@@ -2429,6 +2451,7 @@ class NestController extends ChangeNotifier {
 
       final authUrl = await _repository.driveConnectStart(
         homeschoolId: homeschoolId,
+        redirectMode: 'web',
       );
       if (authUrl == null || authUrl.isEmpty) {
         return 'Google 인증 주소를 받지 못했습니다. 잠시 후 다시 시도하세요.';
@@ -2457,6 +2480,44 @@ class NestController extends ChangeNotifier {
       // Always clear the stashed context (incl. the user access token) from
       // client-side storage once the flow ends — success, failure, or timeout.
       await _oauthBridge.clearContext();
+    }
+  }
+
+  /// 앱에서 브라우저로 나갔을 때, 연결이 저장됐는지 DB를 보고 알아챈다.
+  Future<void> _pollDriveConnected() async {
+    const timeout = Duration(minutes: 3);
+    const interval = Duration(seconds: 2);
+    final deadline = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(interval);
+      await loadDriveIntegration();
+      if (driveIntegration?.isConnected == true) {
+        return;
+      }
+    }
+  }
+
+  /// Drive 연결을 끊는다. 계정을 잘못 붙였을 때 되돌릴 길이 없었다.
+  ///
+  /// 이미 Drive에 올라간 원본은 지우지 않는다 — 관리자 Drive에 그대로 남고,
+  /// 다시 연결하면 앨범에서 또 보인다.
+  Future<String?> disconnectGoogleDrive() async {
+    if (!isAdminLike) {
+      return '관리자만 Google Drive 연결을 끊을 수 있습니다.';
+    }
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      return '홈스쿨을 먼저 선택하세요.';
+    }
+
+    try {
+      await _repository.disconnectDrive(homeschoolId: homeschoolId);
+      await loadDriveIntegration();
+      notifyListeners();
+      return null;
+    } catch (error) {
+      return error.toString().replaceFirst('Exception: ', '');
     }
   }
 

@@ -3566,14 +3566,34 @@ class NestRepository {
 
   /// Starts the admin OAuth flow. Returns the Google consent [auth_url] to open
   /// in a popup, or null if the edge function did not return one.
-  Future<String?> driveConnectStart({required String homeschoolId}) async {
+  Future<String?> driveConnectStart({
+    required String homeschoolId,
+    String redirectMode = 'web',
+  }) async {
     final response = await client.functions.invoke(
       'google-drive-connect-start',
-      body: {'homeschool_id': homeschoolId},
+      body: {
+        'homeschool_id': homeschoolId,
+        'redirect_mode': redirectMode,
+      },
     );
 
     final authUrl = _asMap(response.data)['auth_url'];
     return authUrl is String && authUrl.isNotEmpty ? authUrl : null;
+  }
+
+  /// Drive 연결을 끊는다. 토큰은 지우고 행은 남겨 두어, 예전에 올린 사진의
+  /// drive_file_id가 가리키던 통합 기록이 사라지지 않게 한다.
+  Future<void> disconnectDrive({required String homeschoolId}) {
+    return client
+        .from('drive_integrations')
+        .update({
+          'status': 'DISCONNECTED',
+          'google_access_token': null,
+          'google_refresh_token': null,
+          'google_token_expires_at': null,
+        })
+        .eq('homeschool_id', homeschoolId);
   }
 
   /// Reads the non-secret Drive integration row for a homeschool. Never selects
@@ -3581,7 +3601,10 @@ class NestRepository {
   Future<DriveIntegration?> fetchDriveIntegration(String homeschoolId) async {
     final row = await client
         .from('drive_integrations')
-        .select('id, homeschool_id, status, root_folder_id, updated_at')
+        .select(
+          'id, homeschool_id, status, root_folder_id, google_email, '
+          'connected_at, updated_at',
+        )
         .eq('homeschool_id', homeschoolId)
         .maybeSingle();
 

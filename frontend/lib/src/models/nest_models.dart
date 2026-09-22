@@ -1966,6 +1966,7 @@ class DriveIntegration {
     required this.status,
     this.rootFolderId,
     this.googleEmail,
+    this.connectedAt,
     this.updatedAt,
   });
 
@@ -1975,9 +1976,8 @@ class DriveIntegration {
       homeschoolId: (map['homeschool_id'] as String?) ?? '',
       status: (map['status'] as String?) ?? 'DISCONNECTED',
       rootFolderId: map['root_folder_id'] as String?,
-      // google_email is not stored in the app-visible columns today; parsed
-      // defensively so the model stays forward-compatible if it is added.
       googleEmail: map['google_email'] as String?,
+      connectedAt: parseDateTime(map['connected_at']),
       updatedAt: parseDateTime(map['updated_at']),
     );
   }
@@ -1987,6 +1987,7 @@ class DriveIntegration {
   final String status;
   final String? rootFolderId;
   final String? googleEmail;
+  final DateTime? connectedAt;
   final DateTime? updatedAt;
 
   bool get isConnected => status == 'CONNECTED';
@@ -1997,6 +1998,7 @@ class DriveIntegration {
     'status': status,
     'root_folder_id': rootFolderId,
     'google_email': googleEmail,
+    'connected_at': connectedAt?.toIso8601String(),
     'updated_at': updatedAt?.toIso8601String(),
   };
 }
