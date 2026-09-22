@@ -1,8 +1,11 @@
 import { corsHeaders } from "../_shared/cors.ts";
+import { driveRedirectUri } from "../_shared/google_drive.ts";
 import { assertRole, createAdminClient, json, requireUser } from "../_shared/supabase.ts";
 
 type Payload = {
   homeschool_id: string;
+  /// "web"이면 팝업 + callback.html, 그 외에는 앱용 리다이렉트 함수로 돌아온다.
+  redirect_mode?: string;
 };
 
 Deno.serve(async (req) => {
@@ -26,7 +29,7 @@ Deno.serve(async (req) => {
     await assertRole(admin, payload.homeschool_id, user.id, ["HOMESCHOOL_ADMIN"]);
 
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
-    const redirectUri = Deno.env.get("GOOGLE_REDIRECT_URI");
+    const redirectUri = driveRedirectUri(payload.redirect_mode);
 
     if (!clientId || !redirectUri) {
       return json(400, { error: "Missing GOOGLE_CLIENT_ID or GOOGLE_REDIRECT_URI" }, corsHeaders);
@@ -46,7 +49,13 @@ Deno.serve(async (req) => {
       response_type: "code",
       access_type: "offline",
       prompt: "consent",
-      scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.install",
+      include_granted_scopes: "true",
+      // 연결 화면에서 "어느 계정인지" 보여 주려면 이메일이 필요하다.
+      scope:
+        "https://www.googleapis.com/auth/drive.file " +
+        "https://www.googleapis.com/auth/drive.appdata " +
+        "https://www.googleapis.com/auth/drive.install " +
+        "https://www.googleapis.com/auth/userinfo.email",
       state
     });
 

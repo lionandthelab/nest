@@ -67,6 +67,21 @@ Deno.serve(async (req) => {
 
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
+    // 관리자가 "내 어느 계정의 용량을 쓰는지" 확인할 수 있어야 한다. 계정이
+    // 여러 개인 관리자가 엉뚱한 곳에 붙여 놓고도 알아채지 못하던 문제.
+    let googleEmail: string | null = null;
+    try {
+      const meRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        googleEmail = typeof me.email === "string" ? me.email : null;
+      }
+    } catch (_) {
+      googleEmail = null;
+    }
+
     const { error: upsertErr } = await admin.from("drive_integrations").upsert(
       {
         homeschool_id: payload.homeschool_id,
@@ -79,6 +94,7 @@ Deno.serve(async (req) => {
         google_access_token: accessToken,
         google_refresh_token: refreshToken || null,
         google_token_expires_at: expiresAt,
+        google_email: googleEmail,
         oauth_scope: scope || null
       },
       { onConflict: "homeschool_id" }
@@ -92,6 +108,7 @@ Deno.serve(async (req) => {
       200,
       {
         connected: true,
+        google_email: googleEmail,
         expires_at: expiresAt,
         has_refresh_token: Boolean(refreshToken)
       },
