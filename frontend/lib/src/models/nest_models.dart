@@ -1810,6 +1810,13 @@ class GalleryItem {
     required this.storagePath,
     required this.classGroupId,
     required this.capturedAt,
+    this.termId,
+    this.courseId,
+    this.thumbnailPath,
+    this.fileName = '',
+    this.mimeType = '',
+    this.sizeBytes = 0,
+    this.uploaderUserId = '',
   });
 
   final String id;
@@ -1820,8 +1827,23 @@ class GalleryItem {
   final String? storagePath;
   final String? classGroupId;
   final DateTime? capturedAt;
+  final String? termId;
+  final String? courseId;
+
+  /// 그리드용 축소본의 저장 경로. 업로드 시 만들지 못했으면 null이고, 이때는
+  /// 호출부가 [storagePath]의 원본으로 되돌아간다.
+  final String? thumbnailPath;
+  final String fileName;
+  final String mimeType;
+  final int sizeBytes;
+  final String uploaderUserId;
 
   bool get isVideo => mediaType == 'VIDEO';
+  bool get hasThumbnail => (thumbnailPath ?? '').isNotEmpty;
+
+  /// 그리드에 붙일 경로. 썸네일이 있으면 그걸, 없으면 원본을 쓴다.
+  String? get previewPath =>
+      hasThumbnail ? thumbnailPath : storagePath;
 
   factory GalleryItem.fromMap(Map<String, dynamic> map) {
     return GalleryItem(
@@ -1833,8 +1855,94 @@ class GalleryItem {
       storagePath: map['storage_path'] as String?,
       classGroupId: map['class_group_id'] as String?,
       capturedAt: parseDateTime(map['captured_at']),
+      termId: map['term_id'] as String?,
+      courseId: map['course_id'] as String?,
+      thumbnailPath: map['thumbnail_path'] as String?,
+      fileName: (map['file_name'] as String?) ?? '',
+      mimeType: (map['mime_type'] as String?) ?? '',
+      sizeBytes: (map['size_bytes'] as num?)?.toInt() ?? 0,
+      uploaderUserId: (map['uploader_user_id'] as String?) ?? '',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title,
+    'description': description,
+    'media_type': mediaType,
+    'drive_web_view_link': driveWebViewLink,
+    'storage_path': storagePath,
+    'class_group_id': classGroupId,
+    'captured_at': capturedAt?.toUtc().toIso8601String(),
+    'term_id': termId,
+    'course_id': courseId,
+    'thumbnail_path': thumbnailPath,
+    'file_name': fileName,
+    'mime_type': mimeType,
+    'size_bytes': sizeBytes,
+    'uploader_user_id': uploaderUserId,
+  };
+}
+
+/// 앨범 폴더 뷰의 카드 한 장. `album_summaries` RPC 한 행에 대응한다.
+class AlbumSummary {
+  const AlbumSummary({
+    required this.scope,
+    required this.scopeId,
+    required this.scopeName,
+    required this.itemCount,
+    required this.photoCount,
+    required this.videoCount,
+    this.latestCapturedAt,
+    this.coverStoragePath,
+    this.coverThumbnailPath,
+  });
+
+  /// 'TERM' | 'COURSE' | 'CLASS_GROUP'
+  final String scope;
+  final String scopeId;
+  final String scopeName;
+  final int itemCount;
+  final int photoCount;
+  final int videoCount;
+  final DateTime? latestCapturedAt;
+  final String? coverStoragePath;
+  final String? coverThumbnailPath;
+
+  bool get isTerm => scope == 'TERM';
+  bool get isCourse => scope == 'COURSE';
+  bool get isClassGroup => scope == 'CLASS_GROUP';
+
+  /// 커버로 붙일 경로. 썸네일이 있으면 그걸, 없으면 원본을 쓴다.
+  String? get coverPath => (coverThumbnailPath ?? '').isNotEmpty
+      ? coverThumbnailPath
+      : coverStoragePath;
+
+  factory AlbumSummary.fromMap(Map<String, dynamic> map) {
+    return AlbumSummary(
+      scope: (map['scope'] as String?) ?? '',
+      scopeId: (map['scope_id'] as String?) ?? '',
+      scopeName: (map['scope_name'] as String?) ?? '',
+      itemCount: (map['item_count'] as num?)?.toInt() ?? 0,
+      photoCount: (map['photo_count'] as num?)?.toInt() ?? 0,
+      videoCount: (map['video_count'] as num?)?.toInt() ?? 0,
+      latestCapturedAt: parseDateTime(map['latest_captured_at']),
+      coverStoragePath: map['cover_storage_path'] as String?,
+      coverThumbnailPath: map['cover_thumbnail_path'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'scope': scope,
+    'scope_id': scopeId,
+    'scope_name': scopeName,
+    'item_count': itemCount,
+    'photo_count': photoCount,
+    'video_count': videoCount,
+    'latest_captured_at': latestCapturedAt?.toUtc().toIso8601String(),
+    'cover_storage_path': coverStoragePath,
+    'cover_thumbnail_path': coverThumbnailPath,
+  };
 }
 
 class DriveIntegration {

@@ -1044,4 +1044,95 @@ void main() {
       expect(roundTripped.sizeBytes, attachment.sizeBytes);
     });
   });
+
+  group('album models', () {
+    test('GalleryItem.fromMap이 학기·수업·썸네일 메타데이터를 읽는다', () {
+      final item = GalleryItem.fromMap({
+        'id': 'media-1',
+        'title': '운동회',
+        'description': '이어달리기',
+        'media_type': 'PHOTO',
+        'drive_web_view_link': 'https://drive.example/view',
+        'storage_path': 'hs-1/2026-09/1_abc.jpg',
+        'class_group_id': 'class-1',
+        'captured_at': '2026-09-22T01:02:03.000Z',
+        'term_id': 'term-1',
+        'course_id': 'course-1',
+        'thumbnail_path': 'hs-1/2026-09/thumb/1_abc.jpg',
+        'file_name': '운동회.jpg',
+        'mime_type': 'image/jpeg',
+        'size_bytes': 204800,
+        'uploader_user_id': 'user-1',
+      });
+
+      expect(item.termId, 'term-1');
+      expect(item.courseId, 'course-1');
+      expect(item.thumbnailPath, 'hs-1/2026-09/thumb/1_abc.jpg');
+      expect(item.fileName, '운동회.jpg');
+      expect(item.sizeBytes, 204800);
+      expect(item.uploaderUserId, 'user-1');
+      expect(item.hasThumbnail, isTrue);
+      expect(item.previewPath, 'hs-1/2026-09/thumb/1_abc.jpg');
+      expect(item.isVideo, isFalse);
+    });
+
+    test('썸네일이 없으면 미리보기는 원본 경로로 돌아간다', () {
+      final item = GalleryItem.fromMap({
+        'id': 'media-2',
+        'media_type': 'VIDEO',
+        'storage_path': 'hs-1/2026-09/2_def.mp4',
+      });
+
+      expect(item.hasThumbnail, isFalse);
+      expect(item.previewPath, 'hs-1/2026-09/2_def.mp4');
+      expect(item.isVideo, isTrue);
+      // 옛 행에는 새 컬럼이 없다. 기본값으로 떨어져야 한다.
+      expect(item.termId, isNull);
+      expect(item.fileName, '');
+      expect(item.sizeBytes, 0);
+    });
+
+    test('GalleryItem은 toMap으로 왕복한다 (캐시 저장용)', () {
+      final item = GalleryItem.fromMap({
+        'id': 'media-3',
+        'title': '가을 소풍',
+        'media_type': 'PHOTO',
+        'storage_path': 'hs-1/2026-10/3_ghi.jpg',
+        'term_id': 'term-2',
+        'captured_at': '2026-10-01T00:00:00.000Z',
+        'size_bytes': 1024,
+      });
+
+      final roundTripped = GalleryItem.fromMap(item.toMap());
+
+      expect(roundTripped.id, item.id);
+      expect(roundTripped.title, item.title);
+      expect(roundTripped.termId, item.termId);
+      expect(roundTripped.storagePath, item.storagePath);
+      expect(roundTripped.sizeBytes, item.sizeBytes);
+      expect(roundTripped.capturedAt, item.capturedAt);
+    });
+
+    test('AlbumSummary.fromMap이 RPC 한 행을 읽는다', () {
+      final summary = AlbumSummary.fromMap({
+        'scope': 'COURSE',
+        'scope_id': 'course-1',
+        'scope_name': '미술',
+        'item_count': 15,
+        'photo_count': 12,
+        'video_count': 3,
+        'latest_captured_at': '2026-09-22T01:02:03.000Z',
+        'cover_storage_path': 'hs-1/2026-09/1_abc.jpg',
+        'cover_thumbnail_path': null,
+      });
+
+      expect(summary.isCourse, isTrue);
+      expect(summary.isTerm, isFalse);
+      expect(summary.scopeName, '미술');
+      expect(summary.itemCount, 15);
+      expect(summary.videoCount, 3);
+      // 썸네일이 비면 커버도 원본으로 떨어진다.
+      expect(summary.coverPath, 'hs-1/2026-09/1_abc.jpg');
+    });
+  });
 }
