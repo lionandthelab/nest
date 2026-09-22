@@ -49,6 +49,10 @@ dependencies:
   lion_auth:
     path: ../packages/lion_auth
   archive: ^4.0.9
+  # 앨범 썸네일 인코딩 전용. 디코딩과 축소는 dart:ui(플랫폼 코덱)가 하고, 이
+  # 패키지는 이미 512px로 줄어든 버퍼를 JPEG로 감싸는 일만 한다. 순수 Dart라
+  # iOS/Android 빌드 설정을 건드리지 않는다.
+  image: ^4.10.1
 
 dev_dependencies:
   flutter_test:
