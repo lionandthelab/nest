@@ -613,6 +613,102 @@ async function main() {
     return { path: callbackPath };
   });
 
+  // ── 앨범 ──
+
+  const albumAsset = await step("album_media_asset_columns", async () => {
+    const courseIds = report.ids.courseIds;
+    const storagePath = `${homeschool.id}/e2e/${Date.now()}_album.png`;
+
+    const rows = await restInsert(accessToken, "media_assets", [
+      {
+        homeschool_id: homeschool.id,
+        uploader_user_id: userId,
+        class_group_id: classGroup.id,
+        course_id: courseIds?.[0] || null,
+        storage_path: storagePath,
+        thumbnail_path: `${homeschool.id}/e2e/thumb/${Date.now()}_album.jpg`,
+        file_name: "album-e2e.png",
+        mime_type: "image/png",
+        size_bytes: 1024,
+        title: "E2E 앨범 사진",
+        description: "앨범 스키마 검증",
+        media_type: "PHOTO",
+        captured_at: new Date().toISOString()
+      }
+    ]);
+
+    const asset = rows[0];
+
+    // 20260922094000의 트리거가 반에서 학기를 유도해 넣어야 한다.
+    if (asset.term_id !== term.id) {
+      throw new Error(
+        `media_assets.term_id was not synced from class group: ${asset.term_id} != ${term.id}`
+      );
+    }
+
+    report.ids.albumMediaAssetId = asset.id;
+    return {
+      id: asset.id,
+      term_id: asset.term_id,
+      course_id: asset.course_id,
+      thumbnail_path: asset.thumbnail_path,
+      size_bytes: asset.size_bytes
+    };
+  });
+
+  await step("album_keyset_pagination", async () => {
+    const iso = new Date().toISOString();
+    const columns =
+      "id,title,media_type,storage_path,thumbnail_path,class_group_id,term_id,course_id,captured_at,file_name,mime_type,size_bytes,uploader_user_id";
+
+    // 앱이 쓰는 것과 같은 (captured_at, id) 복합 키 필터.
+    const rows = await restSelect(
+      accessToken,
+      `media_assets?select=${columns}` +
+        `&homeschool_id=eq.${homeschool.id}` +
+        `&term_id=eq.${term.id}` +
+        `&or=(captured_at.lt.${iso},and(captured_at.eq.${iso},id.lt.${albumAsset.id}))` +
+        `&order=captured_at.desc,id.desc&limit=60`
+    );
+
+    if (!Array.isArray(rows)) {
+      throw new Error(`album keyset page did not return rows: ${JSON.stringify(rows)}`);
+    }
+    if (!rows.some((row) => row.id === albumAsset.id)) {
+      throw new Error("album keyset page did not include the asset just inserted");
+    }
+
+    return { page_size: rows.length };
+  });
+
+  await step("album_summaries_rpc", async () => {
+    const rows = await api("POST", `/rest/v1/rpc/album_summaries`, {
+      headers: {
+        apikey: ANON_KEY,
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: { p_homeschool_id: homeschool.id }
+    });
+
+    if (!Array.isArray(rows)) {
+      throw new Error(`album_summaries did not return rows: ${JSON.stringify(rows)}`);
+    }
+
+    const termRow = rows.find((row) => row.scope === "TERM" && row.scope_id === term.id);
+    if (!termRow) {
+      throw new Error("album_summaries has no TERM row for the term just used");
+    }
+    if (Number(termRow.item_count) < 1) {
+      throw new Error(`album_summaries TERM row counted nothing: ${JSON.stringify(termRow)}`);
+    }
+
+    return {
+      scopes: [...new Set(rows.map((row) => row.scope))],
+      term_item_count: Number(termRow.item_count),
+      term_cover: termRow.cover_storage_path ? "present" : "none"
+    };
+  });
+
   await step("drive_real_upload_when_connected", async () => {
     const refreshToken = process.env.E2E_DRIVE_REFRESH_TOKEN;
     if (!refreshToken) {
@@ -671,12 +767,28 @@ async function main() {
         upload_session_id: uploadSessionId,
         file_name: "nest-e2e.png",
         mime_type: "image/png",
-        file_base64: TINY_PNG_BASE64
+        file_base64: TINY_PNG_BASE64,
+        folder_segments: [term.name, "E2E", "2026-09-22"]
       }
     });
 
     if (!uploadRes.drive_file_id) {
       throw new Error(`drive upload did not return drive_file_id: ${JSON.stringify(uploadRes)}`);
+    }
+    if (!uploadRes.drive_folder_id) {
+      throw new Error(
+        `drive upload did not resolve a folder: ${JSON.stringify(uploadRes)}`
+      );
+    }
+
+    // 경로 세 단계가 drive_folder_nodes에 캐시돼야 두 번째 파일이 왕복 없이 오른다.
+    const cached = await restSelect(
+      accessToken,
+      `drive_folder_nodes?select=path_key,folder_id` +
+        `&drive_integration_id=eq.${report.ids.driveIntegrationId}`
+    );
+    if (!Array.isArray(cached) || cached.length === 0) {
+      throw new Error("drive_folder_nodes cache stayed empty after an upload");
     }
 
     report.ids.driveFileId = uploadRes.drive_file_id;
@@ -684,6 +796,8 @@ async function main() {
     return {
       uploaded: true,
       drive_file_id: uploadRes.drive_file_id,
+      drive_folder_id: uploadRes.drive_folder_id,
+      drive_folder_nodes: cached.length,
       drive_web_view_link: uploadRes.drive_web_view_link || null
     };
   });
