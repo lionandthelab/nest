@@ -192,4 +192,32 @@ void main() {
       expect(AlbumOrganizer.gridColumnsFor(1200, AlbumViewMode.large), 2);
     });
   });
+
+  group('AlbumOrganizer.thumbnailPathFor', () {
+    test('원본과 같은 폴더의 thumb/ 아래에 jpg로 둔다', () {
+      expect(
+        AlbumOrganizer.thumbnailPathFor('hs-1/2026-09/1758_abc.jpg'),
+        'hs-1/2026-09/thumb/1758_abc.jpg',
+      );
+    });
+
+    test('원본이 jpg가 아니어도 썸네일 확장자는 jpg다', () {
+      expect(
+        AlbumOrganizer.thumbnailPathFor('hs-1/2026-09/1758_abc.png'),
+        'hs-1/2026-09/thumb/1758_abc.jpg',
+      );
+      expect(
+        AlbumOrganizer.thumbnailPathFor('hs-1/2026-09/clip.mp4'),
+        'hs-1/2026-09/thumb/clip.jpg',
+      );
+    });
+
+    test('폴더 없는 경로도 다룬다', () {
+      expect(AlbumOrganizer.thumbnailPathFor('solo.jpg'), 'thumb/solo.jpg');
+    });
+
+    test('빈 경로면 만들지 않는다', () {
+      expect(AlbumOrganizer.thumbnailPathFor(''), isNull);
+    });
+  });
 }

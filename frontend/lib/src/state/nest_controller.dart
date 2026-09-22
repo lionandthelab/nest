@@ -1,13 +1,17 @@
 import 'dart:async';
 
+import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../models/nest_models.dart';
+import '../services/album_organizer.dart';
 import '../services/auth_validation.dart';
+import '../services/download_helper.dart';
 import '../services/local_planner.dart';
+import '../services/media_thumbnailer.dart';
 import '../services/nest_cache.dart';
 import '../services/nest_push.dart';
 import '../services/nest_repository.dart';
@@ -136,9 +140,46 @@ class NestController extends ChangeNotifier {
   List<SelfStudySlotExclusion> selfStudyExclusions = [];
   List<SelfStudySupervision> selfStudySupervisions = [];
 
+  // ── 앨범 ──
   List<GalleryItem> galleryItems = [];
   Map<String, List<String>> mediaChildrenByAsset = const {};
   PendingMediaFile? pendingMediaFile;
+
+  List<AlbumSummary> albumSummaries = const [];
+  bool albumLoading = false;
+  bool albumLoadingMore = false;
+  bool albumHasMore = true;
+  String albumErrorMessage = '';
+  AlbumCursor? _albumCursor;
+  bool _albumLoadedOnce = false;
+
+  /// 한 페이지 크기. 2·3·4·5·6으로 나누어떨어져 어느 브레이크포인트에서도
+  /// 마지막 줄이 어중간하게 비지 않는다.
+  static const int albumPageSize = 60;
+
+  /// 필터. null은 "좁히지 않음"이다.
+  String? albumClassGroupId;
+  String? albumCourseId;
+  String? albumMediaType;
+
+  /// 선택 학기로 좁힐지. 폴더 뷰에서 학기 카드를 열면 잠시 꺼진다.
+  bool albumScopedToTerm = true;
+
+  final Set<String> albumSelectedIds = <String>{};
+  bool get isAlbumSelecting => albumSelectedIds.isNotEmpty;
+
+  /// 한 번에 다룰 수 있는 장수. 브라우저 메모리와 zip 생성 시간을 감안한 상한.
+  static const int albumSelectionLimit = 50;
+
+  List<AlbumUploadTask> albumUploads = const [];
+  bool get isAlbumUploading =>
+      albumUploads.any((task) => !task.isFinished);
+
+  /// 동시 업로드 수. 모바일은 무선 구간과 메모리가, 웹은 호스트당 6개 커넥션
+  /// 상한이 병목이다. 3이면 PostgREST 호출과 썸네일 GET에 여유가 남는다.
+  static const int _albumUploadConcurrency = 3;
+
+  final MediaThumbnailer _thumbnailer = const MediaThumbnailer();
 
   List<CommunityPost> communityPosts = [];
   Map<String, List<CommunityPostMedia>> communityMediaByPost = const {};
@@ -162,6 +203,17 @@ class NestController extends ChangeNotifier {
 
   void _notifyIfIdle() {
     if (_notifyMuteDepth > 0 || _isBusy) return;
+    notifyListeners();
+  }
+
+  /// 앨범 상태 전용 알림.
+  ///
+  /// [_notifyIfIdle]는 [_runBusy]가 도는 동안 알림을 삼킨다. 앨범의 목록 로딩과
+  /// 업로드는 그 뮤텍스 **밖에서** 돌기 때문에(뮤텍스는 재진입하면 던진다),
+  /// 같은 규칙을 쓰면 다른 작업이 겹친 순간의 진행 상황이 화면에 영영 반영되지
+  /// 않는다. 부트스트랩의 묶음 알림만 존중한다.
+  void _notifyAlbum() {
+    if (_notifyMuteDepth > 0) return;
     notifyListeners();
   }
 
@@ -976,10 +1028,14 @@ class NestController extends ChangeNotifier {
         loadTeachingPlans(),
         loadAnnouncements(),
         _loadNewScheduleFeaturesTolerantly(),
-        loadGalleryItems(),
-        loadCommunityFeed(),
       ]);
     });
+
+    // 사진과 커뮤니티는 시간표가 뜨는 걸 기다리게 하지 않는다. 예전에는 이 둘이
+    // _runBusy 안의 Future.wait에 함께 묶여 있어서, 학기를 바꿀 때마다 앨범
+    // 48장을 다 받을 때까지 화면이 막혀 있었다.
+    unawaited(loadAlbumPage(reset: true));
+    unawaited(loadCommunityFeed());
   }
 
   /// 예정(또는 임의 기간) 학기를 새로 만들고, 만든 학기로 전환한다.
@@ -1151,7 +1207,7 @@ class NestController extends ChangeNotifier {
     _syncSelectedSessionsFromTermPack();
     notifyListeners();
 
-    await _runBusy('수업 및 갤러리를 갱신하는 중...', () async {
+    await _runBusy('수업 정보를 갱신하는 중...', () async {
       if (!_termScheduleLoaded) {
         await _loadTermSessionsPack();
         _syncSelectedSessionsFromTermPack();
@@ -1160,10 +1216,11 @@ class NestController extends ChangeNotifier {
         loadClassEnrollments(),
         loadTeachingPlans(),
         loadAnnouncements(),
-        loadGalleryItems(),
-        loadCommunityFeed(),
       ]);
     });
+
+    unawaited(loadAlbumPage(reset: true));
+    unawaited(loadCommunityFeed());
   }
 
   Future<void> bootstrapFrame({
@@ -1867,6 +1924,346 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  // ── 앨범 업로드 ──
+
+  /// 앨범용 사진·영상을 여러 장 고른다. 바이트를 못 읽은 파일은 조용히 뺀다.
+  Future<List<PendingMediaFile>> pickAlbumMediaFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.media,
+      allowMultiple: true,
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return const [];
+    }
+
+    return result.files
+        .where((file) => file.bytes != null)
+        .map(
+          (file) => PendingMediaFile(
+            name: file.name,
+            mimeType: _guessMimeType(file.name),
+            bytes: file.bytes!,
+          ),
+        )
+        .toList();
+  }
+
+  /// 고른 파일들을 앨범에 올린다.
+  ///
+  /// [_runBusy]를 쓰지 않는다. 그건 전역 뮤텍스라 업로드 한 건이 앱 전체를
+  /// 막고, 두 사람 몫의 업로드가 동시에 도는 것 자체가 불가능해진다. 참여자
+  /// 여럿이 올리는 앨범에서는 그게 가장 큰 병목이다.
+  Future<void> uploadAlbumMedia({
+    required List<PendingMediaFile> files,
+    String? classGroupId,
+    String? courseId,
+    DateTime? capturedAt,
+    String description = '',
+    List<String> childIds = const [],
+  }) async {
+    final homeschoolId = selectedHomeschoolId;
+    final currentUser = user;
+
+    if (!canUploadMedia || currentUser == null) {
+      throw StateError('업로드 권한이 없습니다.');
+    }
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+    if (files.isEmpty) {
+      throw StateError('올릴 파일을 먼저 선택하세요.');
+    }
+    if (isAlbumUploading) {
+      throw StateError('앞서 올리던 사진이 아직 남아 있습니다.');
+    }
+
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    albumUploads = [
+      for (var index = 0; index < files.length; index++)
+        AlbumUploadTask(localId: 'upload-$stamp-$index', file: files[index]),
+    ];
+    _notifyAlbum();
+
+    final queue = List<AlbumUploadTask>.from(albumUploads);
+    var next = 0;
+    var failed = 0;
+
+    Future<void> worker() async {
+      while (true) {
+        if (next >= queue.length) return;
+        final task = queue[next++];
+
+        _updateUploadTask(
+          task.localId,
+          (t) => t.copyWith(status: AlbumUploadStatus.uploading),
+        );
+
+        try {
+          // 썸네일을 먼저 만들어 화면에 꽂는다. 사용자가 느끼는 "다 됐다"는
+          // 4MB 전송이 끝나는 순간이 아니라 미리보기가 뜨는 순간이다.
+          final thumbnailBytes = task.file.isVideo
+              ? null
+              : await _thumbnailer.buildJpeg(task.file.bytes);
+          if (thumbnailBytes != null) {
+            _updateUploadTask(
+              task.localId,
+              (t) => t.copyWith(thumbnailBytes: thumbnailBytes),
+            );
+          }
+
+          await _uploadOneAlbumFile(
+            homeschoolId: homeschoolId,
+            uploaderUserId: currentUser.id,
+            file: task.file,
+            thumbnailBytes: thumbnailBytes,
+            classGroupId: classGroupId,
+            courseId: courseId,
+            capturedAt: capturedAt,
+            description: description,
+            childIds: childIds,
+          );
+
+          _updateUploadTask(
+            task.localId,
+            (t) => t.copyWith(status: AlbumUploadStatus.done),
+          );
+        } catch (error) {
+          failed += 1;
+          debugPrint('[Album] upload failed: $error');
+          _updateUploadTask(
+            task.localId,
+            (t) => t.copyWith(
+              status: AlbumUploadStatus.failed,
+              errorMessage: _albumErrorText(error),
+            ),
+          );
+        }
+      }
+    }
+
+    final workers = <Future<void>>[
+      for (var i = 0; i < _albumUploadConcurrency && i < queue.length; i++)
+        worker(),
+    ];
+    await Future.wait(workers);
+
+    final succeeded = queue.length - failed;
+    _setStatus(
+      failed == 0
+          ? '사진 $succeeded장을 올렸습니다.'
+          : '$succeeded장을 올렸습니다. $failed장은 실패했습니다.',
+    );
+
+    await loadAlbumPage(reset: true);
+    unawaited(loadAlbumSummaries());
+
+    // 실패한 건만 남겨 사용자가 무엇이 빠졌는지 볼 수 있게 한다.
+    albumUploads = albumUploads
+        .where((task) => task.status == AlbumUploadStatus.failed)
+        .toList();
+    _notifyAlbum();
+  }
+
+  Future<void> _uploadOneAlbumFile({
+    required String homeschoolId,
+    required String uploaderUserId,
+    required PendingMediaFile file,
+    required Uint8List? thumbnailBytes,
+    required String? classGroupId,
+    required String? courseId,
+    required DateTime? capturedAt,
+    required String description,
+    required List<String> childIds,
+  }) async {
+    final uploadResult = await _repository.uploadToStorage(
+      homeschoolId: homeschoolId,
+      file: file,
+    );
+
+    String? thumbnailPath;
+    if (thumbnailBytes != null) {
+      thumbnailPath = await _repository.uploadThumbnail(
+        storagePath: uploadResult.storagePath,
+        bytes: thumbnailBytes,
+      );
+    }
+
+    final mediaAssetId = await _repository.insertMediaAsset(
+      homeschoolId: homeschoolId,
+      uploadSessionId: null,
+      uploaderUserId: uploaderUserId,
+      classGroupId: classGroupId,
+      courseId: courseId,
+      termId: selectedTermId,
+      thumbnailPath: thumbnailPath,
+      fileName: file.name,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      capturedAt: capturedAt,
+      uploadResult: uploadResult,
+      title: _albumTitleFrom(file.name),
+      description: description.trim(),
+      mediaType: file.isVideo ? 'VIDEO' : 'PHOTO',
+    );
+
+    if (childIds.isNotEmpty) {
+      await _repository.insertMediaChildren(
+        mediaAssetId: mediaAssetId,
+        childIds: childIds,
+      );
+    }
+
+    // Drive 미러는 기다리지 않는다. Google이 느리거나 죽어 있는 날에도 앨범
+    // 업로드가 그만큼 늦어져서는 안 된다.
+    unawaited(
+      _mirrorMediaToDriveBestEffort(
+        homeschoolId: homeschoolId,
+        mediaAssetId: mediaAssetId,
+        file: file,
+        classGroupId: classGroupId,
+        courseId: courseId,
+        capturedAt: capturedAt,
+      ),
+    );
+  }
+
+  void _updateUploadTask(
+    String localId,
+    AlbumUploadTask Function(AlbumUploadTask) update,
+  ) {
+    albumUploads = [
+      for (final task in albumUploads)
+        if (task.localId == localId) update(task) else task,
+    ];
+    _notifyAlbum();
+  }
+
+  /// 파일명에서 확장자를 떼 제목으로 쓴다. 사용자가 따로 제목을 적지 않아도
+  /// 목록에서 "IMG_2931" 정도는 읽히게 하려는 것.
+  String _albumTitleFrom(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    final stem = dot <= 0 ? fileName : fileName.substring(0, dot);
+    return stem.trim();
+  }
+
+  // ── 앨범 삭제 / 내려받기 ──
+
+  Future<void> deleteAlbumSelection() async {
+    final targets = selectedAlbumItems;
+    if (targets.isEmpty) return;
+
+    await _runBusy('사진을 삭제하는 중...', () async {
+      for (final item in targets) {
+        await _repository.deleteMediaAsset(
+          mediaAssetId: item.id,
+          storagePath: item.storagePath,
+          thumbnailPath: item.thumbnailPath,
+        );
+      }
+      albumSelectedIds.clear();
+      _setStatus('사진 ${targets.length}장을 삭제했습니다.');
+    });
+
+    await loadAlbumPage(reset: true);
+    unawaited(loadAlbumSummaries());
+  }
+
+  /// 고른 사진을 내려받는다. 웹에서는 한 장이면 그대로, 여러 장이면 zip으로
+  /// 묶어 저장한다. 파일 저장이 불가능한 플랫폼에서는 한 장만 새 창으로 연다.
+  Future<AlbumDownloadOutcome> downloadAlbumSelection() async {
+    final targets = selectedAlbumItems
+        .where((item) => (item.storagePath ?? '').isNotEmpty)
+        .toList();
+
+    if (targets.isEmpty) {
+      return AlbumDownloadOutcome.empty;
+    }
+
+    final totalBytes = targets.fold<int>(0, (sum, item) => sum + item.sizeBytes);
+    if (totalBytes > kAlbumDownloadMaxBytes) {
+      return AlbumDownloadOutcome.tooLarge;
+    }
+
+    final helper = createDownloadHelper();
+
+    if (!helper.isSupported) {
+      if (targets.length > 1) {
+        return AlbumDownloadOutcome.bulkUnsupported;
+      }
+      final url = mediaPublicUrl(targets.single.storagePath);
+      if (url == null) {
+        return AlbumDownloadOutcome.failed;
+      }
+      final opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      return opened
+          ? AlbumDownloadOutcome.openedExternally
+          : AlbumDownloadOutcome.failed;
+    }
+
+    try {
+      final used = <String>{};
+
+      if (targets.length == 1) {
+        final item = targets.single;
+        final bytes = await _repository.downloadMediaBytes(
+          storagePath: item.storagePath!,
+        );
+        helper.downloadBytes(
+          bytes: bytes,
+          filename: AlbumOrganizer.downloadFileName(item, used: used),
+          mimeType: item.mimeType.isEmpty
+              ? 'application/octet-stream'
+              : item.mimeType,
+        );
+        return AlbumDownloadOutcome.savedSingle;
+      }
+
+      final archive = Archive();
+      for (final item in targets) {
+        final bytes = await _repository.downloadMediaBytes(
+          storagePath: item.storagePath!,
+        );
+        archive.add(
+          ArchiveFile(
+            AlbumOrganizer.downloadFileName(item, used: used),
+            bytes.length,
+            bytes,
+          ),
+        );
+      }
+
+      helper.downloadBytes(
+        bytes: ZipEncoder().encodeBytes(archive),
+        filename: _albumZipName(),
+        mimeType: 'application/zip',
+      );
+      return AlbumDownloadOutcome.savedZip;
+    } catch (error) {
+      debugPrint('[Album] download failed: $error');
+      return AlbumDownloadOutcome.failed;
+    }
+  }
+
+  String _albumZipName() {
+    final now = DateTime.now();
+    final date =
+        '${now.year}${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}';
+    final termName = terms
+        .where((term) => term.id == selectedTermId)
+        .map((term) => AlbumOrganizer.sanitizeFolderName(term.name))
+        .firstOrNull;
+
+    return termName == null || termName.isEmpty
+        ? '앨범_$date.zip'
+        : '앨범_${termName}_$date.zip';
+  }
+
   // ── Google Drive integration ──
 
   /// Loads the current homeschool's Drive integration row (non-secret columns).
@@ -1984,6 +2381,9 @@ class NestController extends ChangeNotifier {
     required String homeschoolId,
     required String mediaAssetId,
     required PendingMediaFile file,
+    String? classGroupId,
+    String? courseId,
+    DateTime? capturedAt,
   }) async {
     final integration = driveIntegration;
     if (user == null || integration == null || !integration.isConnected) {
@@ -2016,6 +2416,11 @@ class NestController extends ChangeNotifier {
         fileName: file.name,
         mimeType: file.mimeType,
         bytes: file.bytes,
+        folderSegments: _driveFolderSegmentsFor(
+          classGroupId: classGroupId,
+          courseId: courseId,
+          capturedAt: capturedAt,
+        ),
       );
 
       if (driveResult != null) {
@@ -2035,6 +2440,39 @@ class NestController extends ChangeNotifier {
       // Drive is additive; swallow so the Storage-backed upload stays intact.
       debugPrint('[Drive] media mirror failed: $error');
     }
+  }
+
+  /// 관리자 Drive 안에서 이 파일이 들어갈 경로. 학기 → 수업(또는 반) → 날짜.
+  ///
+  /// 수업 이름을 반 이름보다 앞세운다. 앨범을 여는 사람은 "3학년 1반"보다
+  /// "미술"을 먼저 찾는다.
+  List<String> _driveFolderSegmentsFor({
+    String? classGroupId,
+    String? courseId,
+    DateTime? capturedAt,
+  }) {
+    final termName = terms
+        .where((term) => term.id == selectedTermId)
+        .map((term) => term.name)
+        .firstOrNull;
+
+    final courseName = courses
+        .where((course) => course.id == courseId)
+        .map((course) => course.name)
+        .firstOrNull;
+
+    final groupName = (classGroupId == null || classGroupId.isEmpty)
+        ? null
+        : classGroups
+              .where((group) => group.id == classGroupId)
+              .map((group) => group.name)
+              .firstOrNull;
+
+    return AlbumOrganizer.driveFolderSegments(
+      termName: termName,
+      courseName: courseName ?? groupName,
+      capturedAt: capturedAt ?? DateTime.now(),
+    );
   }
 
   Future<void> loadHomeschoolContext() async {
@@ -2325,25 +2763,211 @@ class NestController extends ChangeNotifier {
     return _repository.mediaPublicUrl(storagePath);
   }
 
-  Future<void> loadGalleryItems() async {
+  /// 앨범 첫 페이지를 다시 읽는다. 커뮤니티 업로드 등 앨범 밖에서 미디어가
+  /// 늘어난 경로도 이걸 부른다.
+  Future<void> loadGalleryItems() => loadAlbumPage(reset: true);
+
+  /// 앨범 한 페이지를 읽어 목록 뒤에 잇는다. [reset]이면 처음부터 다시 읽는다.
+  ///
+  /// **[_runBusy] 안에서 부르지 말 것.** 그건 프로세스 전역 뮤텍스라 재진입하면
+  /// 던진다. 사용자가 다른 작업 중에 스크롤만 해도 '이미 처리 중이에요.'가
+  /// 떠 버린다. 페이징은 제 플래그로만 겹침을 막는다.
+  Future<void> loadAlbumPage({bool reset = false}) async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
       galleryItems = [];
       mediaChildrenByAsset = const {};
-      _notifyIfIdle();
+      albumHasMore = false;
+      _notifyAlbum();
       return;
     }
 
-    galleryItems = await _repository.fetchGalleryItems(
-      homeschoolId: homeschoolId,
-      classGroupId: selectedClassGroupId,
-    );
+    if (reset ? albumLoading : (albumLoadingMore || !albumHasMore)) {
+      return;
+    }
 
-    mediaChildrenByAsset = await _repository.fetchMediaChildrenByAsset(
-      mediaAssetIds: galleryItems.map((item) => item.id).toList(),
-    );
+    if (reset) {
+      albumLoading = true;
+      _albumCursor = null;
+      albumHasMore = true;
+    } else {
+      albumLoadingMore = true;
+    }
+    albumErrorMessage = '';
+    _notifyAlbum();
 
-    _notifyIfIdle();
+    try {
+      final page = await _repository.fetchAlbumPage(
+        homeschoolId: homeschoolId,
+        termId: albumScopedToTerm ? selectedTermId : null,
+        classGroupId: albumClassGroupId,
+        courseId: albumCourseId,
+        mediaType: albumMediaType,
+        cursor: reset ? null : _albumCursor,
+        limit: albumPageSize,
+      );
+
+      galleryItems = reset ? page : [...galleryItems, ...page];
+      albumHasMore = page.length == albumPageSize;
+      if (page.isNotEmpty) {
+        final last = page.last;
+        _albumCursor = AlbumCursor(capturedAt: last.capturedAt, id: last.id);
+      }
+      _albumLoadedOnce = true;
+    } catch (error) {
+      albumErrorMessage = _albumErrorText(error);
+      if (reset) {
+        albumHasMore = false;
+      }
+    } finally {
+      albumLoading = false;
+      albumLoadingMore = false;
+      _notifyAlbum();
+    }
+  }
+
+  Future<void> ensureAlbumLoaded() async {
+    if (_albumLoadedOnce) return;
+    await loadAlbumPage(reset: true);
+  }
+
+  /// 폴더 뷰의 학기·수업·반 카드. 집계는 서버가 한 번에 센다.
+  Future<void> loadAlbumSummaries() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      albumSummaries = const [];
+      return;
+    }
+
+    try {
+      albumSummaries = await _repository.fetchAlbumSummaries(
+        homeschoolId: homeschoolId,
+      );
+    } catch (error) {
+      // 폴더 뷰가 비는 것뿐이다. 격자·타임라인은 그대로 쓸 수 있어야 한다.
+      debugPrint('[Album] summaries failed: $error');
+    }
+    _notifyAlbum();
+  }
+
+  /// 사진 한 장에 태그된 아이들. 예전에는 목록을 읽을 때마다 함께 읽었는데,
+  /// 화면에 쓰는 곳이 상세뿐이라 매 페이지마다 왕복 한 번이 통째로 낭비였다.
+  Future<List<String>> loadTaggedChildrenFor(String mediaAssetId) async {
+    final cached = mediaChildrenByAsset[mediaAssetId];
+    if (cached != null) {
+      return cached;
+    }
+
+    try {
+      final grouped = await _repository.fetchMediaChildrenByAsset(
+        mediaAssetIds: [mediaAssetId],
+      );
+      mediaChildrenByAsset = {...mediaChildrenByAsset, ...grouped};
+      _notifyAlbum();
+      return grouped[mediaAssetId] ?? const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  // ── 앨범 필터 ──
+
+  Future<void> setAlbumClassGroupFilter(String? classGroupId) async {
+    final next = _normalizeNullable(classGroupId);
+    if (next == albumClassGroupId) return;
+    albumClassGroupId = next;
+    albumCourseId = null;
+    clearAlbumSelection();
+    await loadAlbumPage(reset: true);
+  }
+
+  Future<void> setAlbumCourseFilter(String? courseId) async {
+    final next = _normalizeNullable(courseId);
+    if (next == albumCourseId) return;
+    albumCourseId = next;
+    albumClassGroupId = null;
+    clearAlbumSelection();
+    await loadAlbumPage(reset: true);
+  }
+
+  Future<void> setAlbumMediaTypeFilter(String? mediaType) async {
+    final next = _normalizeNullable(mediaType);
+    if (next == albumMediaType) return;
+    albumMediaType = next;
+    clearAlbumSelection();
+    await loadAlbumPage(reset: true);
+  }
+
+  /// 폴더 뷰에서 학기 카드를 열 때처럼, 선택 학기 밖까지 보고 싶을 때.
+  Future<void> setAlbumTermScope({required bool scoped}) async {
+    if (scoped == albumScopedToTerm) return;
+    albumScopedToTerm = scoped;
+    clearAlbumSelection();
+    await loadAlbumPage(reset: true);
+  }
+
+  Future<void> clearAlbumFilters() async {
+    if (albumClassGroupId == null &&
+        albumCourseId == null &&
+        albumMediaType == null &&
+        albumScopedToTerm) {
+      return;
+    }
+    albumClassGroupId = null;
+    albumCourseId = null;
+    albumMediaType = null;
+    albumScopedToTerm = true;
+    clearAlbumSelection();
+    await loadAlbumPage(reset: true);
+  }
+
+  // ── 앨범 선택 ──
+
+  /// 상한에 걸리면 false. 호출부가 안내 문구를 띄운다.
+  bool toggleAlbumSelection(String mediaAssetId) {
+    if (albumSelectedIds.contains(mediaAssetId)) {
+      albumSelectedIds.remove(mediaAssetId);
+      _notifyAlbum();
+      return true;
+    }
+
+    if (albumSelectedIds.length >= albumSelectionLimit) {
+      return false;
+    }
+
+    albumSelectedIds.add(mediaAssetId);
+    _notifyAlbum();
+    return true;
+  }
+
+  /// 화면에 올라온 것 중 상한까지 고른다.
+  void selectVisibleAlbumItems() {
+    albumSelectedIds
+      ..clear()
+      ..addAll(
+        galleryItems.take(albumSelectionLimit).map((item) => item.id),
+      );
+    _notifyAlbum();
+  }
+
+  void clearAlbumSelection() {
+    if (albumSelectedIds.isEmpty) return;
+    albumSelectedIds.clear();
+    _notifyAlbum();
+  }
+
+  List<GalleryItem> get selectedAlbumItems => galleryItems
+      .where((item) => albumSelectedIds.contains(item.id))
+      .toList();
+
+  String _albumErrorText(Object error) {
+    if (error is PostgrestException) {
+      return error.message;
+    }
+    if (error is StorageException) {
+      return error.message;
+    }
+    return '사진을 불러오지 못했습니다.';
   }
 
   Future<void> loadHomeschoolMemberships() async {

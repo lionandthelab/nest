@@ -27,6 +27,34 @@ class AlbumDateSection {
   final List<GalleryItem> items;
 }
 
+/// 내려받기 결과. 플랫폼마다 할 수 있는 일이 달라, 호출부가 이 값을 보고
+/// 안내 문구를 고른다.
+enum AlbumDownloadOutcome {
+  /// 파일 한 장을 저장했다.
+  savedSingle,
+
+  /// 여러 장을 zip으로 묶어 저장했다.
+  savedZip,
+
+  /// 저장 대신 새 창으로 열었다(모바일·데스크톱 단일 건).
+  openedExternally,
+
+  /// 이 플랫폼에서는 여러 장 저장을 지원하지 않는다.
+  bulkUnsupported,
+
+  /// 한 번에 내려받을 수 있는 용량을 넘었다.
+  tooLarge,
+
+  /// 고른 것이 없다.
+  empty,
+
+  failed,
+}
+
+/// 한 번에 내려받을 수 있는 총 용량. 브라우저가 zip을 통째로 메모리에 들고
+/// 있어야 해서, 넘기면 탭이 죽는다.
+const int kAlbumDownloadMaxBytes = 300 * 1024 * 1024;
+
 /// 목록 페이지네이션 커서. 마지막으로 받은 행을 가리킨다.
 class AlbumCursor {
   const AlbumCursor({required this.capturedAt, required this.id});
@@ -110,6 +138,25 @@ class AlbumOrganizer {
         .replaceAll(RegExp(r'[/\\]'), '-')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  /// 원본 [storagePath]에 대응하는 썸네일 경로. 같은 폴더의 `thumb/` 아래에
+  /// 같은 이름으로 두되 확장자는 항상 jpg다 — 썸네일은 영상이든 png든 jpg로
+  /// 다시 인코딩하기 때문이다. 경로가 비어 있으면 null.
+  static String? thumbnailPathFor(String? storagePath) {
+    final path = (storagePath ?? '').trim();
+    if (path.isEmpty) {
+      return null;
+    }
+
+    final slash = path.lastIndexOf('/');
+    final dir = slash < 0 ? '' : path.substring(0, slash);
+    final name = slash < 0 ? path : path.substring(slash + 1);
+
+    final ext = _extensionOf(name);
+    final stem = ext.isEmpty ? name : name.substring(0, name.length - ext.length);
+
+    return dir.isEmpty ? 'thumb/$stem.jpg' : '$dir/thumb/$stem.jpg';
   }
 
   static String formatDateFolder(DateTime date) {

@@ -2156,6 +2156,48 @@ class PendingMediaFile {
   bool get isVideo => mimeType.startsWith('video/');
 }
 
+enum AlbumUploadStatus { waiting, uploading, done, failed }
+
+/// 업로드 큐의 한 건.
+///
+/// 파일을 고른 순간 바로 목록 맨 앞에 낙관적으로 꽂아 두고, 서버 응답이
+/// 오면 제자리에서 진짜 항목으로 바꾼다. 사용자에게 "다 됐다"고 느껴지는
+/// 시점을 4MB 전송이 아니라 썸네일이 뜨는 순간으로 앞당기기 위함이다.
+class AlbumUploadTask {
+  const AlbumUploadTask({
+    required this.localId,
+    required this.file,
+    this.status = AlbumUploadStatus.waiting,
+    this.thumbnailBytes,
+    this.errorMessage = '',
+  });
+
+  final String localId;
+  final PendingMediaFile file;
+  final AlbumUploadStatus status;
+
+  /// 업로드 전에 로컬에서 만든 미리보기. 네트워크를 기다리지 않고 바로 그린다.
+  final Uint8List? thumbnailBytes;
+  final String errorMessage;
+
+  bool get isFinished =>
+      status == AlbumUploadStatus.done || status == AlbumUploadStatus.failed;
+
+  AlbumUploadTask copyWith({
+    AlbumUploadStatus? status,
+    Uint8List? thumbnailBytes,
+    String? errorMessage,
+  }) {
+    return AlbumUploadTask(
+      localId: localId,
+      file: file,
+      status: status ?? this.status,
+      thumbnailBytes: thumbnailBytes ?? this.thumbnailBytes,
+      errorMessage: errorMessage ?? this.errorMessage,
+    );
+  }
+}
+
 class GeneratedSessionDraft {
   const GeneratedSessionDraft({
     required this.classGroupId,
