@@ -2181,7 +2181,15 @@ class NestController extends ChangeNotifier {
       return AlbumDownloadOutcome.empty;
     }
 
-    final totalBytes = targets.fold<int>(0, (sum, item) => sum + item.sizeBytes);
+    // size_bytes 컬럼이 생기기 전에 올라온 사진은 크기가 0으로 남아 있다. 그냥
+    // 더하면 옛 사진만 고른 경우 상한이 절대 걸리지 않아, 브라우저가 zip을
+    // 통째로 메모리에 들다가 탭이 죽는다. 모르는 건 넉넉히 잡아 둔다.
+    const assumedBytesWhenUnknown = 8 * 1024 * 1024;
+    final totalBytes = targets.fold<int>(
+      0,
+      (sum, item) =>
+          sum + (item.sizeBytes > 0 ? item.sizeBytes : assumedBytesWhenUnknown),
+    );
     if (totalBytes > kAlbumDownloadMaxBytes) {
       return AlbumDownloadOutcome.tooLarge;
     }
