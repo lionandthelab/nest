@@ -220,4 +220,62 @@ void main() {
       expect(AlbumOrganizer.thumbnailPathFor(''), isNull);
     });
   });
+
+  group('AlbumOrganizer.storagePathsFor', () {
+    test('원본과 썸네일 경로를 같은 키에서 함께 만든다', () {
+      final paths = AlbumOrganizer.storagePathsFor(
+        homeschoolId: 'hs-1',
+        fileName: '운동회.JPG',
+        now: DateTime.utc(2026, 9, 22, 10),
+        seed: 12345,
+      );
+
+      expect(paths.originalPath, 'hs-1/2026-09/1790071200000_12345.JPG');
+      expect(paths.thumbnailPath, 'hs-1/2026-09/thumb/1790071200000_12345.jpg');
+    });
+
+    test('썸네일은 원본이 영상이어도 jpg다', () {
+      final paths = AlbumOrganizer.storagePathsFor(
+        homeschoolId: 'hs-1',
+        fileName: 'clip.mp4',
+        now: DateTime.utc(2026, 9, 22, 10),
+        seed: 7,
+      );
+
+      expect(paths.originalPath, endsWith('.mp4'));
+      expect(paths.thumbnailPath, endsWith('.jpg'));
+      expect(paths.thumbnailPath, contains('/thumb/'));
+    });
+
+    test('확장자가 없는 파일명도 다룬다', () {
+      final paths = AlbumOrganizer.storagePathsFor(
+        homeschoolId: 'hs-1',
+        fileName: 'noext',
+        now: DateTime.utc(2026, 1, 5),
+        seed: 1,
+      );
+
+      expect(paths.originalPath, 'hs-1/2026-01/1767571200000_1');
+      expect(paths.thumbnailPath, 'hs-1/2026-01/thumb/1767571200000_1.jpg');
+    });
+
+    test('같은 초에 올려도 seed가 다르면 경로가 겹치지 않는다', () {
+      final now = DateTime.utc(2026, 9, 22, 10);
+      final a = AlbumOrganizer.storagePathsFor(
+        homeschoolId: 'hs-1',
+        fileName: 'a.jpg',
+        now: now,
+        seed: 1,
+      );
+      final b = AlbumOrganizer.storagePathsFor(
+        homeschoolId: 'hs-1',
+        fileName: 'a.jpg',
+        now: now,
+        seed: 2,
+      );
+
+      expect(a.originalPath, isNot(b.originalPath));
+      expect(a.thumbnailPath, isNot(b.thumbnailPath));
+    });
+  });
 }

@@ -1810,6 +1810,7 @@ class GalleryItem {
     required this.storagePath,
     required this.classGroupId,
     required this.capturedAt,
+    this.driveFileId,
     this.termId,
     this.courseId,
     this.thumbnailPath,
@@ -1824,6 +1825,9 @@ class GalleryItem {
   final String description;
   final String mediaType;
   final String? driveWebViewLink;
+
+  /// 관리자 Drive의 파일 id. 원본이 Drive에 있으면 채워진다.
+  final String? driveFileId;
   final String? storagePath;
   final String? classGroupId;
   final DateTime? capturedAt;
@@ -1841,9 +1845,17 @@ class GalleryItem {
   bool get isVideo => mediaType == 'VIDEO';
   bool get hasThumbnail => (thumbnailPath ?? '').isNotEmpty;
 
+  /// 원본이 관리자 Google Drive에만 있는가.
+  ///
+  /// 하이브리드 저장에서 원본은 Drive로 가고 Supabase에는 썸네일만 남는다.
+  /// 이 경우 storage_path가 비어 있어, 원본을 보려면 엣지 함수를 거쳐야 한다.
+  bool get isDriveBacked =>
+      (storagePath ?? '').isEmpty && (driveFileId ?? '').isNotEmpty;
+
   /// 그리드에 붙일 경로. 썸네일이 있으면 그걸, 없으면 원본을 쓴다.
+  /// Drive에만 있는 원본은 공개 URL이 없으므로 여기서 쓸 수 없다.
   String? get previewPath =>
-      hasThumbnail ? thumbnailPath : storagePath;
+      hasThumbnail ? thumbnailPath : (isDriveBacked ? null : storagePath);
 
   factory GalleryItem.fromMap(Map<String, dynamic> map) {
     return GalleryItem(
@@ -1852,6 +1864,7 @@ class GalleryItem {
       description: (map['description'] as String?) ?? '',
       mediaType: (map['media_type'] as String?) ?? 'PHOTO',
       driveWebViewLink: map['drive_web_view_link'] as String?,
+      driveFileId: map['drive_file_id'] as String?,
       storagePath: map['storage_path'] as String?,
       classGroupId: map['class_group_id'] as String?,
       capturedAt: parseDateTime(map['captured_at']),
@@ -1871,6 +1884,7 @@ class GalleryItem {
     'description': description,
     'media_type': mediaType,
     'drive_web_view_link': driveWebViewLink,
+    'drive_file_id': driveFileId,
     'storage_path': storagePath,
     'class_group_id': classGroupId,
     'captured_at': capturedAt?.toUtc().toIso8601String(),

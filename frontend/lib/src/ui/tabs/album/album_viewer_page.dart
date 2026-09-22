@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -74,8 +75,15 @@ class _AlbumViewerPageState extends State<AlbumViewerPage> {
   }
 
   Future<void> _openVideo() async {
-    final url = widget.controller.mediaPublicUrl(_current.storagePath);
-    if (url == null) return;
+    // 영상은 앱 안에서 재생하지 않는다. 원본이 Supabase에 있으면 공개 주소로,
+    // 관리자 Drive에만 있으면 Drive 보기 링크로 보낸다.
+    final url =
+        widget.controller.mediaPublicUrl(_current.storagePath) ??
+        _current.driveWebViewLink;
+    if (url == null || url.isEmpty) {
+      _toast('영상을 열 수 없습니다.');
+      return;
+    }
     final opened = await launchUrl(
       Uri.parse(url),
       mode: LaunchMode.externalApplication,
@@ -145,6 +153,8 @@ class _AlbumViewerPageState extends State<AlbumViewerPage> {
             itemBuilder: (context, index) {
               final pageItem = widget.items[index];
               return _ViewerPage(
+                key: ValueKey(pageItem.id),
+                controller: widget.controller,
                 item: pageItem,
                 // 뷰어는 원본을 쓴다. 그리드와 달리 확대해서 보는 화면이다.
                 imageUrl: widget.controller.mediaPublicUrl(
@@ -174,19 +184,43 @@ class _AlbumViewerPageState extends State<AlbumViewerPage> {
   }
 }
 
-class _ViewerPage extends StatelessWidget {
+class _ViewerPage extends StatefulWidget {
   const _ViewerPage({
+    super.key,
+    required this.controller,
     required this.item,
     required this.imageUrl,
     required this.onOpenVideo,
   });
 
+  final NestController controller;
   final GalleryItem item;
   final String? imageUrl;
   final VoidCallback onOpenVideo;
 
   @override
+  State<_ViewerPage> createState() => _ViewerPageState();
+}
+
+class _ViewerPageState extends State<_ViewerPage> {
+  Future<Uint8List>? _driveBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    // 원본이 관리자 Drive에만 있으면 공개 URL이 없다. 엣지 함수가 권한을
+    // 확인하고 바이트를 중계해 주므로, 받아서 메모리에서 그린다.
+    if (widget.item.isDriveBacked && !widget.item.isVideo) {
+      _driveBytes = widget.controller.fetchAlbumOriginalBytes(widget.item);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final onOpenVideo = widget.onOpenVideo;
+    final imageUrl = widget.imageUrl;
+
     if (item.isVideo) {
       return Center(
         child: Column(
@@ -208,25 +242,90 @@ class _ViewerPage extends StatelessWidget {
       );
     }
 
+    final driveBytes = _driveBytes;
+    if (driveBytes != null) {
+      return FutureBuilder<Uint8List>(
+        future: driveBytes,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.white70,
+                ),
+              ),
+            );
+          }
+          if (snapshot.hasError || snapshot.data == null) {
+            return const _ViewerError(
+              message: '원본을 불러오지 못했습니다.\nGoogle Drive 연결을 확인해 주세요.',
+            );
+          }
+          return _zoomable(Image.memory(snapshot.data!, fit: BoxFit.contain));
+        },
+      );
+    }
+
     final url = imageUrl;
     if (url == null || url.isEmpty) {
       return const Center(child: AlbumTilePlaceholder());
     }
 
+    return _zoomable(
+      Image.network(
+        url,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => const Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 48,
+            color: Colors.white38,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _zoomable(Widget child) {
     return InteractiveViewer(
       minScale: 1,
       maxScale: 4,
-      child: Center(
-        child: Image.network(
-          url,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Center(
-            child: Icon(
-              Icons.broken_image_outlined,
-              size: 48,
+      child: Center(child: child),
+    );
+  }
+}
+
+class _ViewerError extends StatelessWidget {
+  const _ViewerError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 44,
               color: Colors.white38,
             ),
-          ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.7),
+                height: 1.5,
+              ),
+            ),
+          ],
         ),
       ),
     );

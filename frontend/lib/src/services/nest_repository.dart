@@ -3418,15 +3418,16 @@ class NestRepository {
   Future<StorageUploadResult> uploadToStorage({
     required String homeschoolId,
     required PendingMediaFile file,
+    String? storagePathOverride,
   }) async {
-    final now = DateTime.now();
-    final month = '${now.year}-${now.month.toString().padLeft(2, '0')}';
-    final ext = file.name.contains('.')
-        ? file.name.substring(file.name.lastIndexOf('.'))
-        : '';
-    final uniqueName =
-        '${now.millisecondsSinceEpoch}_${file.name.hashCode.abs()}$ext';
-    final storagePath = '$homeschoolId/$month/$uniqueName';
+    final storagePath =
+        storagePathOverride ??
+        AlbumOrganizer.storagePathsFor(
+          homeschoolId: homeschoolId,
+          fileName: file.name,
+          now: DateTime.now(),
+          seed: file.name.hashCode.abs(),
+        ).originalPath;
 
     await client.storage
         .from('media')
@@ -3448,14 +3449,21 @@ class NestRepository {
     return StorageUploadResult(storagePath: storagePath, publicUrl: publicUrl);
   }
 
-  /// 원본 옆 `thumb/` 경로에 축소본을 올린다. 실패해도 던지지 않는다 —
-  /// 썸네일이 없으면 그리드가 원본으로 되돌아가면 그만이다.
+  /// 정해진 경로에 축소본을 올린다. 실패해도 던지지 않는다 — 썸네일이 없으면
+  /// 그리드가 원본으로 되돌아가면 그만이다.
+  Future<String?> uploadThumbnailAt({
+    required String thumbnailPath,
+    required Uint8List bytes,
+  }) => _putThumbnail(thumbnailPath, bytes);
+
+  /// 원본 옆 `thumb/` 경로에 축소본을 올린다.
   Future<String?> uploadThumbnail({
     required String storagePath,
     required Uint8List bytes,
-  }) async {
-    final thumbPath = AlbumOrganizer.thumbnailPathFor(storagePath);
-    if (thumbPath == null || bytes.isEmpty) {
+  }) => _putThumbnail(AlbumOrganizer.thumbnailPathFor(storagePath), bytes);
+
+  Future<String?> _putThumbnail(String? thumbPath, Uint8List bytes) async {
+    if (thumbPath == null || thumbPath.isEmpty || bytes.isEmpty) {
       return null;
     }
 
@@ -3483,10 +3491,14 @@ class NestRepository {
     required String? uploadSessionId,
     required String uploaderUserId,
     required String? classGroupId,
-    required StorageUploadResult uploadResult,
     required String title,
     required String description,
     required String mediaType,
+    /// Supabase에 원본을 둔 경우의 경로. 원본이 관리자 Drive로 갔으면 null이다.
+    String? storagePath,
+    String? driveFileId,
+    String? driveWebViewLink,
+    String? driveFolderId,
     String? termId,
     String? courseId,
     String? thumbnailPath,
@@ -3500,7 +3512,10 @@ class NestRepository {
         .insert({
           'homeschool_id': homeschoolId,
           'upload_session_id': ?uploadSessionId,
-          'storage_path': uploadResult.storagePath,
+          'storage_path': storagePath,
+          'drive_file_id': driveFileId,
+          'drive_web_view_link': driveWebViewLink,
+          'drive_folder_id': driveFolderId,
           'uploader_user_id': uploaderUserId,
           'class_group_id': classGroupId,
           'term_id': termId,
@@ -3580,7 +3595,8 @@ class NestRepository {
   /// Uploads already-fetched bytes to Google Drive via the edge function. The
   /// function does not persist media_assets — callers must attach the returned
   /// ids with [attachDriveInfoToMediaAsset].
-  Future<({String driveFileId, String? driveWebViewLink})?> uploadMediaToDrive({
+  Future<({String driveFileId, String? driveWebViewLink, String? driveFolderId})?>
+  uploadMediaToDrive({
     required String homeschoolId,
     required String uploadSessionId,
     required String fileName,
@@ -3607,9 +3623,11 @@ class NestRepository {
     }
 
     final link = body['drive_web_view_link'];
+    final folderId = body['drive_folder_id'];
     return (
       driveFileId: driveFileId,
       driveWebViewLink: link is String && link.isNotEmpty ? link : null,
+      driveFolderId: folderId is String && folderId.isNotEmpty ? folderId : null,
     );
   }
 
@@ -3629,9 +3647,9 @@ class NestRepository {
   }
 
   static const String _albumColumns =
-      'id, title, description, media_type, drive_web_view_link, storage_path, '
-      'thumbnail_path, class_group_id, term_id, course_id, captured_at, '
-      'file_name, mime_type, size_bytes, uploader_user_id';
+      'id, title, description, media_type, drive_web_view_link, drive_file_id, '
+      'storage_path, thumbnail_path, class_group_id, term_id, course_id, '
+      'captured_at, file_name, mime_type, size_bytes, uploader_user_id';
 
   /// 앨범 한 페이지. [cursor]가 있으면 그 행 **다음**부터 이어 읽는다.
   ///
@@ -3695,6 +3713,32 @@ class NestRepository {
     return client.storage.from('media').download(storagePath);
   }
 
+  /// 관리자 Drive에 있는 원본 바이트. 엣지 함수가 권한을 확인하고 중계한다 —
+  /// Drive 파일은 공개 공유돼 있지 않고, 관리자 토큰을 프론트에 내줄 수 없다.
+  Future<Uint8List> fetchDriveOriginalBytes({
+    required String mediaAssetId,
+  }) async {
+    final response = await client.functions.invoke(
+      'google-drive-file',
+      body: {'media_asset_id': mediaAssetId},
+    );
+
+    final data = response.data;
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+
+    throw StateError('원본을 가져오지 못했습니다.');
+  }
+
+  /// 앨범 원본이 어디에 있든 바이트로 돌려준다.
+  Future<Uint8List> fetchOriginalBytes(GalleryItem item) {
+    final path = item.storagePath;
+    if (path != null && path.isNotEmpty) {
+      return downloadMediaBytes(storagePath: path);
+    }
+    return fetchDriveOriginalBytes(mediaAssetId: item.id);
+  }
+
   /// 미디어 한 건을 지운다. DB 행을 먼저 지우고 스토리지 오브젝트를 뒤따라
   /// 정리한다 — 오브젝트 삭제가 실패해도 앨범에서는 이미 사라졌고, 남은 파일은
   /// 참조 없는 쓰레기일 뿐 사용자에게 보이지 않는다.
@@ -3702,7 +3746,21 @@ class NestRepository {
     required String mediaAssetId,
     String? storagePath,
     String? thumbnailPath,
+    bool hasDriveOriginal = false,
   }) async {
+    // Drive 원본을 먼저 지운다. DB 행이 사라진 뒤에는 엣지 함수가 권한을 확인할
+    // 근거(홈스쿨·업로더)를 잃어 영영 못 지우는 파일이 된다.
+    if (hasDriveOriginal) {
+      try {
+        await client.functions.invoke(
+          'google-drive-file',
+          body: {'media_asset_id': mediaAssetId, 'action': 'delete'},
+        );
+      } catch (error) {
+        debugPrint('[Album] drive delete failed: $error');
+      }
+    }
+
     await client.from('media_assets').delete().eq('id', mediaAssetId);
 
     final paths = <String>[

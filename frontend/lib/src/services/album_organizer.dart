@@ -55,6 +55,22 @@ enum AlbumDownloadOutcome {
 /// 있어야 해서, 넘기면 탭이 죽는다.
 const int kAlbumDownloadMaxBytes = 300 * 1024 * 1024;
 
+/// 업로드 한 건이 쓰는 저장 경로 묶음.
+class AlbumStoragePaths {
+  const AlbumStoragePaths({
+    required this.originalPath,
+    required this.thumbnailPath,
+  });
+
+  /// 원본이 Supabase로 떨어질 때(관리자 Drive 미연결·업로드 실패·용량 초과)
+  /// 쓰는 경로. Drive에 올라가면 이 경로는 비워 둔다.
+  final String originalPath;
+
+  /// 축소본 경로. 원본이 어디에 있든 썸네일은 항상 Supabase에 둔다 — 그리드가
+  /// CDN에서 바로 받아야 하기 때문이다.
+  final String thumbnailPath;
+}
+
 /// 목록 페이지네이션 커서. 마지막으로 받은 행을 가리킨다.
 class AlbumCursor {
   const AlbumCursor({required this.capturedAt, required this.id});
@@ -138,6 +154,28 @@ class AlbumOrganizer {
         .replaceAll(RegExp(r'[/\\]'), '-')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  /// 업로드 한 건의 저장 경로를 한 키에서 함께 만든다.
+  ///
+  /// 하이브리드 저장에서는 원본이 Supabase에 없을 수 있어(관리자 Drive로 감)
+  /// 썸네일 경로를 원본 경로에서 유도할 수 없다. 둘 다 같은
+  /// `{밀리초}_{seed}` 키에서 뽑아, 나중에 짝을 다시 찾을 수 있게 한다.
+  static AlbumStoragePaths storagePathsFor({
+    required String homeschoolId,
+    required String fileName,
+    required DateTime now,
+    required int seed,
+  }) {
+    final month = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final dot = fileName.lastIndexOf('.');
+    final ext = dot <= 0 ? '' : fileName.substring(dot);
+    final key = '${now.millisecondsSinceEpoch}_$seed';
+
+    return AlbumStoragePaths(
+      originalPath: '$homeschoolId/$month/$key$ext',
+      thumbnailPath: '$homeschoolId/$month/thumb/$key.jpg',
+    );
   }
 
   /// 원본 [storagePath]에 대응하는 썸네일 경로. 같은 폴더의 `thumb/` 아래에

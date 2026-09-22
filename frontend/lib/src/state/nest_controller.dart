@@ -181,6 +181,13 @@ class NestController extends ChangeNotifier {
 
   final MediaThumbnailer _thumbnailer = const MediaThumbnailer();
 
+  /// Drive로 보낼 수 있는 원본 최대 크기.
+  ///
+  /// 엣지 함수가 파일을 base64 JSON으로 받아 요청 크기 상한에 걸린다. 이걸
+  /// 넘는 파일은 Supabase에 남는다 — 관리자 Drive 용량을 아끼는 것보다 큰
+  /// 영상을 잃지 않는 것이 먼저다.
+  static const int maxDriveOriginalBytes = 40 * 1024 * 1024;
+
   List<CommunityPost> communityPosts = [];
   Map<String, List<CommunityPostMedia>> communityMediaByPost = const {};
   Map<String, List<CommunityComment>> communityCommentsByPost = const {};
@@ -1900,7 +1907,7 @@ class NestController extends ChangeNotifier {
         uploadSessionId: null,
         uploaderUserId: user!.id,
         classGroupId: selectedClassGroupId,
-        uploadResult: uploadResult,
+        storagePath: uploadResult.storagePath,
         title: title.trim(),
         description: description.trim(),
         mediaType: file.isVideo ? 'VIDEO' : 'PHOTO',
@@ -2077,17 +2084,41 @@ class NestController extends ChangeNotifier {
     required String description,
     required List<String> childIds,
   }) async {
-    final uploadResult = await _repository.uploadToStorage(
+    final paths = AlbumOrganizer.storagePathsFor(
       homeschoolId: homeschoolId,
-      file: file,
+      fileName: file.name,
+      now: DateTime.now(),
+      seed: file.name.hashCode.abs(),
     );
 
+    // 썸네일은 원본이 어디로 가든 항상 Supabase에 둔다. 그리드 수십 칸이
+    // CDN에서 바로 받아야 하고, 한 장에 45KB라 용량도 거의 들지 않는다.
     String? thumbnailPath;
     if (thumbnailBytes != null) {
-      thumbnailPath = await _repository.uploadThumbnail(
-        storagePath: uploadResult.storagePath,
+      thumbnailPath = await _repository.uploadThumbnailAt(
+        thumbnailPath: paths.thumbnailPath,
         bytes: thumbnailBytes,
       );
+    }
+
+    // 원본은 관리자 Drive가 1차다. 실패하면 Supabase로 떨어진다 — 사진을
+    // 잃는 것보다 용량을 쓰는 편이 낫다.
+    final drive = await _uploadOriginalToDrive(
+      homeschoolId: homeschoolId,
+      file: file,
+      classGroupId: classGroupId,
+      courseId: courseId,
+      capturedAt: capturedAt,
+    );
+
+    String? storagePath;
+    if (drive == null) {
+      final uploadResult = await _repository.uploadToStorage(
+        homeschoolId: homeschoolId,
+        file: file,
+        storagePathOverride: paths.originalPath,
+      );
+      storagePath = uploadResult.storagePath;
     }
 
     final mediaAssetId = await _repository.insertMediaAsset(
@@ -2102,7 +2133,10 @@ class NestController extends ChangeNotifier {
       mimeType: file.mimeType,
       sizeBytes: file.sizeBytes,
       capturedAt: capturedAt,
-      uploadResult: uploadResult,
+      storagePath: storagePath,
+      driveFileId: drive?.driveFileId,
+      driveWebViewLink: drive?.driveWebViewLink,
+      driveFolderId: drive?.driveFolderId,
       title: _albumTitleFrom(file.name),
       description: description.trim(),
       mediaType: file.isVideo ? 'VIDEO' : 'PHOTO',
@@ -2114,19 +2148,69 @@ class NestController extends ChangeNotifier {
         childIds: childIds,
       );
     }
+  }
 
-    // Drive 미러는 기다리지 않는다. Google이 느리거나 죽어 있는 날에도 앨범
-    // 업로드가 그만큼 늦어져서는 안 된다.
-    unawaited(
-      _mirrorMediaToDriveBestEffort(
+  /// 원본을 관리자 Drive에 올린다. 못 올리면 null — 호출부가 Supabase로
+  /// 떨어뜨린다.
+  ///
+  /// 예전의 미러와 달리 이건 기다린다. Drive가 이제 원본의 유일한 집이라,
+  /// 결과를 모르는 채로 media_assets 행을 만들면 어디에도 없는 사진이 생긴다.
+  Future<({String driveFileId, String? driveWebViewLink, String? driveFolderId})?>
+  _uploadOriginalToDrive({
+    required String homeschoolId,
+    required PendingMediaFile file,
+    required String? classGroupId,
+    required String? courseId,
+    required DateTime? capturedAt,
+  }) async {
+    final integration = driveIntegration;
+    if (user == null || integration == null || !integration.isConnected) {
+      return null;
+    }
+
+    // 엣지 함수가 파일을 base64 JSON으로 받아 요청 크기 상한에 걸린다. 큰 영상은
+    // Supabase로 떨어뜨린다 — 관리자 Drive 용량을 아끼는 것보다 영상을 잃지 않는
+    // 것이 먼저다.
+    if (file.sizeBytes > maxDriveOriginalBytes) {
+      debugPrint('[Drive] too large for Drive, falling back to Storage');
+      return null;
+    }
+
+    try {
+      final uploadSessionId = await _repository.createUploadSession(
         homeschoolId: homeschoolId,
-        mediaAssetId: mediaAssetId,
-        file: file,
-        classGroupId: classGroupId,
-        courseId: courseId,
-        capturedAt: capturedAt,
-      ),
-    );
+        uploaderUserId: user!.id,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+      );
+
+      final result = await _repository.uploadMediaToDrive(
+        homeschoolId: homeschoolId,
+        uploadSessionId: uploadSessionId,
+        fileName: file.name,
+        mimeType: file.mimeType,
+        bytes: file.bytes,
+        folderSegments: _driveFolderSegmentsFor(
+          classGroupId: classGroupId,
+          courseId: courseId,
+          capturedAt: capturedAt,
+        ),
+      );
+
+      if (result == null) {
+        return null;
+      }
+
+      await _repository.updateUploadStatus(
+        uploadSessionId: uploadSessionId,
+        status: 'COMPLETED',
+      );
+
+      return result;
+    } catch (error) {
+      debugPrint('[Drive] original upload failed: $error');
+      return null;
+    }
   }
 
   void _updateUploadTask(
@@ -2148,6 +2232,12 @@ class NestController extends ChangeNotifier {
     return stem.trim();
   }
 
+  /// 원본 바이트. Supabase에 있으면 거기서, 관리자 Drive에만 있으면 엣지
+  /// 함수를 거쳐 가져온다. 뷰어의 "크게 보기"와 내려받기가 함께 쓴다.
+  Future<Uint8List> fetchAlbumOriginalBytes(GalleryItem item) {
+    return _repository.fetchOriginalBytes(item);
+  }
+
   // ── 앨범 삭제 / 내려받기 ──
 
   Future<void> deleteAlbumSelection() async {
@@ -2160,6 +2250,7 @@ class NestController extends ChangeNotifier {
           mediaAssetId: item.id,
           storagePath: item.storagePath,
           thumbnailPath: item.thumbnailPath,
+          hasDriveOriginal: item.isDriveBacked,
         );
       }
       albumSelectedIds.clear();
@@ -2174,7 +2265,10 @@ class NestController extends ChangeNotifier {
   /// 묶어 저장한다. 파일 저장이 불가능한 플랫폼에서는 한 장만 새 창으로 연다.
   Future<AlbumDownloadOutcome> downloadAlbumSelection() async {
     final targets = selectedAlbumItems
-        .where((item) => (item.storagePath ?? '').isNotEmpty)
+        .where(
+          (item) =>
+              (item.storagePath ?? '').isNotEmpty || item.isDriveBacked,
+        )
         .toList();
 
     if (targets.isEmpty) {
@@ -2202,7 +2296,19 @@ class NestController extends ChangeNotifier {
       }
       final url = mediaPublicUrl(targets.single.storagePath);
       if (url == null) {
-        return AlbumDownloadOutcome.failed;
+        // 원본이 관리자 Drive에만 있으면 공개 주소가 없다. Drive 보기 링크가
+        // 있으면 그걸로 보낸다.
+        final driveLink = targets.single.driveWebViewLink;
+        if (driveLink == null || driveLink.isEmpty) {
+          return AlbumDownloadOutcome.failed;
+        }
+        final openedDrive = await launchUrl(
+          Uri.parse(driveLink),
+          mode: LaunchMode.externalApplication,
+        );
+        return openedDrive
+            ? AlbumDownloadOutcome.openedExternally
+            : AlbumDownloadOutcome.failed;
       }
       final opened = await launchUrl(
         Uri.parse(url),
@@ -2218,9 +2324,7 @@ class NestController extends ChangeNotifier {
 
       if (targets.length == 1) {
         final item = targets.single;
-        final bytes = await _repository.downloadMediaBytes(
-          storagePath: item.storagePath!,
-        );
+        final bytes = await _repository.fetchOriginalBytes(item);
         helper.downloadBytes(
           bytes: bytes,
           filename: AlbumOrganizer.downloadFileName(item, used: used),
@@ -2233,9 +2337,7 @@ class NestController extends ChangeNotifier {
 
       final archive = Archive();
       for (final item in targets) {
-        final bytes = await _repository.downloadMediaBytes(
-          storagePath: item.storagePath!,
-        );
+        final bytes = await _repository.fetchOriginalBytes(item);
         archive.add(
           ArchiveFile(
             AlbumOrganizer.downloadFileName(item, used: used),
@@ -4967,7 +5069,7 @@ class NestController extends ChangeNotifier {
           uploadSessionId: null,
           uploaderUserId: user!.id,
           classGroupId: targetClassGroupId,
-          uploadResult: uploadResult,
+          storagePath: uploadResult.storagePath,
           title: pendingFile.name,
           description: trimmedContent,
           mediaType: pendingFile.isVideo ? 'VIDEO' : 'PHOTO',
