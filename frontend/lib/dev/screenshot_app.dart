@@ -549,6 +549,7 @@ class _FakeNestRepository extends NestRepository {
     String? termId,
     String? classGroupId,
     String? courseId,
+    String? albumFolderId,
     String? mediaType,
     AlbumCursor? cursor,
     int limit = 60,

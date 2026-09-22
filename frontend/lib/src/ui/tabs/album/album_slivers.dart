@@ -297,10 +297,34 @@ class _AlbumFolderCard extends StatelessWidget {
               ),
               child: AspectRatio(
                 aspectRatio: 1,
-                child: AlbumTileImage(
-                  item: null,
-                  imageUrl: coverUrl,
-                  cacheWidth: 480,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AlbumTileImage(
+                      item: null,
+                      imageUrl: coverUrl,
+                      cacheWidth: 480,
+                    ),
+                    // 사용자가 만든 폴더는 자동 묶음(학기·수업)과 구분되게
+                    // 배지를 단다. Drive에도 같은 이름으로 있는 것들이다.
+                    if (summary.isFolder)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.folder_rounded,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

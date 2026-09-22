@@ -70,6 +70,7 @@ class _AlbumTabState extends State<AlbumTab> {
       if (!mounted) return;
       unawaited(widget.controller.ensureAlbumLoaded());
       unawaited(widget.controller.loadAlbumSummaries());
+      unawaited(widget.controller.loadAlbumFolders());
 
       // 연결 상태는 이 탭이 직접 챙긴다. 예전에는 관리자 홈의 카드만 불러서,
       // 앨범으로 바로 들어오면 이미 연결돼 있는데도 "미연결"로 보였고 업로드
@@ -138,6 +139,7 @@ class _AlbumTabState extends State<AlbumTab> {
   Future<void> _refresh() async {
     await widget.controller.loadAlbumPage(reset: true);
     unawaited(widget.controller.loadAlbumSummaries());
+    unawaited(widget.controller.loadAlbumFolders());
   }
 
   Future<void> _openUploadSheet() async {
@@ -164,6 +166,7 @@ class _AlbumTabState extends State<AlbumTab> {
         files: draft.files,
         classGroupId: draft.classGroupId,
         courseId: draft.courseId,
+        albumFolderId: draft.albumFolderId,
         capturedAt: draft.capturedAt,
         description: draft.description,
       );
@@ -246,7 +249,9 @@ class _AlbumTabState extends State<AlbumTab> {
     }
 
     setState(() => _openAlbum = summary);
-    if (summary.isCourse) {
+    if (summary.isFolder) {
+      await controller.setAlbumFolderFilter(summary.scopeId);
+    } else if (summary.isCourse) {
       await controller.setAlbumCourseFilter(summary.scopeId);
     } else {
       await controller.setAlbumClassGroupFilter(summary.scopeId);
@@ -452,6 +457,7 @@ class _AlbumTabState extends State<AlbumTab> {
     final filtered =
         controller.albumClassGroupId != null ||
         controller.albumCourseId != null ||
+        controller.albumFolderId != null ||
         controller.albumMediaType != null;
 
     if (filtered) {
@@ -701,9 +707,19 @@ class _FilterRow extends StatelessWidget {
             selected:
                 controller.albumClassGroupId == null &&
                 controller.albumCourseId == null &&
+                controller.albumFolderId == null &&
                 controller.albumMediaType == null,
             onSelected: () => controller.clearAlbumFilters(),
           ),
+          for (final folder in controller.visibleAlbumFolders)
+            _chip(
+              label: folder.name,
+              icon: Icons.folder_outlined,
+              selected: controller.albumFolderId == folder.id,
+              onSelected: () => controller.setAlbumFolderFilter(
+                controller.albumFolderId == folder.id ? null : folder.id,
+              ),
+            ),
           for (final group in groups)
             _chip(
               label: group.name,
@@ -735,10 +751,12 @@ class _FilterRow extends StatelessWidget {
     required String label,
     required bool selected,
     required Future<void> Function() onSelected,
+    IconData? icon,
   }) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
+        avatar: icon == null ? null : Icon(icon, size: 15),
         label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         selected: selected,
         onSelected: (_) {

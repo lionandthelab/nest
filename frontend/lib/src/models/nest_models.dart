@@ -1813,6 +1813,7 @@ class GalleryItem {
     this.driveFileId,
     this.termId,
     this.courseId,
+    this.albumFolderId,
     this.thumbnailPath,
     this.fileName = '',
     this.mimeType = '',
@@ -1833,6 +1834,7 @@ class GalleryItem {
   final DateTime? capturedAt;
   final String? termId;
   final String? courseId;
+  final String? albumFolderId;
 
   /// 그리드용 축소본의 저장 경로. 업로드 시 만들지 못했으면 null이고, 이때는
   /// 호출부가 [storagePath]의 원본으로 되돌아간다.
@@ -1870,6 +1872,7 @@ class GalleryItem {
       capturedAt: parseDateTime(map['captured_at']),
       termId: map['term_id'] as String?,
       courseId: map['course_id'] as String?,
+      albumFolderId: map['album_folder_id'] as String?,
       thumbnailPath: map['thumbnail_path'] as String?,
       fileName: (map['file_name'] as String?) ?? '',
       mimeType: (map['mime_type'] as String?) ?? '',
@@ -1890,11 +1893,51 @@ class GalleryItem {
     'captured_at': capturedAt?.toUtc().toIso8601String(),
     'term_id': termId,
     'course_id': courseId,
+    'album_folder_id': albumFolderId,
     'thumbnail_path': thumbnailPath,
     'file_name': fileName,
     'mime_type': mimeType,
     'size_bytes': sizeBytes,
     'uploader_user_id': uploaderUserId,
+  };
+}
+
+/// 사용자가 직접 만든 앨범 폴더. Drive의 폴더 이름이 곧 이 이름이다.
+class AlbumFolder {
+  const AlbumFolder({
+    required this.id,
+    required this.homeschoolId,
+    required this.name,
+    this.termId,
+    this.createdByUserId,
+    this.createdAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String name;
+  final String? termId;
+  final String? createdByUserId;
+  final DateTime? createdAt;
+
+  factory AlbumFolder.fromMap(Map<String, dynamic> map) {
+    return AlbumFolder(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      name: (map['name'] as String?) ?? '',
+      termId: map['term_id'] as String?,
+      createdByUserId: map['created_by_user_id'] as String?,
+      createdAt: parseDateTime(map['created_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'homeschool_id': homeschoolId,
+    'name': name,
+    'term_id': termId,
+    'created_by_user_id': createdByUserId,
+    'created_at': createdAt?.toUtc().toIso8601String(),
   };
 }
 
@@ -1912,7 +1955,7 @@ class AlbumSummary {
     this.coverThumbnailPath,
   });
 
-  /// 'TERM' | 'COURSE' | 'CLASS_GROUP'
+  /// 'TERM' | 'COURSE' | 'CLASS_GROUP' | 'FOLDER'
   final String scope;
   final String scopeId;
   final String scopeName;
@@ -1926,6 +1969,7 @@ class AlbumSummary {
   bool get isTerm => scope == 'TERM';
   bool get isCourse => scope == 'COURSE';
   bool get isClassGroup => scope == 'CLASS_GROUP';
+  bool get isFolder => scope == 'FOLDER';
 
   /// 커버로 붙일 경로. 썸네일이 있으면 그걸, 없으면 원본을 쓴다.
   String? get coverPath => (coverThumbnailPath ?? '').isNotEmpty

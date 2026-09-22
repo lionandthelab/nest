@@ -162,6 +162,10 @@ class NestController extends ChangeNotifier {
   String? albumCourseId;
   String? albumMediaType;
 
+  /// 사용자가 만든 앨범 폴더. Drive의 폴더 이름이 곧 이 이름이다.
+  List<AlbumFolder> albumFolders = const [];
+  String? albumFolderId;
+
   /// 선택 학기로 좁힐지. 폴더 뷰에서 학기 카드를 열면 잠시 꺼진다.
   bool albumScopedToTerm = true;
 
@@ -1966,6 +1970,7 @@ class NestController extends ChangeNotifier {
     required List<PendingMediaFile> files,
     String? classGroupId,
     String? courseId,
+    String? albumFolderId,
     DateTime? capturedAt,
     String description = '',
     List<String> childIds = const [],
@@ -2027,6 +2032,7 @@ class NestController extends ChangeNotifier {
             thumbnailBytes: thumbnailBytes,
             classGroupId: classGroupId,
             courseId: courseId,
+            albumFolderId: albumFolderId,
             capturedAt: capturedAt,
             description: description,
             childIds: childIds,
@@ -2080,6 +2086,7 @@ class NestController extends ChangeNotifier {
     required Uint8List? thumbnailBytes,
     required String? classGroupId,
     required String? courseId,
+    required String? albumFolderId,
     required DateTime? capturedAt,
     required String description,
     required List<String> childIds,
@@ -2108,6 +2115,7 @@ class NestController extends ChangeNotifier {
       file: file,
       classGroupId: classGroupId,
       courseId: courseId,
+      albumFolderId: albumFolderId,
       capturedAt: capturedAt,
     );
 
@@ -2127,6 +2135,7 @@ class NestController extends ChangeNotifier {
       uploaderUserId: uploaderUserId,
       classGroupId: classGroupId,
       courseId: courseId,
+      albumFolderId: albumFolderId,
       termId: selectedTermId,
       thumbnailPath: thumbnailPath,
       fileName: file.name,
@@ -2161,6 +2170,7 @@ class NestController extends ChangeNotifier {
     required PendingMediaFile file,
     required String? classGroupId,
     required String? courseId,
+    required String? albumFolderId,
     required DateTime? capturedAt,
   }) async {
     final integration = driveIntegration;
@@ -2193,6 +2203,7 @@ class NestController extends ChangeNotifier {
         folderSegments: _driveFolderSegmentsFor(
           classGroupId: classGroupId,
           courseId: courseId,
+          albumFolderId: albumFolderId,
           capturedAt: capturedAt,
         ),
       );
@@ -2620,6 +2631,7 @@ class NestController extends ChangeNotifier {
   List<String> _driveFolderSegmentsFor({
     String? classGroupId,
     String? courseId,
+    String? albumFolderId,
     DateTime? capturedAt,
   }) {
     final termName = terms
@@ -2641,6 +2653,7 @@ class NestController extends ChangeNotifier {
 
     return AlbumOrganizer.driveFolderSegments(
       termName: termName,
+      folderName: albumFolderName(albumFolderId),
       courseName: courseName ?? groupName,
       capturedAt: capturedAt ?? DateTime.now(),
     );
@@ -2973,6 +2986,7 @@ class NestController extends ChangeNotifier {
         termId: albumScopedToTerm ? selectedTermId : null,
         classGroupId: albumClassGroupId,
         courseId: albumCourseId,
+        albumFolderId: albumFolderId,
         mediaType: albumMediaType,
         cursor: reset ? null : _albumCursor,
         limit: albumPageSize,
@@ -2999,6 +3013,99 @@ class NestController extends ChangeNotifier {
 
   Future<void> ensureAlbumLoaded() async {
     if (_albumLoadedOnce) return;
+    await loadAlbumPage(reset: true);
+  }
+
+  Future<void> loadAlbumFolders() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      albumFolders = const [];
+      return;
+    }
+    try {
+      albumFolders = await _repository.fetchAlbumFolders(
+        homeschoolId: homeschoolId,
+      );
+    } catch (error) {
+      debugPrint('[Album] folders failed: $error');
+    }
+    _notifyAlbum();
+  }
+
+  /// 폴더를 만든다. 이미 같은 이름이 있으면 그걸 돌려준다 — 사용자가 두 번
+  /// 만들려 했다고 오류를 보여 줄 이유가 없다.
+  Future<AlbumFolder> createAlbumFolder(String name) async {
+    final homeschoolId = selectedHomeschoolId;
+    final currentUser = user;
+    final trimmed = name.trim();
+
+    if (!canUploadMedia || currentUser == null) {
+      throw StateError('폴더를 만들 권한이 없습니다.');
+    }
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+    if (trimmed.isEmpty) {
+      throw StateError('폴더 이름을 입력하세요.');
+    }
+
+    final existing = albumFolders.where(
+      (folder) =>
+          folder.termId == selectedTermId &&
+          folder.name.trim().toLowerCase() == trimmed.toLowerCase(),
+    );
+    if (existing.isNotEmpty) {
+      return existing.first;
+    }
+
+    final created = await _repository.createAlbumFolder(
+      homeschoolId: homeschoolId,
+      name: trimmed,
+      createdByUserId: currentUser.id,
+      termId: selectedTermId,
+    );
+    albumFolders = [created, ...albumFolders];
+    _notifyAlbum();
+    return created;
+  }
+
+  Future<void> deleteAlbumFolder(String folderId) async {
+    try {
+      await _repository.deleteAlbumFolder(folderId: folderId);
+      albumFolders = albumFolders
+          .where((folder) => folder.id != folderId)
+          .toList();
+      if (albumFolderId == folderId) {
+        albumFolderId = null;
+        await loadAlbumPage(reset: true);
+      }
+      _notifyAlbum();
+    } catch (error) {
+      debugPrint('[Album] folder delete failed: $error');
+    }
+  }
+
+  /// 이 학기에 보여 줄 폴더. 학기에 매이지 않은 폴더도 함께 보인다.
+  List<AlbumFolder> get visibleAlbumFolders => albumFolders
+      .where(
+        (folder) => folder.termId == null || folder.termId == selectedTermId,
+      )
+      .toList();
+
+  String albumFolderName(String? folderId) {
+    if (folderId == null || folderId.isEmpty) return '';
+    return albumFolders
+        .where((folder) => folder.id == folderId)
+        .map((folder) => folder.name)
+        .firstOrNull ??
+        '';
+  }
+
+  Future<void> setAlbumFolderFilter(String? folderId) async {
+    final next = _normalizeNullable(folderId);
+    if (next == albumFolderId) return;
+    albumFolderId = next;
+    clearAlbumSelection();
     await loadAlbumPage(reset: true);
   }
 
@@ -3080,12 +3187,14 @@ class NestController extends ChangeNotifier {
   Future<void> clearAlbumFilters() async {
     if (albumClassGroupId == null &&
         albumCourseId == null &&
+        albumFolderId == null &&
         albumMediaType == null &&
         albumScopedToTerm) {
       return;
     }
     albumClassGroupId = null;
     albumCourseId = null;
+    albumFolderId = null;
     albumMediaType = null;
     albumScopedToTerm = true;
     clearAlbumSelection();

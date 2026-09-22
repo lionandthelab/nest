@@ -19,6 +19,7 @@ class AlbumUploadDraft {
     required this.capturedAt,
     this.classGroupId,
     this.courseId,
+    this.albumFolderId,
     this.description = '',
   });
 
@@ -26,6 +27,7 @@ class AlbumUploadDraft {
   final DateTime capturedAt;
   final String? classGroupId;
   final String? courseId;
+  final String? albumFolderId;
   final String description;
 }
 
@@ -56,6 +58,7 @@ class _AlbumUploadSheetState extends State<_AlbumUploadSheet> {
 
   late String? _classGroupId = widget.controller.selectedClassGroupId;
   String? _courseId;
+  late String? _folderId = widget.controller.albumFolderId;
   DateTime _capturedAt = DateTime.now();
   bool _isPicking = false;
 
@@ -133,6 +136,96 @@ class _AlbumUploadSheetState extends State<_AlbumUploadSheet> {
     setState(() => _classGroupId = selected);
   }
 
+  /// 폴더 고르기. 목록 맨 위에 "새 폴더 만들기"를 둬서, Drive에서 폴더를
+  /// 만들고 오는 왕복 없이 여기서 끝나게 한다.
+  Future<void> _pickFolder() async {
+    const createValue = '__create__';
+    final folders = widget.controller.visibleAlbumFolders;
+
+    final picked = await showSelectSheet<String?>(
+      context: context,
+      title: '폴더 선택',
+      helpText: '행사나 주제별로 묶어 둘 폴더를 고르세요.',
+      currentValue: _folderId,
+      options: [
+        const SelectSheetOption(
+          value: createValue,
+          title: '+ 새 폴더 만들기',
+          subtitle: '예: 가을 소풍, 김장 체험',
+        ),
+        const SelectSheetOption(
+          value: null,
+          title: '폴더 없음',
+          subtitle: '학기·수업·날짜로만 묶입니다',
+        ),
+        for (final folder in folders)
+          SelectSheetOption(
+            value: folder.id,
+            title: folder.name,
+            keywords: folder.name,
+          ),
+      ],
+    );
+
+    if (!mounted || picked == null && _folderId == null) return;
+
+    if (picked == createValue) {
+      await _createFolder();
+      return;
+    }
+    setState(() => _folderId = picked);
+  }
+
+  Future<void> _createFolder() async {
+    final controller = TextEditingController();
+    final name = await showNestSheet<String>(
+      context: context,
+      maxWidth: 420,
+      builder: (sheetContext) => NestSheet(
+        title: '새 폴더',
+        subtitle: 'Google Drive에도 같은 이름의 폴더가 생깁니다.',
+        icon: Icons.create_new_folder_outlined,
+        iconColor: NestColors.clay,
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(sheetContext).pop(controller.text.trim()),
+            child: const Text('만들기'),
+          ),
+        ],
+        child: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) =>
+              Navigator.of(sheetContext).pop(value.trim()),
+          decoration: const InputDecoration(
+            labelText: '폴더 이름',
+            hintText: '예: 조이홈스쿨 2026 가을 소풍',
+            prefixIcon: Icon(Icons.folder_outlined, size: 20),
+          ),
+        ),
+      ),
+    );
+    controller.dispose();
+
+    if (name == null || name.isEmpty || !mounted) return;
+
+    try {
+      final folder = await widget.controller.createAlbumFolder(name);
+      if (!mounted) return;
+      setState(() => _folderId = folder.id);
+    } on StateError catch (error) {
+      _toast(error.message);
+    } catch (_) {
+      _toast('폴더를 만들지 못했습니다.');
+    }
+  }
+
   Future<void> _pickCourse() async {
     final courses = widget.controller.courses;
     final selected = await showSelectSheet<String?>(
@@ -170,6 +263,7 @@ class _AlbumUploadSheetState extends State<_AlbumUploadSheet> {
         capturedAt: _capturedAt,
         classGroupId: _classGroupId,
         courseId: _courseId,
+        albumFolderId: _folderId,
         description: _descriptionController.text.trim(),
       ),
     );
@@ -278,6 +372,18 @@ class _AlbumUploadSheetState extends State<_AlbumUploadSheet> {
           ],
           const SizedBox(height: 14),
           SelectFieldCard(
+            label: '폴더',
+            hintText: '폴더를 고르거나 새로 만드세요',
+            icon: Icons.folder_outlined,
+            enabled: true,
+            onTap: _pickFolder,
+            value: controller.albumFolderName(_folderId).isEmpty
+                ? null
+                : controller.albumFolderName(_folderId),
+            helpText: 'Drive에도 같은 이름의 폴더로 저장됩니다.',
+          ),
+          const SizedBox(height: 10),
+          SelectFieldCard(
             label: '수업',
             hintText: '수업을 선택하세요',
             icon: Icons.menu_book_outlined,
@@ -324,7 +430,7 @@ class _AlbumUploadSheetState extends State<_AlbumUploadSheet> {
           if (driveConnected) ...[
             const SizedBox(height: 12),
             const NestQuietCard(
-              'Google Drive에도 함께 저장됩니다. 40MB가 넘는 파일은 Nest에만 저장됩니다.',
+              '사진 원본은 관리자 Google Drive에 저장됩니다. 40MB가 넘는 파일은 Nest에 저장됩니다.',
             ),
           ],
         ],

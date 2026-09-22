@@ -127,18 +127,31 @@ class AlbumOrganizer {
   ///
   /// 엣지 함수도 같은 정규화를 한 번 더 하지만, 클라이언트에서 미리 맞춰 두면
   /// 업로드 전에 사용자에게 "어디에 저장됩니다"를 정확히 보여 줄 수 있다.
+  /// 앨범 폴더를 골랐으면 `학기/폴더명` 으로 끝낸다. Drive를 열었을 때 사람이
+  /// 찾는 단위는 "가을 소풍"이지 수업명이나 날짜가 아니다. 폴더가 없을 때만
+  /// 예전처럼 `학기/수업/날짜` 로 쪼갠다.
   static List<String> driveFolderSegments({
     String? termName,
+    String? folderName,
     String? courseName,
     DateTime? capturedAt,
   }) {
     final segments = <String>[];
 
-    for (final name in [termName, courseName]) {
-      final clean = sanitizeFolderName(name ?? '');
-      if (clean.isNotEmpty) {
-        segments.add(clean);
-      }
+    final term = sanitizeFolderName(termName ?? '');
+    if (term.isNotEmpty) {
+      segments.add(term);
+    }
+
+    final folder = sanitizeFolderName(folderName ?? '');
+    if (folder.isNotEmpty) {
+      segments.add(folder);
+      return segments;
+    }
+
+    final course = sanitizeFolderName(courseName ?? '');
+    if (course.isNotEmpty) {
+      segments.add(course);
     }
 
     if (capturedAt != null) {

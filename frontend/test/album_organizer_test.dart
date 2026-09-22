@@ -278,4 +278,52 @@ void main() {
       expect(a.thumbnailPath, isNot(b.thumbnailPath));
     });
   });
+
+  group('AlbumOrganizer.driveFolderSegments — 앨범 폴더', () {
+    test('폴더 이름이 있으면 학기 다음에 폴더가 오고 날짜는 빠진다', () {
+      // Drive에서 사람이 찾는 단위는 "가을 소풍"이지 날짜가 아니다. 폴더를
+      // 골랐으면 그 이름 하나로 묶는다.
+      expect(
+        AlbumOrganizer.driveFolderSegments(
+          termName: '2026 가을',
+          folderName: '가을 소풍',
+          courseName: '미술',
+          capturedAt: DateTime(2026, 9, 23),
+        ),
+        ['2026 가을', '가을 소풍'],
+      );
+    });
+
+    test('폴더가 없으면 기존대로 학기·수업·날짜', () {
+      expect(
+        AlbumOrganizer.driveFolderSegments(
+          termName: '2026 가을',
+          courseName: '미술',
+          capturedAt: DateTime(2026, 9, 23),
+        ),
+        ['2026 가을', '미술', '2026-09-23'],
+      );
+    });
+
+    test('폴더 이름의 구분자도 하이픈으로 바뀐다', () {
+      expect(
+        AlbumOrganizer.driveFolderSegments(
+          termName: '2026 가을',
+          folderName: '소풍/체험',
+        ),
+        ['2026 가을', '소풍-체험'],
+      );
+    });
+
+    test('공백뿐인 폴더 이름은 없는 것으로 본다', () {
+      expect(
+        AlbumOrganizer.driveFolderSegments(
+          termName: '2026 가을',
+          folderName: '   ',
+          capturedAt: DateTime(2026, 9, 23),
+        ),
+        ['2026 가을', '2026-09-23'],
+      );
+    });
+  });
 }

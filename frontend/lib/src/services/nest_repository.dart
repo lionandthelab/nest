@@ -3501,6 +3501,7 @@ class NestRepository {
     String? driveFolderId,
     String? termId,
     String? courseId,
+    String? albumFolderId,
     String? thumbnailPath,
     String fileName = '',
     String mimeType = '',
@@ -3520,6 +3521,7 @@ class NestRepository {
           'class_group_id': classGroupId,
           'term_id': termId,
           'course_id': courseId,
+          'album_folder_id': albumFolderId,
           'thumbnail_path': thumbnailPath,
           'file_name': fileName,
           'mime_type': mimeType,
@@ -3672,7 +3674,8 @@ class NestRepository {
   static const String _albumColumns =
       'id, title, description, media_type, drive_web_view_link, drive_file_id, '
       'storage_path, thumbnail_path, class_group_id, term_id, course_id, '
-      'captured_at, file_name, mime_type, size_bytes, uploader_user_id';
+      'album_folder_id, captured_at, file_name, mime_type, size_bytes, '
+      'uploader_user_id';
 
   /// 앨범 한 페이지. [cursor]가 있으면 그 행 **다음**부터 이어 읽는다.
   ///
@@ -3684,6 +3687,7 @@ class NestRepository {
     String? termId,
     String? classGroupId,
     String? courseId,
+    String? albumFolderId,
     String? mediaType,
     AlbumCursor? cursor,
     int limit = 60,
@@ -3702,6 +3706,9 @@ class NestRepository {
     if (courseId != null && courseId.isNotEmpty) {
       query = query.eq('course_id', courseId);
     }
+    if (albumFolderId != null && albumFolderId.isNotEmpty) {
+      query = query.eq('album_folder_id', albumFolderId);
+    }
     if (mediaType != null && mediaType.isNotEmpty) {
       query = query.eq('media_type', mediaType);
     }
@@ -3717,6 +3724,44 @@ class NestRepository {
         .limit(limit);
 
     return _asRows(data).map(GalleryItem.fromMap).toList();
+  }
+
+  /// 이 홈스쿨의 앨범 폴더. 학기별로 나누되 학기 없는 폴더도 함께 준다.
+  Future<List<AlbumFolder>> fetchAlbumFolders({
+    required String homeschoolId,
+  }) async {
+    final data = await client
+        .from('album_folders')
+        .select('id, homeschool_id, term_id, name, created_by_user_id, created_at')
+        .eq('homeschool_id', homeschoolId)
+        .order('created_at', ascending: false);
+
+    return _asRows(data).map(AlbumFolder.fromMap).toList();
+  }
+
+  Future<AlbumFolder> createAlbumFolder({
+    required String homeschoolId,
+    required String name,
+    required String createdByUserId,
+    String? termId,
+  }) async {
+    final row = await client
+        .from('album_folders')
+        .insert({
+          'homeschool_id': homeschoolId,
+          'term_id': termId,
+          'name': name.trim(),
+          'created_by_user_id': createdByUserId,
+        })
+        .select('id, homeschool_id, term_id, name, created_by_user_id, created_at')
+        .single();
+
+    return AlbumFolder.fromMap(_asMap(row));
+  }
+
+  /// 폴더만 지운다. 사진은 album_folder_id가 null로 풀릴 뿐 남는다.
+  Future<void> deleteAlbumFolder({required String folderId}) {
+    return client.from('album_folders').delete().eq('id', folderId);
   }
 
   /// 폴더 뷰용 학기/수업/반별 집계. 서버에서 한 번에 센다.
