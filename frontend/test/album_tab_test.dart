@@ -151,4 +151,67 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('사진이 없는 반·폴더 태그는 필터에 세우지 않는다', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final controller = _controller(role: 'HOMESCHOOL_ADMIN', items: [_item('a')]);
+    controller.classGroups = [
+      ClassGroup.fromMap({'id': 'cg-1', 'term_id': 't-1', 'name': '해바라기반'}),
+      ClassGroup.fromMap({'id': 'cg-2', 'term_id': 't-1', 'name': '민들레반'}),
+    ];
+    controller.albumFolders = [
+      AlbumFolder.fromMap({
+        'id': 'f-1',
+        'homeschool_id': 'hs-1',
+        'name': '가을 소풍',
+      }),
+      AlbumFolder.fromMap({
+        'id': 'f-2',
+        'homeschool_id': 'hs-1',
+        'name': '빈 폴더',
+      }),
+    ];
+    // 집계에는 해바라기반과 가을 소풍만 사진이 있다.
+    controller.albumSummaries = [
+      AlbumSummary.fromMap({
+        'scope': 'CLASS_GROUP',
+        'scope_id': 'cg-1',
+        'scope_name': '해바라기반',
+        'item_count': 12,
+      }),
+      AlbumSummary.fromMap({
+        'scope': 'FOLDER',
+        'scope_id': 'f-1',
+        'scope_name': '가을 소풍',
+        'item_count': 52,
+      }),
+    ];
+
+    await _pumpAlbum(tester, controller);
+
+    expect(find.text('해바라기반'), findsOneWidget);
+    expect(find.text('가을 소풍'), findsOneWidget);
+    expect(find.text('민들레반'), findsNothing);
+    expect(find.text('빈 폴더'), findsNothing);
+  });
+
+  testWidgets('지금 고른 태그는 비어 있어도 남겨 해제할 수 있게 한다', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final controller = _controller(role: 'HOMESCHOOL_ADMIN');
+    controller.classGroups = [
+      ClassGroup.fromMap({'id': 'cg-2', 'term_id': 't-1', 'name': '민들레반'}),
+    ];
+    controller.albumClassGroupId = 'cg-2';
+    controller.albumSummaries = const [];
+
+    await _pumpAlbum(tester, controller);
+
+    expect(find.text('민들레반'), findsOneWidget);
+  });
 }

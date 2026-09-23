@@ -169,6 +169,26 @@ class AlbumOrganizer {
         .trim();
   }
 
+  /// 그 축에서 사진이 하나라도 있는 id만 추린다.
+  ///
+  /// 필터 칩을 "만들어진 모든 반·폴더"로 세우면, 아직 사진이 한 장도 없는
+  /// 태그가 줄줄이 늘어서서 정작 누를 게 뭔지 보이지 않는다. 특히 반 이름에는
+  /// 아이 이름이 들어가 있어 빈 태그가 그대로 노출되는 것도 좋지 않다.
+  static Set<String> scopeIdsWithPhotos(
+    List<AlbumSummary> summaries,
+    String scope,
+  ) {
+    return summaries
+        .where(
+          (summary) =>
+              summary.scope == scope &&
+              summary.scopeId.isNotEmpty &&
+              summary.itemCount > 0,
+        )
+        .map((summary) => summary.scopeId)
+        .toSet();
+  }
+
   /// 업로드 한 건의 저장 경로를 한 키에서 함께 만든다.
   ///
   /// 하이브리드 저장에서는 원본이 Supabase에 없을 수 있어(관리자 Drive로 감)

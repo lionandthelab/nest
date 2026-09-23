@@ -3085,6 +3085,50 @@ class NestController extends ChangeNotifier {
     }
   }
 
+  /// 필터에 세울 폴더. 사진이 실제로 들어 있는 것만 남긴다.
+  /// 지금 고른 폴더는 비어 있어도 남겨야 사용자가 해제할 수 있다.
+  List<AlbumFolder> get albumFilterFolders {
+    final withPhotos = AlbumOrganizer.scopeIdsWithPhotos(
+      albumSummaries,
+      'FOLDER',
+    );
+    return visibleAlbumFolders
+        .where(
+          (folder) =>
+              withPhotos.contains(folder.id) || folder.id == albumFolderId,
+        )
+        .toList();
+  }
+
+  /// 필터에 세울 반. 같은 이유로 사진이 있는 반만 남긴다.
+  List<ClassGroup> get albumFilterClassGroups {
+    final withPhotos = AlbumOrganizer.scopeIdsWithPhotos(
+      albumSummaries,
+      'CLASS_GROUP',
+    );
+    return classGroups
+        .where(
+          (group) =>
+              withPhotos.contains(group.id) || group.id == albumClassGroupId,
+        )
+        .toList();
+  }
+
+  /// 필터에 세울 수업. 반과 달리 수업은 학기를 가로지르므로, 사진이 있는
+  /// 것만 두면 목록이 과하게 길어지지 않는다.
+  List<Course> get albumFilterCourses {
+    final withPhotos = AlbumOrganizer.scopeIdsWithPhotos(
+      albumSummaries,
+      'COURSE',
+    );
+    return courses
+        .where(
+          (course) =>
+              withPhotos.contains(course.id) || course.id == albumCourseId,
+        )
+        .toList();
+  }
+
   /// 이 학기에 보여 줄 폴더. 학기에 매이지 않은 폴더도 함께 보인다.
   List<AlbumFolder> get visibleAlbumFolders => albumFolders
       .where(

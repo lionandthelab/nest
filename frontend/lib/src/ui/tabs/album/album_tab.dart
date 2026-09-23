@@ -695,7 +695,11 @@ class _FilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final groups = controller.classGroups;
+    // 만들어진 모든 반·수업이 아니라, 사진이 실제로 들어 있는 것만 세운다.
+    // 빈 태그가 줄줄이 늘어서면 정작 누를 게 뭔지 보이지 않는다.
+    final folders = controller.albumFilterFolders;
+    final groups = controller.albumFilterClassGroups;
+    final courses = controller.albumFilterCourses;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -711,7 +715,7 @@ class _FilterRow extends StatelessWidget {
                 controller.albumMediaType == null,
             onSelected: () => controller.clearAlbumFilters(),
           ),
-          for (final folder in controller.visibleAlbumFolders)
+          for (final folder in folders)
             _chip(
               label: folder.name,
               icon: Icons.folder_outlined,
@@ -720,12 +724,23 @@ class _FilterRow extends StatelessWidget {
                 controller.albumFolderId == folder.id ? null : folder.id,
               ),
             ),
+          for (final course in courses)
+            _chip(
+              label: course.name,
+              icon: Icons.menu_book_outlined,
+              selected: controller.albumCourseId == course.id,
+              onSelected: () => controller.setAlbumCourseFilter(
+                controller.albumCourseId == course.id ? null : course.id,
+              ),
+            ),
           for (final group in groups)
             _chip(
               label: group.name,
+              icon: Icons.groups_outlined,
               selected: controller.albumClassGroupId == group.id,
-              onSelected: () =>
-                  controller.setAlbumClassGroupFilter(group.id),
+              onSelected: () => controller.setAlbumClassGroupFilter(
+                controller.albumClassGroupId == group.id ? null : group.id,
+              ),
             ),
           const SizedBox(width: 6),
           _chip(

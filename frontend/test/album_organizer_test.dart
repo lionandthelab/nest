@@ -326,4 +326,50 @@ void main() {
       );
     });
   });
+
+  group('AlbumOrganizer.scopeIdsWithPhotos', () {
+    AlbumSummary sum(String scope, String id, int count) => AlbumSummary(
+      scope: scope,
+      scopeId: id,
+      scopeName: id,
+      itemCount: count,
+      photoCount: count,
+      videoCount: 0,
+    );
+
+    test('그 축에서 사진이 하나라도 있는 id만 돌려준다', () {
+      final ids = AlbumOrganizer.scopeIdsWithPhotos(
+        [
+          sum('CLASS_GROUP', 'cg-1', 12),
+          sum('CLASS_GROUP', 'cg-2', 0),
+          sum('FOLDER', 'f-1', 52),
+        ],
+        'CLASS_GROUP',
+      );
+
+      expect(ids, {'cg-1'});
+    });
+
+    test('다른 축은 섞이지 않는다', () {
+      final ids = AlbumOrganizer.scopeIdsWithPhotos(
+        [sum('CLASS_GROUP', 'cg-1', 12), sum('FOLDER', 'f-1', 52)],
+        'FOLDER',
+      );
+
+      expect(ids, {'f-1'});
+    });
+
+    test('빈 집계는 빈 집합', () {
+      expect(AlbumOrganizer.scopeIdsWithPhotos(const [], 'FOLDER'), isEmpty);
+    });
+
+    test('id가 비어 있는 행은 버린다', () {
+      final ids = AlbumOrganizer.scopeIdsWithPhotos(
+        [sum('FOLDER', '', 3), sum('FOLDER', 'f-2', 1)],
+        'FOLDER',
+      );
+
+      expect(ids, {'f-2'});
+    });
+  });
 }
