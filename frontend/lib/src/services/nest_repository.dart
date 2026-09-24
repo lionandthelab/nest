@@ -2259,6 +2259,12 @@ class NestRepository {
             _defaultTimeSlots(termId: termId),
             onConflict: 'term_id,day_of_week,start_time,end_time',
           ),
+      client
+          .from('classrooms')
+          .upsert(
+            bootstrapClassroomRows(termId: termId),
+            onConflict: 'term_id,name',
+          ),
     ]);
 
     return BootstrapResult(
@@ -4146,6 +4152,17 @@ class NestRepository {
   /// Returns the public URL for a storage path in the 'media' bucket.
   String mediaPublicUrl(String storagePath) {
     return client.storage.from('media').getPublicUrl(storagePath);
+  }
+
+  /// 새 학기 틀에 기본으로 넣는 교실. 홈스쿨은 대부분 집에서 수업한다.
+  static const defaultClassroomName = '집';
+
+  static List<Map<String, dynamic>> bootstrapClassroomRows({
+    required String termId,
+  }) {
+    return [
+      {'term_id': termId, 'name': defaultClassroomName, 'capacity': 20},
+    ];
   }
 
   List<Map<String, dynamic>> _defaultTimeSlots({required String termId}) {
