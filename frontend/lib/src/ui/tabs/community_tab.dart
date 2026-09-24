@@ -65,10 +65,7 @@ class _CommunityTabState extends State<CommunityTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '커뮤니티 관리',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                Text('커뮤니티 관리', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 6),
                 const Text('이 탭은 관리자/스태프 전용 관리 화면입니다.'),
                 const SizedBox(height: 10),
@@ -103,10 +100,7 @@ class _CommunityTabState extends State<CommunityTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'SNS 관리',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('SNS 관리', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
               '게시글 관리, 신고 접수 처리, 숨김/고정 상태를 한 화면에서 운영합니다.',
@@ -317,9 +311,7 @@ class _CommunityTabState extends State<CommunityTab> {
                   commentCount: controller
                       .commentsForCommunityPost(post.id)
                       .length,
-                  mediaCount: controller
-                      .mediaForCommunityPost(post.id)
-                      .length,
+                  mediaCount: controller.mediaForCommunityPost(post.id).length,
                   openReportCount: controller.openReportsForCommunityPost(
                     post.id,
                   ),
@@ -327,8 +319,7 @@ class _CommunityTabState extends State<CommunityTab> {
                   onTogglePinned: () => _togglePinned(post),
                   onToggleHidden: () => _toggleHidden(post),
                   onDelete: () => _deletePost(post.id),
-                  onOpenFirstMedia: () =>
-                      _openFirstMedia(controller, post.id),
+                  onOpenFirstMedia: () => _openFirstMedia(controller, post.id),
                 ),
               ),
             ),
@@ -387,10 +378,8 @@ class _CommunityTabState extends State<CommunityTab> {
               (post) => controller.openReportsForCommunityPost(post.id) > 0,
             )
             .toList(),
-      _PostFilter.hidden =>
-        rows.where((post) => post.isHidden).toList(),
-      _PostFilter.pinned =>
-        rows.where((post) => post.isPinned).toList(),
+      _PostFilter.hidden => rows.where((post) => post.isHidden).toList(),
+      _PostFilter.pinned => rows.where((post) => post.isPinned).toList(),
     };
   }
 
@@ -808,10 +797,9 @@ class _CommunityComposerModal extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed:
-                    controller.isBusy || !controller.canWriteCommunity
-                        ? null
-                        : onPublish,
+                onPressed: controller.isBusy || !controller.canWriteCommunity
+                    ? null
+                    : onPublish,
                 icon: const Icon(Icons.send_rounded),
                 label: const Text('게시'),
               ),
