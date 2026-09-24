@@ -9,6 +9,8 @@ import 'package:nest_frontend/src/state/nest_controller.dart';
 import 'package:nest_frontend/src/ui/models/new_term_checklist.dart';
 import 'package:nest_frontend/src/ui/models/tab_section_request.dart';
 import 'package:nest_frontend/src/ui/home_page.dart';
+import 'package:nest_frontend/src/ui/homeschool_select_page.dart';
+import 'package:nest_frontend/src/ui/join_homeschool_page.dart';
 import 'package:nest_frontend/src/ui/tabs/admin_home_tab.dart';
 import 'package:nest_frontend/src/ui/tabs/admin_news_tab.dart';
 import 'package:nest_frontend/src/ui/tabs/profile_settings_tab.dart';
@@ -253,6 +255,44 @@ void main() {
   });
 
   group('HomePage 모바일 셸', () {
+    // 개인 홈스쿨 하나만 있어도 다른 홈스쿨에 들어갈 길이 있어야 한다.
+    testWidgets('홈스쿨이 하나여도 뱃지를 누르면 가입 동선이 열린다', (tester) async {
+      await _setMobileSize(tester);
+      final controller = _adminController();
+      controller.notificationPrefsLoaded = true;
+      controller.notificationPrefs = NotificationPrefs(
+        notifOnboardedAt: DateTime(2026, 9, 16),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ko', 'KR'),
+          supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: HomePage(controller: controller),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('homeschool-badge')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(HomeschoolSelectPage), findsOneWidget);
+      expect(find.text('다른 홈스쿨 가입하기'), findsOneWidget);
+
+      await tester.tap(find.text('다른 홈스쿨 가입하기'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(JoinHomeschoolPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('헤더 벨·설정과 하단 탭이 360폭에서 보인다', (tester) async {
       await _setMobileSize(tester);
       final controller = _adminController();
