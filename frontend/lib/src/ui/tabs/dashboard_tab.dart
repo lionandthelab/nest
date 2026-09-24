@@ -252,7 +252,12 @@ class _HomeschoolSearchJoinCardState extends State<HomeschoolSearchJoinCard> {
             children: [
               Icon(Icons.travel_explore, color: NestColors.dustyRose),
               const SizedBox(width: 8),
-              Text('홈스쿨 검색 및 가입 요청', style: theme.textTheme.titleLarge),
+              Expanded(
+                child: Text(
+                  '홈스쿨 검색 및 가입 요청',
+                  style: theme.textTheme.titleLarge,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -613,7 +618,9 @@ class _JoinByCodeCardState extends State<JoinByCodeCard> {
             children: [
               const Icon(Icons.vpn_key_outlined, color: NestColors.clay),
               const SizedBox(width: 8),
-              Text('참여 코드로 합류하기', style: theme.textTheme.titleLarge),
+              Expanded(
+                child: Text('참여 코드로 합류하기', style: theme.textTheme.titleLarge),
+              ),
             ],
           ),
           const SizedBox(height: 4),
