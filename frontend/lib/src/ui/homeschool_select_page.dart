@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/nest_models.dart';
 import '../state/nest_controller.dart';
+import 'join_homeschool_page.dart';
 import 'nest_theme.dart';
 import 'widgets/entity_visuals.dart';
 import 'widgets/homeschool_create_dialog.dart';
@@ -68,6 +69,17 @@ class HomeschoolSelectPage extends StatelessWidget {
                       selected: hs.id == selectedId,
                       onTap: () => onSelect(hs.id),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            JoinHomeschoolPage(controller: controller),
+                      ),
+                    ),
+                    icon: const Icon(Icons.group_add_outlined, size: 18),
+                    label: const Text('다른 홈스쿨 가입하기'),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(

@@ -12,6 +12,7 @@ import 'models/new_term_checklist.dart';
 import 'models/tab_section_request.dart';
 import 'nest_theme.dart';
 import 'homeschool_select_page.dart';
+import 'join_homeschool_page.dart';
 import 'tabs/admin_home_tab.dart';
 import 'tabs/admin_news_tab.dart';
 import 'tabs/community_feed_tab.dart';
@@ -1044,11 +1045,13 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     final name = membership.homeschool.name;
     final canSwitch = controller.hasMultipleHomeschools;
 
+    // 홈스쿨이 하나뿐이어도 눌러서 다른 홈스쿨 가입·개설로 갈 수 있어야 한다.
     return NestPressable(
-      enabled: canSwitch && !controller.isBusy,
-      onPressed: canSwitch && !controller.isBusy
-          ? () => _showHomeschoolSwitchSheet(controller)
-          : null,
+      key: const ValueKey('homeschool-badge'),
+      enabled: !controller.isBusy,
+      onPressed: controller.isBusy
+          ? null
+          : () => _showHomeschoolSwitchSheet(controller),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -1073,10 +1076,12 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 ),
               ),
             ),
-            if (canSwitch) ...[
-              const SizedBox(width: 2),
-              Icon(Icons.swap_horiz, size: 14, color: NestColors.clay),
-            ],
+            const SizedBox(width: 2),
+            Icon(
+              canSwitch ? Icons.swap_horiz : Icons.expand_more,
+              size: 14,
+              color: NestColors.clay,
+            ),
           ],
         ),
       ),
@@ -1519,6 +1524,8 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 } catch (_) {}
               } else if (value == 'switch_homeschool') {
                 _showHomeschoolSwitchSheet(controller);
+              } else if (value == 'join_homeschool') {
+                _openJoinHomeschoolPage(context, controller);
               } else if (value.startsWith('role:')) {
                 final role = value.substring(5);
                 try {
@@ -1547,6 +1554,14 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
+              const PopupMenuItem<String>(
+                value: 'join_homeschool',
+                child: ListTile(
+                  leading: Icon(Icons.group_add_outlined),
+                  title: Text('다른 홈스쿨 가입'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'settings',
                 child: ListTile(
@@ -2257,6 +2272,8 @@ class _MainPanelState extends State<_MainPanel> {
             onSelected: (value) {
               if (value == 'logout') {
                 unawaited(widget.onLogout());
+              } else if (value == 'join_homeschool') {
+                _openJoinHomeschoolPage(context, controller);
               }
             },
             itemBuilder: (context) => [
@@ -2292,6 +2309,16 @@ class _MainPanelState extends State<_MainPanel> {
                 ),
               if (controller.availableViewRoles.length > 1)
                 const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'join_homeschool',
+                child: Row(
+                  children: [
+                    Icon(Icons.group_add_outlined, size: 16),
+                    SizedBox(width: 8),
+                    Text('다른 홈스쿨 가입'),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(
@@ -2373,6 +2400,8 @@ class _MainPanelState extends State<_MainPanel> {
             onSelected: (value) {
               if (value == 'logout') {
                 unawaited(widget.onLogout());
+              } else if (value == 'join_homeschool') {
+                _openJoinHomeschoolPage(context, controller);
               }
             },
             itemBuilder: (context) => [
@@ -2419,6 +2448,16 @@ class _MainPanelState extends State<_MainPanel> {
                 ),
               if (controller.availableViewRoles.length > 1)
                 const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'join_homeschool',
+                child: Row(
+                  children: [
+                    Icon(Icons.group_add_outlined, size: 16),
+                    SizedBox(width: 8),
+                    Text('다른 홈스쿨 가입'),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(
@@ -3124,4 +3163,13 @@ class _SceneBlob extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 이미 소속이 있어도 다른 홈스쿨에 합류할 수 있는 화면을 연다.
+void _openJoinHomeschoolPage(BuildContext context, NestController controller) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => JoinHomeschoolPage(controller: controller),
+    ),
+  );
 }
