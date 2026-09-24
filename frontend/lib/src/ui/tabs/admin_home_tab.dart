@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/new_term_checklist.dart';
 import '../nest_theme.dart';
+import '../widgets/admin_self_setup_card.dart';
 import '../widgets/drive_integration_card.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
@@ -127,6 +128,12 @@ class AdminHomeTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
+          // 로딩 중엔 가정·선생님 목록이 비어 있어 버튼이 잠깐 번쩍인다.
+          if (!booting)
+            AdminSelfSetupCard(
+              controller: controller,
+              margin: const EdgeInsets.only(bottom: 12),
+            ),
           NestAppear(
             index: 2,
             child: _NewTermChecklistCard(
