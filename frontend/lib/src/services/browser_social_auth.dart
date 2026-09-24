@@ -159,10 +159,7 @@ class BrowserSocialAuth {
       mode: LaunchMode.externalApplication,
     );
     if (!ok) {
-      ok = await launchUrl(
-        authorizeUri,
-        mode: LaunchMode.inAppBrowserView,
-      );
+      ok = await launchUrl(authorizeUri, mode: LaunchMode.inAppBrowserView);
     }
     if (!ok) {
       throw StateError('네이버 로그인 브라우저를 열지 못했습니다.');
@@ -182,9 +179,7 @@ class BrowserSocialAuth {
     try {
       await _completeNaver(uri);
     } catch (error) {
-      final message = error is StateError
-          ? error.message
-          : '네이버 로그인에 실패했습니다.';
+      final message = error is StateError ? error.message : '네이버 로그인에 실패했습니다.';
       debugPrint('[BrowserSocialAuth] $error');
       onMessage?.call(message);
     }
@@ -240,10 +235,7 @@ class BrowserSocialAuth {
       throw StateError(serverError ?? '서버에서 로그인 토큰을 받지 못했습니다.');
     }
 
-    await client.auth.verifyOTP(
-      type: OtpType.magiclink,
-      tokenHash: tokenHash,
-    );
+    await client.auth.verifyOTP(type: OtpType.magiclink, tokenHash: tokenHash);
     await closeInAppWebView();
   }
 

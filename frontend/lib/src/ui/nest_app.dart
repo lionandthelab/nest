@@ -34,9 +34,7 @@ class _NestAppRootState extends State<NestAppRoot> {
     ErrorWidget.builder = (details) => const _NestErrorFallback();
 
     final repository = NestRepository(Supabase.instance.client);
-    controller = NestController(
-      repository: repository,
-    );
+    controller = NestController(repository: repository);
 
     controller.initialize();
     BrowserSocialAuth.onMessage = (message) {
@@ -64,10 +62,7 @@ class _NestAppRootState extends State<NestAppRoot> {
       debugShowCheckedModeBanner: false,
       theme: NestTheme.light(),
       locale: const Locale('ko', 'KR'),
-      supportedLocales: const [
-        Locale('ko', 'KR'),
-        Locale('en', 'US'),
-      ],
+      supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -104,9 +99,10 @@ class _NestAppRootState extends State<NestAppRoot> {
           )) {
             (false, _) => const ValueKey<String>('boot'),
             (true, false) => const ValueKey<String>('login'),
-            (true, true) => needsNotif
-                ? const ValueKey<String>('notif-onboarding')
-                : const ValueKey<String>('home'),
+            (true, true) =>
+              needsNotif
+                  ? const ValueKey<String>('notif-onboarding')
+                  : const ValueKey<String>('home'),
           };
 
           return AnimatedSwitcher(

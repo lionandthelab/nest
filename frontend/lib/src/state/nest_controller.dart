@@ -69,8 +69,8 @@ class NestController extends ChangeNotifier {
   List<Announcement> allAnnouncements = [];
 
   /// 공지 id → 첨부파일 목록. `loadAnnouncements()`가 함께 채운다.
-  Map<String, List<AnnouncementAttachment>> announcementAttachmentsByAnnouncement =
-      const {};
+  Map<String, List<AnnouncementAttachment>>
+  announcementAttachmentsByAnnouncement = const {};
   List<AcademicEvent> academicEvents = [];
   List<PersonalEvent> personalEvents = [];
   CalendarIntegration? calendarIntegration;
@@ -176,8 +176,7 @@ class NestController extends ChangeNotifier {
   static const int albumSelectionLimit = 50;
 
   List<AlbumUploadTask> albumUploads = const [];
-  bool get isAlbumUploading =>
-      albumUploads.any((task) => !task.isFinished);
+  bool get isAlbumUploading => albumUploads.any((task) => !task.isFinished);
 
   /// 동시 업로드 수. 모바일은 무선 구간과 메모리가, 웹은 호스트당 6개 커넥션
   /// 상한이 병목이다. 3이면 PostgREST 호출과 썸네일 GET에 여유가 남는다.
@@ -2164,7 +2163,9 @@ class NestController extends ChangeNotifier {
   ///
   /// 예전의 미러와 달리 이건 기다린다. Drive가 이제 원본의 유일한 집이라,
   /// 결과를 모르는 채로 media_assets 행을 만들면 어디에도 없는 사진이 생긴다.
-  Future<({String driveFileId, String? driveWebViewLink, String? driveFolderId})?>
+  Future<
+    ({String driveFileId, String? driveWebViewLink, String? driveFolderId})?
+  >
   _uploadOriginalToDrive({
     required String homeschoolId,
     required PendingMediaFile file,
@@ -2277,8 +2278,7 @@ class NestController extends ChangeNotifier {
   Future<AlbumDownloadOutcome> downloadAlbumSelection() async {
     final targets = selectedAlbumItems
         .where(
-          (item) =>
-              (item.storagePath ?? '').isNotEmpty || item.isDriveBacked,
+          (item) => (item.storagePath ?? '').isNotEmpty || item.isDriveBacked,
         )
         .toList();
 
@@ -3139,9 +3139,9 @@ class NestController extends ChangeNotifier {
   String albumFolderName(String? folderId) {
     if (folderId == null || folderId.isEmpty) return '';
     return albumFolders
-        .where((folder) => folder.id == folderId)
-        .map((folder) => folder.name)
-        .firstOrNull ??
+            .where((folder) => folder.id == folderId)
+            .map((folder) => folder.name)
+            .firstOrNull ??
         '';
   }
 
@@ -3268,9 +3268,7 @@ class NestController extends ChangeNotifier {
   void selectVisibleAlbumItems() {
     albumSelectedIds
       ..clear()
-      ..addAll(
-        galleryItems.take(albumSelectionLimit).map((item) => item.id),
-      );
+      ..addAll(galleryItems.take(albumSelectionLimit).map((item) => item.id));
     _notifyAlbum();
   }
 
@@ -3280,9 +3278,8 @@ class NestController extends ChangeNotifier {
     _notifyAlbum();
   }
 
-  List<GalleryItem> get selectedAlbumItems => galleryItems
-      .where((item) => albumSelectedIds.contains(item.id))
-      .toList();
+  List<GalleryItem> get selectedAlbumItems =>
+      galleryItems.where((item) => albumSelectedIds.contains(item.id)).toList();
 
   String _albumErrorText(Object error) {
     if (error is PostgrestException) {

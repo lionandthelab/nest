@@ -11,9 +11,7 @@ void main() {
 
   tearDown(() => BrowserSocialAuth.onMessage = null);
   test('parseNaverCallback reads code and state from the app scheme', () {
-    final uri = Uri.parse(
-      'nestnaverlogin://callback?code=abc123&state=xyz789',
-    );
+    final uri = Uri.parse('nestnaverlogin://callback?code=abc123&state=xyz789');
     expect(BrowserSocialAuth.isNaverCallback(uri), isTrue);
     final parsed = BrowserSocialAuth.parseNaverCallback(uri);
     expect(parsed?.code, 'abc123');
@@ -21,14 +19,8 @@ void main() {
   });
 
   test('Naver authorize redirect is the HTTPS bridge, not a custom scheme', () {
-    expect(
-      BrowserSocialAuth.naverRedirectUri,
-      startsWith('https://'),
-    );
-    expect(
-      BrowserSocialAuth.naverRedirectUri,
-      contains('naver-oauth-bridge'),
-    );
+    expect(BrowserSocialAuth.naverRedirectUri, startsWith('https://'));
+    expect(BrowserSocialAuth.naverRedirectUri, contains('naver-oauth-bridge'));
     expect(BrowserSocialAuth.naverAppScheme, 'nestnaverlogin://callback');
   });
 
@@ -147,9 +139,7 @@ void main() {
     });
 
     test('예전 이름(code)도 계속 읽는다 (구버전 브릿지 호환)', () {
-      final uri = Uri.parse(
-        'nestnaverlogin://callback?code=abc123&state=old1',
-      );
+      final uri = Uri.parse('nestnaverlogin://callback?code=abc123&state=old1');
       expect(BrowserSocialAuth.isNaverCallback(uri), isTrue);
       expect(BrowserSocialAuth.parseNaverCallback(uri)?.code, 'abc123');
     });
