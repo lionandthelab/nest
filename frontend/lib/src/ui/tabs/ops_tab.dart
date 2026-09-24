@@ -40,83 +40,89 @@ class _OpsTabState extends State<OpsTab> {
   }
 
   Widget _buildAuditLogSection(NestController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('감사 로그', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 10),
-        if (controller.auditLogs.isEmpty)
-          const NestEmptyState(
-            icon: Icons.assignment_outlined,
-            title: '기록된 감사 로그가 없습니다.',
-          )
-        else
-          ...controller.auditLogs.take(120).map((log) {
-            final timeText = log.createdAt == null
-                ? '-'
-                : DateFormat('MM-dd HH:mm').format(log.createdAt!);
-            return InkWell(
-              borderRadius: BorderRadius.circular(6),
-              onTap: () => _showAuditLogDetail(log),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: NestColors.roseMist.withValues(alpha: 0.6),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('감사 로그', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            if (controller.auditLogs.isEmpty)
+              const NestEmptyState(
+                icon: Icons.assignment_outlined,
+                title: '기록된 감사 로그가 없습니다.',
+              )
+            else
+              ...controller.auditLogs.take(120).map((log) {
+                final timeText = log.createdAt == null
+                    ? '-'
+                    : DateFormat('MM-dd HH:mm').format(log.createdAt!);
+                return InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => _showAuditLogDetail(log),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
                     ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 80,
-                      child: Text(
-                        timeText,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: NestColors.roseMist,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        log.actionType,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: NestColors.roseMist.withValues(alpha: 0.6),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        log.resourceType,
-                        style: Theme.of(context).textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          child: Text(
+                            timeText,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: NestColors.roseMist,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            log.actionType,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            log.resourceType,
+                            style: Theme.of(context).textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 16,
+                          color: NestColors.deepWood.withValues(alpha: 0.4),
+                        ),
+                      ],
                     ),
-                    Icon(
-                      Icons.chevron_right,
-                      size: 16,
-                      color: NestColors.deepWood.withValues(alpha: 0.4),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-      ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
     );
   }
 

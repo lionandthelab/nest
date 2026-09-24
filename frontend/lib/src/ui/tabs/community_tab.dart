@@ -268,62 +268,67 @@ class _CommunityTabState extends State<CommunityTab> {
     NestController controller,
     List<CommunityPost> posts,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '게시글 관리',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: controller.isBusy
-                    ? null
-                    : () => _openComposerModal(controller),
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('게시글 작성'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _buildFilterBar(controller),
-          const SizedBox(height: 10),
-          if (posts.isEmpty)
-            const NestEmptyState(
-              icon: Icons.article_outlined,
-              title: '선택된 조건의 게시글이 없습니다.',
-            )
-          else
-            ...posts.map(
-              (post) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _PostModerationCard(
-                  post: post,
-                  classGroupName: controller.findClassGroupName(
-                    post.classGroupId,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '게시글 관리',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  likeCount: controller.likesForCommunityPost(post.id),
-                  commentCount: controller
-                      .commentsForCommunityPost(post.id)
-                      .length,
-                  mediaCount: controller.mediaForCommunityPost(post.id).length,
-                  openReportCount: controller.openReportsForCommunityPost(
-                    post.id,
-                  ),
-                  canAct: !controller.isBusy,
-                  onTogglePinned: () => _togglePinned(post),
-                  onToggleHidden: () => _toggleHidden(post),
-                  onDelete: () => _deletePost(post.id),
-                  onOpenFirstMedia: () => _openFirstMedia(controller, post.id),
                 ),
-              ),
+                FilledButton.icon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => _openComposerModal(controller),
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('게시글 작성'),
+                ),
+              ],
             ),
-        ],
+            const SizedBox(height: 10),
+            _buildFilterBar(controller),
+            const SizedBox(height: 10),
+            if (posts.isEmpty)
+              const NestEmptyState(
+                icon: Icons.article_outlined,
+                title: '선택된 조건의 게시글이 없습니다.',
+              )
+            else
+              ...posts.map(
+                (post) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _PostModerationCard(
+                    post: post,
+                    classGroupName: controller.findClassGroupName(
+                      post.classGroupId,
+                    ),
+                    likeCount: controller.likesForCommunityPost(post.id),
+                    commentCount: controller
+                        .commentsForCommunityPost(post.id)
+                        .length,
+                    mediaCount: controller
+                        .mediaForCommunityPost(post.id)
+                        .length,
+                    openReportCount: controller.openReportsForCommunityPost(
+                      post.id,
+                    ),
+                    canAct: !controller.isBusy,
+                    onTogglePinned: () => _togglePinned(post),
+                    onToggleHidden: () => _toggleHidden(post),
+                    onDelete: () => _deletePost(post.id),
+                    onOpenFirstMedia: () =>
+                        _openFirstMedia(controller, post.id),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
