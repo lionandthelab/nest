@@ -161,6 +161,24 @@ void main() {
       expect(find.byType(Card), findsNothing);
     });
 
+    // 가정 연결은 학부모 역할을 서버에서 부여하고 홈스쿨 멤버 목록만 다시
+    // 읽는다. 그 목록에 내가 학부모로 있으면 버튼이 남아 있으면 안 된다.
+    testWidgets('홈스쿨 멤버 목록에 내가 학부모로 있으면 버튼을 뺀다', (tester) async {
+      final controller = _admin();
+      controller.homeschoolMemberships = [
+        Membership.fromMap({
+          'user_id': 'u-1',
+          'homeschool_id': 'hs-1',
+          'role': 'PARENT',
+          'status': 'ACTIVE',
+        }),
+      ];
+
+      await _pumpCard(tester, controller);
+
+      expect(find.text('학부모로 등록'), findsNothing);
+    });
+
     testWidgets('학부모 역할만 있으면 그 버튼만 빠진다', (tester) async {
       await _pumpCard(tester, _admin(extraRoles: ['PARENT']));
 
