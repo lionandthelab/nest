@@ -6211,6 +6211,87 @@ class NestController extends ChangeNotifier {
     });
   }
 
+  // ── 관리자 빠른 설정: 나도 이 홈스쿨의 가정·학부모·선생님으로 ──
+
+  /// 내가 보호자로 연결된 가정이 있는지.
+  bool get hasOwnFamily {
+    final me = user?.id;
+    if (me == null) return false;
+    final familyIds = families.map((f) => f.id).toSet();
+    return familyGuardianUserIdsByFamily.entries.any(
+      (entry) => familyIds.contains(entry.key) && entry.value.contains(me),
+    );
+  }
+
+  bool get isSelfParent {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null) return false;
+    return rolesForHomeschool(homeschoolId).contains('PARENT');
+  }
+
+  bool get hasSelfTeacherProfile {
+    final me = user?.id;
+    if (me == null) return false;
+    return teacherProfiles.any((profile) => profile.userId == me);
+  }
+
+  String get _selfName {
+    final real = myRealName.trim();
+    if (real.isNotEmpty) return real;
+    final current = user;
+    return current == null ? '관리자' : _authorDisplayName(current);
+  }
+
+  /// 내 이름으로 가정을 만들고 나를 보호자로 잇는다(학부모 역할도 함께).
+  /// 같은 이름의 가정이 이미 있으면 새로 만들지 않고 그 가정에 잇는다.
+  Future<void> createMyFamily() async {
+    final me = user?.id;
+    if (me == null) throw StateError('로그인이 필요합니다.');
+    final name = '$_selfName 가정';
+    final existing = families
+        .where((f) => f.familyName.trim() == name)
+        .firstOrNull;
+    final family =
+        existing ?? await createFamily(familyName: name, note: '');
+    await upsertFamilyGuardian(
+      familyId: family.id,
+      userId: me,
+      guardianType: 'GUARDIAN',
+    );
+  }
+
+  Future<void> registerSelfAsParent() async {
+    final me = user?.id;
+    if (me == null) throw StateError('로그인이 필요합니다.');
+    await grantMembershipRole(targetUserId: me, role: 'PARENT');
+  }
+
+  /// 나를 선생님 명단에 올리고, 선생님 화면으로도 볼 수 있게 역할을 준다.
+  Future<void> registerSelfAsTeacher() async {
+    final me = user?.id;
+    if (me == null) throw StateError('로그인이 필요합니다.');
+    if (!hasSelfTeacherProfile) {
+      await createTeacherProfile(
+        displayName: _selfName,
+        teacherType: 'PARENT_TEACHER',
+        userId: me,
+      );
+    }
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId != null &&
+        !rolesForHomeschool(homeschoolId).contains('TEACHER')) {
+      await grantMembershipRole(targetUserId: me, role: 'TEACHER');
+    }
+  }
+
+  Future<void> addDefaultClassroom() {
+    return createClassroom(
+      name: NestRepository.defaultClassroomName,
+      capacity: 20,
+      note: '',
+    );
+  }
+
   Future<Family> createFamily({
     required String familyName,
     required String note,
