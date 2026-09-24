@@ -43,12 +43,14 @@ class _NestAppRootState extends State<NestAppRoot> {
         SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
     };
+    BrowserSocialAuth.onSignInReturn = controller.markSocialSignInReturned;
     unawaited(BrowserSocialAuth.bindDeepLinks());
   }
 
   @override
   void dispose() {
     BrowserSocialAuth.onMessage = null;
+    BrowserSocialAuth.onSignInReturn = null;
     unawaited(BrowserSocialAuth.dispose());
     controller.dispose();
     super.dispose();
@@ -78,10 +80,18 @@ class _NestAppRootState extends State<NestAppRoot> {
               controller.isLoggedIn &&
               controller.needsNotifOnboarding;
 
+          // 브라우저 로그인에서 돌아와 계정을 읽는 동안. 로그인 화면을 그대로
+          // 두면 버튼을 다시 누를 수 있고, 화면이 멈춘 것처럼 보인다.
+          final isSigningIn =
+              controller.isBootstrapped && controller.isSigningIn;
+
           final page = switch ((
             controller.isBootstrapped,
             controller.isLoggedIn,
           )) {
+            _ when isSigningIn => const NestLoadingScreen(
+              message: '로그인하는 중이에요...',
+            ),
             (false, _) => const NestLoadingScreen(),
             (true, false) => LoginPage(controller: controller),
             (true, true) =>
@@ -97,6 +107,7 @@ class _NestAppRootState extends State<NestAppRoot> {
             controller.isBootstrapped,
             controller.isLoggedIn,
           )) {
+            _ when isSigningIn => const ValueKey<String>('signing-in'),
             (false, _) => const ValueKey<String>('boot'),
             (true, false) => const ValueKey<String>('login'),
             (true, true) =>
