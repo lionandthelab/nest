@@ -151,4 +151,73 @@ void main() {
       expect(BrowserSocialAuth.newState(), isNot(state), reason: '매번 달라야 한다');
     });
   });
+  // 브라우저에서 돌아온 순간을 알아야 "로그인하는 중" 화면을 띄울 수 있다.
+  // 코드 교환과 계정 로드가 끝날 때까지 로그인 화면이 멈춰 보이던 문제.
+  group('로그인 복귀 링크 판별', () {
+    test('카카오/구글 콜백(code)은 로그인 복귀다', () {
+      expect(
+        BrowserSocialAuth.isSignInReturn(
+          Uri.parse('com.lionandthelab.nest://login-callback/?code=abc'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('토큰 조각(#access_token)으로 와도 로그인 복귀다', () {
+      expect(
+        BrowserSocialAuth.isSignInReturn(
+          Uri.parse('com.lionandthelab.nest://login-callback/#access_token=x'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('네이버 콜백도 로그인 복귀다', () {
+      expect(
+        BrowserSocialAuth.isSignInReturn(
+          Uri.parse('nestnaverlogin://callback?naver_code=a&state=nestv2b'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('취소·거부(error)로 돌아오면 기다리지 않는다', () {
+      expect(
+        BrowserSocialAuth.isSignInReturn(
+          Uri.parse(
+            'com.lionandthelab.nest://login-callback/?error=access_denied',
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        BrowserSocialAuth.isSignInReturn(
+          Uri.parse('nestnaverlogin://callback?error=access_denied'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('다른 링크는 로그인 복귀가 아니다', () {
+      expect(
+        BrowserSocialAuth.isSignInReturn(Uri.parse('https://nestapp.life/')),
+        isFalse,
+      );
+      expect(
+        BrowserSocialAuth.isSignInReturn(
+          Uri.parse('com.lionandthelab.nest://login-callback/'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('복귀 링크를 받으면 onSignInReturn 을 부른다', () async {
+      var calls = 0;
+      BrowserSocialAuth.onSignInReturn = () => calls++;
+      await BrowserSocialAuth.handleIncoming(
+        Uri.parse('com.lionandthelab.nest://login-callback/?code=abc'),
+      );
+      expect(calls, 1);
+    });
+  });
 }
