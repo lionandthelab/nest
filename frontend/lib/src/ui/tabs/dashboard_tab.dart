@@ -22,20 +22,7 @@ class DashboardTab extends StatefulWidget {
 }
 
 class _DashboardTabState extends State<DashboardTab> {
-  final _joinSearchController = TextEditingController();
-  final _joinRequestNoteController = TextEditingController();
-  bool _joinSearching = false;
   bool _openingCreate = false;
-  List<HomeschoolDirectoryEntry> _joinSearchResults = const [];
-  String? _joinSearchMessage;
-  final Set<String> _joinRequestingIds = <String>{};
-
-  @override
-  void dispose() {
-    _joinSearchController.dispose();
-    _joinRequestNoteController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,18 +183,66 @@ class _DashboardTabState extends State<DashboardTab> {
           children: [
             JoinByCodeCard(controller: controller, framed: false),
             const SizedBox(height: 12),
-            _buildOnboardingJoinRequestCard(theme, controller, framed: false),
+            HomeschoolSearchJoinCard(controller: controller, framed: false),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOnboardingJoinRequestCard(
-    ThemeData theme,
-    NestController controller, {
-    bool framed = true,
-  }) {
+  Future<void> _showOnboardingCreateModal() async {
+    if (_openingCreate || widget.controller.isBusy) return;
+    setState(() => _openingCreate = true);
+    try {
+      final created = await showHomeschoolCreateDialog(
+        context: context,
+        controller: widget.controller,
+      );
+      if (created && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.controller.statusMessage)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _openingCreate = false);
+    }
+  }
+}
+
+/// 이름으로 홈스쿨을 찾아 가입을 요청하는 카드.
+class HomeschoolSearchJoinCard extends StatefulWidget {
+  const HomeschoolSearchJoinCard({
+    super.key,
+    required this.controller,
+    this.framed = true,
+  });
+
+  final NestController controller;
+  final bool framed;
+
+  @override
+  State<HomeschoolSearchJoinCard> createState() =>
+      _HomeschoolSearchJoinCardState();
+}
+
+class _HomeschoolSearchJoinCardState extends State<HomeschoolSearchJoinCard> {
+  final _joinSearchController = TextEditingController();
+  final _joinRequestNoteController = TextEditingController();
+  bool _joinSearching = false;
+  List<HomeschoolDirectoryEntry> _joinSearchResults = const [];
+  String? _joinSearchMessage;
+  final Set<String> _joinRequestingIds = <String>{};
+
+  @override
+  void dispose() {
+    _joinSearchController.dispose();
+    _joinRequestNoteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final body = Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -295,26 +330,8 @@ class _DashboardTabState extends State<DashboardTab> {
         ],
       ),
     );
-    if (!framed) return body;
+    if (!widget.framed) return body;
     return Card(child: body);
-  }
-
-  Future<void> _showOnboardingCreateModal() async {
-    if (_openingCreate || widget.controller.isBusy) return;
-    setState(() => _openingCreate = true);
-    try {
-      final created = await showHomeschoolCreateDialog(
-        context: context,
-        controller: widget.controller,
-      );
-      if (created && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.controller.statusMessage)),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _openingCreate = false);
-    }
   }
 
   Future<void> _searchHomeschools() async {
