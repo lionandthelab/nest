@@ -40,6 +40,10 @@ class BrowserSocialAuth {
   static AppLinks? _links;
   static void Function(String message)? onMessage;
 
+  /// 브라우저 로그인을 마치고 앱으로 돌아온 순간. 코드 교환과 계정 로드가
+  /// 끝날 때까지 몇 초가 걸려서, 이때부터 로딩을 보여 줘야 멈춰 보이지 않는다.
+  static void Function()? onSignInReturn;
+
   /// 이미 처리한 콜백 코드. app_links 는 콜드 스타트에서 초기 링크를
   /// `getInitialLink()` 와 `uriLinkStream` 양쪽으로 흘린다. 같은 콜백을 두 번
   /// 처리하면 두 번째는 state 가 이미 소비돼, 로그인에 성공하고도 사용자에게는
@@ -50,6 +54,7 @@ class BrowserSocialAuth {
   static void resetForTest() {
     _handledCodes.clear();
     onMessage = null;
+    onSignInReturn = null;
   }
 
   /// 앱 시작 시 한 번. 네이버 브라우저 복귀(콜드 스타트 포함)를 받는다.
@@ -167,6 +172,7 @@ class BrowserSocialAuth {
   }
 
   static Future<void> handleIncoming(Uri uri) async {
+    if (isSignInReturn(uri)) onSignInReturn?.call();
     if (uri.scheme != 'nestnaverlogin') return;
     final oauthError = uri.queryParameters['error'] ?? '';
     if (oauthError.isNotEmpty) {
@@ -183,6 +189,19 @@ class BrowserSocialAuth {
       debugPrint('[BrowserSocialAuth] $error');
       onMessage?.call(message);
     }
+  }
+
+  /// 로그인을 마치고 돌아온 링크인지. 취소·거부로 돌아온 링크는 아니다.
+  static bool isSignInReturn(Uri uri) {
+    if (isNaverCallback(uri)) return true;
+    if (uri.scheme != AppConfig.appDeepLinkScheme ||
+        uri.host != AppConfig.appDeepLinkHost) {
+      return false;
+    }
+    if (uri.queryParameters.containsKey('error')) return false;
+    final fragment = Uri.splitQueryString(uri.fragment);
+    return (uri.queryParameters['code'] ?? '').isNotEmpty ||
+        (fragment['access_token'] ?? '').isNotEmpty;
   }
 
   static bool isNaverCallback(Uri uri) {

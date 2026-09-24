@@ -32,6 +32,8 @@ class NestController extends ChangeNotifier {
   bool _isBusy = false;
   bool _blocksUi = true;
   bool _isExplicitAuthInProgress = false;
+  bool _isSigningIn = false;
+  Timer? _signInReturnTimeout;
   bool _bootstrapInFlight = false;
   bool _communityLoaded = false;
   bool _galleryLoaded = false;
@@ -245,6 +247,9 @@ class NestController extends ChangeNotifier {
       inboxOpenedThisSession ? 0 : notificationInbox.length;
   bool get isLoggedIn => user != null;
   bool get isBootstrapped => _isBootstrapped;
+
+  /// 소셜 로그인 복귀 뒤 세션 교환과 계정 로드가 끝나기 전까지.
+  bool get isSigningIn => _isSigningIn;
   String get statusMessage => _statusMessage;
   ScheduleOptionDraft? get selectedScheduleOption {
     final targetId = selectedScheduleOptionId;
@@ -663,7 +668,7 @@ class NestController extends ChangeNotifier {
 
     _authSubscription = _repository.authChanges.listen((authState) {
       if (_isExplicitAuthInProgress) return;
-      unawaited(_onAuthStateChanged(authState.session));
+      unawaited(handleExternalAuthSession(authState.session));
     });
 
     if (isLoggedIn) {
@@ -8864,6 +8869,55 @@ class NestController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 브라우저 로그인에서 돌아왔다. 세션이 오기까지 기다리는 모습을 보인다.
+  ///
+  /// 취소한 뒤 콜백 없이 돌아온 경우는 여기로 오지 않는다. 그래도 교환이
+  /// 실패해 세션이 끝내 오지 않으면 로그인 화면으로 되돌려 놓는다.
+  void markSocialSignInReturned() {
+    if (isLoggedIn) return;
+    _signInReturnTimeout?.cancel();
+    _signInReturnTimeout = Timer(const Duration(seconds: 20), () {
+      if (!_isSigningIn || isLoggedIn) return;
+      _isSigningIn = false;
+      notifyListeners();
+    });
+    if (_isSigningIn) return;
+    _isSigningIn = true;
+    notifyListeners();
+  }
+
+  /// 앱 밖(브라우저 복귀·네이티브 시트·토큰 갱신)에서 바뀐 세션을 반영한다.
+  ///
+  /// 로그아웃 상태에서 새로 로그인되면, 계정을 읽는 몇 초 동안 로그인 중임을
+  /// 먼저 알린다. 알리지 않으면 로그인 화면이 그대로 멈춰 보인다.
+  Future<void> handleExternalAuthSession(Session? nextSession) async {
+    final isNewSignIn = user == null && nextSession?.user != null;
+    if (nextSession?.user == null) {
+      _finishSigningIn(notify: false);
+      await _onAuthStateChanged(nextSession);
+      return;
+    }
+    if (!isNewSignIn) {
+      await _onAuthStateChanged(nextSession);
+      return;
+    }
+    _isSigningIn = true;
+    notifyListeners();
+    try {
+      await _onAuthStateChanged(nextSession);
+    } finally {
+      _finishSigningIn(notify: true);
+    }
+  }
+
+  void _finishSigningIn({required bool notify}) {
+    _signInReturnTimeout?.cancel();
+    _signInReturnTimeout = null;
+    if (!_isSigningIn) return;
+    _isSigningIn = false;
+    if (notify) notifyListeners();
+  }
+
   Future<void> _onAuthStateChanged(Session? nextSession) async {
     session = nextSession;
     user = nextSession?.user;
@@ -9637,6 +9691,7 @@ class NestController extends ChangeNotifier {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _signInReturnTimeout?.cancel();
     super.dispose();
   }
 }
