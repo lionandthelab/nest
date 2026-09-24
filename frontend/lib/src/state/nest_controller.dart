@@ -6226,7 +6226,13 @@ class NestController extends ChangeNotifier {
   bool get isSelfParent {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null) return false;
-    return rolesForHomeschool(homeschoolId).contains('PARENT');
+    if (rolesForHomeschool(homeschoolId).contains('PARENT')) return true;
+    // 가정 연결이 부여한 역할은 홈스쿨 멤버 목록에 먼저 반영된다.
+    final me = user?.id;
+    return homeschoolMemberships.any(
+      (row) =>
+          row.userId == me && row.role == 'PARENT' && row.status == 'ACTIVE',
+    );
   }
 
   bool get hasSelfTeacherProfile {
@@ -6258,6 +6264,9 @@ class NestController extends ChangeNotifier {
       userId: me,
       guardianType: 'GUARDIAN',
     );
+    // 연결하며 받은 학부모 역할을 바로 뷰 전환에 쓸 수 있게 내 소속을 다시 읽는다.
+    memberships = await _repository.fetchMemberships(userId: me);
+    notifyListeners();
   }
 
   Future<void> registerSelfAsParent() async {
