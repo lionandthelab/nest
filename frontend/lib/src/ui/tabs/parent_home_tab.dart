@@ -10,6 +10,7 @@ import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
 import '../widgets/announcement_attachments.dart';
 import '../widgets/homeschool_tips_card.dart';
+import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_motion.dart';
 import '../widgets/today_personal_events.dart';
 import '../widgets/today_schedule_card.dart';
@@ -303,7 +304,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: [
-              Icon(Icons.campaign, size: 20, color: NestColors.dustyRose),
+              const Nest3dIcon.announcement(size: 28, floating: true),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -469,8 +470,8 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
           ),
         const SizedBox(height: 10),
         if (events.isEmpty)
-          const NestEmptyState(
-            icon: Icons.event_note_outlined,
+          const NestEmptyState.with3d(
+            illustration: Nest3dIcon.calendar(size: 58, floating: true),
             title: '등록된 학사 일정이 없습니다',
             subtitle: '관리자가 일정을 등록하면 여기서 확인할 수 있습니다.',
           )

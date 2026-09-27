@@ -164,11 +164,11 @@ String _initialsFromLabel(String label) {
 
 List<Color> _seededColors(String seed) {
   const palettes = <List<Color>>[
-    [Color(0xFFDCAE96), Color(0xFFB48268)],
-    [Color(0xFF8A9A84), Color(0xFF6C7F67)],
-    [Color(0xFFC69A82), Color(0xFFA4765F)],
-    [Color(0xFF8D7C6D), Color(0xFF675748)],
-    [Color(0xFFBFA089), Color(0xFF9C7E68)],
+    [Color(0xFFF79D8E), Color(0xFFFFAE9F)], // Pastel Coral Rose
+    [Color(0xFF8ED6AE), Color(0xFFA4E3BF)], // Pastel Mint
+    [Color(0xFFBCA7E8), Color(0xFFD4C5F9)], // Pastel Lavender
+    [Color(0xFF8EC8F6), Color(0xFFAAD8F9)], // Pastel Sky Blue
+    [Color(0xFFF5B971), Color(0xFFFFD199)], // Pastel Caramel Honey
   ];
   if (seed.trim().isEmpty) {
     return palettes.first;

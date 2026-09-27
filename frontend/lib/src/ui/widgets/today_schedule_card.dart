@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/schedule_occurrence.dart';
 import '../nest_theme.dart';
+import 'nest_3d_icon.dart';
 import 'nest_motion.dart';
 
 /// 다음 수업 히어로 + 오늘 남은 수업. 탭하면 시간표로 이동한다.
@@ -47,7 +48,7 @@ class TodayScheduleCard extends StatelessWidget {
           child: next == null
               ? Row(
                   children: [
-                    const Icon(Icons.wb_sunny_outlined, color: NestColors.clay),
+                    const Nest3dIcon.studyBooks(size: 28, floating: true),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(

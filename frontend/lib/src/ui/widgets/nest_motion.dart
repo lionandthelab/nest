@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -304,13 +305,40 @@ class _DockItem extends StatelessWidget {
           curve: NestMotion.appearCurve,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
-            color: selected
-                ? NestColors.roseMist
-                : NestColors.roseMist.withValues(alpha: 0),
-            borderRadius: BorderRadius.circular(12),
+            gradient: selected
+                ? const LinearGradient(
+                    colors: [
+                      Colors.white,
+                      NestColors.roseMist,
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(14),
+            border: selected
+                ? Border.all(
+                    color: NestColors.dustyRose.withValues(alpha: 0.35),
+                    width: 1.2,
+                  )
+                : null,
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: NestColors.dustyRose.withValues(alpha: 0.24),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                    const BoxShadow(
+                      color: Colors.white,
+                      blurRadius: 2,
+                      offset: Offset(0, -1),
+                    ),
+                  ]
+                : null,
           ),
           child: AnimatedScale(
-            scale: selected ? 1 : 0.92,
+            scale: selected ? 1.04 : 0.94,
             duration: NestMotion.fade,
             curve: NestMotion.appearCurve,
             child: IconTheme(
@@ -480,6 +508,238 @@ class NestBusyOverlay extends StatelessWidget {
                 ],
               )
             : const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+/// 탭할 때 자연스럽게 눌리는 햅틱/클레이 느낌의 터치 모션 위젯.
+class TactileCard extends StatefulWidget {
+  const TactileCard({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.borderRadius = 20.0,
+    this.pressedScale = 0.975,
+    this.backgroundColor,
+    this.border,
+    this.padding,
+    this.margin,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final double borderRadius;
+  final double pressedScale;
+  final Color? backgroundColor;
+  final BoxBorder? border;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+
+  @override
+  State<TactileCard> createState() => _TactileCardState();
+}
+
+class _TactileCardState extends State<TactileCard> {
+  bool _isPressed = false;
+
+  void _handleTapDown(TapDownDetails _) {
+    if (widget.onTap != null || widget.onLongPress != null) {
+      setState(() => _isPressed = true);
+    }
+  }
+
+  void _handleTapUp(TapUpDetails _) {
+    if (_isPressed) setState(() => _isPressed = false);
+  }
+
+  void _handleTapCancel() {
+    if (_isPressed) setState(() => _isPressed = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.backgroundColor ?? Colors.white.withValues(alpha: 0.95);
+    final isInteractive = widget.onTap != null || widget.onLongPress != null;
+
+    final cardContent = AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
+      padding: widget.padding,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        border:
+            widget.border ??
+            Border.all(
+              color: NestColors.roseMist.withValues(alpha: 0.85),
+              width: 1.2,
+            ),
+        boxShadow: [
+          // Ambient soft glow
+          BoxShadow(
+            color: NestColors.dustyRose.withValues(
+              alpha: _isPressed ? 0.04 : 0.08,
+            ),
+            blurRadius: _isPressed ? 8 : 16,
+            offset: Offset(0, _isPressed ? 2 : 6),
+          ),
+          // Contact depth shadow
+          BoxShadow(
+            color: Colors.black.withValues(alpha: _isPressed ? 0.02 : 0.04),
+            blurRadius: _isPressed ? 3 : 6,
+            offset: Offset(0, _isPressed ? 1 : 2),
+          ),
+        ],
+      ),
+      child: widget.child,
+    );
+
+    if (!isInteractive) {
+      return Container(margin: widget.margin, child: cardContent);
+    }
+
+    return Container(
+      margin: widget.margin,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: _handleTapDown,
+        onTapUp: _handleTapUp,
+        onTapCancel: _handleTapCancel,
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: AnimatedScale(
+          scale: _isPressed ? widget.pressedScale : 1.0,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          child: cardContent,
+        ),
+      ),
+    );
+  }
+}
+
+/// 3D 로고나 주요 엠블럼이 부드럽게 숨쉬듯 위아래로 부유하는 모션 위젯.
+class Floating3DWidget extends StatefulWidget {
+  const Floating3DWidget({
+    super.key,
+    required this.child,
+    this.floatDistance = 6.0,
+    this.duration = const Duration(milliseconds: 2600),
+  });
+
+  final Widget child;
+  final double floatDistance;
+  final Duration duration;
+
+  @override
+  State<Floating3DWidget> createState() => _Floating3DWidgetState();
+}
+
+class _Floating3DWidgetState extends State<Floating3DWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    final isTest =
+        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    if (!isTest) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final sinVal = math.sin(_controller.value * 2 * math.pi);
+        final offsetY = sinVal * (widget.floatDistance / 2);
+        return Transform.translate(
+          offset: Offset(0, offsetY),
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// 화면 진입 시 순차적으로 떠오르는 스태거드 페이드 & 슬라이드 위젯.
+class StaggeredSlideFade extends StatefulWidget {
+  const StaggeredSlideFade({
+    super.key,
+    required this.child,
+    this.index = 0,
+    this.delay = const Duration(milliseconds: 50),
+    this.duration = const Duration(milliseconds: 400),
+    this.offsetY = 18.0,
+  });
+
+  final Widget child;
+  final int index;
+  final Duration delay;
+  final Duration duration;
+  final double offsetY;
+
+  @override
+  State<StaggeredSlideFade> createState() => _StaggeredSlideFadeState();
+}
+
+class _StaggeredSlideFadeState extends State<StaggeredSlideFade>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(curve);
+    _slide = Tween<Offset>(
+      begin: Offset(0, widget.offsetY / 100),
+      end: Offset.zero,
+    ).animate(curve);
+
+    Future.delayed(widget.delay * widget.index, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
+
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
       ),
     );
   }

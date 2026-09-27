@@ -274,16 +274,46 @@ class _LoginPageState extends State<LoginPage> {
                                       CrossAxisAlignment.stretch,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // ── Logo + Brand ──
+                                    // ── 3D Pastel Floating Logo + Brand ──
                                     Center(
-                                      child: Image.asset(
-                                        'assets/logo_mark.png',
-                                        width: 72,
-                                        height: 72,
-                                        fit: BoxFit.contain,
+                                      child: Floating3DWidget(
+                                        floatDistance: 7,
+                                        child: Container(
+                                          width: 104,
+                                          height: 104,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(28),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: NestColors.dustyRose
+                                                    .withValues(alpha: 0.24),
+                                                blurRadius: 24,
+                                                offset: const Offset(0, 8),
+                                              ),
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.04),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                            border: Border.all(
+                                              color: NestColors.roseMist
+                                                  .withValues(alpha: 0.95),
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          padding: const EdgeInsets.all(12),
+                                          child: Image.asset(
+                                            'assets/logo_3d_mark.png',
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 20),
                                     Text(
                                       AppConfig.appName,
                                       style: theme.textTheme.displayMedium,

@@ -1,17 +1,26 @@
-// Flutter 3.47 stable moved CupertinoPageTransitionsBuilder out of material and
-// into cupertino/route.dart, so material.dart alone no longer resolves it.
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 class NestColors {
   const NestColors._();
 
-  static const Color dustyRose = Color(0xFFDCAE96);
-  static const Color creamyWhite = Color(0xFFF9F7F2);
-  static const Color deepWood = Color(0xFF5A4637);
-  static const Color mutedSage = Color(0xFF8A9A84);
-  static const Color clay = Color(0xFFB48268);
-  static const Color roseMist = Color(0xFFF4E4DB);
+  // ── 화사하고 산뜻한 파스텔 컬러 시스템 ──
+  // 메인 주조색: 따뜻하고 화사한 파스텔 코랄 로즈 (기존 0xFFDCAE96 대비 생동감 강화)
+  static const Color dustyRose = Color(0xFFF79D8E);
+  // 배경색: 맑고 부드러운 밀키 크림 화이트 (기존 0xFFF9F7F2 대비 맑고 화사한 바탕)
+  static const Color creamyWhite = Color(0xFFFDFBF7);
+  // 본문 텍스트: 리치 코코아 에스프레소 (기존 0xFF5A4637 대비 높은 가독성과 소프트한 대비)
+  static const Color deepWood = Color(0xFF42342B);
+  // 보조 활력색: 산뜻한 파스텔 민트 세이지 (기존 0xFF8A9A84 대비 싱그러운 파스텔)
+  static const Color mutedSage = Color(0xFF90D5AF);
+  // 3차 악센트: 부드럽고 따뜻한 파스텔 카라멜 앰버 (기존 0xFFB48268 대비 밝은 톤)
+  static const Color clay = Color(0xFFD49A6A);
+  // 면 하이라이트: 은은하고 맑은 페탈 블러시 핑크 (기존 0xFFF4E4DB 대비 화사한 카드/칩 배경)
+  static const Color roseMist = Color(0xFFFFF0EB);
+
+  // 추가 파스텔 디자인 악센트 (태그, 시간표, 뱃지용)
+  static const Color pastelSky = Color(0xFFB8E0F9);
+  static const Color pastelLavender = Color(0xFFE4D7F5);
+  static const Color pastelButter = Color(0xFFFFF1C2);
 }
 
 class NestTheme {
@@ -84,13 +93,16 @@ class NestTheme {
         thickness: 1,
       ),
       cardTheme: CardThemeData(
-        color: Colors.white.withValues(alpha: 0.92),
+        color: Colors.white.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
-        elevation: 4,
+        shadowColor: NestColors.dustyRose.withValues(alpha: 0.14),
+        elevation: 6,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: NestColors.roseMist.withValues(alpha: 0.8)),
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: NestColors.roseMist.withValues(alpha: 0.9),
+            width: 1.2,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -99,23 +111,25 @@ class NestTheme {
         helperMaxLines: 3,
         errorMaxLines: 2,
         hintStyle: textTheme.bodyMedium?.copyWith(
-          color: NestColors.deepWood.withValues(alpha: 0.55),
+          color: NestColors.deepWood.withValues(alpha: 0.45),
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: NestColors.roseMist.withValues(alpha: 0.9),
+            color: NestColors.roseMist.withValues(alpha: 0.95),
+            width: 1.2,
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: NestColors.roseMist.withValues(alpha: 0.9),
+            color: NestColors.roseMist.withValues(alpha: 0.95),
+            width: 1.2,
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: NestColors.clay, width: 1.6),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: NestColors.dustyRose, width: 2.0),
         ),
       ),
       snackBarTheme: SnackBarThemeData(

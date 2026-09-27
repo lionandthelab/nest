@@ -899,20 +899,38 @@ class _DesktopScaffold extends StatelessWidget {
             useIndicator: true,
             backgroundColor: Colors.white.withValues(alpha: 0.7),
             leading: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => onSelectIndex(0),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: Image.asset(
-                    'assets/logo_mark.png',
-                    width: 68,
-                    height: 68,
-                    fit: BoxFit.contain,
+              padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+              child: Tooltip(
+                message: '홈으로 이동',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => onSelectIndex(0),
+                  child: Container(
+                    width: 64,
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: NestColors.dustyRose.withValues(alpha: 0.18),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: NestColors.roseMist.withValues(alpha: 0.95),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Image.asset(
+                      'assets/logo_3d_mark.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),

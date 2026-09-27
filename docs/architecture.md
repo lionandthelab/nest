@@ -835,6 +835,31 @@ DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
 
 마이그레이션 `20260922150000_drive_integration_email.sql`(연결 계정 이메일).
 
+### 6.26 3D 클레이모피즘 디자인 시스템 및 에셋 (2026-09)
+
+최신 프로덕트 디자인 트렌드(Claymorphism, Tactile UI, Neumorphic Depth)를 반영하여 입체감 있는 3D 비주얼 시스템을 구축했다.
+
+1. **3D 브랜드 아이덴티티 및 에셋 6종**:
+   - `assets/logo_3d_mark.png`, `assets/logo_3d_app_icon.png`: 새싹·새·둥지 결합형 3D 파스텔 엠블럼 및 앱 아이콘
+   - `assets/3d/announcement_3d.png`: 공지사항 확성기
+   - `assets/3d/calendar_3d.png`: 학사 캘린더 (빈 상태 및 시간표)
+   - `assets/3d/study_books_3d.png`: 교과서와 연필 (수업/진도)
+   - `assets/3d/tips_lightbulb_3d.png`: 표정이 있는 홈스쿨 팁 전구
+   - `assets/3d/empty_nest_3d.png`: 포근한 빈 둥지 (Zero Data)
+   - `assets/3d/achievement_star_3d.png`: 성취 골든 스타 (뱃지/완료)
+2. **마이크로 모션 그래픽 (`Floating3DWidget`, `Nest3dIcon`)**:
+   - 부유하는 사인파 앰비언트 모션 및 높낮이에 연동된 가변 소프트 드롭 섀도우
+   - 테스트 환경(`TestWidgetsFlutterBinding`) 자동 감지로 `pumpAndSettle` 무한 루프 방지
+3. **화사한 파스텔 테마 토큰 (`NestColors`)**:
+   - 코랄 로즈(`dustyRose`), 크림 화이트(`creamyWhite`), 민트 세이지(`mutedSage`), 카라멜 앰버(`clay`) 등 화사한 톤앤매너로 전면 개선
+4. **3D Clay Tactile Dock Bar**:
+   - 하단 내비게이션 활성 탭에 볼록한 3D 클레이 필 효과와 듀얼 레이어 소프트 섀도우 적용
+
+### 6.27 공지사항 첨부파일 업로드 및 열람 (2026-09)
+
+- 공지사항 작성 시 이미지나 문서 등의 파일을 Supabase Storage(`announcements` 버킷)에 업로드
+- 첨부파일 메타데이터(URL, 파일명, 크기)를 보관하며, 상세 화면에서 첨부파일 칩/뱃지 표시 및 다운로드/열람 지원
+
 ## 7. Database and RLS Notes
 
 ### 7.1 Core Membership Security

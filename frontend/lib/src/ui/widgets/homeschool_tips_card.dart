@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/homeschool_start_tips.dart';
 import '../nest_theme.dart';
+import 'nest_3d_icon.dart';
 import 'nest_motion.dart';
 
 /// 우리집 홈스쿨을 처음 여는 부모님을 위한 짧은 팁.
@@ -150,22 +151,16 @@ class _TipRow extends StatelessWidget {
 }
 
 class _TipGlyph extends StatelessWidget {
-  const _TipGlyph({required this.icon, this.size = 36});
+  const _TipGlyph({required this.icon, this.size = 38});
 
   final IconData icon;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: NestColors.dustyRose.withValues(alpha: 0.22),
-        border: Border.all(color: NestColors.roseMist),
-      ),
-      child: Icon(icon, size: size * 0.52, color: NestColors.clay),
+    return Nest3dIcon.lightbulb(
+      size: size,
+      floating: true,
     );
   }
 }
