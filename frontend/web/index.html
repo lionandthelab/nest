@@ -32,7 +32,7 @@
     앞당긴다. GitHub Pages는 응답 헤더를 손댈 수 없어, 웹에서 쓸 수 있는 네트워크
     최적화는 사실상 이 한 줄뿐이다.
   -->
-  <link rel="preconnect" href="https://avursvhmilcsssabqtkx.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://avursvhmilcsssabqtkx.supabase.co" crossorigin="">
   <link rel="dns-prefetch" href="https://avursvhmilcsssabqtkx.supabase.co">
 
   <!-- Fonts (BlackHanSans / Jua / DoHyeon) are bundled as Flutter assets. -->
@@ -42,6 +42,9 @@
 
   <title>Nest</title>
   <link rel="manifest" href="manifest.json">
+  
+  
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
   <style id="splash-screen-style">
     html {
       height: 100%
@@ -113,7 +116,6 @@
       document.body.style.background = "transparent";
     }
   </script>
-  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
 </head>
 <body>
   <picture id="splash">
@@ -121,6 +123,7 @@
       <source srcset="splash/img/dark-1x.png 1x, splash/img/dark-2x.png 2x, splash/img/dark-3x.png 3x, splash/img/dark-4x.png 4x" media="(prefers-color-scheme: dark)">
       <img class="center" aria-hidden="true" src="splash/img/light-1x.png" alt="">
   </picture>
+  
   <!-- PWA install prompt capture -->
   <script>
     window._nestDeferredPrompt = null;

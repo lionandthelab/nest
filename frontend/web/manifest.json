@@ -4,13 +4,15 @@
     "start_url": "/",
     "display": "standalone",
     "background_color": "#F9F7F2",
-    "theme_color": "#DCAE96",
+    "theme_color": "#F79D8E",
     "description": "우리 아이가 날아오르기 전, 따뜻한 둥지",
     "orientation": "any",
     "prefer_related_applications": false,
     "id": "/",
     "scope": "/",
-    "categories": ["education"],
+    "categories": [
+        "education"
+    ],
     "icons": [
         {
             "src": "icons/Icon-192.png",

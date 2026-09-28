@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.1.0+26
+version: 2.1.0+27
 
 environment:
   sdk: ^3.10.7
@@ -84,6 +84,8 @@ flutter:
     - assets/logo_mark.png
     - assets/logo_3d_mark.png
     - assets/logo_3d_app_icon.png
+    - assets/app_icon_1024.png
+    - assets/app_icon_foreground.png
     - assets/3d/
     - assets/legal/privacy.md
     - assets/legal/terms.md
@@ -128,26 +130,28 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo_square.png"
+  image_path: "assets/app_icon_1024.png"
+  remove_alpha_ios: true
   adaptive_icon_background: "#F9F7F2"
-  adaptive_icon_foreground: "assets/logo_square.png"
+  adaptive_icon_foreground: "assets/app_icon_foreground.png"
   min_sdk_android: 21
   web:
     generate: true
-    image_path: "assets/logo_square.png"
+    image_path: "assets/app_icon_1024.png"
     background_color: "#F9F7F2"
-    theme_color: "#DCAE96"
+    theme_color: "#F79D8E"
 
 flutter_native_splash:
   color: "#F9F7F2"
-  image: "assets/logo_square.png"
+  image: "assets/app_icon_1024.png"
   color_dark: "#2E2A27"
-  image_dark: "assets/logo_square.png"
+  image_dark: "assets/app_icon_1024.png"
   android_12:
     color: "#F9F7F2"
     icon_background_color: "#F9F7F2"
-    image: "assets/logo_square.png"
+    image: "assets/app_icon_1024.png"
     color_dark: "#2E2A27"
     icon_background_color_dark: "#2E2A27"
-    image_dark: "assets/logo_square.png"
+    image_dark: "assets/app_icon_1024.png"
   web: true
+
