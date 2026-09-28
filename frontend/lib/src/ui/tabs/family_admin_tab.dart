@@ -605,6 +605,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
             style: TextStyle(
               fontSize: 15,
               fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              color: Colors.black,
             ),
           ),
           selected: selected,

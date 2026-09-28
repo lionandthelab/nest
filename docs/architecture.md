@@ -1013,6 +1013,13 @@ Migration `20260912020000_term_schedule_pack.sql`:
 - `fetch_term_schedule_pack(term_id)` — 학기 전체 활성 세션 + 교사 배정을 jsonb 한 번에. `is_term_member` 가드, security definer
 - 인덱스 `idx_class_sessions_group_active`, `idx_academic_events_school_term`
 
+### 7.9 Personal events policies fix (2026-09)
+
+Migration `20260928150000_personal_events_policies_fix.sql`:
+
+- `personal_events` — RLS 정책 보강: 관리자/스태프(`HOMESCHOOL_ADMIN`, `STAFF`) 및 작성자 본인(`owner_user_id = auth.uid()`)의 SELECT/INSERT/UPDATE/DELETE 권한 명시. 관리자가 자녀 일정을 등록하거나 부모/관리자 모드에서 개인 일정을 추가할 때 RLS 위반 에러가 발생하지 않도록 수정
+
+
 ## 8. Environment Variables
 
 Required `dart-define` values:

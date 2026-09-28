@@ -1295,10 +1295,15 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         avatar: const Icon(
                           Icons.family_restroom_outlined,
                           size: 14,
+                          color: Colors.black87,
                         ),
                         visualDensity: VisualDensity.compact,
                       ),
@@ -1346,8 +1351,16 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                               : controller.findTeacherName(activeTeacherId),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        avatar: const Icon(Icons.school_outlined, size: 14),
+                        avatar: const Icon(
+                          Icons.school_outlined,
+                          size: 14,
+                          color: Colors.black87,
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
@@ -1392,8 +1405,16 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                           controller.activeStudentChild?.name ?? '학생 선택',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        avatar: const Icon(Icons.child_care_outlined, size: 14),
+                        avatar: const Icon(
+                          Icons.child_care_outlined,
+                          size: 14,
+                          color: Colors.black87,
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
@@ -1419,10 +1440,15 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                               childLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             avatar: const Icon(
                               Icons.child_friendly_outlined,
                               size: 14,
+                              color: Colors.black87,
                             ),
                             visualDensity: VisualDensity.compact,
                           )
@@ -1458,10 +1484,15 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                                 childLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               avatar: const Icon(
                                 Icons.child_friendly_outlined,
                                 size: 14,
+                                color: Colors.black87,
                               ),
                               visualDensity: VisualDensity.compact,
                             ),
@@ -2193,8 +2224,18 @@ class _MainPanelState extends State<_MainPanel> {
             const SizedBox(width: 6),
             if (children.length <= 1)
               Chip(
-                label: Text(childLabel),
-                avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+                label: Text(
+                  childLabel,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                avatar: const Icon(
+                  Icons.child_friendly_outlined,
+                  size: 14,
+                  color: Colors.black87,
+                ),
                 visualDensity: VisualDensity.compact,
               )
             else
@@ -2225,8 +2266,18 @@ class _MainPanelState extends State<_MainPanel> {
                     )
                     .toList(),
                 child: Chip(
-                  label: Text(childLabel),
-                  avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+                  label: Text(
+                    childLabel,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  avatar: const Icon(
+                    Icons.child_friendly_outlined,
+                    size: 14,
+                    color: Colors.black87,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
@@ -2501,9 +2552,19 @@ class _MainPanelState extends State<_MainPanel> {
     final children = controller.myChildren.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     if (children.isEmpty) {
-      return Chip(
-        label: const Text('내 아이 미연동'),
-        avatar: const Icon(Icons.child_care_outlined, size: 14),
+      return const Chip(
+        label: Text(
+          '내 아이 미연동',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        avatar: Icon(
+          Icons.child_care_outlined,
+          size: 14,
+          color: Colors.black87,
+        ),
         visualDensity: VisualDensity.compact,
       );
     }
@@ -2545,9 +2606,20 @@ class _MainPanelState extends State<_MainPanel> {
       child: Chip(
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 220),
-          child: Text(label, overflow: TextOverflow.ellipsis),
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
-        avatar: const Icon(Icons.child_friendly_outlined, size: 14),
+        avatar: const Icon(
+          Icons.child_friendly_outlined,
+          size: 14,
+          color: Colors.black87,
+        ),
         visualDensity: VisualDensity.compact,
       ),
     );
@@ -2561,9 +2633,19 @@ class _MainPanelState extends State<_MainPanel> {
 
     final candidates = controller.parentViewCandidateUserIds;
     if (candidates.isEmpty) {
-      return Chip(
-        label: const Text('부모 대상 없음'),
-        avatar: const Icon(Icons.family_restroom_outlined, size: 14),
+      return const Chip(
+        label: Text(
+          '부모 대상 없음',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        avatar: Icon(
+          Icons.family_restroom_outlined,
+          size: 14,
+          color: Colors.black87,
+        ),
         visualDensity: VisualDensity.compact,
       );
     }
@@ -2607,9 +2689,20 @@ class _MainPanelState extends State<_MainPanel> {
       child: Chip(
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 180),
-          child: Text('자녀: $activeLabel', overflow: TextOverflow.ellipsis),
+          child: Text(
+            '자녀: $activeLabel',
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
-        avatar: const Icon(Icons.family_restroom_outlined, size: 14),
+        avatar: const Icon(
+          Icons.family_restroom_outlined,
+          size: 14,
+          color: Colors.black87,
+        ),
         visualDensity: VisualDensity.compact,
       ),
     );
@@ -2623,9 +2716,19 @@ class _MainPanelState extends State<_MainPanel> {
 
     final candidates = controller.teacherViewCandidateProfiles;
     if (candidates.isEmpty) {
-      return Chip(
-        label: const Text('교사 대상 없음'),
-        avatar: const Icon(Icons.school_outlined, size: 14),
+      return const Chip(
+        label: Text(
+          '교사 대상 없음',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        avatar: Icon(
+          Icons.school_outlined,
+          size: 14,
+          color: Colors.black87,
+        ),
         visualDensity: VisualDensity.compact,
       );
     }
@@ -2671,9 +2774,20 @@ class _MainPanelState extends State<_MainPanel> {
       child: Chip(
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 180),
-          child: Text('교사: $activeLabel', overflow: TextOverflow.ellipsis),
+          child: Text(
+            '교사: $activeLabel',
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
-        avatar: const Icon(Icons.school_outlined, size: 14),
+        avatar: const Icon(
+          Icons.school_outlined,
+          size: 14,
+          color: Colors.black87,
+        ),
         visualDensity: VisualDensity.compact,
       ),
     );

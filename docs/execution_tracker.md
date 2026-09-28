@@ -87,6 +87,8 @@ Last updated: 2026-09-12
 | 2026-09-12 | 우리집 홈스쿨 생성 중복 탭 잠금·로딩 오버레이·전환 모션. 생성 후 필수 컨텍스트만 대기 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
 | 2026-09-12 | 학기 시간표 팩 RPC + 관리자/달력/시간표 병렬 로드. 중복 생성 홈스쿨 정리 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test`, `supabase db push` |
 | 2026-09-28 | 공지 첨부파일 업로드/다운로드 + 3D 클레이모피즘 비주얼 시스템 6종 확장 + 화사한 파스텔 테마 리뉴얼 + 3D 부유 모션 위젯 및 독바 개선 | 완료 | `flutter analyze`, `flutter test` (423/423 통과), `flutter build web --release` |
+| 2026-09-28 | 상단 가족/아이 선택 배지 검정 텍스트 가독성 개선 + 개인 일정 RLS 권한 보강(관리자/작성자 CRUD 허용) | 완료 | `flutter analyze`, `flutter test` (423/423 통과), `supabase db push` |
+
 
 ## Next Batch
 

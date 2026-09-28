@@ -171,6 +171,17 @@ class NestTheme {
         backgroundColor: NestColors.roseMist,
         side: BorderSide.none,
         selectedColor: NestColors.mutedSage.withValues(alpha: 0.18),
+        labelStyle: textTheme.labelMedium?.copyWith(
+          color: Colors.black,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: textTheme.labelMedium?.copyWith(
+          color: Colors.black,
+          fontWeight: FontWeight.w600,
+        ),
+        iconTheme: const IconThemeData(
+          color: Colors.black,
+        ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
