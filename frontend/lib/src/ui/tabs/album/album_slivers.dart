@@ -112,7 +112,7 @@ List<Widget> buildAlbumFolderSlivers({
           crossAxisCount: ctx.columns,
           mainAxisSpacing: 10,
           crossAxisSpacing: 10,
-          childAspectRatio: 0.82,
+          childAspectRatio: 0.76,
         ),
         delegate: SliverChildBuilderDelegate((context, index) {
           final summary = summaries[index];
@@ -291,12 +291,11 @@ class _AlbumFolderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(14),
-              ),
-              child: AspectRatio(
-                aspectRatio: 1,
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(14),
+                ),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [

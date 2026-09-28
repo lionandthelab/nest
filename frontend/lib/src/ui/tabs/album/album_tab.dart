@@ -39,12 +39,20 @@ class AlbumPage extends StatelessWidget {
 
 /// 학기·수업별 사진첩.
 class AlbumTab extends StatefulWidget {
-  const AlbumTab({super.key, required this.controller, this.onSelectTerm});
+  const AlbumTab({
+    super.key,
+    required this.controller,
+    this.onSelectTerm,
+    this.initialMode,
+  });
 
   final NestController controller;
 
   /// 폴더 뷰에서 다른 학기 카드를 열 때 셸의 학기 선택을 함께 옮긴다.
   final Future<void> Function(String? termId)? onSelectTerm;
+
+  /// 초기 표시 모드 (지정하지 않으면 캐시된 모드 또는 기본 grid).
+  final AlbumViewMode? initialMode;
 
   @override
   State<AlbumTab> createState() => _AlbumTabState();
@@ -64,7 +72,11 @@ class _AlbumTabState extends State<AlbumTab> {
   @override
   void initState() {
     super.initState();
-    _restoreViewMode();
+    if (widget.initialMode != null) {
+      _mode = widget.initialMode!;
+    } else {
+      _restoreViewMode();
+    }
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
