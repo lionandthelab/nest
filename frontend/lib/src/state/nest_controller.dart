@@ -209,6 +209,9 @@ class NestController extends ChangeNotifier {
   /// True on platforms that can run the OAuth popup flow (web).
   bool get isWebOauthSupported => _oauthBridge.supported;
 
+  /// True when the current homeschool's album has been activated via Google Drive integration.
+  bool get isAlbumActive => driveIntegration?.isConnected == true;
+
   /// Suppress intermediate UI rebuilds while a [_runBusy] operation is active
   /// or a bootstrap/refresh mute is in effect.
   int _notifyMuteDepth = 0;
@@ -2800,6 +2803,7 @@ class NestController extends ChangeNotifier {
       loadAcademicEvents(),
       loadPersonalEvents(),
       loadCalendarIntegration(),
+      loadDriveIntegration(),
       loadNotificationPrefs(),
       loadNotificationInbox(),
     ]);

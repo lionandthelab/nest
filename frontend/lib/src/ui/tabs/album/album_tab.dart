@@ -7,6 +7,7 @@ import '../../../services/album_organizer.dart';
 import '../../../services/nest_cache.dart';
 import '../../../state/nest_controller.dart';
 import '../../nest_theme.dart';
+import '../../widgets/nest_3d_icon.dart';
 import '../../widgets/nest_empty_state.dart';
 import '../../widgets/nest_motion.dart';
 import '../../widgets/nest_refresh.dart';
@@ -72,12 +73,9 @@ class _AlbumTabState extends State<AlbumTab> {
       unawaited(widget.controller.loadAlbumSummaries());
       unawaited(widget.controller.loadAlbumFolders());
 
-      // 연결 상태는 이 탭이 직접 챙긴다. 예전에는 관리자 홈의 카드만 불러서,
-      // 앨범으로 바로 들어오면 이미 연결돼 있는데도 "미연결"로 보였고 업로드
-      // 때마다 연결 안내가 다시 떴다.
-      if (widget.controller.isAdminLike) {
-        unawaited(widget.controller.loadDriveIntegration());
-      }
+      // 연결 상태는 이 탭이 직접 챙긴다. 모든 구성원이 드라이브 연동에 따른
+      // 앨범 활성화 여부를 즉시 파악할 수 있도록 항상 상태를 조회한다.
+      unawaited(widget.controller.loadDriveIntegration());
     });
   }
 
@@ -146,13 +144,17 @@ class _AlbumTabState extends State<AlbumTab> {
     final controller = widget.controller;
     // 원본은 관리자 Drive로 간다. 관리자가 아직 연결하지 않았다면 사진을 올리기
     // 전이 알려 줄 마지막 기회다 — 연결 없이 올리면 Nest 용량에 쌓인다.
-    if (controller.isAdminLike &&
-        !(controller.driveIntegration?.isConnected ?? false)) {
-      final connected = await showDriveConnectSheet(
-        context: context,
-        controller: controller,
-      );
-      if (!mounted || connected == null) return;
+    if (!controller.isAlbumActive) {
+      if (controller.isAdminLike) {
+        final connected = await showDriveConnectSheet(
+          context: context,
+          controller: controller,
+        );
+        if (!mounted || connected != true) return;
+      } else {
+        _toast('관리자가 Google Drive를 연동해야 사진을 올릴 수 있습니다.');
+        return;
+      }
     }
 
     final draft = await showAlbumUploadSheet(
@@ -317,21 +319,23 @@ class _AlbumTabState extends State<AlbumTab> {
                     // 지어 두면 빠르게 내릴 때 빈 칸이 스쳐 지나가지 않는다.
                     cacheExtent: 600,
                     slivers: [
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _AlbumHeaderDelegate(
-                          controller: controller,
-                          mode: _mode,
-                          openAlbum: _openAlbum,
-                          onPickMode: _pickMode,
-                          onCloseAlbum: _closeAlbumCard,
-                          onOpenDriveSetup: _openDriveSetup,
+                      if (controller.isAlbumActive)
+                        SliverPersistentHeader(
+                          pinned: true,
+                          delegate: _AlbumHeaderDelegate(
+                            controller: controller,
+                            mode: _mode,
+                            openAlbum: _openAlbum,
+                            onPickMode: _pickMode,
+                            onCloseAlbum: _closeAlbumCard,
+                            onOpenDriveSetup: _openDriveSetup,
+                          ),
                         ),
-                      ),
                       ..._buildBody(controller, constraints.maxWidth),
-                      SliverToBoxAdapter(
-                        child: _buildFooter(controller, selecting),
-                      ),
+                      if (controller.isAlbumActive)
+                        SliverToBoxAdapter(
+                          child: _buildFooter(controller, selecting),
+                        ),
                     ],
                   ),
                 );
@@ -344,7 +348,7 @@ class _AlbumTabState extends State<AlbumTab> {
   }
 
   Widget? _buildFab(NestController controller, bool selecting) {
-    if (!controller.canUploadMedia) return null;
+    if (!controller.canUploadMedia || !controller.isAlbumActive) return null;
 
     return AnimatedScale(
       scale: selecting ? 0 : 1,
@@ -360,6 +364,10 @@ class _AlbumTabState extends State<AlbumTab> {
   }
 
   List<Widget> _buildBody(NestController controller, double width) {
+    if (!controller.isAlbumActive) {
+      return [_buildActivationGate(controller, width)];
+    }
+
     if (controller.albumLoading && controller.galleryItems.isEmpty) {
       return [_buildSkeleton(width)];
     }
@@ -433,6 +441,26 @@ class _AlbumTabState extends State<AlbumTab> {
             borderRadius: 4,
           ),
           childCount: columns * 3,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActivationGate(NestController controller, double width) {
+    final isAdmin = controller.isAdminLike;
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: isAdmin
+                ? _AdminAlbumActivationCard(
+                    onConnect: _openDriveSetup,
+                  )
+                : const _MemberAlbumWaitingCard(),
+          ),
         ),
       ),
     );
@@ -782,3 +810,272 @@ class _FilterRow extends StatelessWidget {
     );
   }
 }
+
+class _AdminAlbumActivationCard extends StatelessWidget {
+  const _AdminAlbumActivationCard({required this.onConnect});
+
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: NestColors.roseMist.withValues(alpha: 0.9),
+          width: 1.5,
+        ),
+      ),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Nest3dIcon.studyBooks(
+              size: 76,
+              floating: true,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '앨범을 시작하려면\nGoogle Drive를 연동해 주세요',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: NestColors.deepWood,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '홈스쿨 사진과 동영상을 관리자님의 Google Drive에 안전하고 무제한으로 보관합니다. 1회 연동 시 앨범 기능이 즉시 활성화됩니다.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: NestColors.roseMist.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: NestColors.roseMist,
+                ),
+              ),
+              child: const Column(
+                children: [
+                  _FeatureBenefitRow(
+                    icon: Icons.cloud_done_rounded,
+                    iconColor: NestColors.dustyRose,
+                    title: '관리자 Drive 원본 보관',
+                    subtitle: '용량 걱정 없이 고화질 원본 그대로 평생 안전 보관',
+                  ),
+                  SizedBox(height: 12),
+                  _FeatureBenefitRow(
+                    icon: Icons.auto_awesome_motion_rounded,
+                    iconColor: NestColors.clay,
+                    title: '학기·수업·날짜별 자동 정리',
+                    subtitle: '올리기만 하면 Nest가 알아서 폴더를 만들고 분류',
+                  ),
+                  SizedBox(height: 12),
+                  _FeatureBenefitRow(
+                    icon: Icons.shield_rounded,
+                    iconColor: NestColors.mutedSage,
+                    title: '가족 및 구성원 실시간 안전 공유',
+                    subtitle: '홈스쿨에 초대된 가족만 볼 수 있는 프라이빗 앨범',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: NestPressable(
+                haptic: true,
+                onPressed: onConnect,
+                child: FilledButton.icon(
+                  onPressed: onConnect,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: NestColors.dustyRose,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 2,
+                    shadowColor: NestColors.dustyRose.withValues(alpha: 0.4),
+                  ),
+                  icon: const Icon(Icons.add_to_drive, size: 20),
+                  label: const Text(
+                    'Google Drive 연동하고 앨범 시작하기',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '관리자 계정 1회 연동으로 모든 가족이 앨범을 이용할 수 있습니다.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.52),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeatureBenefitRow extends StatelessWidget {
+  const _FeatureBenefitRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, size: 18, color: iconColor),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.68),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MemberAlbumWaitingCard extends StatelessWidget {
+  const _MemberAlbumWaitingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: NestColors.roseMist.withValues(alpha: 0.9),
+          width: 1.5,
+        ),
+      ),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Nest3dIcon.emptyNest(
+              size: 76,
+              floating: true,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '앨범 준비 중',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: NestColors.deepWood,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '홈스쿨 관리자가 사진 보관용 Google Drive를 연동하면 앨범 기능이 활성화됩니다.\n관리자에게 앨범 활성화를 요청해 주세요.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: NestColors.pastelSky.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: NestColors.pastelSky.withValues(alpha: 0.6),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: NestColors.clay,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '관리자가 Drive를 연동하면 모든 가족이 수업별 사진을 함께 확인하고 다운로드할 수 있어요.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

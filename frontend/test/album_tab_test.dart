@@ -23,6 +23,7 @@ GalleryItem _item(String id, {bool video = false, String title = ''}) {
 NestController _controller({
   required String role,
   List<GalleryItem> items = const [],
+  bool driveConnected = true,
 }) {
   final client = SupabaseClient(
     'http://localhost',
@@ -33,6 +34,13 @@ NestController _controller({
   controller.currentRole = role;
   controller.selectedHomeschoolId = 'hs-1';
   controller.galleryItems = items;
+  if (driveConnected) {
+    controller.driveIntegration = const DriveIntegration(
+      id: 'd-1',
+      homeschoolId: 'hs-1',
+      status: 'CONNECTED',
+    );
+  }
   return controller;
 }
 
@@ -213,5 +221,51 @@ void main() {
     await _pumpAlbum(tester, controller);
 
     expect(find.text('민들레반'), findsOneWidget);
+  });
+
+  testWidgets('Drive 미연동 시 관리자에게 앨범 활성화 안내 카드가 표시된다', (tester) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final controller = _controller(
+      role: 'HOMESCHOOL_ADMIN',
+      driveConnected: false,
+    );
+    await _pumpAlbum(tester, controller);
+
+    expect(find.textContaining('Google Drive를 연동해 주세요'), findsOneWidget);
+    expect(find.text('Google Drive 연동하고 앨범 시작하기'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
+  testWidgets('Drive 미연동 시 학부모에게 앨범 준비 중 카드가 표시된다', (tester) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final controller = _controller(
+      role: 'PARENT',
+      driveConnected: false,
+    );
+    await _pumpAlbum(tester, controller);
+
+    expect(find.text('앨범 준비 중'), findsOneWidget);
+    expect(find.textContaining('홈스쿨 관리자가 사진 보관용 Google Drive를 연동하면'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
+  testWidgets('Drive 미연동 시 교사에게도 업로드 버튼이 숨겨진다', (tester) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final controller = _controller(
+      role: 'TEACHER',
+      driveConnected: false,
+    );
+    await _pumpAlbum(tester, controller);
+
+    expect(find.byType(FloatingActionButton), findsNothing);
   });
 }

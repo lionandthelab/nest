@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/nest_controller.dart';
 import '../models/homeschool_start_tips.dart';
 import '../nest_theme.dart';
+import '../tabs/album/album_drive_connect_sheet.dart';
+import 'nest_3d_icon.dart';
 import 'nest_motion.dart';
+
+enum _Step { form, driveOnboarding }
 
 /// 우리집 홈스쿨을 바로 열 수 있게, 기본값을 채워 두는 생성 화면.
 class HomeschoolCreateDialog extends StatefulWidget {
@@ -24,6 +30,7 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
   late final TextEditingController _endDateController;
   late final TextEditingController _classController;
   late final TextEditingController _courseController;
+  _Step _step = _Step.form;
   bool _submitting = false;
 
   @override
@@ -107,10 +114,23 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
       );
       if (!mounted) return;
       NestHaptics.success();
-      Navigator.of(context).pop(true);
+      unawaited(widget.controller.loadDriveIntegration());
+      setState(() {
+        _submitting = false;
+        _step = _Step.driveOnboarding;
+      });
     } catch (_) {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _onConnectDriveInOnboarding() async {
+    await showDriveConnectSheet(
+      context: context,
+      controller: widget.controller,
+    );
+    if (!mounted) return;
+    setState(() {});
   }
 
   InputDecoration _field({
@@ -198,6 +218,12 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
         final locked = _isLocked;
         return PopScope(
           canPop: !locked,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            if (_step == _Step.driveOnboarding) {
+              Navigator.of(context).pop(true);
+            }
+          },
           child: Dialog(
             insetPadding: EdgeInsets.symmetric(
               horizontal: isNarrow ? 12 : 24,
@@ -214,16 +240,18 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                     child: AbsorbPointer(
                       absorbing: locked,
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '우리집 홈스쿨 시작하기',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
+                      child: _step == _Step.driveOnboarding
+                          ? _buildDriveOnboardingContent(context, isNarrow)
+                          : Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '우리집 홈스쿨 시작하기',
+                                    style: Theme.of(context).textTheme.titleLarge,
+                                  ),
                             const SizedBox(height: 8),
                             Text(
                               '기본값은 이미 넣어 두었어요. 이름만 보고 바로 시작해도 됩니다.',
@@ -339,6 +367,229 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDriveOnboardingContent(BuildContext context, bool isNarrow) {
+    final theme = Theme.of(context);
+    final isDriveConnected = widget.controller.isAlbumActive;
+    final homeschoolName = _homeschoolController.text.trim().isEmpty
+        ? '우리집 홈스쿨'
+        : _homeschoolController.text.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 8),
+        const Nest3dIcon.star(
+          size: 72,
+          floating: true,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '🎉 $homeschoolName 개설 완료!',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: NestColors.deepWood,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '홈스쿨 공간이 성공적으로 준비되었습니다.\n아이들의 학습과 활동 사진을 보관할 준비를 시작해 보세요.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: NestColors.deepWood.withValues(alpha: 0.72),
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDriveConnected
+                ? NestColors.mutedSage.withValues(alpha: 0.15)
+                : NestColors.roseMist.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDriveConnected
+                  ? NestColors.mutedSage.withValues(alpha: 0.6)
+                  : NestColors.roseMist,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isDriveConnected
+                          ? Icons.cloud_done_rounded
+                          : Icons.add_to_drive_rounded,
+                      size: 20,
+                      color: isDriveConnected
+                          ? NestColors.mutedSage
+                          : NestColors.dustyRose,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isDriveConnected
+                              ? 'Google Drive 연동 완료 (앨범 활성화됨)'
+                              : '사진 보관용 Google Drive 연동 (권장)',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: NestColors.deepWood,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isDriveConnected
+                              ? '이제 모든 가족이 앨범을 이용할 수 있습니다.'
+                              : '앨범 기능을 활성화하려면 관리자 Drive 연동이 필요합니다.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: NestColors.deepWood.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (!isDriveConnected) ...[
+                const SizedBox(height: 14),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                _buildBulletItem(
+                  context,
+                  icon: Icons.check_circle_outline_rounded,
+                  text: '관리자 개인 Google Drive에 안전하고 무제한 원본 저장',
+                ),
+                const SizedBox(height: 8),
+                _buildBulletItem(
+                  context,
+                  icon: Icons.check_circle_outline_rounded,
+                  text: '학기·수업·날짜별 스마트 자동 폴더 생성 및 정리',
+                ),
+                const SizedBox(height: 8),
+                _buildBulletItem(
+                  context,
+                  icon: Icons.check_circle_outline_rounded,
+                  text: '초대된 가족들과 고화질 활동 사진 실시간 공유',
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (isDriveConnected) ...[
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: NestColors.dustyRose,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                '홈스쿨 시작하기',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ] else ...[
+          SizedBox(
+            width: double.infinity,
+            child: NestPressable(
+              haptic: true,
+              onPressed: _onConnectDriveInOnboarding,
+              child: FilledButton.icon(
+                onPressed: _onConnectDriveInOnboarding,
+                style: FilledButton.styleFrom(
+                  backgroundColor: NestColors.dustyRose,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 2,
+                ),
+                icon: const Icon(Icons.add_to_drive, size: 18),
+                label: const Text(
+                  'Google Drive 연동하기 (권장)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                '나중에 하기 (홈스쿨 바로 시작)',
+                style: TextStyle(
+                  color: NestColors.deepWood.withValues(alpha: 0.65),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '앨범 탭에서 언제든지 연동하여 앨범을 활성화할 수 있습니다.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: 11,
+              color: NestColors.deepWood.withValues(alpha: 0.5),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildBulletItem(
+    BuildContext context, {
+    required IconData icon,
+    required String text,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: NestColors.clay),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: NestColors.deepWood.withValues(alpha: 0.8),
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
