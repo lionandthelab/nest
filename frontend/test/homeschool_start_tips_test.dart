@@ -70,4 +70,32 @@ void main() {
     expect(find.text(featured.title), findsOneWidget);
     expect(find.text('다른 이야기'), findsOneWidget);
   });
+
+  test('포트폴리오 예고 팁이 포함되어 있고 안내 문구를 제공한다', () {
+    final portfolioTip = HomeschoolStartTips.all.firstWhere(
+      (tip) => tip.id == 'portfolio-preview',
+    );
+    expect(portfolioTip.title, contains('포트폴리오'));
+    expect(portfolioTip.badgeText, '준비 중');
+    expect(portfolioTip.body, contains('포트폴리오'));
+  });
+
+  testWidgets('다른 이야기 클릭 시 포트폴리오 안내를 포함한 추가 팁이 펼쳐진다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: HomeschoolTipsCard(now: DateTime(2026, 9, 11))),
+      ),
+    );
+
+    // 초기 상태에서는 1개만 표시
+    expect(find.text('접기'), findsNothing);
+
+    // 펼치기
+    await tester.tap(find.text('다른 이야기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('접기'), findsOneWidget);
+    expect(find.text('준비 중'), findsOneWidget);
+    expect(find.text('아이의 성장을 담는 포트폴리오'), findsOneWidget);
+  });
 }

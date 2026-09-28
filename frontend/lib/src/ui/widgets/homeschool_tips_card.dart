@@ -108,6 +108,8 @@ class _TipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasBadge = tip.badgeText != null;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -115,24 +117,64 @@ class _TipRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         color: featured
             ? NestColors.roseMist.withValues(alpha: 0.55)
-            : Colors.white,
-        border: Border.all(color: NestColors.roseMist),
+            : hasBadge
+                ? NestColors.creamyWhite
+                : Colors.white,
+        border: Border.all(
+          color: hasBadge
+              ? NestColors.dustyRose.withValues(alpha: 0.5)
+              : NestColors.roseMist,
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _TipGlyph(icon: tip.icon, size: featured ? 40 : 34),
+          _TipGlyph(
+            icon: tip.icon,
+            size: featured ? 40 : 34,
+            tipId: tip.id,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  tip.title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: NestColors.deepWood,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        tip.title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: NestColors.deepWood,
+                        ),
+                      ),
+                    ),
+                    if (tip.badgeText != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: NestColors.dustyRose.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: NestColors.dustyRose.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Text(
+                          tip.badgeText!,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: NestColors.dustyRose,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -151,13 +193,20 @@ class _TipRow extends StatelessWidget {
 }
 
 class _TipGlyph extends StatelessWidget {
-  const _TipGlyph({required this.icon, this.size = 38});
+  const _TipGlyph({required this.icon, this.size = 38, this.tipId});
 
   final IconData icon;
   final double size;
+  final String? tipId;
 
   @override
   Widget build(BuildContext context) {
+    if (tipId == 'portfolio-preview') {
+      return Nest3dIcon.achievement(
+        size: size,
+        floating: true,
+      );
+    }
     return Nest3dIcon.lightbulb(
       size: size,
       floating: true,

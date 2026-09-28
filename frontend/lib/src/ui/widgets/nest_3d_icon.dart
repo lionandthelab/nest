@@ -83,6 +83,17 @@ class Nest3dIcon extends StatelessWidget {
     this.onTap,
   }) : assetPath = 'assets/3d/achievement_star_3d.png';
 
+  /// 성취 / 포트폴리오
+  const Nest3dIcon.achievement({
+    super.key,
+    this.size = 44.0,
+    this.floating = false,
+    this.floatDistance = 4.0,
+    this.duration = const Duration(milliseconds: 2200),
+    this.fit = BoxFit.contain,
+    this.onTap,
+  }) : assetPath = 'assets/3d/achievement_star_3d.png';
+
   /// 3D 로고 심볼
   const Nest3dIcon.logo({
     super.key,

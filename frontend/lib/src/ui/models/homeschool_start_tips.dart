@@ -14,6 +14,7 @@ class HomeschoolTip {
     required this.icon,
     required this.title,
     required this.body,
+    this.badgeText,
   });
 
   final String id;
@@ -21,6 +22,7 @@ class HomeschoolTip {
   final IconData icon;
   final String title;
   final String body;
+  final String? badgeText;
 
   String get themeLabel => switch (theme) {
     HomeschoolTipTheme.start => '시작',
@@ -70,46 +72,33 @@ class HomeschoolStartTips {
 
   static const List<HomeschoolTip> all = [
     HomeschoolTip(
-      id: 'one-thing',
-      theme: HomeschoolTipTheme.start,
-      icon: Icons.flag_outlined,
-      title: '이번 주 한 가지만',
-      body: '처음부터 학교처럼 안 짜도 돼요. 이번 주에 지킬 한 가지만 정하면 충분해요.',
-    ),
-    HomeschoolTip(
-      id: 'same-time',
-      theme: HomeschoolTipTheme.rhythm,
-      icon: Icons.schedule,
-      title: '같은 시간에 책상만 펴도',
-      body: '매일 같은 시간에 책상만 펴도, 아이도 나도 몸이 먼저 알아요.',
-    ),
-    HomeschoolTip(
-      id: 'living-classroom',
-      theme: HomeschoolTipTheme.start,
-      icon: Icons.kitchen_outlined,
-      title: '부엌도 교실이에요',
-      body: '장보기, 요리, 산책도 우리집 홈스쿨 수업으로 세어도 돼요.',
-    ),
-    HomeschoolTip(
-      id: 'one-line',
-      theme: HomeschoolTipTheme.record,
-      icon: Icons.photo_outlined,
-      title: '사진 한 장, 한 줄',
-      body: '매일 보고서를 쓰지 않아도 돼요. 짧게 남기면 나중에 기록이 돼요.',
-    ),
-    HomeschoolTip(
-      id: 'rest-day',
-      theme: HomeschoolTipTheme.rhythm,
-      icon: Icons.weekend_outlined,
-      title: '쉬는 날을 미리',
-      body: '쉬는 날을 정해 두면, 지키는 날이 오히려 편해져요.',
-    ),
-    HomeschoolTip(
-      id: 'no-compare',
+      id: 'family-pace',
       theme: HomeschoolTipTheme.together,
       icon: Icons.favorite_outline,
-      title: '우리집 속도로',
-      body: '학교 진도와 맞출 필요 없어요. 우리집 속도가 곧 커리큘럼이에요.',
+      title: '우리 가족만의 속도로',
+      body: '다른 집과 비교하지 않아도 괜찮아요. 우리 아이에게 맞는 편안한 속도가 가장 좋은 배움의 길이에요.',
+    ),
+    HomeschoolTip(
+      id: 'daily-learning',
+      theme: HomeschoolTipTheme.start,
+      icon: Icons.eco_outlined,
+      title: '일상의 모든 순간이 배움이에요',
+      body: '요리와 장보기, 자연 산책 같은 소소한 하루도 아이에게는 훌륭한 홈스쿨 수업이 됩니다.',
+    ),
+    HomeschoolTip(
+      id: 'simple-record',
+      theme: HomeschoolTipTheme.record,
+      icon: Icons.photo_camera_outlined,
+      title: '작은 기록 하나면 충분해요',
+      body: '거창한 보고서 대신 사진 한 장과 짧은 메모만 남겨도 소중한 성장의 흔적이 돼요.',
+    ),
+    HomeschoolTip(
+      id: 'portfolio-preview',
+      theme: HomeschoolTipTheme.record,
+      icon: Icons.auto_awesome_outlined,
+      badgeText: '준비 중',
+      title: '아이의 성장을 담는 포트폴리오',
+      body: '차곡차곡 모인 시간표와 활동 기록으로 학기 말 맞춤 학습 포트폴리오를 만들어 드리는 기능이 곧 추가됩니다.',
     ),
   ];
 
