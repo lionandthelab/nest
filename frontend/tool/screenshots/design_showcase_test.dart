@@ -430,6 +430,25 @@ void main() {
     await _shoot(tester, key, 'shot_branding_showcase.png');
   });
 
+  testWidgets('capture: 첫 화면(스플래시) 3D 로고 및 브랜딩', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(420, 840);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final key = GlobalKey();
+
+    await tester.pumpWidget(frame(
+      key,
+      const NestLoadingScreen(message: 'Nest를 준비하고 있습니다...'),
+      size: const Size(420, 840),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await _shoot(tester, key, 'shot_splash_first_screen.png');
+  });
+
   testWidgets('capture: 로그인 화면 3D 로고 및 파스텔 디자인', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(420, 840);
@@ -445,9 +464,32 @@ void main() {
       size: const Size(420, 840),
     ));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 500));
 
     await _shoot(tester, key, 'shot_login_screen.png');
+  });
+
+  testWidgets('capture: 회원가입 모드 전환 화면', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(420, 840);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = NestController(repository: NestRepository(client));
+    final key = GlobalKey();
+
+    await tester.pumpWidget(frame(
+      key,
+      LoginPage(controller: controller),
+      size: const Size(420, 840),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.text('회원가입').first);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await _shoot(tester, key, 'shot_signup_screen.png');
   });
 
   testWidgets('capture: 학부모 홈 화면 파스텔 디자인 및 카드 뎁스', (tester) async {

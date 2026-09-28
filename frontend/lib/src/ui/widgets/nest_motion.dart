@@ -376,56 +376,59 @@ class NestLoadingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFFF4EC),
-              NestColors.creamyWhite,
-              Color(0xFFF3ECE2),
-            ],
-          ),
-        ),
-        child: Center(
-          child: TweenAnimationBuilder<double>(
-            duration: NestMotion.appear,
-            curve: NestMotion.appearCurve,
-            tween: Tween(begin: 0.96, end: 1),
-            builder: (context, value, child) {
-              return Transform.scale(scale: value, child: child);
-            },
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 320),
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: NestColors.roseMist.withValues(alpha: 0.92),
+      body: Stack(
+        children: [
+          // ── Gradient & Ambient Pastel Glow Blobs ──
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFFFF5EF),
+                    NestColors.creamyWhite,
+                    Color(0xFFF2ECE4),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: NestColors.deepWood.withValues(alpha: 0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
               ),
-              child: Row(
+              child: Stack(
                 children: [
-                  const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.6),
+                  Positioned(
+                    top: -90,
+                    right: -50,
+                    child: Container(
+                      width: 280,
+                      height: 280,
+                      decoration: BoxDecoration(
+                        color: NestColors.dustyRose.withValues(alpha: 0.28),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: NestColors.dustyRose.withValues(alpha: 0.28),
+                            blurRadius: 80,
+                            spreadRadius: 20,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.82),
+                  Positioned(
+                    bottom: -110,
+                    left: -70,
+                    child: Container(
+                      width: 300,
+                      height: 300,
+                      decoration: BoxDecoration(
+                        color: NestColors.mutedSage.withValues(alpha: 0.22),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: NestColors.mutedSage.withValues(alpha: 0.22),
+                            blurRadius: 80,
+                            spreadRadius: 20,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -433,7 +436,122 @@ class NestLoadingScreen extends StatelessWidget {
               ),
             ),
           ),
-        ),
+
+          // ── Centered Hero Branding & Progress ──
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 3D Floating Logo Mark with soft aura
+                  Floating3DWidget(
+                    floatDistance: 8,
+                    duration: const Duration(milliseconds: 2400),
+                    child: Container(
+                      width: 112,
+                      height: 112,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: NestColors.dustyRose.withValues(alpha: 0.28),
+                            blurRadius: 28,
+                            offset: const Offset(0, 10),
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: NestColors.roseMist.withValues(alpha: 0.95),
+                          width: 1.5,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(14),
+                      child: Image.asset(
+                        'assets/logo_3d_mark.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Brand Title & Slogan
+                  Text(
+                    'Nest',
+                    style: theme.textTheme.displayMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: NestColors.deepWood,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '우리 아이가 날아오르기 전, 따뜻한 둥지',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.68),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 36),
+
+                  // Tactile Progress Capsule
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: NestColors.roseMist.withValues(alpha: 0.9),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: NestColors.deepWood.withValues(alpha: 0.06),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              NestColors.dustyRose,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Flexible(
+                          child: Text(
+                            message,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: NestColors.deepWood.withValues(alpha: 0.85),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
