@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
+import '../widgets/announcement_attachments.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
@@ -165,14 +166,14 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
   }
 
   Widget _buildAnnouncementsSection() {
-    final announcements =
-        widget.controller.announcements.toList()..sort((a, b) {
-          // Pinned first, then by date desc
-          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-          final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
-          final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
-          return right.compareTo(left);
-        });
+    final announcements = widget.controller.announcements.toList()
+      ..sort((a, b) {
+        // Pinned first, then by date desc
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        final left = a.createdAt?.millisecondsSinceEpoch ?? 0;
+        final right = b.createdAt?.millisecondsSinceEpoch ?? 0;
+        return right.compareTo(left);
+      });
 
     if (announcements.isEmpty) {
       if (widget.controller.isBusy) {
@@ -200,74 +201,84 @@ class _ParentNewsTabState extends State<ParentNewsTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         itemCount: announcements.length,
-      itemBuilder: (context, index) {
+        itemBuilder: (context, index) {
         final a = announcements[index];
+        final attachments = widget.controller.attachmentsForAnnouncement(a.id);
         final when = a.createdAt == null
-            ? '-'
-            : DateFormat('yyyy-MM-dd HH:mm').format(a.createdAt!);
-        final classGroupName = a.classGroupId == null
-            ? '전체 공지'
-            : widget.controller.findClassGroupName(a.classGroupId!);
+              ? '-'
+              : DateFormat('yyyy-MM-dd HH:mm').format(a.createdAt!);
+          final classGroupName = a.classGroupId == null
+              ? '전체 공지'
+              : widget.controller.findClassGroupName(a.classGroupId!);
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    EntityAvatar(
-                      label: classGroupName,
-                      icon: a.pinned
-                          ? Icons.push_pin_outlined
-                          : Icons.campaign_outlined,
-                      size: 34,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        a.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      EntityAvatar(
+                        label: classGroupName,
+                        icon: a.pinned
+                            ? Icons.push_pin_outlined
+                            : Icons.campaign_outlined,
+                        size: 34,
                       ),
-                    ),
-                    if (a.pinned)
-                      Icon(
-                        Icons.push_pin,
-                        size: 16,
-                        color: NestColors.dustyRose,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          a.title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
                       ),
+                      if (a.pinned)
+                        Icon(
+                          Icons.push_pin,
+                          size: 16,
+                          color: NestColors.dustyRose,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      Text(
+                        classGroupName,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      Text(
+                        when,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (a.body.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(a.body),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    Text(
-                      classGroupName,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    Text(
-                      when,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: NestColors.deepWood.withValues(alpha: 0.5),
-                      ),
+                  if (attachments.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    AnnouncementAttachmentList(
+                      attachments: attachments,
+                      resolveUrl: widget.controller.mediaPublicUrl,
+                      downloadBytes: (path) => widget.controller
+                          .downloadMediaBytes(storagePath: path),
                     ),
                   ],
-                ),
-                if (a.body.trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(a.body),
                 ],
-              ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
       ),
     );
   }

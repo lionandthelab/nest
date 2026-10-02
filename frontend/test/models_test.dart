@@ -1134,5 +1134,71 @@ void main() {
       // 썸네일이 비면 커버도 원본으로 떨어진다.
       expect(summary.coverPath, 'hs-1/2026-09/1_abc.jpg');
     });
+
+    test('StudentSemesterReview.fromMap parses fields correctly', () {
+      final review = StudentSemesterReview.fromMap({
+        'id': 'rev-1',
+        'homeschool_id': 'hs-1',
+        'term_id': 'term-1',
+        'child_id': 'child-1',
+        'teacher_evaluation': '성실하고 창의적인 학생입니다.',
+        'parent_evaluation': '가정에서도 책을 즐겨 읽습니다.',
+        'student_reflection': '수학 실력이 많이 늘었습니다.',
+        'attendance_note': '체험학습 3일 출석 인정',
+        'created_by_user_id': 'user-1',
+        'created_at': '2026-09-29T10:00:00.000Z',
+        'updated_at': '2026-09-29T10:00:00.000Z',
+      });
+
+      expect(review.id, 'rev-1');
+      expect(review.homeschoolId, 'hs-1');
+      expect(review.termId, 'term-1');
+      expect(review.childId, 'child-1');
+      expect(review.teacherEvaluation, '성실하고 창의적인 학생입니다.');
+      expect(review.parentEvaluation, '가정에서도 책을 즐겨 읽습니다.');
+      expect(review.studentReflection, '수학 실력이 많이 늘었습니다.');
+      expect(review.attendanceNote, '체험학습 3일 출석 인정');
+      expect(review.createdByUserId, 'user-1');
+      expect(review.createdAt, isNotNull);
+      expect(review.updatedAt, isNotNull);
+    });
+
+    test('StudentSemesterReview.fromMap handles missing fields safely', () {
+      final review = StudentSemesterReview.fromMap(const {});
+
+      expect(review.id, '');
+      expect(review.homeschoolId, '');
+      expect(review.termId, '');
+      expect(review.childId, '');
+      expect(review.teacherEvaluation, '');
+      expect(review.parentEvaluation, '');
+      expect(review.studentReflection, '');
+      expect(review.attendanceNote, '');
+      expect(review.createdByUserId, isNull);
+      expect(review.createdAt, isNull);
+    });
+
+    test('StudentSemesterReview.toMap serializes and copyWith works', () {
+      const review = StudentSemesterReview(
+        id: 'rev-2',
+        homeschoolId: 'hs-2',
+        termId: 'term-2',
+        childId: 'child-2',
+        teacherEvaluation: '교사 의견',
+        parentEvaluation: '부모 의견',
+        studentReflection: '학생 소감',
+        attendanceNote: '개근',
+      );
+
+      final map = review.toMap();
+      expect(map['homeschool_id'], 'hs-2');
+      expect(map['term_id'], 'term-2');
+      expect(map['child_id'], 'child-2');
+      expect(map['teacher_evaluation'], '교사 의견');
+
+      final copied = review.copyWith(teacherEvaluation: '수정된 교사 의견');
+      expect(copied.teacherEvaluation, '수정된 교사 의견');
+      expect(copied.parentEvaluation, '부모 의견');
+    });
   });
 }

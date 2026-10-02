@@ -1,6 +1,6 @@
 # Nest Execution Tracker
 
-Last updated: 2026-09-12
+Last updated: 2026-10-02
 
 ## Scope
 
@@ -89,6 +89,10 @@ Last updated: 2026-09-12
 | 2026-09-28 | 공지 첨부파일 업로드/다운로드 + 3D 클레이모피즘 비주얼 시스템 6종 확장 + 화사한 파스텔 테마 리뉴얼 + 3D 부유 모션 위젯 및 독바 개선 | 완료 | `flutter analyze`, `flutter test` (423/423 통과), `flutter build web --release` |
 | 2026-09-28 | 상단 가족/아이 선택 배지 검정 텍스트 가독성 개선 + 개인 일정 RLS 권한 보강(관리자/작성자 CRUD 허용) | 완료 | `flutter analyze`, `flutter test` (423/423 통과), `supabase db push` |
 | 2026-09-28 | 앨범 관리자 Drive 연동 활성화 게이트웨이(Drive 미연동 시 업로드 제한 및 관리자/구성원 맞춤형 안내 카드) + 홈스쿨 생성 완료 온보딩(Google Drive 연동 안내/스킵 플로우) 구현 | 완료 | `flutter analyze`, `flutter test` (430/430 통과) |
+| 2026-09-29 | 학기별 학습 포트폴리오 PDF 생성 기능 추가: 한국 학교 생활기록부 대체 규격(표지, 인적/학적, 출결 총괄표 및 결석 사유 소명, 교과학습 발달상황, 창의적 체험활동, 행동특성 및 종합의견, 직인란) + 학기 사진 갤러리(2x2 그리드) + student_semester_reviews 마이그레이션 + 대화형 생성/미리보기 다이얼로그 + 학부모/관리자/교사/학생 탭 연동 | 완료 | `flutter analyze`, `flutter test` (435/435 통과) |
+| 2026-09-30 | 학습 포트폴리오 3D 클레이 성장 바인더 UI 구현(`PortfolioBinderView`) + 3개 탭 다이얼로그 개편 + 100% 한국어 네이티브 화면 캡처 파이프라인(`capture_portfolio_binder_shot_test.dart`) + 실제 앱 화면 기반 공식 홍보 이미지 2종(1:1 쇼케이스 카드, 16:9 와이드 배너) 및 마케팅 키트 제작 | 완료 | `flutter analyze`, `flutter test` (435/435 통과) |
+| 2026-09-30 | Blender Headless 3D 클레이모피즘 에셋 생성 파이프라인(`scripts/blender/render_portfolio_clay_assets.py`) 구축 + 신규 3D 에셋 3종(바인더, 카메라, 리본메달) 렌더링/확보 + `Nest3dIcon` 위젯 연계 및 UI 적용 + `CLAUDE.md`, `AGENTS.md`, `docs/architecture.md` 디자인 파이프라인 규칙 정립 | 완료 | `flutter analyze`, `flutter test` (435/435 통과), Blender Cycles Headless 렌더링 검증 |
+| 2026-10-02 | 공지 첨부를 소식 카드에서 바로 미리보기: 이미지는 카드에 표시 후 확대, PDF·텍스트는 앱 안 뷰어, 학부모 소식 탭에도 첨부 표시 | 완료 | `flutter analyze`, `flutter test` (438/438 통과) |
 
 
 ## Next Batch

@@ -8230,6 +8230,205 @@ class NestController extends ChangeNotifier {
     return studentActivityLogs.where((log) => log.childId == childId).toList();
   }
 
+  /// 한 학기 학습 포트폴리오 작성을 위한 종합 데이터 번들 취합
+  Future<StudentPortfolioBundle> compilePortfolioBundle({
+    required String termId,
+    required String childId,
+  }) async {
+    final term = terms.firstWhere(
+      (t) => t.id == termId,
+      orElse: () =>
+          selectedTerm ??
+          Term(
+            id: termId,
+            homeschoolId: selectedHomeschoolId ?? '',
+            name: '학기',
+            startDate: DateTime.now(),
+            endDate: DateTime.now(),
+            status: 'ACTIVE',
+          ),
+    );
+
+    final child = children.firstWhere(
+      (c) => c.id == childId,
+      orElse: () => ChildProfile(
+        id: childId,
+        familyId: '',
+        familyName: '',
+        name: '학생',
+        birthDate: DateTime.now(),
+        profileNote: '',
+        status: 'ACTIVE',
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    final homeschool = memberships
+            .where((m) => m.homeschoolId == term.homeschoolId)
+            .map((m) => m.homeschool)
+            .firstOrNull ??
+        Homeschool(
+          id: term.homeschoolId,
+          name: selectedHomeschoolName.isNotEmpty
+              ? selectedHomeschoolName
+              : '홈스쿨',
+          timezone: 'Asia/Seoul',
+        );
+
+    final family = families.where((f) => f.id == child.familyId).firstOrNull;
+
+    // 소속 반(ClassGroup) 및 담임 교사 확인
+    final enrolledGroupIds = classEnrollments
+        .where((e) => e.childId == childId)
+        .map((e) => e.classGroupId)
+        .toSet();
+    final classGroup = classGroups
+        .where((g) => g.termId == termId && enrolledGroupIds.contains(g.id))
+        .firstOrNull;
+
+    // 반 세션의 담당 교사 배정 조회
+    TeacherProfile? mainTeacher;
+    if (classGroup != null) {
+      final allSessions =
+          allTermSessions.isNotEmpty ? allTermSessions : sessions;
+      final groupSessions =
+          allSessions.where((s) => s.classGroupId == classGroup.id).toList();
+      final groupSessionIds = groupSessions.map((s) => s.id).toSet();
+      final groupAssignments = assignmentsForSessionIds(groupSessionIds);
+      final mainTeacherId = groupAssignments
+              .where((a) => a.assignmentRole == 'MAIN')
+              .map((a) => a.teacherProfileId)
+              .firstOrNull ??
+          groupAssignments.map((a) => a.teacherProfileId).firstOrNull;
+
+      if (mainTeacherId != null) {
+        mainTeacher = teacherProfiles
+            .where((t) => t.id == mainTeacherId)
+            .firstOrNull;
+      }
+    }
+
+    // 총 수업일수 계산 (학기 평일 - 학사일정 공휴일/방학)
+    final termStart = term.startDate ?? DateTime.now();
+    final termEnd = term.endDate ?? DateTime.now();
+
+    final holidayDates = academicEvents
+        .where((e) {
+          if (e.kind != 'HOLIDAY' && e.kind != 'BREAK') return false;
+          final d = e.eventDate;
+          return !d.isBefore(termStart) && !d.isAfter(termEnd);
+        })
+        .map((e) => DateTime(e.eventDate.year, e.eventDate.month, e.eventDate.day))
+        .toSet();
+
+    var weekdays = 0;
+    var cur = DateTime(termStart.year, termStart.month, termStart.day);
+    final endLimit = DateTime(termEnd.year, termEnd.month, termEnd.day);
+    while (!cur.isAfter(endLimit)) {
+      if (cur.weekday >= DateTime.monday &&
+          cur.weekday <= DateTime.friday &&
+          !holidayDates.contains(cur)) {
+        weekdays++;
+      }
+      cur = cur.add(const Duration(days: 1));
+    }
+    final totalSchoolDays = weekdays > 0 ? weekdays : 90;
+
+    // 결석 내역 집계
+    final childAbsences = absenceReports.where((r) {
+      if (r.childId != childId || r.isCanceled) return false;
+      final d = r.occurrenceDate;
+      return !d.isBefore(termStart) && !d.isAfter(termEnd);
+    }).toList()
+      ..sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
+
+    final absentDays = childAbsences
+        .map((r) => '${r.occurrenceDate.year}-${r.occurrenceDate.month}-${r.occurrenceDate.day}')
+        .toSet()
+        .length;
+    final attendedDays = (totalSchoolDays - absentDays).clamp(0, totalSchoolDays);
+
+    // 수강 과목 및 수업
+    final allSessions = allTermSessions.isNotEmpty ? allTermSessions : sessions;
+    final groupSessions = classGroup != null
+        ? allSessions.where((s) => s.classGroupId == classGroup.id).toList()
+        : allSessions;
+    final courseIds = groupSessions.map((s) => s.courseId).toSet();
+    final childCourses = courses.where((c) => courseIds.contains(c.id)).toList();
+
+    // 수업 진도(CourseLesson)
+    final childLessons = courseLessons.where((l) {
+      if (courseIds.isNotEmpty && !courseIds.contains(l.courseId)) return false;
+      return !l.lessonDate.isBefore(termStart) && !l.lessonDate.isAfter(termEnd);
+    }).toList()
+      ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
+
+    // 학생 활동 및 관찰 기록(StudentActivityLog)
+    final logs = studentActivityLogs.where((l) => l.childId == childId).toList()
+      ..sort((a, b) =>
+          (b.recordedAt ?? DateTime(0)).compareTo(a.recordedAt ?? DateTime(0)));
+
+    // 학사 행사(AcademicEvent)
+    final events = academicEvents.where((e) {
+      if (e.termId == termId) return true;
+      return !e.eventDate.isBefore(termStart) && !e.eventDate.isAfter(termEnd);
+    }).toList()
+      ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
+
+    // 자습 계획(SelfStudyPlan)
+    final studyPlans =
+        selfStudyPlans.where((p) => p.termId == termId).toList();
+
+    // 사진 갤러리 비동기 조회
+    final photos = await _repository.fetchPortfolioPhotos(
+      homeschoolId: homeschool.id,
+      termId: termId,
+      childId: childId,
+      classGroupId: classGroup?.id,
+    );
+
+    // 학기 종합의견 비동기 조회
+    final review = await _repository.fetchSemesterReview(
+      termId: termId,
+      childId: childId,
+    );
+
+    return StudentPortfolioBundle(
+      homeschool: homeschool,
+      term: term,
+      child: child,
+      family: family,
+      classGroup: classGroup,
+      mainTeacher: mainTeacher,
+      totalSchoolDays: totalSchoolDays,
+      attendedDays: attendedDays,
+      absentDays: absentDays,
+      absenceRecords: childAbsences,
+      courses: childCourses.isNotEmpty ? childCourses : courses,
+      courseLessons: childLessons,
+      activityLogs: logs,
+      academicEvents: events,
+      selfStudyPlans: studyPlans,
+      photos: photos,
+      review: review,
+    );
+  }
+
+  /// 학기별 아동 종합의견 저장
+  Future<StudentSemesterReview> saveSemesterReview(
+    StudentSemesterReview review,
+  ) async {
+    final saved = await _repository.upsertSemesterReview(review);
+    _notifyIfIdle();
+    return saved;
+  }
+
+  /// 스토리지 미디어 바이트 다운로드
+  Future<Uint8List> downloadMediaBytes({required String storagePath}) {
+    return _repository.downloadMediaBytes(storagePath: storagePath);
+  }
+
+
   String findClassGroupName(String? classGroupId) {
     if (classGroupId == null || classGroupId.isEmpty) {
       return '전체 공개';

@@ -15,6 +15,7 @@ import '../widgets/schedule_badges.dart';
 import '../widgets/schedule_personal_section.dart';
 import '../widgets/today_personal_events.dart';
 import '../widgets/today_schedule_card.dart';
+import '../widgets/portfolio_generation_dialog.dart';
 import 'lessons_today_section.dart';
 
 /// 학생 본인 계정의 홈 탭.
@@ -127,15 +128,29 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
           ),
         ),
         const SizedBox(height: 10),
-        if (widget.onOpenTimetable != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: widget.onOpenTimetable,
-              icon: const Icon(Icons.event_busy_outlined, size: 18),
-              label: const Text('결석 신고 · 시간표'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            if (widget.onOpenTimetable != null)
+              TextButton.icon(
+                onPressed: widget.onOpenTimetable,
+                icon: const Icon(Icons.event_busy_outlined, size: 18),
+                label: const Text('결석 신고 · 시간표'),
+              ),
+            TextButton.icon(
+              onPressed: () {
+                showPortfolioGenerationDialog(
+                  context,
+                  controller: controller,
+                  initialChildId: childId,
+                );
+              },
+              icon: const Icon(Icons.auto_stories_outlined, size: 18),
+              label: const Text('나의 한 학기 포트폴리오'),
             ),
-          ),
+          ],
+        ),
         if (noEnrollments) ...[
           _buildNoticeCard(
             context,
@@ -753,6 +768,8 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
               AnnouncementAttachmentList(
                 attachments: controller.attachmentsForAnnouncement(a.id),
                 resolveUrl: controller.mediaPublicUrl,
+                downloadBytes: (path) =>
+                    controller.downloadMediaBytes(storagePath: path),
               ),
             ],
           ],

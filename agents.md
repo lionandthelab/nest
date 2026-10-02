@@ -132,12 +132,24 @@ final isWide = MediaQuery.of(context).size.width > 800;
 // 넓은 화면: Row 레이아웃, 좁은 화면: Column/스크롤
 ```
 
+#### 3D 클레이모피즘 애셋 확보 및 활용
+
+```dart
+// 주요 신규 기능/탭/카드 디자인 시:
+// 1. scripts/blender/ 스크립트를 작성/실행하여 3D 클레이 에셋 렌더링 (512x512 투명 PNG)
+// 2. frontend/assets/3d/ 에 저장
+// 3. Nest3dIcon 에 전용 생성자 등록 후 UI에 부유 모션과 함께 활용
+Nest3dIcon.portfolio(size: 36, floating: true)
+Nest3dIcon.camera(size: 28, floating: true)
+```
+
 ### 금지 사항
 
 - DropdownButton 직접 사용 (→ `showSelectSheet` 사용)
 - Navigator.push로 화면 전환 (→ 탭 기반 네비게이션 유지)
 - 새 패키지 의존성 추가 (논의 필요)
 - 색상 하드코딩
+- 3D 클레이모피즘 시그니처 스타일 무시 및 평면 아이콘만으로 핵심 기능 화면 구성 (Blender 에셋 생성 및 `Nest3dIcon` 연계 필수)
 
 ---
 

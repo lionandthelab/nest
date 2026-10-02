@@ -53,6 +53,8 @@ dependencies:
   # 패키지는 이미 512px로 줄어든 버퍼를 JPEG로 감싸는 일만 한다. 순수 Dart라
   # iOS/Android 빌드 설정을 건드리지 않는다.
   image: ^4.10.1
+  pdf: ^3.12.0
+  printing: ^5.14.3
 
 dev_dependencies:
   flutter_test:

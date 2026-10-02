@@ -10,6 +10,7 @@ import '../widgets/nest_empty_state.dart';
 import 'timetable/course_lesson_sheet.dart';
 import '../widgets/nest_section_header.dart';
 import '../widgets/nest_sheet.dart';
+import '../widgets/portfolio_generation_dialog.dart';
 
 class FamilyAdminTab extends StatefulWidget {
   const FamilyAdminTab({
@@ -1454,6 +1455,18 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       )
                     : null,
                 actions: [
+                  if (initial != null)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        showPortfolioGenerationDialog(
+                          context,
+                          controller: controller,
+                          initialChildId: initial.id,
+                        );
+                      },
+                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      label: const Text('포트폴리오'),
+                    ),
                   OutlinedButton(
                     onPressed: isSaving
                         ? null

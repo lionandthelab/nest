@@ -2829,3 +2829,129 @@ class NotificationInboxItem {
     );
   }
 }
+
+/// 학기별 학생 학습 포트폴리오 및 종합의견 모델
+class StudentSemesterReview {
+  const StudentSemesterReview({
+    required this.id,
+    required this.homeschoolId,
+    required this.termId,
+    required this.childId,
+    this.teacherEvaluation = '',
+    this.parentEvaluation = '',
+    this.studentReflection = '',
+    this.attendanceNote = '',
+    this.createdByUserId,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String homeschoolId;
+  final String termId;
+  final String childId;
+  final String teacherEvaluation;
+  final String parentEvaluation;
+  final String studentReflection;
+  final String attendanceNote;
+  final String? createdByUserId;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory StudentSemesterReview.fromMap(Map<String, dynamic> map) {
+    return StudentSemesterReview(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      termId: (map['term_id'] as String?) ?? '',
+      childId: (map['child_id'] as String?) ?? '',
+      teacherEvaluation: (map['teacher_evaluation'] as String?) ?? '',
+      parentEvaluation: (map['parent_evaluation'] as String?) ?? '',
+      studentReflection: (map['student_reflection'] as String?) ?? '',
+      attendanceNote: (map['attendance_note'] as String?) ?? '',
+      createdByUserId: map['created_by_user_id'] as String?,
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'homeschool_id': homeschoolId,
+    'term_id': termId,
+    'child_id': childId,
+    'teacher_evaluation': teacherEvaluation,
+    'parent_evaluation': parentEvaluation,
+    'student_reflection': studentReflection,
+    'attendance_note': attendanceNote,
+    if (createdByUserId != null) 'created_by_user_id': createdByUserId,
+  };
+
+  StudentSemesterReview copyWith({
+    String? id,
+    String? homeschoolId,
+    String? termId,
+    String? childId,
+    String? teacherEvaluation,
+    String? parentEvaluation,
+    String? studentReflection,
+    String? attendanceNote,
+    String? createdByUserId,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return StudentSemesterReview(
+      id: id ?? this.id,
+      homeschoolId: homeschoolId ?? this.homeschoolId,
+      termId: termId ?? this.termId,
+      childId: childId ?? this.childId,
+      teacherEvaluation: teacherEvaluation ?? this.teacherEvaluation,
+      parentEvaluation: parentEvaluation ?? this.parentEvaluation,
+      studentReflection: studentReflection ?? this.studentReflection,
+      attendanceNote: attendanceNote ?? this.attendanceNote,
+      createdByUserId: createdByUserId ?? this.createdByUserId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
+
+/// 한 학기 포트폴리오 생성을 위해 취합된 전체 데이터 번들
+class StudentPortfolioBundle {
+  const StudentPortfolioBundle({
+    required this.homeschool,
+    required this.term,
+    required this.child,
+    this.family,
+    this.classGroup,
+    this.mainTeacher,
+    required this.totalSchoolDays,
+    required this.attendedDays,
+    required this.absentDays,
+    this.absenceRecords = const [],
+    this.courses = const [],
+    this.courseLessons = const [],
+    this.activityLogs = const [],
+    this.academicEvents = const [],
+    this.selfStudyPlans = const [],
+    this.photos = const [],
+    this.review,
+  });
+
+  final Homeschool homeschool;
+  final Term term;
+  final ChildProfile child;
+  final Family? family;
+  final ClassGroup? classGroup;
+  final TeacherProfile? mainTeacher;
+  final int totalSchoolDays;
+  final int attendedDays;
+  final int absentDays;
+  final List<AbsenceReport> absenceRecords;
+  final List<Course> courses;
+  final List<CourseLesson> courseLessons;
+  final List<StudentActivityLog> activityLogs;
+  final List<AcademicEvent> academicEvents;
+  final List<SelfStudyPlan> selfStudyPlans;
+  final List<GalleryItem> photos;
+  final StudentSemesterReview? review;
+}
+

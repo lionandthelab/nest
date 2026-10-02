@@ -626,7 +626,7 @@ Admin dashboard onboarding:
 - `NestController.loadAnnouncements()`가 공지 목록과 함께 첨부파일을 `announcement_id` 기준으로 한 번에 불러와 `announcementAttachmentsByAnnouncement`에 채운다. `attachmentsForAnnouncement(id)`로 조회한다.
 - `createAnnouncement`/`updateAnnouncement`는 `List<PendingMediaFile>` 파라미터(`attachments`/`newAttachments`)를 받아, 공지 행을 만들거나 수정한 **뒤** 같은 `_runBusy` 블록 안에서 업로드·삽입까지 마친다. 파일 선택 자체(`pickAnnouncementAttachments`)는 컨트롤러 상태를 바꾸지 않는 순수 호출이고, 고른 파일은 호출부(편집 시트)가 로컬 상태로 들고 있다가 저장 시점에 넘긴다.
 - 삭제는 `deleteAnnouncement`와 같은 이유로 `.select('id')`로 실제 삭제 행 수를 돌려받는다. 스토리지 객체 삭제는 best-effort(실패해도 DB 행 삭제는 진행) — 고아 파일보다 "삭제가 안 되는 것처럼 보이는 것"이 더 나쁘다.
-- UI는 `widgets/announcement_attachments.dart`의 `AnnouncementAttachmentList`(칩 목록, 탭하면 `url_launcher`로 공개 URL을 연다)를 관리자 소식 탭·교사 반 공지 위젯·학부모/학생 홈 공지 배너가 공유한다. 삭제 버튼은 `onDelete`를 넘긴 편집 화면에서만 나타난다.
+- UI는 `widgets/announcement_attachments.dart`의 `AnnouncementAttachmentList`를 관리자 소식 탭·학부모 소식 탭·교사 반 공지 위젯·학부모/학생 홈 공지 배너가 공유한다. 이미지는 카드 안에 바로 보이고 누르면 크게 본다. PDF와 텍스트는 앱 안 미리보기로 연다(PDF는 이미 의존하는 `printing`의 `PdfPreview`, 바이트는 `downloadMediaBytes`). 한글·오피스·압축 파일은 기기의 기본 앱으로 연다. 삭제 버튼은 `onDelete`를 넘긴 편집 화면에서만 나타난다.
 
 ### 6.20 수업 회차 내용 (Course Lessons, 2026-08)
 
@@ -848,7 +848,7 @@ DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
 
 최신 프로덕트 디자인 트렌드(Claymorphism, Tactile UI, Neumorphic Depth)를 반영하여 입체감 있는 3D 비주얼 시스템을 구축했다.
 
-1. **3D 브랜드 아이덴티티 및 에셋 6종**:
+1. **3D 브랜드 아이덴티티 및 에셋 라인업**:
    - `assets/logo_3d_mark.png`, `assets/logo_3d_app_icon.png`: 새싹·새·둥지 결합형 3D 파스텔 엠블럼 및 앱 아이콘
    - `assets/3d/announcement_3d.png`: 공지사항 확성기
    - `assets/3d/calendar_3d.png`: 학사 캘린더 (빈 상태 및 시간표)
@@ -856,6 +856,9 @@ DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
    - `assets/3d/tips_lightbulb_3d.png`: 표정이 있는 홈스쿨 팁 전구
    - `assets/3d/empty_nest_3d.png`: 포근한 빈 둥지 (Zero Data)
    - `assets/3d/achievement_star_3d.png`: 성취 골든 스타 (뱃지/완료)
+   - `assets/3d/portfolio_binder_3d.png`: 한 학기 성장 바인더 (Blender Cycles 렌더링)
+   - `assets/3d/camera_memory_3d.png`: 추억 앨범 레트로 카메라 (Blender Cycles 렌더링)
+   - `assets/3d/ribbon_badge_3d.png`: 공식 승인 리본 메달 (Blender Cycles 렌더링)
 2. **마이크로 모션 그래픽 (`Floating3DWidget`, `Nest3dIcon`)**:
    - 부유하는 사인파 앰비언트 모션 및 높낮이에 연동된 가변 소프트 드롭 섀도우
    - 테스트 환경(`TestWidgetsFlutterBinding`) 자동 감지로 `pumpAndSettle` 무한 루프 방지
@@ -868,6 +871,41 @@ DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
 
 - 공지사항 작성 시 이미지나 문서 등의 파일을 Supabase Storage(`announcements` 버킷)에 업로드
 - 첨부파일 메타데이터(URL, 파일명, 크기)를 보관하며, 상세 화면에서 첨부파일 칩/뱃지 표시 및 다운로드/열람 지원
+
+### 6.28 학기별 학습 포트폴리오 생성 (PDF, 2026-09)
+
+- **배경**: 홈스쿨링 학생의 의무교육 유예 심의, 정원외 학적관리, 초·중·고 전·편입학 시 학습 인정 증빙 자료로 활용할 수 있는 공적 생활기록부 대체 포트폴리오 및 가정 소장용 성장 앨범의 필요성.
+- **포트폴리오 구성**:
+  1. **표지 (Cover)**: 학년도·학기 명칭, 학생 인적사항, 소속 기관 및 학급, 발급일자, 직인란
+  2. **1. 인적·학적 사항 & 2. 출결 상황 총괄표**: 학생/보호자/기관 정보, 총수업일수, 출석일수, 결석일수, 출석률, 결석 사유 상세 내역 및 출결 특기사항
+  3. **3. 교과학습 발달상황**: 이수 교과목, 주당 시수/수업시간, 회차별 주요 학습 진도(`course_lessons`), 수업 관찰 및 과제 기록(`student_activity_logs`)
+  4. **4. 창의적 체험활동 & 자율학습**: 학사 행사 및 현장체험학습(`academic_events`), 자기주도학습 계획 및 실천(`self_study_plans`)
+  5. **5. 행동특성 및 종합의견**: 담임(지도) 교사 종합의견, 학부모 관찰 총평, 학생 성찰 소감문, 최종 확인 문구 및 직인/서명란
+  6. **6. 활동 사진 포트폴리오 (추억 앨범)**: 2x2 카드 그리드 (선명한 사진, 촬영일자 뱃지, 활동명 및 캡션)
+- **기술 스택**:
+  - `pdf` 및 `printing` 패키지: A4 벡터 그래픽, 표, 이미지 및 다중 페이지 레이아웃 지원
+  - 번들 폰트(`DoHyeon`, `Jua` TTF) 직접 임베딩으로 웹/모바일 전 플랫폼에서 깨짐 없는 선명한 한글 렌더링
+  - 웹 `DownloadHelper`를 통한 PDF 직다운로드 및 모바일 시스템 공유/인쇄(`Printing.sharePdf`, `Printing.layoutPdf`)
+- **접근 동선**:
+  - 학부모 홈 / 학습 현황 탭: `[학기 학습 포트폴리오 (PDF)]` / `[포트폴리오 생성]` 버튼
+  - 관리자 학기 설정(FamilyAdminTab): 아동 수정 다이얼로그 `[포트폴리오]` 버튼
+  - 교사 허브(TeacherHubTab): 수업 노트 카드 `[포트폴리오 생성]` 버튼
+  - 학생 홈(StudentHomeTab): `[나의 한 학기 포트폴리오]` 버튼
+
+### 6.29 3D 클레이 성장 바인더 뷰어 및 Blender 애셋 파이프라인 (2026-09)
+
+- **Blender 3D 클레이 파이프라인 (`scripts/blender/`)**:
+  - 일관된 3D 점토 질감의 에셋을 절차적으로 제작하고 AgX 컬러 매니지먼트 및 3점 소프트 스튜디오 라이팅으로 렌더링하는 Headless 파이프라인(`render_portfolio_clay_assets.py`) 구축.
+  - 신규 3D 에셋 3종: `portfolio_binder_3d.png`(가죽 성장 바인더), `camera_memory_3d.png`(추억 앨범 레트로 카메라), `ribbon_badge_3d.png`(공식 승인 리본 메달).
+  - `Nest3dIcon` 전용 생성자 등록 및 부유 모션(`Floating3DWidget`) 적용.
+- **성장 바인더 실제 앱 뷰어 (`PortfolioBinderView`)**:
+  - 포트폴리오 생성 다이얼로그의 첫 번째 탭으로 전면 배치.
+  - 좌측 페이지: 학생 정보, 학기 출결 현황 타일 보드, 교과목별 파스텔 알약형(Pill) 프로그레스 바, 공식 학교 증빙 승인 스탬프.
+  - 우측 페이지: 마스킹 테이프가 붙은 폴라로이드 사진 프레임 갤러리, 학생 자기 성찰 소감문 카드, 교사 및 부모님 종합 격려 피드백.
+  - 와이드 듀얼 페이지 바인더 힌지/인덱스 탭과 모바일 반응형 단일 컬럼 레이아웃 완비.
+- **한국어 실 화면 캡처 및 홍보 자산**:
+  - `capture_portfolio_binder_shot_test.dart`를 통해 100% 한국어 데이터가 바인딩된 실제 앱 화면을 네이티브 렌더링하여 고화질 캡처.
+  - 태블릿 디바이스 목업 및 데스크 환경의 1:1 쇼케이스 카드, 16:9 와이드 홍보 배너 제작.
 
 ## 7. Database and RLS Notes
 
@@ -1027,6 +1065,15 @@ Migration `20260912020000_term_schedule_pack.sql`:
 Migration `20260928150000_personal_events_policies_fix.sql`:
 
 - `personal_events` — RLS 정책 보강: 관리자/스태프(`HOMESCHOOL_ADMIN`, `STAFF`) 및 작성자 본인(`owner_user_id = auth.uid()`)의 SELECT/INSERT/UPDATE/DELETE 권한 명시. 관리자가 자녀 일정을 등록하거나 부모/관리자 모드에서 개인 일정을 추가할 때 RLS 위반 에러가 발생하지 않도록 수정
+
+### 7.10 Student Semester Reviews (2026-09)
+
+Migration `20260929100000_student_semester_reviews.sql`:
+
+- `student_semester_reviews` — 학기별 아동 종합의견 및 성찰 기록 테이블
+  - 컬럼: `id`, `homeschool_id`, `term_id`, `child_id`, `teacher_evaluation`, `parent_evaluation`, `student_reflection`, `attendance_note`, `created_by_user_id`, `created_at`, `updated_at`
+  - 제약조건: UNIQUE(`term_id`, `child_id`)
+  - RLS: 홈스쿨 회원(`is_homeschool_member`) SELECT 허용, 교사/스태프/관리자(`has_homeschool_role`) 및 해당 아동의 보호자(`family_guardians`) INSERT/UPDATE 허용
 
 
 ## 8. Environment Variables

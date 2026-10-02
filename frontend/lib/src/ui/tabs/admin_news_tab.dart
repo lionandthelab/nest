@@ -178,6 +178,8 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
               authorLabel: controller.findMemberName(notice.authorUserId),
               attachments: controller.attachmentsForAnnouncement(notice.id),
               resolveUrl: controller.mediaPublicUrl,
+              downloadBytes: (path) =>
+                  controller.downloadMediaBytes(storagePath: path),
               busy: controller.isBusy,
               onEdit: () => _openNoticeEditor(notice: notice),
               onTogglePin: () => _toggleNoticePin(notice),
@@ -519,6 +521,7 @@ class _NoticeCard extends StatelessWidget {
     required this.authorLabel,
     required this.attachments,
     required this.resolveUrl,
+    required this.downloadBytes,
     required this.busy,
     required this.onEdit,
     required this.onTogglePin,
@@ -530,6 +533,7 @@ class _NoticeCard extends StatelessWidget {
   final String authorLabel;
   final List<AnnouncementAttachment> attachments;
   final String? Function(String) resolveUrl;
+  final AnnouncementBytesLoader downloadBytes;
   final bool busy;
   final VoidCallback onEdit;
   final VoidCallback onTogglePin;
@@ -635,6 +639,7 @@ class _NoticeCard extends StatelessWidget {
                   AnnouncementAttachmentList(
                     attachments: attachments,
                     resolveUrl: resolveUrl,
+                    downloadBytes: downloadBytes,
                   ),
                 ],
               ],
@@ -1083,29 +1088,16 @@ class _NoticeEditorSheetState extends State<_NoticeEditorSheet> {
                 AnnouncementAttachmentList(
                   attachments: _existingAttachments,
                   resolveUrl: widget.controller.mediaPublicUrl,
+                  downloadBytes: (path) =>
+                      widget.controller.downloadMediaBytes(storagePath: path),
                   onDelete: _deleteExistingAttachment,
                 ),
               ],
               if (_pendingAttachments.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < _pendingAttachments.length;
-                      index++
-                    )
-                      InputChip(
-                        avatar: const Icon(Icons.upload_file, size: 16),
-                        label: Text(
-                          '${_pendingAttachments[index].name} (${formatAttachmentSize(_pendingAttachments[index].sizeBytes)})',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onDeleted: () => _removePendingAttachment(index),
-                      ),
-                  ],
+                PendingAnnouncementAttachments(
+                  files: _pendingAttachments,
+                  onRemove: _removePendingAttachment,
                 ),
               ],
               const SizedBox(height: 12),

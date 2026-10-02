@@ -9,6 +9,7 @@ import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
+import '../widgets/portfolio_generation_dialog.dart';
 
 class ParentProgressTab extends StatelessWidget {
   const ParentProgressTab({
@@ -64,7 +65,21 @@ class ParentProgressTab extends StatelessWidget {
             color: NestColors.deepWood.withValues(alpha: 0.76),
           ),
           const SizedBox(width: 8),
-          Text('학습 현황', style: Theme.of(context).textTheme.titleLarge),
+          Expanded(
+            child: Text('학습 현황', style: Theme.of(context).textTheme.titleLarge),
+          ),
+          if (selectedChildId != null)
+            OutlinedButton.icon(
+              onPressed: () {
+                showPortfolioGenerationDialog(
+                  context,
+                  controller: controller,
+                  initialChildId: selectedChildId,
+                );
+              },
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+              label: const Text('포트폴리오 생성'),
+            ),
         ],
       ),
       const SizedBox(height: 8),

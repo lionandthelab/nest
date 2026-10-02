@@ -434,3 +434,29 @@ services/
 - 기존 코드의 동작을 변경하면서 관련 테스트를 제거
 - 기존 마이그레이션 파일 수정 (항상 새 마이그레이션으로)
 - `pubspec.yaml`에 이 파일에 언급되지 않은 상태관리 패키지 추가
+
+---
+
+## 11. 3D 클레이모피즘 비주얼 & Blender 애셋 파이프라인
+
+Nest의 시그니처 비주얼은 **따뜻한 3D 클레이모피즘(Claymorphism)과 파스텔 컬러 시스템**입니다.
+새로운 핵심 기능(포트폴리오, 알림, 성취, 도메인 허브 등) 기획 및 UI 디자인 시 **Blender를 통해 일관된 3D 클레이 애셋을 직접 생성/확보하고, Flutter UI에 활용**하는 것을 원칙으로 합니다.
+
+### 3D 애셋 제작 및 렌더링 규칙
+1. **스크립트 경로**: `scripts/blender/` (예: `render_portfolio_clay_assets.py`)
+2. **렌더링 실행**:
+   ```bash
+   /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/blender/<렌더스크립트>.py
+   ```
+3. **디자인 및 머티리얼 가이드**:
+   - **색상**: `NestColors.dustyRose` (`#F79D8E`), `mutedSage` (`#90D5AF`), `butterGold` (`#FFD166`), `creamyWhite` (`#FDFBF7`)
+   - **머티리얼**: Principled BSDF, Roughness 0.32~0.38, Subsurface Weight 0.20~0.25 (말랑하고 따뜻한 점토/클레이 텍스처)
+   - **조명**: 3점 스튜디오 소프트 라이팅 (Warm Key Light, Cool Sky Fill, Rim Light)
+   - **출력 규격**: 512x512 해상도, 투명 배경(Film Transparent) RGBA PNG
+4. **애셋 저장 위치**: `frontend/assets/3d/`
+   - 기존 6종: `announcement_3d.png`, `calendar_3d.png`, `study_books_3d.png`, `tips_lightbulb_3d.png`, `empty_nest_3d.png`, `achievement_star_3d.png`
+   - 신규 포트폴리오 에셋: `portfolio_binder_3d.png`, `camera_memory_3d.png`, `ribbon_badge_3d.png`
+5. **위젯 바인딩**:
+   - `frontend/lib/src/ui/widgets/nest_3d_icon.dart`의 전용 생성자(`Nest3dIcon.portfolio()`, `Nest3dIcon.camera()`, `Nest3dIcon.certificate()` 등) 활용
+   - 부유 모션(`Floating3DWidget`) 및 터치 햅틱 반응을 제공하며, 헤더·카드·빈 상태·배지에 적극 활용
+

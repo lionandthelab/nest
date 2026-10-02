@@ -4188,6 +4188,95 @@ class NestRepository {
 
     return rows;
   }
+
+  /// 학기별 아동 종합의견/평가 조회
+  Future<StudentSemesterReview?> fetchSemesterReview({
+    required String termId,
+    required String childId,
+  }) async {
+    try {
+      final data = await client
+          .from('student_semester_reviews')
+          .select()
+          .eq('term_id', termId)
+          .eq('child_id', childId)
+          .maybeSingle();
+
+      if (data == null) {
+        return null;
+      }
+      return StudentSemesterReview.fromMap(data);
+    } on PostgrestException catch (e) {
+      if (_isMissingSchemaObject(e, 'student_semester_reviews')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// 학기별 아동 종합의견/평가 저장 또는 갱신
+  Future<StudentSemesterReview> upsertSemesterReview(
+    StudentSemesterReview review,
+  ) async {
+    final payload = review.toMap();
+    final data = await client
+        .from('student_semester_reviews')
+        .upsert(payload, onConflict: 'term_id,child_id')
+        .select()
+        .single();
+    return StudentSemesterReview.fromMap(data);
+  }
+
+  /// 학기 포트폴리오용 사진 목록 (아동 태그 사진 우선, 소속 반 사진 순)
+  Future<List<GalleryItem>> fetchPortfolioPhotos({
+    required String homeschoolId,
+    required String termId,
+    required String childId,
+    String? classGroupId,
+  }) async {
+    try {
+      // 1) 아동이 태그된 사진 ID 조회
+      final taggedChildRows = await client
+          .from('media_asset_children')
+          .select('media_asset_id')
+          .eq('child_id', childId);
+      final taggedAssetIds = _asRows(taggedChildRows)
+          .map((r) => r['media_asset_id'] as String?)
+          .whereType<String>()
+          .toSet();
+
+      // 2) 해당 학기의 사진 미디어 조회
+      final rows = await client
+          .from('media_assets')
+          .select(_albumColumns)
+          .eq('homeschool_id', homeschoolId)
+          .eq('term_id', termId)
+          .eq('media_type', 'PHOTO')
+          .order('captured_at', ascending: false)
+          .limit(80);
+
+      final allItems = _asRows(rows).map(GalleryItem.fromMap).toList();
+
+      final taggedItems = <GalleryItem>[];
+      final classItems = <GalleryItem>[];
+      final otherItems = <GalleryItem>[];
+
+      for (final item in allItems) {
+        if (taggedAssetIds.contains(item.id)) {
+          taggedItems.add(item);
+        } else if (classGroupId != null && item.classGroupId == classGroupId) {
+          classItems.add(item);
+        } else {
+          otherItems.add(item);
+        }
+      }
+
+      return [...taggedItems, ...classItems, ...otherItems];
+    } catch (e) {
+      debugPrint('[Portfolio] fetchPortfolioPhotos error: $e');
+      return const [];
+    }
+  }
 }
 
 List<Map<String, dynamic>> _asRows(dynamic data) {

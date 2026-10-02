@@ -14,6 +14,7 @@ import '../widgets/search_select_field.dart';
 import '../widgets/today_schedule_card.dart';
 import 'timetable/class_change_dialog.dart';
 import 'timetable/course_lesson_sheet.dart';
+import '../widgets/portfolio_generation_dialog.dart';
 
 class TeacherHubTab extends StatefulWidget {
   const TeacherHubTab({
@@ -126,9 +127,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             .map((profile) => profile.id)
             .toList()
           ..sort();
-    final classIds =
-        controller.classGroups.map((group) => group.id).toList()
-          ..sort();
+    final classIds = controller.classGroups.map((group) => group.id).toList()
+      ..sort();
 
     final signature = '${profileIds.join(',')}::${classIds.join(',')}';
     if (_managedClassLoadSignature == signature) {
@@ -365,7 +365,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       days.add(slot.dayOfWeek);
       periodKeys.add(periodKey);
       final perDay = byPeriodDay.putIfAbsent(
-        periodKey, () => <int, List<ClassSession>>{},
+        periodKey,
+        () => <int, List<ClassSession>>{},
       );
       perDay.putIfAbsent(slot.dayOfWeek, () => <ClassSession>[]).add(session);
     }
@@ -403,8 +404,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 : 1.0;
             final timeColWidth = naturalTimeCol * scale;
             final dayColWidth = naturalDayCol * scale;
-            final columnsWidth =
-                timeColWidth + dayColWidth * sortedDays.length;
+            final columnsWidth = timeColWidth + dayColWidth * sortedDays.length;
             final boardWidth = columnsWidth + borderWidth * 2;
             final compactFont = scale < 0.85;
 
@@ -429,13 +429,17 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                         Container(
                           width: timeColWidth,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 12),
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: NestColors.creamyWhite,
                             border: Border(
                               left: BorderSide(
-                                  color: NestColors.roseMist
-                                      .withValues(alpha: 0.5)),
+                                color: NestColors.roseMist.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -444,20 +448,22 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                             width: dayColWidth,
                             alignment: Alignment.center,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 12),
+                              horizontal: 10,
+                              vertical: 12,
+                            ),
                             decoration: BoxDecoration(
                               color: NestColors.creamyWhite,
                               border: Border(
                                 left: BorderSide(
-                                    color: NestColors.roseMist
-                                        .withValues(alpha: 0.5)),
+                                  color: NestColors.roseMist.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
                               ),
                             ),
                             child: Text(
                               _dayLabel(day),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
+                              style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
@@ -476,8 +482,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                       decoration: BoxDecoration(
                         border: Border(
                           top: BorderSide(
-                            color:
-                                NestColors.roseMist.withValues(alpha: 0.55),
+                            color: NestColors.roseMist.withValues(alpha: 0.55),
                           ),
                         ),
                       ),
@@ -487,13 +492,13 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                             width: timeColWidth,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 4, vertical: 10),
+                                horizontal: 4,
+                                vertical: 10,
+                              ),
                               child: Text(
                                 startLabel,
                                 textAlign: TextAlign.center,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
+                                style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       fontWeight: FontWeight.w700,
                                       fontSize: compactFont ? 10 : 12,
@@ -510,8 +515,9 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                               decoration: BoxDecoration(
                                 border: Border(
                                   left: BorderSide(
-                                    color: NestColors.roseMist
-                                        .withValues(alpha: 0.45),
+                                    color: NestColors.roseMist.withValues(
+                                      alpha: 0.45,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -524,29 +530,31 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                                             .findCourseName(session.courseId);
                                         return Padding(
                                           padding: const EdgeInsets.only(
-                                              bottom: 4),
+                                            bottom: 4,
+                                          ),
                                           child: GestureDetector(
                                             onTap: () =>
                                                 _showSessionDetailModal(
-                                              context,
-                                              controller: controller,
-                                              session: session,
-                                              bundle: bundle,
-                                            ),
+                                                  context,
+                                                  controller: controller,
+                                                  session: session,
+                                                  bundle: bundle,
+                                                ),
                                             child: Container(
                                               width: double.infinity,
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 10),
+                                                    horizontal: 8,
+                                                    vertical: 10,
+                                                  ),
                                               decoration: BoxDecoration(
                                                 borderRadius:
                                                     BorderRadius.circular(10),
                                                 color: NestColors.roseMist
                                                     .withValues(alpha: 0.26),
                                                 border: Border.all(
-                                                    color:
-                                                        NestColors.roseMist),
+                                                  color: NestColors.roseMist,
+                                                ),
                                               ),
                                               child: Text(
                                                 courseName,
@@ -615,76 +623,81 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         return AnimatedBuilder(
           animation: controller,
           builder: (innerContext, _) => SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.menu_book_rounded, color: NestColors.clay),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      courseName,
-                      style: Theme.of(context).textTheme.titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w800),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.menu_book_rounded, color: NestColors.clay),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        courseName,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  bundle.classGroup.name,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.7),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.close),
+                ),
+                const SizedBox(height: 16),
+                _sessionDetailRow(Icons.schedule_outlined, '시간', timeLabel),
+                const Divider(height: 24),
+                _sessionDetailRow(Icons.school_outlined, '담당 교사', teacherLabel),
+                const Divider(height: 24),
+                _sessionDetailRow(
+                  Icons.meeting_room_outlined,
+                  '장소',
+                  locationLabel,
+                ),
+                // 날짜별 진도 내용. 회차는 과목에 매달려 있으므로 같은 과목을
+                // 쓰는 다른 반에도 같은 내용이 함께 보인다.
+                const Divider(height: 24),
+                CourseLessonSummary(
+                  controller: controller,
+                  courseId: session.courseId,
+                  referenceDate: courseLessonReferenceDate(controller, slot),
+                ),
+                // 담당 교사/관리자만: 이 수업의 휴강·시간/장소 변경·보강 공지 등록.
+                if (controller.canManageClassSessionChanges) ...[
+                  const Divider(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        showClassSessionChangeSheet(
+                          context: context,
+                          controller: controller,
+                          classSessionId: session.id,
+                        );
+                      },
+                      icon: const Icon(Icons.published_with_changes),
+                      label: Text(
+                        controller.changesForSession(session.id).isEmpty
+                            ? '수업 변경 공지'
+                            : '수업 변경 공지 '
+                                  '(${controller.changesForSession(session.id).length})',
+                      ),
+                    ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                bundle.classGroup.name,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 16),
-              _sessionDetailRow(Icons.schedule_outlined, '시간', timeLabel),
-              const Divider(height: 24),
-              _sessionDetailRow(Icons.school_outlined, '담당 교사', teacherLabel),
-              const Divider(height: 24),
-              _sessionDetailRow(Icons.meeting_room_outlined, '장소', locationLabel),
-              // 날짜별 진도 내용. 회차는 과목에 매달려 있으므로 같은 과목을
-              // 쓰는 다른 반에도 같은 내용이 함께 보인다.
-              const Divider(height: 24),
-              CourseLessonSummary(
-                controller: controller,
-                courseId: session.courseId,
-                referenceDate: courseLessonReferenceDate(controller, slot),
-              ),
-              // 담당 교사/관리자만: 이 수업의 휴강·시간/장소 변경·보강 공지 등록.
-              if (controller.canManageClassSessionChanges) ...[
-                const Divider(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      showClassSessionChangeSheet(
-                        context: context,
-                        controller: controller,
-                        classSessionId: session.id,
-                      );
-                    },
-                    icon: const Icon(Icons.published_with_changes),
-                    label: Text(
-                      controller.changesForSession(session.id).isEmpty
-                          ? '수업 변경 공지'
-                          : '수업 변경 공지 '
-                                '(${controller.changesForSession(session.id).length})',
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 16),
               ],
-              const SizedBox(height: 16),
-            ],
-          ),
+            ),
           ),
         );
       },
@@ -909,26 +922,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
               ),
               if (_announceAttachments.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < _announceAttachments.length;
-                      index++
-                    )
-                      InputChip(
-                        avatar: const Icon(Icons.upload_file, size: 16),
-                        label: Text(
-                          '${_announceAttachments[index].name} (${formatAttachmentSize(_announceAttachments[index].sizeBytes)})',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onDeleted: () => setState(
-                          () => _announceAttachments.removeAt(index),
-                        ),
-                      ),
-                  ],
+                PendingAnnouncementAttachments(
+                  files: _announceAttachments,
+                  onRemove: (index) =>
+                      setState(() => _announceAttachments.removeAt(index)),
                 ),
               ],
               const SizedBox(height: 8),
@@ -978,6 +975,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                           child: AnnouncementAttachmentList(
                             attachments: attachments,
                             resolveUrl: controller.mediaPublicUrl,
+                            downloadBytes: (path) => controller
+                                .downloadMediaBytes(storagePath: path),
                           ),
                         ),
                     ],
@@ -1043,7 +1042,24 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('수업 노트', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('수업 노트', style: Theme.of(context).textTheme.titleLarge),
+                if (selectedChild != null)
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      showPortfolioGenerationDialog(
+                        context,
+                        controller: controller,
+                        initialChildId: selectedChild.id,
+                      );
+                    },
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                    label: const Text('포트폴리오 생성'),
+                  ),
+              ],
+            ),
             const SizedBox(height: 8),
             if (selectedBundle == null)
               _buildEmptyHint('반을 먼저 선택하세요.')
@@ -1209,11 +1225,10 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     final myTeacherIds = controller.currentUserTeacherProfiles
         .map((profile) => profile.id)
         .toSet();
-    final assigned =
-        (bundle?.assignments ?? const <SessionTeacherAssignment>[])
-            .where((row) => myTeacherIds.contains(row.teacherProfileId))
-            .map((row) => row.classSessionId)
-            .toSet();
+    final assigned = (bundle?.assignments ?? const <SessionTeacherAssignment>[])
+        .where((row) => myTeacherIds.contains(row.teacherProfileId))
+        .map((row) => row.classSessionId)
+        .toSet();
     if (assigned.isNotEmpty) {
       return assigned;
     }
@@ -1399,9 +1414,9 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
             if (reports.isEmpty)
               _buildEmptyHint('접수된 결석 신고가 없습니다.')
             else
-              ...reports.take(30).map(
-                (report) => _buildAbsenceRow(controller, report),
-              ),
+              ...reports
+                  .take(30)
+                  .map((report) => _buildAbsenceRow(controller, report)),
           ],
         ),
       ),
@@ -1487,9 +1502,9 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                 const SizedBox(height: 3),
                 Text(
                   _absenceDateLabel(report.occurrenceDate),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1549,9 +1564,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
     required List<SessionTeacherAssignment> assignments,
   }) {
     final rows =
-        assignments
-            .where((row) => row.classSessionId == sessionId)
-            .toList()
+        assignments.where((row) => row.classSessionId == sessionId).toList()
           ..sort((a, b) {
             final left = a.assignmentRole == 'MAIN' ? 0 : 1;
             final right = b.assignmentRole == 'MAIN' ? 0 : 1;
@@ -1906,7 +1919,13 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
 
   String _dayLabel(int dayOfWeek) {
     const labels = <int, String>{
-      0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토',
+      0: '일',
+      1: '월',
+      2: '화',
+      3: '수',
+      4: '목',
+      5: '금',
+      6: '토',
     };
     return labels[dayOfWeek] ?? '$dayOfWeek';
   }

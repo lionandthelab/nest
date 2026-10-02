@@ -105,6 +105,39 @@ class Nest3dIcon extends StatelessWidget {
     this.onTap,
   }) : assetPath = 'assets/logo_3d_mark.png';
 
+  /// 학습 포트폴리오 바인더 (Blender 3D 렌더링)
+  const Nest3dIcon.portfolio({
+    super.key,
+    this.size = 44.0,
+    this.floating = false,
+    this.floatDistance = 4.0,
+    this.duration = const Duration(milliseconds: 2300),
+    this.fit = BoxFit.contain,
+    this.onTap,
+  }) : assetPath = 'assets/3d/portfolio_binder_3d.png';
+
+  /// 추억 앨범 레트로 카메라 (Blender 3D 렌더링)
+  const Nest3dIcon.camera({
+    super.key,
+    this.size = 44.0,
+    this.floating = false,
+    this.floatDistance = 4.0,
+    this.duration = const Duration(milliseconds: 2200),
+    this.fit = BoxFit.contain,
+    this.onTap,
+  }) : assetPath = 'assets/3d/camera_memory_3d.png';
+
+  /// 공식 승인 리본 메달 (Blender 3D 렌더링)
+  const Nest3dIcon.certificate({
+    super.key,
+    this.size = 44.0,
+    this.floating = false,
+    this.floatDistance = 4.0,
+    this.duration = const Duration(milliseconds: 2100),
+    this.fit = BoxFit.contain,
+    this.onTap,
+  }) : assetPath = 'assets/3d/ribbon_badge_3d.png';
+
   final String assetPath;
   final double size;
   final bool floating;
