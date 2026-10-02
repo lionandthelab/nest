@@ -29,6 +29,7 @@ import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'tabs/timetable_workspace_tab.dart';
 import 'widgets/nest_motion.dart';
+import 'widgets/nest_3d_icon.dart';
 import 'widgets/notification_onboarding.dart';
 import 'widgets/notification_inbox_sheet.dart';
 import 'widgets/term_navigator_bar.dart';
@@ -938,8 +939,9 @@ class _DesktopScaffold extends StatelessWidget {
             destinations: labels
                 .map(
                   (label) => NavigationRailDestination(
-                    icon: _iconForLabel(label, filled: false),
-                    selectedIcon: _iconForLabel(label, filled: true),
+                    icon: _iconForLabel(label, filled: false, size: 26),
+                    selectedIcon:
+                        _iconForLabel(label, filled: true, size: 28),
                     label: Text(label),
                   ),
                 )
@@ -1176,8 +1178,11 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
           child: NestDockBar(
             selectedIndex: widget.currentIndex,
             labels: widget.labels,
-            iconOf: (label, {required bool selected}) =>
-                _iconForLabel(label, filled: selected),
+            iconOf: (label, {required bool selected}) => _iconForLabel(
+              label,
+              filled: selected,
+              size: selected ? 26 : 24,
+            ),
             onSelect: widget.onSelectIndex,
           ),
         ),
@@ -1526,7 +1531,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                           ? '9+'
                           : '${controller.inboxBadgeCount}',
                     ),
-                    child: const Icon(Icons.notifications_outlined),
+                    child: const Nest3dIcon.bell(size: 26),
                   ),
                 ),
               ),
@@ -2317,7 +2322,7 @@ class _MainPanelState extends State<_MainPanel> {
                       ),
                     );
                   },
-            icon: const Icon(Icons.settings_outlined, size: 20),
+            icon: const Nest3dIcon.system(size: 22),
             visualDensity: VisualDensity.compact,
           ),
           PopupMenuButton<String>(
@@ -3174,44 +3179,12 @@ class _ContextOption {
   final String subtitle;
 }
 
-Icon _iconForLabel(String label, {required bool filled}) {
-  return switch (label) {
-    '시작하기' => Icon(filled ? Icons.home_work : Icons.home_work_outlined),
-    '대시보드' => Icon(filled ? Icons.home_work : Icons.home_work_outlined),
-    'Dashboard' => Icon(filled ? Icons.home_work : Icons.home_work_outlined),
-    '홈' => Icon(filled ? Icons.home : Icons.home_outlined),
-    '시간표' => Icon(
-      filled ? Icons.calendar_view_week : Icons.calendar_view_week_outlined,
-    ),
-    '자습' => Icon(filled ? Icons.menu_book : Icons.menu_book_outlined),
-    '학습 현황' => Icon(filled ? Icons.insights : Icons.insights_outlined),
-    '소식' => Icon(filled ? Icons.newspaper : Icons.newspaper_outlined),
-    'Teacher Hub' => Icon(filled ? Icons.school : Icons.school_outlined),
-    'Timetable' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
-    'Schedule' => Icon(filled ? Icons.view_week : Icons.view_week_outlined),
-    '학기 설정' => Icon(filled ? Icons.account_tree : Icons.account_tree_outlined),
-    'Term Setup' => Icon(
-      filled ? Icons.account_tree : Icons.account_tree_outlined,
-    ),
-    '시스템' => Icon(filled ? Icons.tune : Icons.tune_outlined),
-    'System' => Icon(filled ? Icons.tune : Icons.tune_outlined),
-    '커뮤니티' => Icon(filled ? Icons.forum : Icons.forum_outlined),
-    'Community' => Icon(filled ? Icons.forum : Icons.forum_outlined),
-    'SNS' => Icon(filled ? Icons.forum : Icons.forum_outlined),
-    'SNS Admin' => Icon(
-      filled ? Icons.admin_panel_settings : Icons.admin_panel_settings_outlined,
-    ),
-    'Members' => Icon(filled ? Icons.group : Icons.group_outlined),
-    'Families' => Icon(filled ? Icons.diversity_3 : Icons.diversity_3_outlined),
-    'Ops' => Icon(filled ? Icons.manage_search : Icons.manage_search_outlined),
-    '앨범' || '갤러리' =>
-      Icon(filled ? Icons.photo_library : Icons.photo_library_outlined),
-    'Gallery' => Icon(
-      filled ? Icons.photo_library : Icons.photo_library_outlined,
-    ),
-    'Media Setup' => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
-    _ => Icon(filled ? Icons.cloud_done : Icons.cloud_outlined),
-  };
+Widget _iconForLabel(
+  String label, {
+  required bool filled,
+  double size = 26.0,
+}) {
+  return Nest3dIcon.forTab(label, size: size, selected: filled);
 }
 
 String _labelForRole(String role) {

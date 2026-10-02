@@ -453,10 +453,31 @@ Nest의 시그니처 비주얼은 **따뜻한 3D 클레이모피즘(Claymorphism
    - **머티리얼**: Principled BSDF, Roughness 0.32~0.38, Subsurface Weight 0.20~0.25 (말랑하고 따뜻한 점토/클레이 텍스처)
    - **조명**: 3점 스튜디오 소프트 라이팅 (Warm Key Light, Cool Sky Fill, Rim Light)
    - **출력 규격**: 512x512 해상도, 투명 배경(Film Transparent) RGBA PNG
-4. **애셋 저장 위치**: `frontend/assets/3d/`
-   - 기존 6종: `announcement_3d.png`, `calendar_3d.png`, `study_books_3d.png`, `tips_lightbulb_3d.png`, `empty_nest_3d.png`, `achievement_star_3d.png`
-   - 신규 포트폴리오 에셋: `portfolio_binder_3d.png`, `camera_memory_3d.png`, `ribbon_badge_3d.png`
-5. **위젯 바인딩**:
-   - `frontend/lib/src/ui/widgets/nest_3d_icon.dart`의 전용 생성자(`Nest3dIcon.portfolio()`, `Nest3dIcon.camera()`, `Nest3dIcon.certificate()` 등) 활용
-   - 부유 모션(`Floating3DWidget`) 및 터치 햅틱 반응을 제공하며, 헤더·카드·빈 상태·배지에 적극 활용
+4. **애셋 저장 위치**: `frontend/assets/3d/` (총 20종 전체 클레이 에셋 풀 구축)
+   - **코어 네비게이션 & 탭 (11종)**:
+     - `home_nest_3d.png`: 포근한 새집 / 홈 / 대시보드
+     - `calendar_3d.png`: 캘린더 / 시간표 / 학사일정
+     - `study_books_3d.png`: 교과서 / 자습 / 수업
+     - `insight_chart_3d.png`: 학습 현황 / 성취도 차트 & 별
+     - `announcement_3d.png`: 메가폰 / 소식 / 공지
+     - `teacher_cap_3d.png`: 학사모 & 두루마리 / Teacher Hub
+     - `term_setup_3d.png`: 학교 블록 탑 / 학기 설정
+     - `system_gear_3d.png`: 기어 톱니 & 조절 다이얼 / 시스템
+     - `community_chat_3d.png`: 말풍선 쿠션 & 하트 / 커뮤니티
+     - `family_nest_3d.png`: 패밀리 둥지 & 3개의 알 / 가정 관리
+     - `camera_memory_3d.png`: 레트로 즉석 카메라 & 사진 / 앨범
+   - **액션 & 상태 & 피드백 (9종)**:
+     - `portfolio_binder_3d.png`: 학습 포트폴리오 가죽 바인더
+     - `ribbon_badge_3d.png`: 공식 승인 골든 메달 & 리본
+     - `achievement_star_3d.png`: 성취 & 칭찬 골든 스타
+     - `notification_bell_3d.png`: 알림 골든 차임벨
+     - `pencil_write_3d.png`: 과제 & 피드백 육각 연필
+     - `student_backpack_3d.png`: 학생 책가방 & 별 키링
+     - `check_stamp_3d.png`: 출결 & 승인 체크마크 스탬프
+     - `tips_lightbulb_3d.png`: 홈스쿨 팁 & 발광 전구
+     - `empty_nest_3d.png`: 따뜻한 빈 둥지 / 데이터 없음
+5. **위젯 바인딩 & 네비게이션**:
+   - `Nest3dIcon` 전용 생성자 및 `Nest3dIcon.forTab(label, selected: ...)` 팩토리 메서드 활용
+   - 모바일 하단 독바(`NestDockBar`), 데스크탑 사이드 레일(`NavigationRail`), 헤더 알림/설정 아이콘, 빈 상태(`NestEmptyState.with3d`), 주요 액션 카드에 일관되게 3D 클레이모피즘 적용
+
 

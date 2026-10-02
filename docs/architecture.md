@@ -848,17 +848,30 @@ DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
 
 최신 프로덕트 디자인 트렌드(Claymorphism, Tactile UI, Neumorphic Depth)를 반영하여 입체감 있는 3D 비주얼 시스템을 구축했다.
 
-1. **3D 브랜드 아이덴티티 및 에셋 라인업**:
-   - `assets/logo_3d_mark.png`, `assets/logo_3d_app_icon.png`: 새싹·새·둥지 결합형 3D 파스텔 엠블럼 및 앱 아이콘
-   - `assets/3d/announcement_3d.png`: 공지사항 확성기
-   - `assets/3d/calendar_3d.png`: 학사 캘린더 (빈 상태 및 시간표)
-   - `assets/3d/study_books_3d.png`: 교과서와 연필 (수업/진도)
-   - `assets/3d/tips_lightbulb_3d.png`: 표정이 있는 홈스쿨 팁 전구
-   - `assets/3d/empty_nest_3d.png`: 포근한 빈 둥지 (Zero Data)
-   - `assets/3d/achievement_star_3d.png`: 성취 골든 스타 (뱃지/완료)
-   - `assets/3d/portfolio_binder_3d.png`: 한 학기 성장 바인더 (Blender Cycles 렌더링)
-   - `assets/3d/camera_memory_3d.png`: 추억 앨범 레트로 카메라 (Blender Cycles 렌더링)
-   - `assets/3d/ribbon_badge_3d.png`: 공식 승인 리본 메달 (Blender Cycles 렌더링)
+1. **3D 브랜드 아이덴티티 및 에셋 라인업 (총 20종 풀 스위트)**:
+   - `assets/logo_3d_mark.png`, `assets/logo_3d_app_icon.png`: 3D 파스텔 엠블럼 및 앱 아이콘
+   - **코어 네비게이션 & 탭 (11종)**:
+     - `assets/3d/home_nest_3d.png`: 포근한 새집 / 홈 / 대시보드
+     - `assets/3d/calendar_3d.png`: 학사 캘린더 / 시간표 / 학사일정
+     - `assets/3d/study_books_3d.png`: 교과서와 연필 / 수업 / 진도
+     - `assets/3d/insight_chart_3d.png`: 학습 현황 / 성취도 차트 & 별
+     - `assets/3d/announcement_3d.png`: 공지사항 메가폰
+     - `assets/3d/teacher_cap_3d.png`: 학사모 & 두루마리 / Teacher Hub
+     - `assets/3d/term_setup_3d.png`: 학교 블록 탑 / 학기 설정
+     - `assets/3d/system_gear_3d.png`: 기어 톱니 & 조절 다이얼 / 시스템
+     - `assets/3d/community_chat_3d.png`: 말풍선 쿠션 & 하트 / 커뮤니티
+     - `assets/3d/family_nest_3d.png`: 패밀리 둥지 & 3개의 알 / 가정 관리
+     - `assets/3d/camera_memory_3d.png`: 레트로 즉석 카메라 & 사진 / 앨범
+   - **인터랙션 & 상태 & 피드백 (9종)**:
+     - `assets/3d/portfolio_binder_3d.png`: 한 학기 성장 바인더
+     - `assets/3d/ribbon_badge_3d.png`: 공식 승인 리본 메달
+     - `assets/3d/achievement_star_3d.png`: 성취 골든 스타
+     - `assets/3d/notification_bell_3d.png`: 알림 골든 차임벨
+     - `assets/3d/pencil_write_3d.png`: 과제 & 피드백 육각 연필
+     - `assets/3d/student_backpack_3d.png`: 학생 책가방 & 별 키링
+     - `assets/3d/check_stamp_3d.png`: 출결 & 승인 체크마크 스탬프
+     - `assets/3d/tips_lightbulb_3d.png`: 표정이 있는 홈스쿨 팁 전구
+     - `assets/3d/empty_nest_3d.png`: 포근한 빈 둥지 (Zero Data)
 2. **마이크로 모션 그래픽 (`Floating3DWidget`, `Nest3dIcon`)**:
    - 부유하는 사인파 앰비언트 모션 및 높낮이에 연동된 가변 소프트 드롭 섀도우
    - 테스트 환경(`TestWidgetsFlutterBinding`) 자동 감지로 `pumpAndSettle` 무한 루프 방지

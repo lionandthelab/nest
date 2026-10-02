@@ -93,6 +93,7 @@ Last updated: 2026-10-02
 | 2026-09-30 | 학습 포트폴리오 3D 클레이 성장 바인더 UI 구현(`PortfolioBinderView`) + 3개 탭 다이얼로그 개편 + 100% 한국어 네이티브 화면 캡처 파이프라인(`capture_portfolio_binder_shot_test.dart`) + 실제 앱 화면 기반 공식 홍보 이미지 2종(1:1 쇼케이스 카드, 16:9 와이드 배너) 및 마케팅 키트 제작 | 완료 | `flutter analyze`, `flutter test` (435/435 통과) |
 | 2026-09-30 | Blender Headless 3D 클레이모피즘 에셋 생성 파이프라인(`scripts/blender/render_portfolio_clay_assets.py`) 구축 + 신규 3D 에셋 3종(바인더, 카메라, 리본메달) 렌더링/확보 + `Nest3dIcon` 위젯 연계 및 UI 적용 + `CLAUDE.md`, `AGENTS.md`, `docs/architecture.md` 디자인 파이프라인 규칙 정립 | 완료 | `flutter analyze`, `flutter test` (435/435 통과), Blender Cycles Headless 렌더링 검증 |
 | 2026-10-02 | 공지 첨부를 소식 카드에서 바로 미리보기: 이미지는 카드에 표시 후 확대, PDF·텍스트는 앱 안 뷰어, 학부모 소식 탭에도 첨부 표시 | 완료 | `flutter analyze`, `flutter test` (438/438 통과) |
+| 2026-10-03 | 전체 앱 3D 클레이모피즘 에셋 확장 모델링(신규 11종 Blender Headless 렌더링, 총 20종 풀 스위트 완성) + `Nest3dIcon` 20종 전용 생성자 및 `forTab` 팩토리 구현 + 하단 독바/사이드 레일/헤더 벨·설정/빈 상태 UI 3D 전면 연동 + 3D 아이콘 전수 단위 테스트(`nest_3d_icon_test.dart`) 추가 | 완료 | `flutter analyze`, `flutter test` (440/440 통과), Blender Cycles Headless 일괄 렌더링 검증 |
 
 
 ## Next Batch

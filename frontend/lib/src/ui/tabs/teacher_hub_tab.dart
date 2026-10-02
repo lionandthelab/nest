@@ -9,6 +9,7 @@ import '../nest_theme.dart';
 import '../widgets/announcement_attachments.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/search_select_field.dart';
 import '../widgets/today_schedule_card.dart';
@@ -1055,7 +1056,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
                         initialChildId: selectedChild.id,
                       );
                     },
-                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                    icon: const Nest3dIcon.portfolio(size: 18),
                     label: const Text('포트폴리오 생성'),
                   ),
               ],

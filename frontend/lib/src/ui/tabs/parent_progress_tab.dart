@@ -7,6 +7,7 @@ import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
 import '../widgets/portfolio_generation_dialog.dart';
@@ -95,8 +96,8 @@ class ParentProgressTab extends StatelessWidget {
       ]);
     } else if (selectedChildId == null) {
       items.add(
-        const NestEmptyState(
-          icon: Icons.trending_up,
+        const NestEmptyState.with3d(
+          illustration: Nest3dIcon.student(size: 64, floating: true),
           title: '아이를 먼저 선택하세요',
           subtitle: '상단에서 아이를 선택하면 학습 현황을 확인할 수 있습니다.',
         ),
@@ -137,8 +138,8 @@ class ParentProgressTab extends StatelessWidget {
 
       if (childLogs.isEmpty) {
         items.add(
-          const NestEmptyState(
-            icon: Icons.trending_up,
+          const NestEmptyState.with3d(
+            illustration: Nest3dIcon.chart(size: 64, floating: true),
             title: '등록된 상태 로그가 없습니다',
             subtitle: '선생님이 기록을 남기면 여기서 확인할 수 있습니다.',
           ),

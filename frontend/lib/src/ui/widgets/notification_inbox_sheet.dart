@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
 import 'nest_empty_state.dart';
+import 'nest_3d_icon.dart';
 import 'nest_motion.dart';
 import 'nest_sheet.dart';
 
@@ -31,8 +32,9 @@ Future<void> showNotificationInboxSheet({
                 children: [
                   Expanded(
                     child: items.isEmpty
-                        ? const NestEmptyState(
-                            icon: Icons.notifications_none_outlined,
+                        ? const NestEmptyState.with3d(
+                            illustration:
+                                Nest3dIcon.bell(size: 64, floating: true),
                             title: '아직 받은 알림이 없어요',
                             subtitle: '수업이 바뀌거나 오늘 일정이 생기면 여기에 모입니다.',
                           )
