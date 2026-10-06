@@ -612,6 +612,10 @@ class NestController extends ChangeNotifier {
   /// 학생 본인 계정 뷰. 자기 시간표/결석 신고만 다루는 최소 권한 뷰다.
   bool get isStudentView => currentRole == 'STUDENT';
 
+  /// 가정·보호자 목록을 불러와야 하는 뷰. 학부모 뷰는 보호자 연결로 내 아이를
+  /// 찾으므로(myChildren) 관리자 뷰와 함께 반드시 불러온다.
+  bool get needsFamilyGuardianData => isAdminLike || isParentView;
+
   // STUDENT는 아래 집합에 일부러 넣지 않는다. 미성년자 계정이 다른 아이가 찍힌
   // 사진을 올리거나 커뮤니티에 글을 쓰는 경로를 만들지 않기 위함이다(읽기는 허용).
   bool get canUploadMedia => const {
@@ -5134,9 +5138,10 @@ class NestController extends ChangeNotifier {
 
   Future<void> _loadOperationalData() async {
     final admin = isAdminLike;
+    final withFamilies = needsFamilyGuardianData;
     await Future.wait([
       if (admin) loadHomeschoolMemberDirectory(),
-      if (admin) loadFamilies(),
+      if (withFamilies) loadFamilies(),
       loadChildren(),
       loadClassEnrollments(),
       loadTeacherProfiles(),
@@ -5144,7 +5149,7 @@ class NestController extends ChangeNotifier {
       loadSessionTeacherAssignments(),
       loadAnnouncements(),
     ]);
-    if (admin) {
+    if (withFamilies) {
       await loadFamilyGuardians();
     }
   }
