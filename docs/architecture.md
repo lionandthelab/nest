@@ -58,7 +58,7 @@ frontend/
         login_page.dart
         home_page.dart
         widgets/
-          child_selector_header.dart
+          child_unlinked_chip.dart
           hub_scaffold.dart
           nest_motion.dart
           search_select_field.dart

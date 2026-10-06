@@ -117,7 +117,7 @@ nest/
 │   │           ├── login_page.dart           로그인/회원가입
 │   │           ├── home_page.dart            (2,748줄) 메인 홈 화면
 │   │           ├── widgets/                  공용 위젯
-│   │           │   ├── child_selector_header.dart
+│   │           │   ├── child_unlinked_chip.dart
 │   │           │   ├── hub_scaffold.dart
 │   │           │   ├── entity_visuals.dart
 │   │           │   ├── homeschool_create_dialog.dart
