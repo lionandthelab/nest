@@ -1,6 +1,6 @@
 # Mobile Release Checklist (Android/iOS)
 
-Last updated: 2026-10-02
+Last updated: 2026-10-07
 
 ## 0) Fastlane 배포 (권장)
 
@@ -184,7 +184,7 @@ These items must be confirmed before uploading the build to App Store Connect or
 
 ## 6) Version Numbering Strategy
 
-Current version: `2.1.1+28` (pubspec.yaml)
+Current version: `2.1.2+29` (pubspec.yaml)
 
 ### Format
 ```
@@ -227,6 +227,7 @@ version: MAJOR.MINOR.PATCH+BUILD
 | 2026-09-21 | 2.0.19 | 21 | iOS | App Store 심사 제출 | 공지사항 첨부파일 업로드 및 열람 (승인 시 자동 출시) |
 | 2026-10-02 | 2.1.1 | 28 | Android | Closed (alpha) | 공지 첨부 미리보기, 학기 학습 포트폴리오. 프로덕션 트랙은 Play precondition으로 거절되어 비공개 트랙에 올림 |
 | 2026-10-02 | 2.1.1 | 28 | iOS | App Store 심사 제출 완료 | 승인 시 자동 출시. 공지 첨부 미리보기, 학기 학습 포트폴리오 |
+| 2026-10-07 | 2.1.2 | 29 | Android + iOS | Closed (alpha) / App Store 심사 제출 | 학부모 뷰 아이 선택 복구(가정·보호자 로드), 아이 미연동 칩 → 등록 요청 |
 
 ## 7) Signing Configuration Reminders
 
