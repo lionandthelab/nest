@@ -28,6 +28,7 @@ import 'tabs/system_admin_tab.dart';
 import 'tabs/teacher_hub_tab.dart';
 import 'tabs/timetable_tab.dart';
 import 'tabs/timetable_workspace_tab.dart';
+import 'widgets/child_unlinked_chip.dart';
 import 'widgets/nest_motion.dart';
 import 'widgets/nest_3d_icon.dart';
 import 'widgets/notification_onboarding.dart';
@@ -1214,9 +1215,7 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
     final selected = children
         .where((child) => child.id == widget.selectedChildId)
         .firstOrNull;
-    final childLabel = selected != null
-        ? selected.name
-        : (children.isEmpty ? '아이 미연동' : '아이 선택');
+    final childLabel = selected?.name ?? '아이 선택';
 
     // Admin viewing as parent: show parent target switch
     final isAdminAsParent =
@@ -1438,7 +1437,9 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
                 if (controller.isParentView) ...[
                   const SizedBox(width: 8),
                   Flexible(
-                    child: children.length <= 1
+                    child: children.isEmpty
+                        ? ChildUnlinkedChip(controller: controller)
+                        : children.length == 1
                         ? Chip(
                             label: Text(
                               childLabel,
@@ -2204,9 +2205,7 @@ class _MainPanelState extends State<_MainPanel> {
     final selected = children
         .where((child) => child.id == widget.selectedChildId)
         .firstOrNull;
-    final childLabel = selected != null
-        ? selected.name
-        : (children.isEmpty ? '아이 미연동' : '아이 선택');
+    final childLabel = selected?.name ?? '아이 선택';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2226,7 +2225,9 @@ class _MainPanelState extends State<_MainPanel> {
           // 아이 선택 칩은 학부모 뷰에서만 노출(교사 뷰의 '아이 미연동' 칩 제거).
           if (controller.isParentView) ...[
             const SizedBox(width: 6),
-            if (children.length <= 1)
+            if (children.isEmpty)
+              ChildUnlinkedChip(controller: controller)
+            else if (children.length == 1)
               Chip(
                 label: Text(
                   childLabel,
@@ -2556,18 +2557,7 @@ class _MainPanelState extends State<_MainPanel> {
     final children = controller.myChildren.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     if (children.isEmpty) {
-      return const Chip(
-        label: Text(
-          '내 아이 미연동',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
-        ),
-        avatar: Icon(
-          Icons.child_care_outlined,
-          size: 14,
-          color: Colors.black87,
-        ),
-        visualDensity: VisualDensity.compact,
-      );
+      return ChildUnlinkedChip(controller: controller, label: '내 아이 미연동');
     }
 
     final selected = children
