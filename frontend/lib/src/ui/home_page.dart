@@ -940,8 +940,7 @@ class _DesktopScaffold extends StatelessWidget {
                 .map(
                   (label) => NavigationRailDestination(
                     icon: _iconForLabel(label, filled: false, size: 26),
-                    selectedIcon:
-                        _iconForLabel(label, filled: true, size: 28),
+                    selectedIcon: _iconForLabel(label, filled: true, size: 28),
                     label: Text(label),
                   ),
                 )
@@ -2560,10 +2559,7 @@ class _MainPanelState extends State<_MainPanel> {
       return const Chip(
         label: Text(
           '내 아이 미연동',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
         avatar: Icon(
           Icons.child_care_outlined,
@@ -2641,10 +2637,7 @@ class _MainPanelState extends State<_MainPanel> {
       return const Chip(
         label: Text(
           '부모 대상 없음',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
         avatar: Icon(
           Icons.family_restroom_outlined,
@@ -2724,16 +2717,9 @@ class _MainPanelState extends State<_MainPanel> {
       return const Chip(
         label: Text(
           '교사 대상 없음',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
         ),
-        avatar: Icon(
-          Icons.school_outlined,
-          size: 14,
-          color: Colors.black87,
-        ),
+        avatar: Icon(Icons.school_outlined, size: 14, color: Colors.black87),
         visualDensity: VisualDensity.compact,
       );
     }
@@ -3179,11 +3165,7 @@ class _ContextOption {
   final String subtitle;
 }
 
-Widget _iconForLabel(
-  String label, {
-  required bool filled,
-  double size = 26.0,
-}) {
+Widget _iconForLabel(String label, {required bool filled, double size = 26.0}) {
   return Nest3dIcon.forTab(label, size: size, selected: filled);
 }
 
