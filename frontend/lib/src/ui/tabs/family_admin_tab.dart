@@ -740,7 +740,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
           return StatefulBuilder(
             builder: (context, setDialogState) {
               Future<void> saveFamily() async {
-                if (isSaving || nameController.text.trim().isEmpty) {
+                if (isSaving) return;
+                if (nameController.text.trim().isEmpty) {
+                  _showMessage('가정 이름을 입력하세요.');
                   return;
                 }
 

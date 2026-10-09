@@ -120,7 +120,14 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
         _step = _Step.driveOnboarding;
       });
     } catch (_) {
-      if (mounted) setState(() => _submitting = false);
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      final message = widget.controller.statusMessage.trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message.isEmpty ? '우리집 홈스쿨을 만들지 못했어요.' : message),
+        ),
+      );
     }
   }
 
@@ -250,107 +257,117 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
                                 children: [
                                   Text(
                                     '우리집 홈스쿨 시작하기',
-                                    style: Theme.of(context).textTheme.titleLarge,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
                                   ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '기본값은 이미 넣어 두었어요. 이름만 보고 바로 시작해도 됩니다.',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: NestColors.deepWood.withValues(
-                                      alpha: 0.72,
-                                    ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '기본값은 이미 넣어 두었어요. 이름만 보고 바로 시작해도 됩니다.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: NestColors.deepWood.withValues(
+                                            alpha: 0.72,
+                                          ),
+                                        ),
                                   ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _homeschoolController,
-                              textCapitalization: TextCapitalization.words,
-                              decoration: _field(
-                                label: '우리집 홈스쿨 이름',
-                                hint: '예: 민지네 집',
-                                helper: '나중에 설정에서 바꿔도 돼요.',
-                              ),
-                              validator: (value) =>
-                                  (value == null || value.trim().isEmpty)
-                                  ? '이름을 적어 주세요.'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _termController,
-                              decoration: _field(
-                                label: '첫 학기',
-                                hint: '예: 2026 가을 학기',
-                              ),
-                              validator: (value) =>
-                                  (value == null || value.trim().isEmpty)
-                                  ? '학기 이름을 적어 주세요.'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _startDateController,
-                                    readOnly: true,
-                                    onTap: () =>
-                                        _pickDate(_startDateController),
+                                  const SizedBox(height: 16),
+                                  TextFormField(
+                                    controller: _homeschoolController,
+                                    textCapitalization:
+                                        TextCapitalization.words,
                                     decoration: _field(
-                                      label: '시작일',
-                                      suffix: const Icon(Icons.event_outlined),
+                                      label: '우리집 홈스쿨 이름',
+                                      hint: '예: 민지네 집',
+                                      helper: '나중에 설정에서 바꿔도 돼요.',
                                     ),
-                                    validator: _validateDate,
+                                    validator: (value) =>
+                                        (value == null || value.trim().isEmpty)
+                                        ? '이름을 적어 주세요.'
+                                        : null,
                                   ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _endDateController,
-                                    readOnly: true,
-                                    onTap: () => _pickDate(_endDateController),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _termController,
                                     decoration: _field(
-                                      label: '종료일',
-                                      suffix: const Icon(Icons.event_outlined),
+                                      label: '첫 학기',
+                                      hint: '예: 2026 가을 학기',
                                     ),
-                                    validator: _validateDate,
+                                    validator: (value) =>
+                                        (value == null || value.trim().isEmpty)
+                                        ? '학기 이름을 적어 주세요.'
+                                        : null,
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _classController,
-                              decoration: _field(
-                                label: '반 이름',
-                                hint: '예: 우리 반',
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: _startDateController,
+                                          readOnly: true,
+                                          onTap: () =>
+                                              _pickDate(_startDateController),
+                                          decoration: _field(
+                                            label: '시작일',
+                                            suffix: const Icon(
+                                              Icons.event_outlined,
+                                            ),
+                                          ),
+                                          validator: _validateDate,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: _endDateController,
+                                          readOnly: true,
+                                          onTap: () =>
+                                              _pickDate(_endDateController),
+                                          decoration: _field(
+                                            label: '종료일',
+                                            suffix: const Icon(
+                                              Icons.event_outlined,
+                                            ),
+                                          ),
+                                          validator: _validateDate,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _classController,
+                                    decoration: _field(
+                                      label: '반 이름',
+                                      hint: '예: 우리 반',
+                                    ),
+                                    validator: (value) =>
+                                        (value == null || value.trim().isEmpty)
+                                        ? '반 이름을 적어 주세요.'
+                                        : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _courseController,
+                                    decoration: _field(
+                                      label: '과목',
+                                      hint: '예: 국어, 수학, 영어',
+                                      helper: '콤마로 나누면 됩니다. 나중에 더 넣어도 돼요.',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  if (isNarrow)
+                                    ..._actions(stacked: true)
+                                  else
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: _actions(stacked: false),
+                                    ),
+                                ],
                               ),
-                              validator: (value) =>
-                                  (value == null || value.trim().isEmpty)
-                                  ? '반 이름을 적어 주세요.'
-                                  : null,
                             ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _courseController,
-                              decoration: _field(
-                                label: '과목',
-                                hint: '예: 국어, 수학, 영어',
-                                helper: '콤마로 나누면 됩니다. 나중에 더 넣어도 돼요.',
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            if (isNarrow)
-                              ..._actions(stacked: true)
-                            else
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: _actions(stacked: false),
-                              ),
-                          ],
-                        ),
-                      ),
                     ),
                   ),
                   Positioned.fill(
@@ -382,10 +399,7 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
       mainAxisSize: MainAxisSize.min,
       children: [
         const SizedBox(height: 8),
-        const Nest3dIcon.star(
-          size: 72,
-          floating: true,
-        ),
+        const Nest3dIcon.star(size: 72, floating: true),
         const SizedBox(height: 16),
         Text(
           '🎉 $homeschoolName 개설 완료!',

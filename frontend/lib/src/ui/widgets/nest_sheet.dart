@@ -218,116 +218,121 @@ class NestSheet extends StatelessWidget {
       child: child,
     );
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (compact)
-          Padding(
-            padding: const EdgeInsets.only(top: 10, bottom: 2),
-            child: Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NestColors.deepWood.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(2),
+    // 시트는 바텀시트·다이얼로그 양쪽에서 쓰인다. 호출부가 Material로
+    // 감싸지 않으면 TextField가 조상을 찾지 못하고 화면이 오류로 바뀐다.
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (compact)
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 2),
+              child: Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: NestColors.deepWood.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
             ),
-          ),
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            compact ? 8 : 22,
-            compact ? 8 : 16,
-            10,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (icon != null) ...[
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: (iconColor ?? NestColors.clay).withValues(
-                      alpha: 0.14,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 20,
-                    color: iconColor ?? NestColors.clay,
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 제목은 말줄임 대신 줄바꿈한다. 모바일에서 제목이
-                    // "가정 수…"처럼 잘리던 문제를 없앤다.
-                    Text(
-                      title,
-                      softWrap: true,
-                      maxLines: 3,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontSize: compact ? 18 : 19,
-                        height: 1.25,
-                        color: NestColors.deepWood,
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              compact ? 8 : 22,
+              compact ? 8 : 16,
+              10,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (icon != null) ...[
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: (iconColor ?? NestColors.clay).withValues(
+                        alpha: 0.14,
                       ),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    if (subtitle != null && subtitle!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                    child: Icon(
+                      icon,
+                      size: 20,
+                      color: iconColor ?? NestColors.clay,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 제목은 말줄임 대신 줄바꿈한다. 모바일에서 제목이
+                      // "가정 수…"처럼 잘리던 문제를 없앤다.
                       Text(
-                        subtitle!,
+                        title,
                         softWrap: true,
-                        maxLines: 4,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          height: 1.4,
-                          color: NestColors.deepWood.withValues(alpha: 0.66),
+                        maxLines: 3,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: compact ? 18 : 19,
+                          height: 1.25,
+                          color: NestColors.deepWood,
                         ),
                       ),
+                      if (subtitle != null && subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle!,
+                          softWrap: true,
+                          maxLines: 4,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            height: 1.4,
+                            color: NestColors.deepWood.withValues(alpha: 0.66),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              ?headerTrailing,
-              if (showCloseButton)
-                IconButton(
-                  tooltip: '닫기',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.close_rounded, size: 22),
-                  color: NestColors.deepWood.withValues(alpha: 0.6),
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
-            ],
+                ?headerTrailing,
+                if (showCloseButton)
+                  IconButton(
+                    tooltip: '닫기',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close_rounded, size: 22),
+                    color: NestColors.deepWood.withValues(alpha: 0.6),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+              ],
+            ),
           ),
-        ),
-        if (isBusy) const LinearProgressIndicator(minHeight: 2),
-        Divider(
-          height: 1,
-          thickness: 1,
-          color: NestColors.roseMist.withValues(alpha: 0.85),
-        ),
-        Flexible(
-          child: scrollable
-              ? SingleChildScrollView(primary: false, child: body)
-              : body,
-        ),
-        if (actions.isNotEmpty || destructiveAction != null)
-          _NestSheetActionBar(
-            compact: compact,
-            horizontal: horizontal,
-            bottomInset: bottomInset,
-            actions: actions,
-            destructiveAction: destructiveAction,
+          if (isBusy) const LinearProgressIndicator(minHeight: 2),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: NestColors.roseMist.withValues(alpha: 0.85),
           ),
-      ],
+          Flexible(
+            child: scrollable
+                ? SingleChildScrollView(primary: false, child: body)
+                : body,
+          ),
+          if (actions.isNotEmpty || destructiveAction != null)
+            _NestSheetActionBar(
+              compact: compact,
+              horizontal: horizontal,
+              bottomInset: bottomInset,
+              actions: actions,
+              destructiveAction: destructiveAction,
+            ),
+        ],
+      ),
     );
   }
 }

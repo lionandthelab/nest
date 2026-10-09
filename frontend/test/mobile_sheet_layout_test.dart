@@ -9,6 +9,7 @@ import 'package:nest_frontend/src/state/nest_controller.dart';
 import 'package:nest_frontend/src/ui/nest_theme.dart';
 import 'package:nest_frontend/src/ui/tabs/family_admin_tab.dart';
 import 'package:nest_frontend/src/ui/widgets/nest_sheet.dart';
+import 'package:nest_frontend/src/ui/widgets/term_navigator_bar.dart';
 
 NestController _adminController() {
   final client = SupabaseClient(
@@ -188,5 +189,44 @@ void main() {
     final saveButton = find.text('생성');
     expect(saveButton, findsOneWidget);
     expect(tester.getRect(saveButton).bottom, lessThanOrEqualTo(780));
+  });
+
+  testWidgets('예정 학기 추가 시트가 폰에서 입력칸과 만들기 버튼을 보여 준다', (tester) async {
+    final controller = _adminController();
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: NestTheme.light(),
+        locale: const Locale('ko'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ko'), Locale('en')],
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: FilledButton(
+                onPressed: () => showTermEditorDialog(context, controller),
+                child: const Text('학기 만들기'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('학기 만들기'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('예정 학기 추가'), findsOneWidget);
+    expect(find.text('학기 이름'), findsOneWidget);
+    expect(find.text('만들기'), findsOneWidget);
+    expect(tester.getRect(find.text('만들기')).bottom, lessThanOrEqualTo(844));
   });
 }

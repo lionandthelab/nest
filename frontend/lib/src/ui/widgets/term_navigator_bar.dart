@@ -365,7 +365,9 @@ Future<void> showTermEditorDialog(
   final initialEnd =
       term?.endDate ?? initialStart.add(const Duration(days: 140));
 
-  await showDialog<void>(
+  // showDialog에 Dialog로 감싸지 않은 NestSheet를 넣으면 TextField가
+  // Material을 찾지 못해 시트 전체가 오류 화면으로 바뀐다.
+  await showNestSheet<void>(
     context: context,
     builder: (dialogContext) => _TermEditorDialog(
       controller: controller,

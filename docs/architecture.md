@@ -1088,6 +1088,13 @@ Migration `20260929100000_student_semester_reviews.sql`:
   - 제약조건: UNIQUE(`term_id`, `child_id`)
   - RLS: 홈스쿨 회원(`is_homeschool_member`) SELECT 허용, 교사/스태프/관리자(`has_homeschool_role`) 및 해당 아동의 보호자(`family_guardians`) INSERT/UPDATE 허용
 
+### 7.11 Homeschool join code on create (2026-10)
+
+Migration `20261009020000_homeschool_join_code_on_create.sql`:
+
+- `assign_homeschool_join_code` — 홈스쿨 INSERT 전에 `join_code`가 비어 있으면 `gen_join_code()`로 채운다
+- 이미 만들어진 홈스쿨 중 코드가 없는 행도 같은 함수로 백필한다
+
 
 ## 8. Environment Variables
 
