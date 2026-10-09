@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nest · Google Drive 연결</title>
+    <style>
+      :root {
+        --main: #dcae96;
+        --base: #f9f7f2;
+        --wood: #5a4637;
+        --sage: #8a9a84;
+        --line: #f4e4db;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: radial-gradient(circle at 20% 10%, #fff7f0, var(--base));
+        font-family: -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
+        color: var(--wood);
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 32px 28px;
+        max-width: 380px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(90, 70, 55, 0.08);
+      }
+      .mark {
+        width: 64px; height: 64px;
+        margin: 0 auto 18px;
+        border-radius: 20px;
+        display: grid; place-items: center;
+        font-size: 30px;
+      }
+      .ok { background: rgba(138, 154, 132, 0.16); }
+      .bad { background: #fce8e4; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { font-size: 15px; line-height: 1.6; margin: 0; opacity: 0.75; }
+      .hint {
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+        font-size: 13px;
+        opacity: 0.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="mark ok" id="mark">✓</div>
+      <h1 id="title">Google Drive가 연결되었습니다</h1>
+      <p id="body">이 창을 닫고 Nest 앱으로 돌아가 주세요.<br />앱이 곧 연결 상태를 알아챕니다.</p>
+      <p class="hint">앞으로 앨범에 올리는 사진 원본은 이 Google 계정의 Drive에 저장됩니다.</p>
+    </main>
+    <script>
+      // Edge Function이 status/reason 을 쿼리로 넘긴다. 실패 이유는 사용자가
+      // 무엇을 다시 해야 하는지로만 바꿔 보여 준다 — 내부 코드를 그대로
+      // 노출해 봐야 도움이 되지 않는다.
+      var params = new URLSearchParams(location.search);
+      if (params.get('status') === 'error') {
+        var reason = params.get('reason') || '';
+        document.getElementById('mark').className = 'mark bad';
+        document.getElementById('mark').textContent = '!';
+        document.getElementById('title').textContent = '연결하지 못했습니다';
+        document.getElementById('body').innerHTML =
+          reason === 'forbidden'
+            ? '이 홈스쿨의 관리자 계정으로 로그인한 뒤 다시 시도해 주세요.'
+            : reason === 'access_denied'
+              ? 'Google 화면에서 권한을 허용해야 연결됩니다.'
+              : '앱으로 돌아가 다시 연결해 주세요.';
+        document.querySelector('.hint').textContent = '';
+      }
+    </script>
+  </body>
+</html>
