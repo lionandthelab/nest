@@ -78,7 +78,7 @@ class ParentProgressTab extends StatelessWidget {
                   initialChildId: selectedChildId,
                 );
               },
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+              icon: const Nest3dIcon.portfolio(size: 18),
               label: const Text('포트폴리오 생성'),
             ),
         ],

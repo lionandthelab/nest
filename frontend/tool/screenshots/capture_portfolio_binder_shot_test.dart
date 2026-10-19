@@ -169,6 +169,8 @@ void main() {
               alignment: Alignment.center,
               child: PortfolioBinderView(
                 bundle: bundle,
+                onEditConfig: () {},
+                onExportPdf: () {},
               ),
             ),
           ),
@@ -176,7 +178,18 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    final ctx = key.currentContext!;
+    await tester.runAsync(() async {
+      for (final asset in const [
+        'assets/3d/portfolio_binder_3d.png',
+        'assets/3d/camera_memory_3d.png',
+        'assets/3d/ribbon_badge_3d.png',
+        'assets/3d/pencil_write_3d.png',
+      ]) {
+        await precacheImage(AssetImage(asset), ctx);
+      }
+    });
+    await tester.pump(const Duration(milliseconds: 300));
     await _shoot(tester, key, 'portfolio_binder_captured_ko.png');
 
     // 2. 모바일 뷰 캡처 (440 x 920)
@@ -209,7 +222,18 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    final mCtx = mobileKey.currentContext!;
+    await tester.runAsync(() async {
+      for (final asset in const [
+        'assets/3d/portfolio_binder_3d.png',
+        'assets/3d/camera_memory_3d.png',
+        'assets/3d/ribbon_badge_3d.png',
+        'assets/3d/pencil_write_3d.png',
+      ]) {
+        await precacheImage(AssetImage(asset), mCtx);
+      }
+    });
+    await tester.pump(const Duration(milliseconds: 300));
     await _shoot(tester, mobileKey, 'portfolio_binder_mobile_ko.png');
 
     addTearDown(() {

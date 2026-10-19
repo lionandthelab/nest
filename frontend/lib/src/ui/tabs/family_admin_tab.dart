@@ -7,6 +7,7 @@ import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_3d_icon.dart';
 import 'timetable/course_lesson_sheet.dart';
 import '../widgets/nest_section_header.dart';
 import '../widgets/nest_sheet.dart';
@@ -643,6 +644,19 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ),
               description: '가정을 선택하고 카드를 클릭하면 아이 정보를 바로 수정할 수 있습니다.',
               actions: [
+                if (controller.children.isNotEmpty)
+                  FilledButton.tonalIcon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => showPortfolioGenerationDialog(
+                            context,
+                            controller: controller,
+                            initialChildId: familyChildren.firstOrNull?.id ??
+                                controller.children.first.id,
+                          ),
+                    icon: const Nest3dIcon.portfolio(size: 18),
+                    label: const Text('포트폴리오 생성'),
+                  ),
                 ElevatedButton.icon(
                   onPressed: controller.isBusy || controller.families.isEmpty
                       ? null
@@ -1466,7 +1480,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           initialChildId: initial.id,
                         );
                       },
-                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      icon: const Nest3dIcon.portfolio(size: 18),
                       label: const Text('포트폴리오'),
                     ),
                   OutlinedButton(

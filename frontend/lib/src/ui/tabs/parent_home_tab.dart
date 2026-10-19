@@ -112,7 +112,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
                   initialChildId: widget.selectedChildId,
                 );
               },
-              icon: const Icon(Icons.auto_stories_outlined, size: 18),
+              icon: const Nest3dIcon.portfolio(size: 18),
               label: const Text('학기 학습 포트폴리오 (PDF)'),
             ),
           ],

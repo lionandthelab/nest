@@ -202,7 +202,7 @@ class _TipGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tipId == 'portfolio-preview') {
-      return Nest3dIcon.achievement(
+      return Nest3dIcon.portfolio(
         size: size,
         floating: true,
       );

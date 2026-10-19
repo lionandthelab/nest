@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
 import '../nest_theme.dart';
@@ -11,12 +13,20 @@ class PortfolioBinderView extends StatelessWidget {
     super.key,
     required this.bundle,
     this.photoBytes = const {},
+    this.selectedPhotoIds,
+    this.customTeacherEvaluation,
+    this.customParentEvaluation,
+    this.customStudentReflection,
     this.onExportPdf,
     this.onEditConfig,
   });
 
   final StudentPortfolioBundle bundle;
   final Map<String, Uint8List> photoBytes;
+  final Set<String>? selectedPhotoIds;
+  final String? customTeacherEvaluation;
+  final String? customParentEvaluation;
+  final String? customStudentReflection;
   final VoidCallback? onExportPdf;
   final VoidCallback? onEditConfig;
 
@@ -329,13 +339,18 @@ class PortfolioBinderView extends StatelessWidget {
                 ),
               ),
             ),
-            const Spacer(),
-            Text(
-              '${bundle.term.name}  |  ${bundle.child.name}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: NestColors.deepWood.withValues(alpha: 0.6),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${bundle.term.name}  |  ${bundle.child.name}',
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: NestColors.deepWood.withValues(alpha: 0.6),
+                ),
               ),
             ),
           ],
@@ -416,11 +431,16 @@ class PortfolioBinderView extends StatelessWidget {
                       }).toList(),
                     ),
                     const SizedBox(height: 6),
-                    // 3개 행의 귀여운 출석 체크 타일
+                    // 3개 행의 귀여운 출석 체크 타일 (실제 결석일수 반영)
                     for (int row = 0; row < 3; row++) ...[
                       Row(
                         children: List.generate(5, (col) {
-                          final isAttended = !(row == 2 && col == 3);
+                          final tileIdx = row * 5 + col;
+                          final absentPreviewCount = bundle.absentDays <= 0
+                              ? 0
+                              : math.min(3, bundle.absentDays);
+                          final isAttended =
+                              tileIdx < (15 - absentPreviewCount);
                           return Expanded(
                             child: Container(
                               margin: const EdgeInsets.all(2),
@@ -543,6 +563,11 @@ class PortfolioBinderView extends StatelessWidget {
     return List.generate(subjects.length, (index) {
       final course = subjects[index];
       final style = palette[index % palette.length];
+      final lessonCount = bundle.courseLessons
+          .where((l) => l.courseId == course.id)
+          .length;
+      final statusLabel =
+          lessonCount > 0 ? '$lessonCount회 수업  |  ${style.$3}' : style.$3;
 
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -550,18 +575,22 @@ class PortfolioBinderView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  course.name.replaceAll('·', ' / '),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: NestColors.deepWood,
+                Expanded(
+                  child: Text(
+                    course.name.replaceAll('·', ' / '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: NestColors.deepWood,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
-                  style.$3,
+                  statusLabel,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -664,15 +693,23 @@ class PortfolioBinderView extends StatelessWidget {
   // 우측 페이지: 추억 앨범 폴라로이드, 학생 성찰 소감문, 교사 종합 의견
   // ─────────────────────────────────────────────────────────────
   Widget _buildRightPage(BuildContext context) {
-    final studentReflection =
-        bundle.review?.studentReflection.trim().isNotEmpty == true
+    final resolvedStudent = (customStudentReflection?.trim().isNotEmpty == true)
+        ? customStudentReflection!.trim()
+        : (bundle.review?.studentReflection.trim().isNotEmpty == true
             ? bundle.review!.studentReflection.trim()
-            : '“오늘도 정말 즐거운 하루였어요! 숲을 탐험하면서 다양한 나뭇잎과 곤충을 관찰하고 배울 수 있어서 신기했습니다.”';
+            : '“오늘도 정말 즐거운 하루였어요! 숲을 탐험하면서 다양한 나뭇잎과 곤충을 관찰하고 배울 수 있어서 신기했습니다.”');
 
-    final teacherEvaluation =
-        bundle.review?.teacherEvaluation.trim().isNotEmpty == true
+    final resolvedTeacher = (customTeacherEvaluation?.trim().isNotEmpty == true)
+        ? customTeacherEvaluation!.trim()
+        : (bundle.review?.teacherEvaluation.trim().isNotEmpty == true
             ? bundle.review!.teacherEvaluation.trim()
-            : '“한 학기 동안 매일 성실하게 배움에 참여하고 스스로 질문하며 성장하는 모습이 매우 대견합니다.”';
+            : '“한 학기 동안 매일 성실하게 배움에 참여하고 스스로 질문하며 성장하는 모습이 매우 대견합니다.”');
+
+    final resolvedParent = (customParentEvaluation?.trim().isNotEmpty == true)
+        ? customParentEvaluation!.trim()
+        : (bundle.review?.parentEvaluation.trim().isNotEmpty == true
+            ? bundle.review!.parentEvaluation.trim()
+            : '');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -682,15 +719,19 @@ class PortfolioBinderView extends StatelessWidget {
           children: [
             const Nest3dIcon.camera(size: 28, floating: true),
             const SizedBox(width: 6),
-            const Text(
-              '한 학기 추억 앨범',
-              style: TextStyle(
-                fontFamily: 'BlackHanSans',
-                fontSize: 22,
-                color: NestColors.deepWood,
+            const Expanded(
+              child: Text(
+                '한 학기 추억 앨범',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'BlackHanSans',
+                  fontSize: 22,
+                  color: NestColors.deepWood,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -741,25 +782,28 @@ class PortfolioBinderView extends StatelessWidget {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.edit_note_rounded,
-                      color: NestColors.dustyRose, size: 20),
+                  Nest3dIcon.pencil(size: 22),
                   SizedBox(width: 6),
-                  Text(
-                    '아이의 자기 성찰 소감문',
-                    style: TextStyle(
-                      fontFamily: 'DoHyeon',
-                      fontSize: 14,
-                      color: NestColors.deepWood,
+                  Expanded(
+                    child: Text(
+                      '아이의 자기 성찰 소감문',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'DoHyeon',
+                        fontSize: 14,
+                        color: NestColors.deepWood,
+                      ),
                     ),
                   ),
-                  Spacer(),
+                  SizedBox(width: 6),
                   Text('학생 직접 작성',
                       style: TextStyle(fontSize: 10, color: Color(0xFF888888))),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
-                studentReflection,
+                resolvedStudent,
                 style: const TextStyle(
                   fontFamily: 'Jua',
                   fontSize: 14,
@@ -785,28 +829,45 @@ class PortfolioBinderView extends StatelessWidget {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.favorite_rounded,
-                      color: Color(0xFF48B67B), size: 18),
+                  Nest3dIcon.certificate(size: 22),
                   SizedBox(width: 6),
-                  Text(
-                    '선생님 & 부모님 종합 격려',
-                    style: TextStyle(
-                      fontFamily: 'DoHyeon',
-                      fontSize: 13,
-                      color: NestColors.deepWood,
+                  Expanded(
+                    child: Text(
+                      '선생님 & 부모님 종합 격려',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'DoHyeon',
+                        fontSize: 13,
+                        color: NestColors.deepWood,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
-                teacherEvaluation,
+                resolvedTeacher,
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.45,
                   color: NestColors.deepWood.withValues(alpha: 0.85),
                 ),
               ),
+              if (resolvedParent.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: Divider(height: 1, color: Color(0xFFD6EFE1)),
+                ),
+                Text(
+                  resolvedParent,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.45,
+                    color: NestColors.deepWood.withValues(alpha: 0.82),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -814,17 +875,48 @@ class PortfolioBinderView extends StatelessWidget {
     );
   }
 
+  List<GalleryItem> get _displayPhotos {
+    if (selectedPhotoIds != null && selectedPhotoIds!.isNotEmpty) {
+      final filtered = bundle.photos
+          .where((p) => selectedPhotoIds!.contains(p.id))
+          .toList();
+      if (filtered.isNotEmpty) return filtered;
+    }
+    return bundle.photos;
+  }
+
   /// 폴라로이드 스타일 사진 갤러리 (상단 마스킹 테이프 장식)
   Widget _buildPolaroidGallery() {
+    final photos = _displayPhotos;
+    final p0 = photos.isNotEmpty ? photos[0] : null;
+    final p1 = photos.length > 1 ? photos[1] : null;
+
+    final title0 =
+        (p0 != null && p0.title.trim().isNotEmpty) ? p0.title.trim() : '숲 체험학습';
+    final sub0 = (p0 != null && p0.description.trim().isNotEmpty)
+        ? p0.description.trim()
+        : (p0?.capturedAt != null
+            ? DateFormat('yyyy.MM.dd').format(p0!.capturedAt!)
+            : '자연 생태 관찰');
+
+    final title1 = (p1 != null && p1.title.trim().isNotEmpty)
+        ? p1.title.trim()
+        : '과학 탐구 발표';
+    final sub1 = (p1 != null && p1.description.trim().isNotEmpty)
+        ? p1.description.trim()
+        : (p1?.capturedAt != null
+            ? DateFormat('yyyy.MM.dd').format(p1!.capturedAt!)
+            : '창의 실험 페어');
+
     return Row(
       children: [
         Expanded(
           child: _buildPolaroidCard(
-            title: '숲 체험학습',
-            subtitle: '자연 생태 관찰',
+            title: title0,
+            subtitle: sub0,
             tapeColor: const Color(0xFFFFB4A2),
             rotation: -0.02,
-            photoIndex: 0,
+            photo: p0,
             themeGradient: const [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
             accentColor: const Color(0xFF2E7D32),
             iconData: Icons.forest_rounded,
@@ -833,11 +925,11 @@ class PortfolioBinderView extends StatelessWidget {
         const SizedBox(width: 14),
         Expanded(
           child: _buildPolaroidCard(
-            title: '과학 탐구 발표',
-            subtitle: '창의 실험 페어',
+            title: title1,
+            subtitle: sub1,
             tapeColor: NestColors.mutedSage,
             rotation: 0.02,
-            photoIndex: 1,
+            photo: p1,
             themeGradient: const [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
             accentColor: const Color(0xFF0277BD),
             iconData: Icons.science_rounded,
@@ -853,17 +945,13 @@ class PortfolioBinderView extends StatelessWidget {
     required String subtitle,
     required Color tapeColor,
     required double rotation,
-    required int photoIndex,
+    required GalleryItem? photo,
     required List<Color> themeGradient,
     required Color accentColor,
     required IconData iconData,
   }) {
     // 실제 로드된 사진 바이트가 있는지 확인
-    Uint8List? bytes;
-    if (bundle.photos.length > photoIndex) {
-      final photoId = bundle.photos[photoIndex].id;
-      bytes = photoBytes[photoId];
-    }
+    final bytes = photo != null ? photoBytes[photo.id] : null;
 
     return Transform.rotate(
       angle: rotation,
@@ -917,6 +1005,8 @@ class PortfolioBinderView extends StatelessWidget {
                             const SizedBox(height: 6),
                             Text(
                               title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -929,6 +1019,8 @@ class PortfolioBinderView extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: 'DoHyeon',
                     fontSize: 12,
@@ -937,6 +1029,8 @@ class PortfolioBinderView extends StatelessWidget {
                 ),
                 Text(
                   subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 10,
                     color: NestColors.deepWood.withValues(alpha: 0.6),
@@ -995,16 +1089,20 @@ class PortfolioBinderView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontFamily: 'DoHyeon',
-                  fontSize: 14,
-                  color: NestColors.deepWood,
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'DoHyeon',
+                    fontSize: 14,
+                    color: NestColors.deepWood,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(

@@ -7,6 +7,7 @@ import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/announcement_attachments.dart';
 import '../widgets/nest_empty_state.dart';
+import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_motion.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_sheet.dart';
@@ -146,7 +147,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
                   initialChildId: childId,
                 );
               },
-              icon: const Icon(Icons.auto_stories_outlined, size: 18),
+              icon: const Nest3dIcon.portfolio(size: 18),
               label: const Text('나의 한 학기 포트폴리오'),
             ),
           ],

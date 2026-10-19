@@ -92,7 +92,15 @@ class PortfolioPdfBuilder {
     // ─────────────────────────────────────────────────────────────
     // 1. 표지 (Cover Page)
     // ─────────────────────────────────────────────────────────────
-    if (options.includeCover) {
+    final hasAnySection = options.includeCover ||
+        options.includeStudentProfile ||
+        options.includeAttendance ||
+        options.includeCurriculum ||
+        options.includeActivities ||
+        options.includeComprehensiveReview ||
+        options.includePhotos;
+
+    if (options.includeCover || !hasAnySection) {
       doc.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
@@ -119,7 +127,7 @@ class PortfolioPdfBuilder {
                           borderRadius: pw.BorderRadius.circular(20),
                         ),
                         child: pw.Text(
-                          '${bundle.term.name} · 공식 포트폴리오',
+                          '${bundle.term.name} | 공식 포트폴리오',
                           style: pw.TextStyle(
                             font: fontBold,
                             fontSize: 12,
@@ -1008,7 +1016,7 @@ class PortfolioPdfBuilder {
           final courseLessons = bundle.courseLessons
               .where((l) => l.courseId == course.id)
               .take(3)
-              .map((l) => l.headline)
+              .map((l) => l.headline.replaceAll('·', '-'))
               .where((s) => s.isNotEmpty)
               .toList();
 
@@ -1275,6 +1283,7 @@ class PortfolioPdfBuilder {
           pw.SizedBox(height: 6),
           pw.Text(
             content,
+            maxLines: 6,
             style: pw.TextStyle(
               fontSize: 10.5,
               color: colorTextDark,

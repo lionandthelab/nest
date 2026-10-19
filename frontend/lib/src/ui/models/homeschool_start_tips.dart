@@ -96,9 +96,9 @@ class HomeschoolStartTips {
       id: 'portfolio-preview',
       theme: HomeschoolTipTheme.record,
       icon: Icons.auto_awesome_outlined,
-      badgeText: '준비 중',
+      badgeText: 'NEW',
       title: '아이의 성장을 담는 포트폴리오',
-      body: '차곡차곡 모인 시간표와 활동 기록으로 학기 말 맞춤 학습 포트폴리오를 만들어 드리는 기능이 곧 추가됩니다.',
+      body: '차곡차곡 모인 시간표와 활동 기록으로 학기 말 맞춤 학습 포트폴리오(PDF)를 바로 만들 수 있어요.',
     ),
   ];
 

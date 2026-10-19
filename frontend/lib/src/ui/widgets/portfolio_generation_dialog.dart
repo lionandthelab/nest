@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 
 import '../../models/nest_models.dart';
@@ -7,10 +8,10 @@ import '../../services/download_helper.dart';
 import '../../services/portfolio_pdf_builder.dart';
 import '../../state/nest_controller.dart';
 import '../nest_theme.dart';
-import 'entity_visuals.dart';
 import 'nest_3d_icon.dart';
 import 'nest_skeleton.dart';
 import 'portfolio_binder_view.dart';
+import 'search_select_field.dart';
 
 /// 포트폴리오 생성 다이얼로그 호출 함수
 Future<void> showPortfolioGenerationDialog(
@@ -77,6 +78,20 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
 
   bool _isSavingReview = false;
 
+  /// 현재 사용자의 역할에 맞는 선택 가능 학생 목록
+  List<ChildProfile> get _candidateChildren {
+    final c = widget.controller;
+    if (c.isStudentView) {
+      if (c.activeStudentChild != null) return [c.activeStudentChild!];
+      if (c.currentUserChildProfiles.isNotEmpty) {
+        return c.currentUserChildProfiles;
+      }
+    } else if (c.isParentView) {
+      if (c.myChildren.isNotEmpty) return c.myChildren;
+    }
+    return c.children;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -88,10 +103,9 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
             ? widget.controller.terms.first.id
             : '');
 
+    final candidates = _candidateChildren;
     _selectedChildId = widget.initialChildId ??
-        (widget.controller.children.isNotEmpty
-            ? widget.controller.children.first.id
-            : '');
+        (candidates.isNotEmpty ? candidates.first.id : '');
 
     _loadData();
   }
@@ -191,9 +205,30 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
         attendanceNote: _attendanceNoteCtrl.text.trim(),
       );
 
-      await widget.controller.saveSemesterReview(review);
+      final saved = await widget.controller.saveSemesterReview(review);
 
       if (mounted) {
+        setState(() {
+          _bundle = StudentPortfolioBundle(
+            homeschool: _bundle!.homeschool,
+            term: _bundle!.term,
+            child: _bundle!.child,
+            family: _bundle!.family,
+            classGroup: _bundle!.classGroup,
+            mainTeacher: _bundle!.mainTeacher,
+            totalSchoolDays: _bundle!.totalSchoolDays,
+            attendedDays: _bundle!.attendedDays,
+            absentDays: _bundle!.absentDays,
+            absenceRecords: _bundle!.absenceRecords,
+            courses: _bundle!.courses,
+            courseLessons: _bundle!.courseLessons,
+            activityLogs: _bundle!.activityLogs,
+            academicEvents: _bundle!.academicEvents,
+            selfStudyPlans: _bundle!.selfStudyPlans,
+            photos: _bundle!.photos,
+            review: saved,
+          );
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('종합의견이 안전하게 저장되었습니다.')),
         );
@@ -322,6 +357,13 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
                             PortfolioBinderView(
                               bundle: _bundle!,
                               photoBytes: _loadedPhotoBytes,
+                              selectedPhotoIds: _selectedPhotoIds,
+                              customTeacherEvaluation:
+                                  _teacherCommentCtrl.text.trim(),
+                              customParentEvaluation:
+                                  _parentCommentCtrl.text.trim(),
+                              customStudentReflection:
+                                  _studentReflectionCtrl.text.trim(),
                               onExportPdf: _handleDownloadPdf,
                               onEditConfig: () => _tabController.animateTo(1),
                             ),
@@ -449,7 +491,72 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
     );
   }
 
+  Future<void> _pickTerm() async {
+    final terms = widget.controller.terms;
+    if (terms.isEmpty) return;
+
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '학기 선택',
+      helpText: '포트폴리오를 생성할 학기를 선택하세요.',
+      currentValue: _selectedTermId.isNotEmpty ? _selectedTermId : null,
+      options: terms.map((term) {
+        final period = (term.startDate != null && term.endDate != null)
+            ? '${DateFormat('yyyy.MM.dd').format(term.startDate!)} ~ ${DateFormat('yyyy.MM.dd').format(term.endDate!)}'
+            : '';
+        return SelectSheetOption<String>(
+          value: term.id,
+          title: term.name,
+          subtitle: period,
+          keywords: term.name,
+        );
+      }).toList(),
+    );
+
+    if (selected != null && selected != _selectedTermId) {
+      setState(() => _selectedTermId = selected);
+      _loadData();
+    }
+  }
+
+  Future<void> _pickChild() async {
+    final candidates = _candidateChildren;
+    if (candidates.isEmpty) return;
+
+    final selected = await showSelectSheet<String>(
+      context: context,
+      title: '학생(자녀) 선택',
+      helpText: '포트폴리오를 생성할 학생을 선택하세요.',
+      currentValue: _selectedChildId.isNotEmpty ? _selectedChildId : null,
+      options: candidates.map((child) {
+        final familyLabel =
+            child.familyName.isNotEmpty ? '${child.familyName} 가정' : '';
+        return SelectSheetOption<String>(
+          value: child.id,
+          title: child.name,
+          subtitle: familyLabel,
+          keywords: '${child.name} ${child.familyName}',
+        );
+      }).toList(),
+    );
+
+    if (selected != null && selected != _selectedChildId) {
+      setState(() => _selectedChildId = selected);
+      _loadData();
+    }
+  }
+
   Widget _buildSelectionCard() {
+    final selectedTerm = widget.controller.terms
+        .where((t) => t.id == _selectedTermId)
+        .firstOrNull;
+    final candidates = _candidateChildren;
+    final selectedChild =
+        candidates.where((c) => c.id == _selectedChildId).firstOrNull ??
+            widget.controller.children
+                .where((c) => c.id == _selectedChildId)
+                .firstOrNull;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -462,8 +569,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
         children: [
           Row(
             children: [
-              const Icon(Icons.person_outline,
-                  size: 18, color: NestColors.dustyRose),
+              const Nest3dIcon.termSetup(size: 22),
               const SizedBox(width: 8),
               Text(
                 '대상 학기 및 학생 선택',
@@ -477,70 +583,27 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
           const SizedBox(height: 14),
           Row(
             children: [
-              // 학기 선택
+              // 학기 선택 (showSelectSheet 사용)
               Expanded(
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: '학기',
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedTermId.isNotEmpty ? _selectedTermId : null,
-                      isExpanded: true,
-                      items: widget.controller.terms.map((term) {
-                        return DropdownMenuItem(
-                          value: term.id,
-                          child: Text(term.name),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null && val != _selectedTermId) {
-                          setState(() => _selectedTermId = val);
-                          _loadData();
-                        }
-                      },
-                    ),
-                  ),
+                child: SelectFieldCard(
+                  label: '학기',
+                  hintText: '학기를 선택하세요',
+                  icon: Icons.calendar_today_outlined,
+                  enabled: widget.controller.terms.isNotEmpty && !_isLoading,
+                  value: selectedTerm?.name,
+                  onTap: _pickTerm,
                 ),
               ),
               const SizedBox(width: 14),
-              // 학생 선택
+              // 학생 선택 (showSelectSheet 사용)
               Expanded(
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: '학생(자녀)',
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value:
-                          _selectedChildId.isNotEmpty ? _selectedChildId : null,
-                      isExpanded: true,
-                      items: widget.controller.children.map((child) {
-                        return DropdownMenuItem(
-                          value: child.id,
-                          child: Row(
-                            children: [
-                              EntityAvatar(label: child.name, size: 20),
-                              const SizedBox(width: 8),
-                              Text(child.name),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null && val != _selectedChildId) {
-                          setState(() => _selectedChildId = val);
-                          _loadData();
-                        }
-                      },
-                    ),
-                  ),
+                child: SelectFieldCard(
+                  label: '학생(자녀)',
+                  hintText: '학생을 선택하세요',
+                  icon: Icons.child_care_outlined,
+                  enabled: candidates.length > 1 && !_isLoading,
+                  value: selectedChild?.name,
+                  onTap: _pickChild,
                 ),
               ),
             ],
@@ -563,7 +626,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
         children: [
           Row(
             children: [
-              const Icon(Icons.checklist, size: 18, color: NestColors.dustyRose),
+              const Nest3dIcon.checkStamp(size: 22),
               const SizedBox(width: 8),
               Text(
                 '포함할 포트폴리오 항목',
@@ -638,8 +701,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.rate_review_outlined,
-                      size: 18, color: NestColors.dustyRose),
+                  const Nest3dIcon.pencil(size: 22),
                   const SizedBox(width: 8),
                   Text(
                     '한 학기 종합의견 및 성찰',
@@ -667,6 +729,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
           TextField(
             controller: _teacherCommentCtrl,
             maxLines: 3,
+            onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
               labelText: '담임(지도) 교사 종합의견',
               hintText:
@@ -678,6 +741,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
           TextField(
             controller: _parentCommentCtrl,
             maxLines: 3,
+            onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
               labelText: '학부모 가정학습 관찰 총평',
               hintText:
@@ -689,6 +753,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
           TextField(
             controller: _studentReflectionCtrl,
             maxLines: 3,
+            onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
               labelText: '학생 본인 성찰 소감문',
               hintText:
@@ -700,6 +765,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
           TextField(
             controller: _attendanceNoteCtrl,
             maxLines: 2,
+            onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
               labelText: '출결 특기사항 (선택)',
               hintText:
@@ -730,8 +796,7 @@ class _PortfolioGenerationDialogState extends State<_PortfolioGenerationDialog>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.photo_library_outlined,
-                      size: 18, color: NestColors.dustyRose),
+                  const Nest3dIcon.camera(size: 22),
                   const SizedBox(width: 8),
                   Text(
                     '포트폴리오 수록 사진 (${_selectedPhotoIds.length}/${photos.length})',
