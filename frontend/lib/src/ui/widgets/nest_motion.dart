@@ -16,6 +16,10 @@ class NestHaptics {
     HapticFeedback.lightImpact();
   }
 
+  static void tap() {
+    HapticFeedback.selectionClick();
+  }
+
   static void success() {
     HapticFeedback.mediumImpact();
   }

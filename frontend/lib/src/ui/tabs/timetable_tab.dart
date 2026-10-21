@@ -22,6 +22,7 @@ import 'timetable/room_normalizer.dart';
 import 'timetable/timetable_excel_export.dart';
 import 'timetable/timetable_export_board.dart';
 import 'timetable/whole_school_overlay_board.dart';
+import '../widgets/course_schedule_quick_sheet.dart';
 import '../widgets/nest_sheet.dart';
 
 /// Board view mode: per-class editable build, read-only whole-school overlay,
@@ -117,6 +118,16 @@ class _TimetableTabState extends State<TimetableTab> {
     return ListView(
       children: [
         _buildClassContextCard(controller),
+        const SizedBox(height: 8),
+        CourseScheduleQuickBanner(
+          controller: controller,
+          onApplied: () {
+            if (!mounted) return;
+            setState(() {
+              _loadDraftFromController(controller);
+            });
+          },
+        ),
         const SizedBox(height: 8),
         _buildTimeSlotManagerBar(controller),
         const SizedBox(height: 8),
@@ -370,8 +381,23 @@ class _TimetableTabState extends State<TimetableTab> {
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             const Spacer(),
+            if (slots.isEmpty)
+              FilledButton.tonalIcon(
+                onPressed: locked
+                    ? null
+                    : () async {
+                        await _tryAction(
+                          () => controller.ensureDefaultTimeSlots(),
+                        );
+                        if (!mounted) return;
+                        _showMessage(controller.statusMessage);
+                        setState(() {});
+                      },
+                icon: const Icon(Icons.auto_fix_high, size: 16),
+                label: const Text('기본 교시(09~18시) 생성'),
+              ),
             // 교시를 잘못 설정(예: 29교시)했을 때, 현재 상태에서 값을 추론하지 않고
-            // 깨끗한 기본값(평일 09:00~15:00 · 50분)으로 편집기를 열어 재설정한다.
+            // 깨끗한 기본값(평일 09:00~18:00 · 50분 교시 · 10분 쉬는시간)으로 편집기를 열어 재설정한다.
             if (slots.isNotEmpty)
               TextButton.icon(
                 onPressed: locked
@@ -411,9 +437,9 @@ class _TimetableTabState extends State<TimetableTab> {
       uniquePeriods.add('${s.startTime}|${s.endTime}');
     }
 
-    // 기본값(초기화 시엔 현재 상태를 무시하고 이 값으로 시작).
+    // 기본값(초기화 시엔 현재 상태를 무시하고 이 값으로 시작: 09:00~18:00, 50분/10분).
     String inferredStart = '09:00';
-    String inferredEnd = '15:00';
+    String inferredEnd = '18:00';
     int inferredDuration = 50;
     int inferredBreak = 10;
 
@@ -539,7 +565,7 @@ class _TimetableTabState extends State<TimetableTab> {
                   children: [
                     Text(
                       resetToDefaults
-                          ? '기본값(평일 09:00~15:00 · 50분 교시)으로 되돌립니다. '
+                          ? '기본값(평일 09:00~18:00 · 50분 교시 · 10분 쉬는시간)으로 되돌립니다. '
                                 '적용하면 현재 교시가 모두 지워지고 아래 미리보기대로 다시 만들어집니다.'
                           : '시간 범위와 교시 길이를 설정하면 자동으로 교시가 생성됩니다. '
                                 '적용하면 기존 교시는 새 설정으로 교체됩니다.',
@@ -573,7 +599,7 @@ class _TimetableTabState extends State<TimetableTab> {
                             controller: dayEndCtrl,
                             decoration: const InputDecoration(
                               labelText: '종료 시간',
-                              hintText: '15:00',
+                              hintText: '18:00',
                               isDense: true,
                             ),
                             onChanged: (_) => setDialogState(() {}),
@@ -1854,6 +1880,27 @@ class _TimetableTabState extends State<TimetableTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed: locked
+                  ? null
+                  : () async {
+                      final added = await showCourseScheduleQuickSheet(
+                        context: context,
+                        controller: controller,
+                      );
+                      if (added == true && mounted) {
+                        setState(() {
+                          _loadDraftFromController(controller);
+                        });
+                      }
+                    },
+              icon: const Icon(Icons.auto_awesome, size: 18),
+              label: const Text('템플릿·문장으로 한 번에 추가'),
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Icon(

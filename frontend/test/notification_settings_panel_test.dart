@@ -249,4 +249,55 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('세부 이벤트별 알림 스위치와 빠른 프리셋이 동작한다', (tester) async {
+    NotificationPrefs? saved;
+    await _pump(
+      tester,
+      size: const Size(393, 1400),
+      onChanged: (value) => saved = value,
+    );
+
+    expect(find.text('이벤트별 세부 알림'), findsOneWidget);
+    expect(find.text('8/8 켜짐'), findsOneWidget);
+    expect(find.text('수업 변경 · 보강 알림'), findsOneWidget);
+    expect(find.text('결석 신고 · 확인 알림'), findsOneWidget);
+    expect(find.text('공지사항 알림'), findsOneWidget);
+    expect(find.text('학사 일정 · 행사 알림'), findsOneWidget);
+    expect(find.text('아이 활동 기록 · 수업 계획'), findsOneWidget);
+    expect(find.text('실시간 채팅 알림'), findsOneWidget);
+    expect(find.text('커뮤니티 새 글 · 댓글'), findsOneWidget);
+    expect(find.text('추억 앨범 사진 · 영상'), findsOneWidget);
+
+    await tester.tap(find.text('필수 알림만'));
+    await tester.pumpAndSettle();
+
+    expect(saved, isNotNull);
+    expect(saved!.classChangeEnabled, isTrue);
+    expect(saved!.absenceEnabled, isTrue);
+    expect(saved!.announcementEnabled, isTrue);
+    expect(saved!.academicEventEnabled, isTrue);
+    expect(saved!.studentLogEnabled, isTrue);
+    expect(saved!.chatEnabled, isFalse);
+    expect(saved!.communityEnabled, isFalse);
+    expect(saved!.galleryEnabled, isFalse);
+    expect(saved!.enabledEventCount, 5);
+  });
+
+  testWidgets('조용한 시간 시작/종료 시각 칩을 직접 고를 수 있다', (tester) async {
+    NotificationPrefs? saved;
+    await _pump(
+      tester,
+      size: const Size(393, 1200),
+      prefs: const NotificationPrefs(
+        quietHoursStart: '21:00',
+        quietHoursEnd: '07:00',
+      ),
+      onChanged: (value) => saved = value,
+    );
+
+    await tester.tap(find.text('23:00'));
+    await tester.pumpAndSettle();
+    expect(saved?.quietHoursStart, '23:00');
+  });
 }

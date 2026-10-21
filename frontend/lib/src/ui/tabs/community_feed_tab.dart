@@ -6,8 +6,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
+import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
 import '../widgets/entity_visuals.dart';
+import '../widgets/homeschool_chat_view.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_sheet.dart';
 
@@ -19,6 +21,7 @@ class CommunityFeedTab extends StatefulWidget {
     this.showHeroHeader = false,
     this.title = '커뮤니티',
     this.subtitle = '',
+    this.sectionRequest,
   });
 
   final NestController controller;
@@ -26,12 +29,17 @@ class CommunityFeedTab extends StatefulWidget {
   final bool showHeroHeader;
   final String title;
   final String subtitle;
+  final TabSectionRequest? sectionRequest;
 
   @override
   State<CommunityFeedTab> createState() => _CommunityFeedTabState();
 }
 
 class _CommunityFeedTabState extends State<CommunityFeedTab> {
+  static const _chatSection = 'CHAT';
+  static const _feedSection = 'FEED';
+
+  String _section = _chatSection;
   final _postController = TextEditingController();
   final Map<String, TextEditingController> _commentControllers = {};
 
@@ -41,7 +49,25 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
   @override
   void initState() {
     super.initState();
+    _applySectionRequest(widget.sectionRequest);
     unawaited(widget.controller.ensureCommunityFeed());
+    unawaited(widget.controller.ensureChatMessages());
+  }
+
+  @override
+  void didUpdateWidget(covariant CommunityFeedTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final request = widget.sectionRequest;
+    if (request != null && request.isNewerThan(oldWidget.sectionRequest)) {
+      setState(() => _applySectionRequest(request));
+    }
+  }
+
+  void _applySectionRequest(TabSectionRequest? request) {
+    if (request == null) return;
+    if (request.section == _chatSection || request.section == _feedSection) {
+      _section = request.section;
+    }
   }
 
   @override
@@ -67,57 +93,106 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
     _syncComposerClassTarget(controller);
     _syncCommentControllers(posts);
 
+    final isChat = _section == _chatSection;
+
     return Scaffold(
       backgroundColor: NestColors.creamyWhite,
-      floatingActionButton: controller.canWriteCommunity
+      floatingActionButton: !isChat && controller.canWriteCommunity
           ? FloatingActionButton(
               onPressed: () => _openComposeModal(controller),
               backgroundColor: NestColors.dustyRose,
               child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
-      body: RefreshIndicator(
-        onRefresh: _reloadFeed,
-        child: posts.isEmpty
-            ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 120),
-                  NestEmptyState(
-                    icon: Icons.camera_alt_outlined,
-                    title: '아직 게시글이 없습니다',
-                    subtitle: '오른쪽 아래 + 버튼으로 첫 게시글을 올려보세요.',
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                segments: [
+                  ButtonSegment<String>(
+                    value: _chatSection,
+                    icon: const Icon(Icons.chat_bubble_outline, size: 17),
+                    label: Text(
+                      controller.chatMessages.isEmpty
+                          ? '실시간 채팅'
+                          : '실시간 채팅 ${controller.chatMessages.length}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  ButtonSegment<String>(
+                    value: _feedSection,
+                    icon: const Icon(Icons.dynamic_feed_outlined, size: 17),
+                    label: Text(
+                      posts.isEmpty ? '커뮤니티 피드' : '커뮤니티 피드 ${posts.length}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
-              )
-            : ListView.separated(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: posts.length,
-                separatorBuilder: (context, i) => Divider(
-                  height: 1,
-                  color: NestColors.roseMist.withValues(alpha: 0.5),
-                ),
-                itemBuilder: (context, index) {
-                  final post = posts[index];
-                  return _InstagramPostCard(
-                    post: post,
-                    media: controller.mediaForCommunityPost(post.id),
-                    comments: controller.commentsForCommunityPost(post.id),
-                    liked: controller.isCommunityPostLiked(post.id),
-                    likeCount: controller.likesForCommunityPost(post.id),
-                    classGroupName: controller.findClassGroupName(
-                      post.classGroupId,
-                    ),
-                    commentController: _commentControllers[post.id]!,
-                    isBusy: controller.isBusy,
-                    onLike: () => _toggleLike(post.id),
-                    onComment: () => _submitComment(post.id),
-                    onOpenMediaLink: _openLink,
-                    mediaUrlResolver: controller.mediaPublicUrl,
-                    onReport: () => _showReportDialog(post.id),
-                  );
-                },
+                selected: {_section},
+                showSelectedIcon: false,
+                onSelectionChanged: (values) =>
+                    setState(() => _section = values.first),
               ),
+            ),
+          ),
+          Expanded(
+            child: isChat
+                ? HomeschoolChatView(controller: controller)
+                : RefreshIndicator(
+                    onRefresh: _reloadFeed,
+                    child: posts.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: const [
+                              SizedBox(height: 120),
+                              NestEmptyState(
+                                icon: Icons.camera_alt_outlined,
+                                title: '아직 게시글이 없습니다',
+                                subtitle: '오른쪽 아래 + 버튼으로 첫 게시글을 올려보세요.',
+                              ),
+                            ],
+                          )
+                        : ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            itemCount: posts.length,
+                            separatorBuilder: (context, i) => Divider(
+                              height: 1,
+                              color: NestColors.roseMist.withValues(alpha: 0.5),
+                            ),
+                            itemBuilder: (context, index) {
+                              final post = posts[index];
+                              return _InstagramPostCard(
+                                post: post,
+                                media: controller.mediaForCommunityPost(post.id),
+                                comments: controller.commentsForCommunityPost(
+                                  post.id,
+                                ),
+                                liked: controller.isCommunityPostLiked(post.id),
+                                likeCount: controller.likesForCommunityPost(
+                                  post.id,
+                                ),
+                                classGroupName: controller.findClassGroupName(
+                                  post.classGroupId,
+                                ),
+                                commentController:
+                                    _commentControllers[post.id]!,
+                                isBusy: controller.isBusy,
+                                onLike: () => _toggleLike(post.id),
+                                onComment: () => _submitComment(post.id),
+                                onOpenMediaLink: _openLink,
+                                mediaUrlResolver: controller.mediaPublicUrl,
+                                onReport: () => _showReportDialog(post.id),
+                              );
+                            },
+                          ),
+                  ),
+          ),
+        ],
       ),
     );
   }

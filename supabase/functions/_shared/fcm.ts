@@ -38,14 +38,24 @@ export interface DomainPushPayload {
   data?: Record<string, string>;
 }
 
+export interface FcmSendResult {
+  userId: string;
+  token: string;
+  ok: boolean;
+  name?: string;
+  error?: string;
+  unregistered?: boolean;
+}
+
 export async function sendFcmToTokens(args: {
   tokens: Array<{ user_id: string; token: string; platform: string }>;
   payload: DomainPushPayload;
-}): Promise<Array<{ userId: string; ok: boolean; name?: string; error?: string }>> {
+}): Promise<FcmSendResult[]> {
   const raw = Deno.env.get("FCM_SERVICE_ACCOUNT") ?? "";
   if (!raw) {
     return args.tokens.map((row) => ({
       userId: row.user_id,
+      token: row.token,
       ok: false,
       error: "FCM_SERVICE_ACCOUNT 미설정",
     }));
@@ -54,7 +64,7 @@ export async function sendFcmToTokens(args: {
   const sa = parseServiceAccount(raw);
   const projectId = Deno.env.get("FCM_PROJECT_ID") ?? sa.project_id ?? "";
   const accessToken = await fcmAccessToken(sa);
-  const results = [];
+  const results: FcmSendResult[] = [];
 
   for (const row of args.tokens) {
     const message: Record<string, unknown> = {
@@ -64,11 +74,29 @@ export async function sendFcmToTokens(args: {
     if (args.payload.data && Object.keys(args.payload.data).length > 0) {
       message.data = args.payload.data;
     }
-    if (row.platform === "android") message.android = { priority: "high" };
+    if (row.platform === "android") {
+      message.android = {
+        priority: "high",
+        notification: {
+          sound: "default",
+          default_sound: true,
+          default_vibrate_timings: true,
+        },
+      };
+    }
     if (row.platform === "ios") {
       message.apns = {
-        headers: { "apns-priority": "10" },
-        payload: { aps: { sound: "default" } },
+        headers: {
+          "apns-priority": "10",
+          "apns-push-type": "alert",
+        },
+        payload: {
+          aps: {
+            sound: "default",
+            "mutable-content": 1,
+            "content-available": 1,
+          },
+        },
       };
     }
     if (row.platform === "web") {
@@ -89,11 +117,21 @@ export async function sendFcmToTokens(args: {
       },
     );
     const data = await response.json().catch(() => ({}));
+    const errorCode = String(
+      data?.error?.details?.[0]?.errorCode ?? data?.error?.status ?? "",
+    ).toUpperCase();
+    const unregistered =
+      response.status === 404 ||
+      response.status === 410 ||
+      errorCode === "UNREGISTERED";
+
     results.push({
       userId: row.user_id,
+      token: row.token,
       ok: response.ok,
       name: data?.name,
       error: response.ok ? undefined : data?.error?.message ?? `FCM ${response.status}`,
+      unregistered,
     });
   }
   return results;

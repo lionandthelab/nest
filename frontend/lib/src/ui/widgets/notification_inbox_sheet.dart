@@ -103,16 +103,33 @@ class _InboxTile extends StatelessWidget {
       'MORNING_DIGEST' => Icons.wb_sunny_outlined,
       'CLASS_CHANGE' => Icons.swap_horiz_outlined,
       'ABSENCE' => Icons.event_busy_outlined,
+      'ABSENCE_ACK' => Icons.fact_check_outlined,
+      'ANNOUNCEMENT' => Icons.campaign_outlined,
+      'ACADEMIC_EVENT' => Icons.event_note_outlined,
+      'STUDENT_LOG' => Icons.menu_book_outlined,
+      'TEACHING_PLAN' => Icons.assignment_outlined,
+      'CHAT_MESSAGE' => Icons.chat_bubble_outline,
+      'COMMUNITY_POST' || 'COMMUNITY_COMMENT' => Icons.forum_outlined,
+      'GALLERY_UPLOAD' => Icons.photo_library_outlined,
       _ => Icons.notifications_outlined,
     };
   }
 
   String _fallbackTitle(String eventType) {
     return switch (eventType) {
-      'CLASS_REMINDER' => '수업 30분 전',
+      'CLASS_REMINDER' => '수업 전 알림',
       'MORNING_DIGEST' => '오늘 일정',
       'CLASS_CHANGE' => '수업 변경',
       'ABSENCE' => '결석 알림',
+      'ABSENCE_ACK' => '결석 신고 확인',
+      'ANNOUNCEMENT' => '새 공지사항',
+      'ACADEMIC_EVENT' => '새 학사 일정',
+      'STUDENT_LOG' => '아이 활동 기록',
+      'TEACHING_PLAN' => '새 수업 계획',
+      'CHAT_MESSAGE' => '홈스쿨 채팅',
+      'COMMUNITY_POST' => '커뮤니티 새 글',
+      'COMMUNITY_COMMENT' => '커뮤니티 새 댓글',
+      'GALLERY_UPLOAD' => '추억 앨범 새 사진·영상',
       _ => '알림',
     };
   }

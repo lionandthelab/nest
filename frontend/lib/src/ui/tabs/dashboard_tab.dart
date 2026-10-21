@@ -1,17 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/course_schedule_quick_adder.dart';
 import '../../state/nest_controller.dart';
+import '../models/homeschool_start_tips.dart';
 import '../nest_theme.dart';
-import '../widgets/homeschool_create_dialog.dart';
 import '../widgets/homeschool_tips_card.dart';
+import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_motion.dart';
 
-/// 소속 홈스쿨이 없는 사용자를 위한 온보딩 화면.
+/// 소속 홈스쿨이 없는 사용자를 위한 토스 스타일 단계별 인라인 온보딩 화면.
 ///
-/// 메인은 우리집 홈스쿨 개설이다. 초대 · 참여 코드 · 검색 가입은
-/// "이미 홈스쿨이 있나요?" 아래에 둔다.
+/// 불필요한 모달 팝업과 다단계 클릭을 없애고, 한 카드 안에서 애니메이션으로
+/// 즉시 펼쳐지며(0ms 로컬 전환) 1초 만에 바로 열거나 템플릿·문장으로
+/// 시간표(09:00~18:00, 50분/10분)까지 한 번에 세팅할 수 있다.
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key, required this.controller});
 
@@ -22,7 +27,205 @@ class DashboardTab extends StatefulWidget {
 }
 
 class _DashboardTabState extends State<DashboardTab> {
-  bool _openingCreate = false;
+  late final TextEditingController _homeschoolController;
+  late final TextEditingController _termController;
+  late final TextEditingController _startDateController;
+  late final TextEditingController _endDateController;
+  late final TextEditingController _classController;
+  late final TextEditingController _sentenceController;
+  late final TextEditingController _childNameController;
+
+  /// 0: 1단계(이름 확인 및 1초 시작), 1: 2단계(수업 템플릿·문장 및 첫 아이 선택)
+  int _step = 0;
+  bool _showAdvancedSettings = false;
+  bool _useCustomSentence = false;
+  String _selectedTemplateId = kCourseScheduleTemplates.first.id;
+
+  bool _submitting = false;
+  int _progressPhase = 0;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    final nickname = widget.controller.user?.userMetadata?['full_name'];
+    _homeschoolController = TextEditingController(
+      text: HomeschoolStartDefaults.nameFromProfile(
+        realName: widget.controller.myRealName,
+        nickname: nickname is String ? nickname : '',
+      ),
+    );
+    _termController = TextEditingController(
+      text: HomeschoolStartDefaults.termName(now),
+    );
+    _startDateController = TextEditingController(
+      text: DateFormat('yyyy-MM-dd').format(now),
+    );
+    _endDateController = TextEditingController(
+      text: DateFormat(
+        'yyyy-MM-dd',
+      ).format(DateTime(now.year, now.month + 6, now.day)),
+    );
+    _classController = TextEditingController(
+      text: HomeschoolStartDefaults.defaultClassName,
+    );
+    _sentenceController = TextEditingController(
+      text: kCourseScheduleExampleSentences.first.sentence,
+    );
+    _childNameController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _homeschoolController.dispose();
+    _termController.dispose();
+    _startDateController.dispose();
+    _endDateController.dispose();
+    _classController.dispose();
+    _sentenceController.dispose();
+    _childNameController.dispose();
+    super.dispose();
+  }
+
+  CourseScheduleTemplate get _selectedTemplate {
+    return kCourseScheduleTemplates.firstWhere(
+      (t) => t.id == _selectedTemplateId,
+      orElse: () => kCourseScheduleTemplates.first,
+    );
+  }
+
+  List<String> get _nameSuggestions {
+    final nickname = widget.controller.user?.userMetadata?['full_name'];
+    final defaultName = HomeschoolStartDefaults.nameFromProfile(
+      realName: widget.controller.myRealName,
+      nickname: nickname is String ? nickname : '',
+    );
+    final set = <String>{
+      defaultName,
+      '우리집 홈스쿨',
+      '조이 홈스쿨',
+      '숲속 홈스쿨',
+    };
+    return set.toList();
+  }
+
+  void _goToStep2() {
+    if (_homeschoolController.text.trim().isEmpty) {
+      _homeschoolController.text = '우리집 홈스쿨';
+    }
+    NestHaptics.tap();
+    setState(() {
+      _errorMessage = null;
+      _step = 1;
+    });
+  }
+
+  Future<void> _pickDate(TextEditingController target) async {
+    if (_submitting) return;
+    final parsed = DateTime.tryParse(target.text.trim());
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: parsed ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+    );
+    if (picked == null) return;
+    setState(() {
+      target.text = DateFormat('yyyy-MM-dd').format(picked);
+    });
+  }
+
+  Future<void> _startHomeschoolInline({bool quickDefault = false}) async {
+    if (_submitting || widget.controller.isBusy) return;
+
+    final homeschoolName = _homeschoolController.text.trim().isEmpty
+        ? '우리집 홈스쿨'
+        : _homeschoolController.text.trim();
+    final termName = _termController.text.trim().isEmpty
+        ? HomeschoolStartDefaults.termName(DateTime.now())
+        : _termController.text.trim();
+    final className = _classController.text.trim().isEmpty
+        ? HomeschoolStartDefaults.defaultClassName
+        : _classController.text.trim();
+    final startDate = _startDateController.text.trim();
+    final endDate = _endDateController.text.trim();
+    final childName = _childNameController.text.trim();
+
+    late final List<CourseTemplateItem> coursesToEnsure;
+    late final List<TemplateSlotPlacement> placements;
+    if (!quickDefault && _useCustomSentence) {
+      final parsed = parseCourseScheduleSentence(_sentenceController.text);
+      coursesToEnsure = parsed.courses;
+      placements = parsed.placements;
+    } else {
+      final template = _selectedTemplate;
+      coursesToEnsure = template.courses;
+      placements = template.placements;
+    }
+
+    final coursesCsv = coursesToEnsure.isNotEmpty
+        ? coursesToEnsure.map((c) => c.name).join(', ')
+        : HomeschoolStartDefaults.defaultCourses;
+
+    NestHaptics.tap();
+    setState(() {
+      _submitting = true;
+      _progressPhase = 0;
+      _errorMessage = null;
+    });
+
+    try {
+      // 1단계: 홈스쿨 + 학기 + 반 + 기본 과목 + 평일 09:00~18:00(50분/10분) 슬롯 일괄 생성
+      await widget.controller.bootstrapFrame(
+        homeschoolName: homeschoolName,
+        termName: termName,
+        startDate: startDate,
+        endDate: endDate,
+        className: className,
+        coursesCsv: coursesCsv,
+      );
+
+      if (mounted) {
+        setState(() => _progressPhase = 1);
+      }
+
+      // 2단계: 선택한 템플릿/문장의 주간 시간표 배치 (단일 배치 INSERT)
+      if (placements.isNotEmpty) {
+        try {
+          await widget.controller.applyCourseAndScheduleQuickAdd(
+            coursesToEnsure: coursesToEnsure,
+            placements: placements,
+            placeOnTimetable: true,
+          );
+        } catch (_) {}
+      }
+
+      // 3단계: 첫 아이 이름이 입력된 경우 가정·보호자·아이·반 자동 배정
+      if (childName.isNotEmpty) {
+        if (mounted) {
+          setState(() => _progressPhase = 2);
+        }
+        await widget.controller.registerFirstChildOnboarding(
+          childName: childName,
+        );
+      }
+
+      if (mounted) {
+        setState(() => _progressPhase = 3);
+      }
+      NestHaptics.success();
+      unawaited(widget.controller.loadDriveIntegration());
+    } catch (_) {
+      if (!mounted) return;
+      final msg = widget.controller.statusMessage.trim();
+      setState(() {
+        _submitting = false;
+        _errorMessage = msg.isEmpty ? '우리집 홈스쿨을 만들지 못했어요.' : msg;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,80 +235,119 @@ class _DashboardTabState extends State<DashboardTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        NestAppear(index: 0, child: _buildOnboardingWelcome(theme, controller)),
-        const SizedBox(height: 16),
+        if (controller.pendingInvites.isNotEmpty) ...[
+          NestAppear(
+            index: 0,
+            child: PendingInvitesCard(controller: controller),
+          ),
+          const SizedBox(height: 16),
+        ],
         NestAppear(
           index: 1,
-          child: _buildOnboardingCreateCard(theme, controller),
+          child: _buildTossProgressiveOnboardingCard(theme, controller),
         ),
         const SizedBox(height: 16),
         const NestAppear(index: 2, child: HomeschoolTipsCard()),
-        if (controller.pendingInvites.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          PendingInvitesCard(controller: controller),
-        ],
         const SizedBox(height: 16),
         NestAppear(index: 3, child: _buildJoinExistingCard(theme, controller)),
       ],
     );
   }
 
-  // ── Onboarding for users with no membership ──
+  // ── Toss-Style Progressive Unfolding Onboarding Card ──
 
-  Widget _buildOnboardingWelcome(ThemeData theme, NestController controller) {
+  Widget _buildTossProgressiveOnboardingCard(
+    ThemeData theme,
+    NestController controller,
+  ) {
+    final targetProgress = _submitting ? 1.0 : (_step == 0 ? 0.5 : 0.92);
+
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: NestColors.dustyRose.withValues(alpha: 0.45),
+          width: 1.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: NestColors.roseMist,
-                  foregroundColor: NestColors.deepWood,
-                  child: const Icon(Icons.waving_hand, size: 28),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '우리집 홈스쿨, 여기서 열어요',
-                        style: theme.textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        controller.user?.email ?? '',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: NestColors.deepWood.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
+            // 상단 애니메이션 진행 바
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0.25, end: targetProgress),
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) {
+                return LinearProgressIndicator(
+                  value: value,
+                  minHeight: 6,
+                  backgroundColor: NestColors.roseMist.withValues(alpha: 0.45),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    NestColors.dustyRose,
                   ),
-                ),
-              ],
+                );
+              },
             ),
-            const SizedBox(height: 16),
-            Text(
-              '혼자여도 괜찮아요. 학기·반·과목은 미리 넣어 두었으니, 이름만 보고 시작하면 됩니다.',
-              style: theme.textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            const _OnboardingOption(
-              icon: Icons.home_work_outlined,
-              title: '우리집 홈스쿨 열기',
-              description: '기본 틀이 이미 채워져 있어요. 아이와 시간표는 천천히 넣으면 됩니다.',
-              highlight: true,
-            ),
-            const SizedBox(height: 10),
-            _OnboardingOption(
-              icon: Icons.group_add_outlined,
-              title: '이미 있는 홈스쿨',
-              description: '참여 코드나 초대로 들어가면 됩니다.',
-              highlight: controller.pendingInvites.isNotEmpty,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _submitting
+                    ? _buildSubmittingChecklist(theme)
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildStepHeader(theme, controller),
+                          const SizedBox(height: 18),
+                          if (_errorMessage != null) ...[
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Text(
+                                _errorMessage!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: Colors.red.shade800,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 260),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) {
+                              final slide = Tween<Offset>(
+                                begin: const Offset(0, 0.04),
+                                end: Offset.zero,
+                              ).animate(animation);
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: slide,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: _step == 0
+                                ? _buildStep1NameContent(theme)
+                                : _buildStep2ScheduleContent(theme),
+                          ),
+                        ],
+                      ),
+              ),
             ),
           ],
         ),
@@ -113,48 +355,657 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildOnboardingCreateCard(
-    ThemeData theme,
-    NestController controller,
-  ) {
-    return Card(
-      color: NestColors.roseMist.withValues(alpha: 0.35),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.add_home, color: NestColors.dustyRose),
-                const SizedBox(width: 8),
-                Text('우리집 홈스쿨 시작하기', style: theme.textTheme.titleLarge),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '학기, 반, 과목을 미리 채워 두었어요. 그대로 눌러도 됩니다.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 14),
-            NestPressable(
-              enabled: !_openingCreate && !controller.isBusy,
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _openingCreate || controller.isBusy
-                      ? null
-                      : _showOnboardingCreateModal,
-                  child: Text(
-                    _openingCreate || controller.isBusy ? '열고 있어요' : '바로 시작하기',
+  Widget _buildStepHeader(ThemeData theme, NestController controller) {
+    final stepBadgeText = _step == 0
+        ? 'STEP 1 / 2 · 1초 만에 시작'
+        : 'STEP 2 / 2 · 수업·시간표 자동 세팅';
+    final titleText = _step == 0
+        ? '우리집 홈스쿨 이름을 정해 볼까요?'
+        : '어떤 수업으로 시간표를 채울까요?';
+    final subtitleText = _step == 0
+        ? '평일 9시~18시(50분 수업·10분 휴식) 기본 시간표와 학기·반이 자동으로 준비돼요.'
+        : '템플릿이나 예시 문장을 누르면 과목 생성부터 시간표 배치까지 한 번에 끝나요.';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: NestColors.roseMist.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  stepBadgeText,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: NestColors.deepWood,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
                   ),
                 ),
+              ),
+              const SizedBox(height: 10),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: Text(
+                  titleText,
+                  key: ValueKey<String>(titleText),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: NestColors.deepWood,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: Text(
+                  subtitleText,
+                  key: ValueKey<String>(subtitleText),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.72),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        _step == 0
+            ? const Nest3dIcon.logo(size: 52, floating: true)
+            : const Nest3dIcon.calendar(size: 52, floating: true),
+      ],
+    );
+  }
+
+  Widget _buildStep1NameContent(ThemeData theme) {
+    final suggestions = _nameSuggestions;
+
+    return Column(
+      key: const ValueKey<String>('onboarding-step-1'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _homeschoolController,
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => _goToStep2(),
+          onChanged: (_) => setState(() {}),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: InputDecoration(
+            labelText: '우리집 홈스쿨 이름',
+            hintText: '예: 민지네 집',
+            prefixIcon: const Icon(Icons.home_rounded),
+            suffixIcon: _homeschoolController.text.isNotEmpty
+                ? IconButton(
+                    onPressed: () =>
+                        setState(() => _homeschoolController.clear()),
+                    icon: const Icon(Icons.clear, size: 18),
+                    tooltip: '지우기',
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final name in suggestions)
+              ActionChip(
+                avatar: Icon(
+                  _homeschoolController.text.trim() == name
+                      ? Icons.check_circle_rounded
+                      : Icons.auto_awesome_outlined,
+                  size: 16,
+                  color: _homeschoolController.text.trim() == name
+                      ? NestColors.deepWood
+                      : NestColors.clay,
+                ),
+                backgroundColor: _homeschoolController.text.trim() == name
+                    ? NestColors.roseMist
+                    : NestColors.creamyWhite,
+                side: BorderSide(
+                  color: _homeschoolController.text.trim() == name
+                      ? NestColors.dustyRose
+                      : NestColors.roseMist,
+                ),
+                label: Text(
+                  name,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: _homeschoolController.text.trim() == name
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                  ),
+                ),
+                onPressed: () {
+                  NestHaptics.tap();
+                  setState(() {
+                    _homeschoolController.text = name;
+                  });
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        NestPressable(
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _goToStep2,
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: const Text('다음 · 수업 템플릿 고르기'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _startHomeschoolInline(quickDefault: true),
+            icon: const Icon(Icons.bolt_rounded, size: 18),
+            label: const Text('기본 시간표(9시~18시)로 1초 만에 바로 열기'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              side: BorderSide(color: NestColors.roseMist),
+              backgroundColor: NestColors.creamyWhite,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep2ScheduleContent(ThemeData theme) {
+    final template = _selectedTemplate;
+    final parsedCustom = parseCourseScheduleSentence(_sentenceController.text);
+    final previewCoursesCount = _useCustomSentence
+        ? parsedCustom.courses.length
+        : template.courses.length;
+    final previewPlacementsCount = _useCustomSentence
+        ? parsedCustom.placements.length
+        : template.placements.length;
+
+    return Column(
+      key: const ValueKey<String>('onboarding-step-2'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1단계 완료 요약 배지 (클릭 시 0ms로 1단계 펼침)
+        InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            NestHaptics.tap();
+            setState(() => _step = 0);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: NestColors.mutedSage.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: NestColors.mutedSage.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 18,
+                  color: NestColors.deepWood,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '홈스쿨 이름: ${_homeschoolController.text.trim()}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: NestColors.deepWood,
+                    ),
+                  ),
+                ),
+                Text(
+                  '이름 바꾸기',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: NestColors.clay,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 모드 선택 탭 칩 (추천 템플릿 vs 문장 직접 입력)
+        Row(
+          children: [
+            Expanded(
+              child: ChoiceChip(
+                selected: !_useCustomSentence,
+                label: const SizedBox(
+                  width: double.infinity,
+                  child: Text('✨ 추천 템플릿 고르기', textAlign: TextAlign.center),
+                ),
+                onSelected: (_) {
+                  NestHaptics.tap();
+                  setState(() => _useCustomSentence = false);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ChoiceChip(
+                selected: _useCustomSentence,
+                label: const SizedBox(
+                  width: double.infinity,
+                  child: Text('✍️ 한 줄 문장으로 입력', textAlign: TextAlign.center),
+                ),
+                onSelected: (_) {
+                  NestHaptics.tap();
+                  setState(() => _useCustomSentence = true);
+                },
               ),
             ),
           ],
         ),
+        const SizedBox(height: 12),
+
+        AnimatedSize(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          child: !_useCustomSentence
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final item in kCourseScheduleTemplates)
+                          ChoiceChip(
+                            selected: _selectedTemplateId == item.id,
+                            label: Text('${item.title} (${item.badge})'),
+                            onSelected: (_) {
+                              NestHaptics.tap();
+                              setState(() => _selectedTemplateId = item.id);
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: NestColors.creamyWhite,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: NestColors.roseMist),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 18,
+                                color: NestColors.dustyRose,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '${template.title} · 과목 ${template.courses.length}개 · 주 ${template.placements.length}교시 자동 배치',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            template.subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: NestColors.deepWood.withValues(
+                                alpha: 0.72,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final c in template.courses)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: NestColors.roseMist.withValues(
+                                      alpha: 0.55,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    c.name,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _sentenceController,
+                      maxLines: 2,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: '과목 또는 시간표 문장 입력',
+                        hintText:
+                            '예: 월수금 9시 국어, 10시 수학, 화목 10시 영어, 오후 2시 미술',
+                        helperText:
+                            '예시 문장을 눌러 바로 채우거나 자유롭게 수정해 보세요.',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final ex in kCourseScheduleExampleSentences)
+                          ActionChip(
+                            visualDensity: VisualDensity.compact,
+                            avatar: const Icon(
+                              Icons.auto_awesome_outlined,
+                              size: 14,
+                            ),
+                            label: Text('예시: ${ex.label}'),
+                            onPressed: () {
+                              NestHaptics.tap();
+                              setState(() {
+                                _sentenceController.text = ex.sentence;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: NestColors.roseMist.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        previewCoursesCount == 0
+                            ? '문장을 입력하면 생성될 과목과 시간표 수가 여기에 바로 표시됩니다.'
+                            : '✨ 과목 $previewCoursesCount개 생성 · 주간 시간표 $previewPlacementsCount교시 자동 배치 예정',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: NestColors.deepWood,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 14),
+
+        // 첫 아이 이름 입력 (선택)
+        TextField(
+          controller: _childNameController,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _startHomeschoolInline(),
+          decoration: const InputDecoration(
+            labelText: '첫 아이 이름 (선택)',
+            hintText: '예: 하준 (적어 두면 가정과 우리 반에 바로 배정돼요)',
+            prefixIcon: Icon(Icons.child_care_rounded),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 접이식 학기·반·슬롯 기본 설정 요약
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            NestHaptics.tap();
+            setState(() => _showAdvancedSettings = !_showAdvancedSettings);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.tune_rounded,
+                  size: 16,
+                  color: NestColors.deepWood.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '기본 설정: ${_termController.text} · ${_classController.text} · 평일 09:00~18:00 (50분/10분)',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.75),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _showAdvancedSettings
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 18,
+                  color: NestColors.deepWood.withValues(alpha: 0.7),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: !_showAdvancedSettings
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _termController,
+                              decoration: const InputDecoration(
+                                labelText: '첫 학기 이름',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _classController,
+                              decoration: const InputDecoration(
+                                labelText: '기본 반 이름',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _startDateController,
+                              readOnly: true,
+                              onTap: () => _pickDate(_startDateController),
+                              decoration: const InputDecoration(
+                                labelText: '시작일',
+                                suffixIcon: Icon(Icons.event_outlined),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _endDateController,
+                              readOnly: true,
+                              onTap: () => _pickDate(_endDateController),
+                              decoration: const InputDecoration(
+                                labelText: '종료일',
+                                suffixIcon: Icon(Icons.event_outlined),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+        const SizedBox(height: 18),
+
+        NestPressable(
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _startHomeschoolInline(quickDefault: false),
+              icon: const Icon(Icons.rocket_launch_rounded),
+              label: const Text('우리집 홈스쿨 시작하기'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubmittingChecklist(ThemeData theme) {
+    final childName = _childNameController.text.trim();
+    final steps = <String>[
+      '홈스쿨 공간과 학기·반 생성',
+      '평일 09:00~18:00 (50분/10분) 시간슬롯·시간표 자동 배치',
+      if (childName.isNotEmpty) '$childName 어린이 가정 연결 및 반 배정',
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Nest3dIcon.star(size: 48, floating: true),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '우리집 홈스쿨을 빠르게 세팅하고 있어요 ✨',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '완료되면 바로 홈 화면으로 이동합니다.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: NestColors.deepWood.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (var i = 0; i < steps.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 240),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: _progressPhase > i
+                      ? NestColors.mutedSage.withValues(alpha: 0.18)
+                      : (_progressPhase == i
+                            ? NestColors.roseMist.withValues(alpha: 0.45)
+                            : NestColors.creamyWhite),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _progressPhase > i
+                        ? NestColors.mutedSage
+                        : NestColors.roseMist,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (_progressPhase > i)
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 20,
+                        color: NestColors.deepWood,
+                      )
+                    else if (_progressPhase == i)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.2),
+                      )
+                    else
+                      Icon(
+                        Icons.radio_button_unchecked_rounded,
+                        size: 20,
+                        color: NestColors.deepWood.withValues(alpha: 0.35),
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        steps[i],
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: _progressPhase >= i
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -188,24 +1039,6 @@ class _DashboardTabState extends State<DashboardTab> {
         ),
       ),
     );
-  }
-
-  Future<void> _showOnboardingCreateModal() async {
-    if (_openingCreate || widget.controller.isBusy) return;
-    setState(() => _openingCreate = true);
-    try {
-      final created = await showHomeschoolCreateDialog(
-        context: context,
-        controller: widget.controller,
-      );
-      if (created && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.controller.statusMessage)),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _openingCreate = false);
-    }
   }
 }
 
@@ -1033,70 +1866,6 @@ class _OnboardingJoinResultTile extends StatelessWidget {
                     )
                   : const Text('가입 요청'),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OnboardingOption extends StatelessWidget {
-  const _OnboardingOption({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.highlight,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: highlight ? NestColors.dustyRose : NestColors.roseMist,
-          width: highlight ? 2 : 1,
-        ),
-        color: highlight
-            ? NestColors.roseMist.withValues(alpha: 0.3)
-            : Colors.white,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: NestColors.roseMist,
-            foregroundColor: NestColors.deepWood,
-            child: Icon(icon, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: NestColors.deepWood.withValues(alpha: 0.72),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

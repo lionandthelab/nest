@@ -2641,6 +2641,14 @@ class NotificationPrefs {
     this.classReminderEnabled = true,
     this.classReminderLeadMin = defaultLeadMin,
     this.morningDigestMin = defaultMorningMin,
+    this.classChangeEnabled = true,
+    this.absenceEnabled = true,
+    this.announcementEnabled = true,
+    this.academicEventEnabled = true,
+    this.studentLogEnabled = true,
+    this.chatEnabled = true,
+    this.communityEnabled = true,
+    this.galleryEnabled = true,
     this.quietHoursStart,
     this.quietHoursEnd,
     this.notifOnboardedAt,
@@ -2659,6 +2667,20 @@ class NotificationPrefs {
   static const List<int> morningMinChoices = [390, 420, 450, 480];
   static const int defaultMorningMin = 450; // 07:30, 지금 동작과 같다
 
+  /// 조용한 시간 시작/종료 시각 선택지.
+  static const List<String> quietStartChoices = [
+    '21:00',
+    '22:00',
+    '23:00',
+    '00:00',
+  ];
+  static const List<String> quietEndChoices = [
+    '06:00',
+    '07:00',
+    '08:00',
+    '09:00',
+  ];
+
   final bool pushEnabled;
   final bool morningDigestEnabled;
   final bool classReminderEnabled;
@@ -2668,6 +2690,16 @@ class NotificationPrefs {
 
   /// 아침 알림을 받을 시각(자정부터 분).
   final int morningDigestMin;
+
+  /// 이벤트별 세부 알림 스위치.
+  final bool classChangeEnabled;
+  final bool absenceEnabled;
+  final bool announcementEnabled;
+  final bool academicEventEnabled;
+  final bool studentLogEnabled;
+  final bool chatEnabled;
+  final bool communityEnabled;
+  final bool galleryEnabled;
 
   final String? quietHoursStart;
   final String? quietHoursEnd;
@@ -2700,6 +2732,23 @@ class NotificationPrefs {
       morningDigestMin: morningMinChoices.contains(morning)
           ? morning
           : defaultMorningMin,
+      classChangeEnabled: parseBool(
+        map['class_change_enabled'],
+        fallback: true,
+      ),
+      absenceEnabled: parseBool(map['absence_enabled'], fallback: true),
+      announcementEnabled: parseBool(
+        map['announcement_enabled'],
+        fallback: true,
+      ),
+      academicEventEnabled: parseBool(
+        map['academic_event_enabled'],
+        fallback: true,
+      ),
+      studentLogEnabled: parseBool(map['student_log_enabled'], fallback: true),
+      chatEnabled: parseBool(map['chat_enabled'], fallback: true),
+      communityEnabled: parseBool(map['community_enabled'], fallback: true),
+      galleryEnabled: parseBool(map['gallery_enabled'], fallback: true),
       quietHoursStart: map['quiet_hours_start'] as String?,
       quietHoursEnd: map['quiet_hours_end'] as String?,
       notifOnboardedAt: parseDateTime(map['notif_onboarded_at']),
@@ -2712,6 +2761,14 @@ class NotificationPrefs {
     'class_reminder_enabled': classReminderEnabled,
     'class_reminder_lead_min': classReminderLeadMin,
     'morning_digest_min': morningDigestMin,
+    'class_change_enabled': classChangeEnabled,
+    'absence_enabled': absenceEnabled,
+    'announcement_enabled': announcementEnabled,
+    'academic_event_enabled': academicEventEnabled,
+    'student_log_enabled': studentLogEnabled,
+    'chat_enabled': chatEnabled,
+    'community_enabled': communityEnabled,
+    'gallery_enabled': galleryEnabled,
     'quiet_hours_start': quietHoursStart,
     'quiet_hours_end': quietHoursEnd,
     if (notifOnboardedAt != null)
@@ -2749,12 +2806,64 @@ class NotificationPrefs {
   /// 배너까지 겹치면 시끄럽다.
   bool get needsNotifNudge => hasSeenNotifOnboarding && receivesNothing;
 
+  /// 켜져 있는 세부 이벤트 알림 수 (전체 8개 중).
+  int get enabledEventCount => [
+    classChangeEnabled,
+    absenceEnabled,
+    announcementEnabled,
+    academicEventEnabled,
+    studentLogEnabled,
+    chatEnabled,
+    communityEnabled,
+    galleryEnabled,
+  ].where((enabled) => enabled).length;
+
+  static const int totalEventCount = 8;
+
+  /// 모든 이벤트 알림을 한 번에 켠다.
+  NotificationPrefs enableAllEvents() => copyWith(
+    pushEnabled: true,
+    morningDigestEnabled: true,
+    classReminderEnabled: true,
+    classChangeEnabled: true,
+    absenceEnabled: true,
+    announcementEnabled: true,
+    academicEventEnabled: true,
+    studentLogEnabled: true,
+    chatEnabled: true,
+    communityEnabled: true,
+    galleryEnabled: true,
+  );
+
+  /// 수업·출결·공지 등 필수 학사 알림만 켜고 소셜/앨범 알림은 끈다.
+  NotificationPrefs enableEssentialEventsOnly() => copyWith(
+    pushEnabled: true,
+    morningDigestEnabled: true,
+    classReminderEnabled: true,
+    classChangeEnabled: true,
+    absenceEnabled: true,
+    announcementEnabled: true,
+    academicEventEnabled: true,
+    studentLogEnabled: true,
+    chatEnabled: false,
+    communityEnabled: false,
+    galleryEnabled: false,
+  );
+
   NotificationPrefs copyWith({
     bool? pushEnabled,
     bool? morningDigestEnabled,
     bool? classReminderEnabled,
     int? classReminderLeadMin,
     int? morningDigestMin,
+    bool? classChangeEnabled,
+    bool? absenceEnabled,
+    bool? announcementEnabled,
+    bool? academicEventEnabled,
+    bool? studentLogEnabled,
+    bool? chatEnabled,
+    bool? communityEnabled,
+    bool? galleryEnabled,
     String? quietHoursStart,
     String? quietHoursEnd,
     DateTime? notifOnboardedAt,
@@ -2765,6 +2874,14 @@ class NotificationPrefs {
       classReminderEnabled: classReminderEnabled ?? this.classReminderEnabled,
       classReminderLeadMin: classReminderLeadMin ?? this.classReminderLeadMin,
       morningDigestMin: morningDigestMin ?? this.morningDigestMin,
+      classChangeEnabled: classChangeEnabled ?? this.classChangeEnabled,
+      absenceEnabled: absenceEnabled ?? this.absenceEnabled,
+      announcementEnabled: announcementEnabled ?? this.announcementEnabled,
+      academicEventEnabled: academicEventEnabled ?? this.academicEventEnabled,
+      studentLogEnabled: studentLogEnabled ?? this.studentLogEnabled,
+      chatEnabled: chatEnabled ?? this.chatEnabled,
+      communityEnabled: communityEnabled ?? this.communityEnabled,
+      galleryEnabled: galleryEnabled ?? this.galleryEnabled,
       quietHoursStart: quietHoursStart ?? this.quietHoursStart,
       quietHoursEnd: quietHoursEnd ?? this.quietHoursEnd,
       notifOnboardedAt: notifOnboardedAt ?? this.notifOnboardedAt,
@@ -2780,6 +2897,14 @@ class NotificationPrefs {
       classReminderEnabled: classReminderEnabled,
       classReminderLeadMin: classReminderLeadMin,
       morningDigestMin: morningDigestMin,
+      classChangeEnabled: classChangeEnabled,
+      absenceEnabled: absenceEnabled,
+      announcementEnabled: announcementEnabled,
+      academicEventEnabled: academicEventEnabled,
+      studentLogEnabled: studentLogEnabled,
+      chatEnabled: chatEnabled,
+      communityEnabled: communityEnabled,
+      galleryEnabled: galleryEnabled,
       notifOnboardedAt: notifOnboardedAt,
     );
   }
@@ -2806,7 +2931,16 @@ class NotificationInboxItem {
     final tab = payload['tab'] ?? '';
     if (tab.isNotEmpty) return tab;
     return switch (eventType) {
-      'CLASS_REMINDER' || 'MORNING_DIGEST' || 'CLASS_CHANGE' => '시간표',
+      'CLASS_REMINDER' ||
+      'MORNING_DIGEST' ||
+      'CLASS_CHANGE' ||
+      'ABSENCE' ||
+      'ABSENCE_ACK' ||
+      'ACADEMIC_EVENT' ||
+      'TEACHING_PLAN' => '시간표',
+      'CHAT_MESSAGE' => '채팅',
+      'COMMUNITY_POST' || 'COMMUNITY_COMMENT' => '커뮤니티',
+      'GALLERY_UPLOAD' => '앨범',
       _ => '홈',
     };
   }
@@ -2953,5 +3087,306 @@ class StudentPortfolioBundle {
   final List<SelfStudyPlan> selfStudyPlans;
   final List<GalleryItem> photos;
   final StudentSemesterReview? review;
+}
+
+/// 홈스쿨 채팅에 첨부된 사진/동영상/파일 정보
+class ChatAttachment {
+  const ChatAttachment({
+    required this.storagePath,
+    required this.fileName,
+    required this.mimeType,
+    this.sizeBytes = 0,
+    this.publicUrl = '',
+  });
+
+  factory ChatAttachment.fromMap(Map<String, dynamic> map) {
+    return ChatAttachment(
+      storagePath: (map['storage_path'] as String?) ?? '',
+      fileName: (map['file_name'] as String?) ?? '',
+      mimeType: (map['mime_type'] as String?) ?? 'application/octet-stream',
+      sizeBytes: (map['size_bytes'] as num?)?.toInt() ?? 0,
+      publicUrl: (map['public_url'] as String?) ?? '',
+    );
+  }
+
+  final String storagePath;
+  final String fileName;
+  final String mimeType;
+  final int sizeBytes;
+  final String publicUrl;
+
+  bool get isImage {
+    final lowerMime = mimeType.toLowerCase();
+    final lowerName = fileName.toLowerCase();
+    return lowerMime.startsWith('image/') ||
+        lowerName.endsWith('.png') ||
+        lowerName.endsWith('.jpg') ||
+        lowerName.endsWith('.jpeg') ||
+        lowerName.endsWith('.webp') ||
+        lowerName.endsWith('.gif') ||
+        lowerName.endsWith('.heic');
+  }
+
+  bool get isVideo {
+    final lowerMime = mimeType.toLowerCase();
+    final lowerName = fileName.toLowerCase();
+    return lowerMime.startsWith('video/') ||
+        lowerName.endsWith('.mp4') ||
+        lowerName.endsWith('.mov') ||
+        lowerName.endsWith('.webm') ||
+        lowerName.endsWith('.m4v') ||
+        lowerName.endsWith('.avi');
+  }
+
+  Map<String, dynamic> toMap() => {
+    'storage_path': storagePath,
+    'file_name': fileName,
+    'mime_type': mimeType,
+    'size_bytes': sizeBytes,
+    'public_url': publicUrl,
+  };
+}
+
+/// 홈스쿨 채팅으로 공유된 스케줄(수업 시간표·학사일정·직접 입력 일정) 카드 정보
+class SharedScheduleInfo {
+  const SharedScheduleInfo({
+    this.scheduleKind = 'CUSTOM_SCHEDULE',
+    required this.title,
+    this.date = '',
+    this.dayLabel = '',
+    this.timeRange = '',
+    this.location = '',
+    this.teacherName = '',
+    this.className = '',
+    this.note = '',
+    this.sourceId = '',
+  });
+
+  factory SharedScheduleInfo.fromMap(Map<String, dynamic> map) {
+    return SharedScheduleInfo(
+      scheduleKind: (map['schedule_kind'] as String?) ?? 'CUSTOM_SCHEDULE',
+      title: (map['title'] as String?) ?? '',
+      date: (map['date'] as String?) ?? '',
+      dayLabel: (map['day_label'] as String?) ?? '',
+      timeRange: (map['time_range'] as String?) ?? '',
+      location: (map['location'] as String?) ?? '',
+      teacherName: (map['teacher_name'] as String?) ?? '',
+      className: (map['class_name'] as String?) ?? '',
+      note: (map['note'] as String?) ?? '',
+      sourceId: (map['source_id'] as String?) ?? '',
+    );
+  }
+
+  final String scheduleKind;
+  final String title;
+  final String date;
+  final String dayLabel;
+  final String timeRange;
+  final String location;
+  final String teacherName;
+  final String className;
+  final String note;
+  final String sourceId;
+
+  String get kindBadgeLabel => switch (scheduleKind) {
+    'CLASS_SESSION' => '수업 시간표',
+    'ACADEMIC_EVENT' => '학사일정',
+    _ => '일정 공유',
+  };
+
+  Map<String, dynamic> toMap() => {
+    'schedule_kind': scheduleKind,
+    'title': title,
+    if (date.isNotEmpty) 'date': date,
+    if (dayLabel.isNotEmpty) 'day_label': dayLabel,
+    if (timeRange.isNotEmpty) 'time_range': timeRange,
+    if (location.isNotEmpty) 'location': location,
+    if (teacherName.isNotEmpty) 'teacher_name': teacherName,
+    if (className.isNotEmpty) 'class_name': className,
+    if (note.isNotEmpty) 'note': note,
+    if (sourceId.isNotEmpty) 'source_id': sourceId,
+  };
+}
+
+/// 홈스쿨 채팅으로 공유된 연락처(구성원·선생님·보호자·외부 연락처) 카드 정보
+class SharedContactInfo {
+  const SharedContactInfo({
+    required this.contactName,
+    this.contactRole = '',
+    this.phone = '',
+    this.email = '',
+    this.memo = '',
+    this.userId = '',
+  });
+
+  factory SharedContactInfo.fromMap(Map<String, dynamic> map) {
+    return SharedContactInfo(
+      contactName: (map['contact_name'] as String?) ?? '',
+      contactRole: (map['contact_role'] as String?) ?? '',
+      phone: (map['phone'] as String?) ?? '',
+      email: (map['email'] as String?) ?? '',
+      memo: (map['memo'] as String?) ?? '',
+      userId: (map['user_id'] as String?) ?? '',
+    );
+  }
+
+  final String contactName;
+  final String contactRole;
+  final String phone;
+  final String email;
+  final String memo;
+  final String userId;
+
+  Map<String, dynamic> toMap() => {
+    'contact_name': contactName,
+    if (contactRole.isNotEmpty) 'contact_role': contactRole,
+    if (phone.isNotEmpty) 'phone': phone,
+    if (email.isNotEmpty) 'email': email,
+    if (memo.isNotEmpty) 'memo': memo,
+    if (userId.isNotEmpty) 'user_id': userId,
+  };
+}
+
+/// 홈스쿨 채팅 메시지 모델
+class HomeschoolChatMessage {
+  const HomeschoolChatMessage({
+    required this.id,
+    required this.homeschoolId,
+    this.classGroupId,
+    this.recipientUserId,
+    required this.senderUserId,
+    this.senderName = '',
+    this.senderRole = '',
+    this.messageType = 'TEXT',
+    this.content = '',
+    this.attachments = const [],
+    this.sharedSchedule,
+    this.sharedContact,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory HomeschoolChatMessage.fromMap(Map<String, dynamic> map) {
+    final rawMeta = map['metadata'];
+    final meta = rawMeta is Map
+        ? rawMeta.map((key, value) => MapEntry('$key', value))
+        : const <String, dynamic>{};
+
+    final rawAttachments = map['attachments'] is List
+        ? map['attachments']
+        : meta['attachments'];
+    final attachments = <ChatAttachment>[];
+    if (rawAttachments is List) {
+      for (final item in rawAttachments) {
+        if (item is Map) {
+          attachments.add(
+            ChatAttachment.fromMap(
+              item.map((k, v) => MapEntry('$k', v)),
+            ),
+          );
+        }
+      }
+    }
+
+    final type = ((map['message_type'] as String?) ?? 'TEXT').toUpperCase();
+    SharedScheduleInfo? sharedSchedule;
+    if (type == 'SCHEDULE' || meta.containsKey('schedule_kind') || meta.containsKey('title')) {
+      final title = (meta['title'] as String?) ?? '';
+      if (title.isNotEmpty || type == 'SCHEDULE') {
+        sharedSchedule = SharedScheduleInfo.fromMap(meta);
+      }
+    }
+
+    SharedContactInfo? sharedContact;
+    if (type == 'CONTACT' || meta.containsKey('contact_name')) {
+      final contactName = (meta['contact_name'] as String?) ?? '';
+      if (contactName.isNotEmpty || type == 'CONTACT') {
+        sharedContact = SharedContactInfo.fromMap(meta);
+      }
+    }
+
+    return HomeschoolChatMessage(
+      id: (map['id'] as String?) ?? '',
+      homeschoolId: (map['homeschool_id'] as String?) ?? '',
+      classGroupId: map['class_group_id'] as String?,
+      recipientUserId: map['recipient_user_id'] as String?,
+      senderUserId: (map['sender_user_id'] as String?) ?? '',
+      senderName: (map['sender_name'] as String?) ?? '',
+      senderRole: (map['sender_role'] as String?) ?? '',
+      messageType: type,
+      content: (map['content'] as String?) ?? '',
+      attachments: attachments,
+      sharedSchedule: sharedSchedule,
+      sharedContact: sharedContact,
+      createdAt: parseDateTime(map['created_at']),
+      updatedAt: parseDateTime(map['updated_at']),
+    );
+  }
+
+  final String id;
+  final String homeschoolId;
+  final String? classGroupId;
+  final String? recipientUserId;
+  final String senderUserId;
+  final String senderName;
+  final String senderRole;
+  final String messageType;
+  final String content;
+  final List<ChatAttachment> attachments;
+  final SharedScheduleInfo? sharedSchedule;
+  final SharedContactInfo? sharedContact;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  bool get isGeneralRoom =>
+      (classGroupId == null || classGroupId!.isEmpty) &&
+      (recipientUserId == null || recipientUserId!.isEmpty);
+
+  bool get isClassRoom =>
+      classGroupId != null &&
+      classGroupId!.isNotEmpty &&
+      (recipientUserId == null || recipientUserId!.isEmpty);
+
+  bool get isDirectMessage =>
+      recipientUserId != null && recipientUserId!.isNotEmpty;
+
+  String get summaryPreview {
+    return switch (messageType) {
+      'IMAGE' => content.isNotEmpty ? '📷 $content' : '📷 사진을 보냈습니다',
+      'VIDEO' => content.isNotEmpty ? '🎬 $content' : '🎬 동영상을 보냈습니다',
+      'SCHEDULE' => '📅 ${sharedSchedule?.title ?? (content.isNotEmpty ? content : '일정 공유')}',
+      'CONTACT' => '👤 ${sharedContact?.contactName ?? (content.isNotEmpty ? content : '연락처 공유')}',
+      'FILE' => content.isNotEmpty ? '📎 $content' : '📎 파일을 보냈습니다',
+      _ => content,
+    };
+  }
+
+  Map<String, dynamic> toMetadataMap() {
+    final map = <String, dynamic>{};
+    if (attachments.isNotEmpty) {
+      map['attachments'] = attachments.map((a) => a.toMap()).toList();
+    }
+    if (sharedSchedule != null) {
+      map.addAll(sharedSchedule!.toMap());
+    }
+    if (sharedContact != null) {
+      map.addAll(sharedContact!.toMap());
+    }
+    return map;
+  }
+
+  Map<String, dynamic> toMap() => {
+    'homeschool_id': homeschoolId,
+    if (classGroupId != null && classGroupId!.isNotEmpty)
+      'class_group_id': classGroupId,
+    if (recipientUserId != null && recipientUserId!.isNotEmpty)
+      'recipient_user_id': recipientUserId,
+    'sender_user_id': senderUserId,
+    'sender_name': senderName,
+    'sender_role': senderRole,
+    'message_type': messageType,
+    'content': content,
+    'metadata': toMetadataMap(),
+  };
 }
 

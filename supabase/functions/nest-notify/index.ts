@@ -170,10 +170,27 @@ Deno.serve(async (req) => {
     );
   }
 
-  if (event !== "CLASS_CHANGE" && event !== "ABSENCE") {
+const SUPPORTED_EVENTS = new Set([
+  "CLASS_CHANGE",
+  "ABSENCE",
+  "ABSENCE_ACK",
+  "CHAT_MESSAGE",
+  "ANNOUNCEMENT",
+  "ACADEMIC_EVENT",
+  "STUDENT_LOG",
+  "TEACHING_PLAN",
+  "COMMUNITY_POST",
+  "COMMUNITY_COMMENT",
+  "GALLERY_UPLOAD",
+]);
+
+  if (!event || !SUPPORTED_EVENTS.has(event)) {
     return json(
       400,
-      { error: "event 는 'CLASS_CHANGE', 'ABSENCE', 'TEST' 중 하나여야 합니다." },
+      {
+        error:
+          "지원하지 않는 event 입니다. (CLASS_CHANGE, ABSENCE, ABSENCE_ACK, CHAT_MESSAGE, ANNOUNCEMENT, ACADEMIC_EVENT, STUDENT_LOG, TEACHING_PLAN, COMMUNITY_POST, COMMUNITY_COMMENT, GALLERY_UPLOAD, TEST)",
+      },
       corsHeaders
     );
   }
@@ -183,26 +200,54 @@ Deno.serve(async (req) => {
     return json(400, { error: "id 는 uuid 형식이어야 합니다." }, corsHeaders);
   }
 
+  if (event === "CHAT_MESSAGE") {
+    try {
+      return await handleChatMessage(admin, callerId, targetId);
+    } catch (err) {
+      console.error("[nest-notify] CHAT_MESSAGE 처리 실패:", err);
+      return json(500, { error: "채팅 알림 발송 처리 중 오류가 발생했습니다." }, corsHeaders);
+    }
+  }
+
+  if (
+    event === "ABSENCE_ACK" ||
+    event === "ANNOUNCEMENT" ||
+    event === "ACADEMIC_EVENT" ||
+    event === "STUDENT_LOG" ||
+    event === "TEACHING_PLAN" ||
+    event === "COMMUNITY_POST" ||
+    event === "COMMUNITY_COMMENT" ||
+    event === "GALLERY_UPLOAD"
+  ) {
+    try {
+      return await handlePurePushDomainEvent(admin, callerId, event, targetId);
+    } catch (err) {
+      console.error(`[nest-notify] ${event} 처리 실패:`, err);
+      return json(500, { error: "푸시 알림 발송 처리 중 오류가 발생했습니다." }, corsHeaders);
+    }
+  }
+
   const requestedChannel = body?.channel ?? DEFAULT_CHANNEL;
   if (
     requestedChannel !== "sms" &&
     requestedChannel !== "alimtalk" &&
-    requestedChannel !== "auto"
+    requestedChannel !== "auto" &&
+    requestedChannel !== "push"
   ) {
     return json(
       400,
-      { error: "channel 은 'sms', 'alimtalk', 'auto' 중 하나여야 합니다." },
+      { error: "channel 은 'sms', 'alimtalk', 'auto', 'push' 중 하나여야 합니다." },
       corsHeaders
     );
   }
-  const channel: SolapiChannel = requestedChannel;
+  const channel = requestedChannel;
   const force = body?.force === true;
 
   try {
     if (event === "CLASS_CHANGE") {
-      return await handleClassChange(admin, callerId, targetId, channel, force);
+      return await handleClassChange(admin, callerId, targetId, channel as SolapiChannel, force);
     }
-    return await handleAbsence(admin, callerId, targetId, channel, force);
+    return await handleAbsence(admin, callerId, targetId, channel as SolapiChannel, force);
   } catch (err) {
     console.error("[nest-notify] 처리 실패:", err);
     return json(500, { error: "알림 발송 처리 중 오류가 발생했습니다." }, corsHeaders);
@@ -424,13 +469,13 @@ async function dispatch(admin: Admin, args: DispatchArgs): Promise<Response> {
     rowId
   });
 
-  // 번호가 없어도 푸시가 나갔으면 성공으로 본다.
-  if (targets.length === 0) {
+  // 푸시 전용 호출이거나 번호가 없어도 푸시가 나갔으면 성공으로 본다.
+  if ((channel as string) === "push" || targets.length === 0) {
     return json(
       200,
       {
         accepted: pushSent > 0,
-        sent: 0,
+        sent: (channel as string) === "push" ? pushSent : 0,
         push_sent: pushSent,
         skipped_no_phone: skippedNoPhone,
         skipped_no_account: skippedNoAccount,
@@ -517,6 +562,591 @@ async function dispatch(admin: Admin, args: DispatchArgs): Promise<Response> {
   );
 }
 
+// ─────────────────────────────────────────────── 이벤트: 홈스쿨 채팅
+
+async function handleChatMessage(
+  admin: Admin,
+  callerId: string,
+  messageId: string
+): Promise<Response> {
+  const msgResult = await admin
+    .from("homeschool_chat_messages")
+    .select("*")
+    .eq("id", messageId)
+    .maybeSingle();
+
+  if (msgResult.error) {
+    if (isMissingRelation(msgResult.error)) {
+      return json(
+        503,
+        { error: "채팅 알림 기능이 아직 준비되지 않았습니다." },
+        corsHeaders
+      );
+    }
+    throw new Error(`homeschool_chat_messages 조회 실패: ${msgResult.error.message}`);
+  }
+
+  const msg = msgResult.data as Row | null;
+  if (!msg) {
+    return json(404, { error: "채팅 메시지를 찾을 수 없습니다." }, corsHeaders);
+  }
+
+  const homeschoolId = pickString(msg, "homeschool_id");
+  const senderUserId = pickString(msg, "sender_user_id");
+  if (!homeschoolId || !senderUserId) {
+    return json(422, { error: "채팅 메시지 정보가 올바르지 않습니다." }, corsHeaders);
+  }
+
+  // 발신자 본인 또는 관리자/스태프만 알림 발송을 트리거할 수 있다.
+  const isSender = callerId === senderUserId;
+  const memberOk = await isActiveMember(admin, homeschoolId, callerId);
+  if (!memberOk || (!isSender && !(await isAdminOrStaff(admin, homeschoolId, callerId)))) {
+    return json(403, { error: "채팅 알림을 보낼 권한이 없습니다." }, corsHeaders);
+  }
+
+  const recipientUserId = pickString(msg, "recipient_user_id");
+  const classGroupId = pickString(msg, "class_group_id");
+  const senderName = pickString(msg, "sender_name") ?? "구성원";
+  const messageType = (pickString(msg, "message_type") ?? "TEXT").toUpperCase();
+  const content = pickString(msg, "content") ?? "";
+  const metadata = (msg.metadata && typeof msg.metadata === "object" && !Array.isArray(msg.metadata))
+    ? (msg.metadata as Record<string, unknown>)
+    : {};
+
+  // 홈스쿨 이름 및 반 이름 조회
+  const [hsResult, cgResult] = await Promise.all([
+    admin.from("homeschools").select("name").eq("id", homeschoolId).maybeSingle(),
+    classGroupId
+      ? admin.from("class_groups").select("name").eq("id", classGroupId).maybeSingle()
+      : Promise.resolve({ data: null, error: null })
+  ]);
+  const homeschoolName = pickString((hsResult.data as Row | null), "name") ?? "홈스쿨";
+  const classGroupName = pickString((cgResult.data as Row | null), "name");
+
+  // 수신자 목록 계산 (발신자 본인 제외)
+  let targetUserIds: string[] = [];
+  if (recipientUserId) {
+    if (recipientUserId !== senderUserId) {
+      targetUserIds = [recipientUserId];
+    }
+  } else {
+    const memberSet = new Set<string>();
+    const { data: memberships } = await admin
+      .from("homeschool_memberships")
+      .select("user_id")
+      .eq("homeschool_id", homeschoolId)
+      .eq("status", "ACTIVE");
+    for (const row of (memberships ?? []) as Row[]) {
+      const uid = pickString(row, "user_id");
+      if (uid && uid !== senderUserId) memberSet.add(uid);
+    }
+
+    const { data: teachers } = await admin
+      .from("teacher_profiles")
+      .select("user_id")
+      .eq("homeschool_id", homeschoolId);
+    for (const row of (teachers ?? []) as Row[]) {
+      const uid = pickString(row, "user_id");
+      if (uid && uid !== senderUserId) memberSet.add(uid);
+    }
+
+    const { data: families } = await admin
+      .from("families")
+      .select("id")
+      .eq("homeschool_id", homeschoolId);
+    const familyIds = ((families ?? []) as Row[])
+      .map((row) => pickString(row, "id"))
+      .filter((v): v is string => !!v);
+    if (familyIds.length > 0) {
+      const { data: guardians } = await admin
+        .from("family_guardians")
+        .select("user_id")
+        .in("family_id", familyIds);
+      for (const row of (guardians ?? []) as Row[]) {
+        const uid = pickString(row, "user_id");
+        if (uid && uid !== senderUserId) memberSet.add(uid);
+      }
+    }
+
+    targetUserIds = Array.from(memberSet);
+  }
+
+  let title = `[${homeschoolName} 채팅] ${senderName}`;
+  if (recipientUserId) {
+    title = `[${homeschoolName}] ${senderName}님의 1:1 메시지`;
+  } else if (classGroupName) {
+    title = `[${homeschoolName} · ${classGroupName}] ${senderName}`;
+  }
+
+  let bodyText = content;
+  if (messageType === "IMAGE") {
+    bodyText = content ? `📷 사진: ${content}` : "📷 사진을 공유했습니다.";
+  } else if (messageType === "VIDEO") {
+    bodyText = content ? `🎬 동영상: ${content}` : "🎬 동영상을 공유했습니다.";
+  } else if (messageType === "SCHEDULE") {
+    const scheduleTitle = typeof metadata.title === "string" && metadata.title.trim()
+      ? metadata.title.trim()
+      : (content || "새 일정");
+    bodyText = `📅 일정 공유: ${scheduleTitle}`;
+  } else if (messageType === "CONTACT") {
+    const contactName = typeof metadata.contact_name === "string" && metadata.contact_name.trim()
+      ? metadata.contact_name.trim()
+      : (content || "연락처");
+    bodyText = `👤 연락처 공유: ${contactName}`;
+  } else if (messageType === "FILE") {
+    bodyText = content ? `📎 파일: ${content}` : "📎 파일을 공유했습니다.";
+  }
+  if (!bodyText) {
+    bodyText = "새 채팅 메시지가 도착했습니다.";
+  }
+
+  const pushSent = await sendDomainPush(admin, {
+    callerId,
+    userIds: targetUserIds,
+    title,
+    body: bodyText.slice(0, 180),
+    eventType: "CHAT_MESSAGE",
+    rowId: messageId,
+    tab: "채팅"
+  });
+
+  return json(
+    200,
+    {
+      accepted: true,
+      sent: pushSent,
+      push_sent: pushSent,
+      skipped_no_phone: 0,
+      skipped_no_account: 0,
+      message_id: messageId
+    },
+    corsHeaders
+  );
+}
+
+function prefColumnForEvent(eventType: string): string | null {
+  switch (eventType) {
+    case "CLASS_CHANGE":
+      return "class_change_enabled";
+    case "ABSENCE":
+    case "ABSENCE_ACK":
+      return "absence_enabled";
+    case "ANNOUNCEMENT":
+      return "announcement_enabled";
+    case "ACADEMIC_EVENT":
+      return "academic_event_enabled";
+    case "STUDENT_LOG":
+    case "TEACHING_PLAN":
+      return "student_log_enabled";
+    case "CHAT_MESSAGE":
+      return "chat_enabled";
+    case "COMMUNITY_POST":
+    case "COMMUNITY_COMMENT":
+      return "community_enabled";
+    case "GALLERY_UPLOAD":
+      return "gallery_enabled";
+    default:
+      return null;
+  }
+}
+
+function nowMinutesInSeoul(): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const h = Number(get("hour") === "24" ? "0" : get("hour")) || 0;
+  const m = Number(get("minute")) || 0;
+  return h * 60 + m;
+}
+
+function parseHhMmToMinutes(raw: unknown): number | null {
+  if (typeof raw !== "string" || !raw.includes(":")) return null;
+  const [hStr, mStr] = raw.trim().split(":");
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+function isUserInQuietHours(row: Row, nowMinutes: number): boolean {
+  const start = parseHhMmToMinutes(row.quiet_hours_start);
+  const end = parseHhMmToMinutes(row.quiet_hours_end);
+  if (start === null || end === null || start === end) return false;
+  if (start < end) {
+    return nowMinutes >= start && nowMinutes < end;
+  }
+  // 자정을 넘기는 방해금지 구간 (예: 21:00 ~ 07:00)
+  return nowMinutes >= start || nowMinutes < end;
+}
+
+async function resolveAllHomeschoolUserIds(
+  admin: Admin,
+  homeschoolId: string,
+  excludeUserId?: string
+): Promise<string[]> {
+  const memberSet = new Set<string>();
+  const { data: memberships } = await admin
+    .from("homeschool_memberships")
+    .select("user_id")
+    .eq("homeschool_id", homeschoolId)
+    .eq("status", "ACTIVE");
+  for (const row of (memberships ?? []) as Row[]) {
+    const uid = pickString(row, "user_id");
+    if (uid && uid !== excludeUserId) memberSet.add(uid);
+  }
+
+  const { data: teachers } = await admin
+    .from("teacher_profiles")
+    .select("user_id")
+    .eq("homeschool_id", homeschoolId);
+  for (const row of (teachers ?? []) as Row[]) {
+    const uid = pickString(row, "user_id");
+    if (uid && uid !== excludeUserId) memberSet.add(uid);
+  }
+
+  const { data: families } = await admin
+    .from("families")
+    .select("id")
+    .eq("homeschool_id", homeschoolId);
+  const familyIds = ((families ?? []) as Row[])
+    .map((row) => pickString(row, "id"))
+    .filter((v): v is string => !!v);
+  if (familyIds.length > 0) {
+    const [{ data: guardians }, { data: children }] = await Promise.all([
+      admin.from("family_guardians").select("user_id").in("family_id", familyIds),
+      admin.from("children").select("user_id").in("family_id", familyIds),
+    ]);
+    for (const row of (guardians ?? []) as Row[]) {
+      const uid = pickString(row, "user_id");
+      if (uid && uid !== excludeUserId) memberSet.add(uid);
+    }
+    for (const row of (children ?? []) as Row[]) {
+      const uid = pickString(row, "user_id");
+      if (uid && uid !== excludeUserId) memberSet.add(uid);
+    }
+  }
+  return Array.from(memberSet);
+}
+
+async function resolveClassGroupUserIds(
+  admin: Admin,
+  classGroupId: string,
+  excludeUserId?: string
+): Promise<string[]> {
+  const roster = await loadClassRoster(admin, classGroupId);
+  const set = new Set<string>();
+  for (const uid of roster.userIds) {
+    if (uid && uid !== excludeUserId) set.add(uid);
+  }
+  const { data: sessions } = await admin
+    .from("class_sessions")
+    .select("id")
+    .eq("class_group_id", classGroupId);
+  const sessionIds = ((sessions ?? []) as Row[])
+    .map((r) => pickString(r, "id"))
+    .filter((v): v is string => !!v);
+  if (sessionIds.length > 0) {
+    const { data: assigns } = await admin
+      .from("session_teacher_assignments")
+      .select("teacher_profile_id")
+      .in("class_session_id", sessionIds);
+    const tpIds = ((assigns ?? []) as Row[])
+      .map((r) => pickString(r, "teacher_profile_id"))
+      .filter((v): v is string => !!v);
+    if (tpIds.length > 0) {
+      const { data: tps } = await admin
+        .from("teacher_profiles")
+        .select("user_id")
+        .in("id", tpIds);
+      for (const row of (tps ?? []) as Row[]) {
+        const uid = pickString(row, "user_id");
+        if (uid && uid !== excludeUserId) set.add(uid);
+      }
+    }
+  }
+  return Array.from(set);
+}
+
+async function handlePurePushDomainEvent(
+  admin: Admin,
+  callerId: string,
+  event: string,
+  targetId: string
+): Promise<Response> {
+  let targetUserIds: string[] = [];
+  let title = "네스트 알림";
+  let bodyText = "새로운 소식이 도착했습니다.";
+  let tab = "홈";
+
+  if (event === "ANNOUNCEMENT") {
+    const { data: row } = await admin
+      .from("announcements")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!row) {
+      return json(404, { error: "공지사항을 찾을 수 없습니다." }, corsHeaders);
+    }
+    const r = row as Row;
+    const homeschoolId = pickString(r, "homeschool_id") ?? "";
+    const classGroupId = pickString(r, "class_group_id");
+    const annTitle = pickString(r, "title") ?? "새 공지사항";
+    const annBody = pickString(r, "body") ?? "";
+    const [{ data: hs }, cg] = await Promise.all([
+      admin.from("homeschools").select("name").eq("id", homeschoolId).maybeSingle(),
+      classGroupId
+        ? admin.from("class_groups").select("name").eq("id", classGroupId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const hsName = pickString(hs as Row | null, "name") ?? "홈스쿨";
+    const cgName = pickString(cg.data as Row | null, "name");
+    title = cgName ? `[${hsName} · ${cgName} 공지] ${annTitle}` : `[${hsName} 공지] ${annTitle}`;
+    bodyText = (annBody || annTitle).slice(0, 180);
+    tab = "홈";
+    targetUserIds = classGroupId
+      ? await resolveClassGroupUserIds(admin, classGroupId, callerId)
+      : await resolveAllHomeschoolUserIds(admin, homeschoolId, callerId);
+  } else if (event === "ACADEMIC_EVENT") {
+    const { data: row } = await admin
+      .from("academic_events")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!row) {
+      return json(404, { error: "학사 일정을 찾을 수 없습니다." }, corsHeaders);
+    }
+    const r = row as Row;
+    const homeschoolId = pickString(r, "homeschool_id") ?? "";
+    const evTitle = pickString(r, "title") ?? "새 학사 일정";
+    const evDate = pickString(r, "event_date") ?? "";
+    const endDate = pickString(r, "end_date");
+    const desc = pickString(r, "description") ?? "";
+    const { data: hs } = await admin
+      .from("homeschools")
+      .select("name")
+      .eq("id", homeschoolId)
+      .maybeSingle();
+    const hsName = pickString(hs as Row | null, "name") ?? "홈스쿨";
+    title = `[${hsName} 학사일정] ${evTitle}`;
+    const dateRange = endDate ? `${evDate} ~ ${endDate}` : evDate;
+    bodyText = [dateRange, desc].filter(Boolean).join(" · ").slice(0, 180) || evTitle;
+    tab = "시간표";
+    targetUserIds = await resolveAllHomeschoolUserIds(admin, homeschoolId, callerId);
+  } else if (event === "STUDENT_LOG") {
+    const { data: row } = await admin
+      .from("student_activity_logs")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!row) {
+      return json(404, { error: "활동 기록을 찾을 수 없습니다." }, corsHeaders);
+    }
+    const r = row as Row;
+    const childId = pickString(r, "child_id") ?? "";
+    const content = pickString(r, "content") ?? "";
+    const teacherId = pickString(r, "recorded_by_teacher_id");
+    const [{ data: child }, teacherRes] = await Promise.all([
+      admin.from("children").select("name, family_id, user_id").eq("id", childId).maybeSingle(),
+      teacherId
+        ? admin.from("teacher_profiles").select("display_name").eq("id", teacherId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const cRow = child as Row | null;
+    const childName = pickString(cRow, "name") ?? "학생";
+    const teacherName = pickString(teacherRes.data as Row | null, "display_name");
+    const familyId = pickString(cRow, "family_id");
+    const recipientSet = new Set<string>();
+    const studentUid = pickString(cRow, "user_id");
+    if (studentUid && studentUid !== callerId) recipientSet.add(studentUid);
+    if (familyId) {
+      const { data: guardians } = await admin
+        .from("family_guardians")
+        .select("user_id")
+        .eq("family_id", familyId);
+      for (const g of (guardians ?? []) as Row[]) {
+        const uid = pickString(g, "user_id");
+        if (uid && uid !== callerId) recipientSet.add(uid);
+      }
+    }
+    title = teacherName
+      ? `[${childName} 활동 기록] ${teacherName} 선생님의 새 기록`
+      : `[${childName} 활동 기록] 새 수업 기록이 등록되었어요`;
+    bodyText = content.slice(0, 180) || "앱에서 아이의 오늘 활동 기록을 확인해 보세요.";
+    tab = "홈";
+    targetUserIds = Array.from(recipientSet);
+  } else if (event === "TEACHING_PLAN") {
+    const { data: row } = await admin
+      .from("teaching_plans")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!row) {
+      return json(404, { error: "수업 계획을 찾을 수 없습니다." }, corsHeaders);
+    }
+    const r = row as Row;
+    const sessionId = pickString(r, "class_session_id") ?? "";
+    const objectives = pickString(r, "objectives") ?? "";
+    const ctx = await loadSessionContext(admin, sessionId);
+    if (!ctx) {
+      return json(404, { error: "수업 정보를 찾을 수 없습니다." }, corsHeaders);
+    }
+    title = `[${ctx.classGroupName} · ${ctx.courseName}] 새 수업 계획 등록`;
+    bodyText = objectives.slice(0, 180) || "새 수업 계획과 준비물을 확인해 보세요.";
+    tab = "시간표";
+    targetUserIds = await resolveClassGroupUserIds(admin, ctx.classGroupId, callerId);
+  } else if (event === "ABSENCE_ACK") {
+    const { data: row } = await admin
+      .from("absence_reports")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!row) {
+      return json(404, { error: "결석 신고를 찾을 수 없습니다." }, corsHeaders);
+    }
+    const r = row as Row;
+    const sessionId = pickString(r, "class_session_id") ?? "";
+    const childId = pickString(r, "child_id") ?? "";
+    const occDate = pickString(r, "occurrence_date") ?? "";
+    const reportedBy = pickString(r, "reported_by_user_id");
+    const [ctx, { data: child }] = await Promise.all([
+      loadSessionContext(admin, sessionId),
+      admin.from("children").select("name, family_id, user_id").eq("id", childId).maybeSingle(),
+    ]);
+    const cRow = child as Row | null;
+    const childName = pickString(cRow, "name") ?? "학생";
+    const courseName = ctx?.courseName ?? "수업";
+    const recipientSet = new Set<string>();
+    if (reportedBy && reportedBy !== callerId) recipientSet.add(reportedBy);
+    const studentUid = pickString(cRow, "user_id");
+    if (studentUid && studentUid !== callerId) recipientSet.add(studentUid);
+    const familyId = pickString(cRow, "family_id");
+    if (familyId) {
+      const { data: guardians } = await admin
+        .from("family_guardians")
+        .select("user_id")
+        .eq("family_id", familyId);
+      for (const g of (guardians ?? []) as Row[]) {
+        const uid = pickString(g, "user_id");
+        if (uid && uid !== callerId) recipientSet.add(uid);
+      }
+    }
+    title = `[결석 신고 확인] ${childName} (${courseName})`;
+    bodyText = `${occDate} ${courseName} 수업 결석 신고를 담당 선생님이 확인했습니다.`;
+    tab = "시간표";
+    targetUserIds = Array.from(recipientSet);
+  } else if (event === "COMMUNITY_POST") {
+    const { data: row } = await admin
+      .from("community_posts")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!row) {
+      return json(404, { error: "게시글을 찾을 수 없습니다." }, corsHeaders);
+    }
+    const r = row as Row;
+    const homeschoolId = pickString(r, "homeschool_id") ?? "";
+    const classGroupId = pickString(r, "class_group_id");
+    const authorName = pickString(r, "author_display_name") ?? "구성원";
+    const content = pickString(r, "content") ?? "";
+    const { data: hs } = await admin
+      .from("homeschools")
+      .select("name")
+      .eq("id", homeschoolId)
+      .maybeSingle();
+    const hsName = pickString(hs as Row | null, "name") ?? "홈스쿨";
+    title = `[${hsName} 커뮤니티] ${authorName}님의 새 글`;
+    bodyText = content.slice(0, 180) || "커뮤니티에 새 게시글이 올라왔습니다.";
+    tab = "커뮤니티";
+    targetUserIds = classGroupId
+      ? await resolveClassGroupUserIds(admin, classGroupId, callerId)
+      : await resolveAllHomeschoolUserIds(admin, homeschoolId, callerId);
+  } else if (event === "COMMUNITY_COMMENT") {
+    const { data: post } = await admin
+      .from("community_posts")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!post) {
+      return json(404, { error: "게시글을 찾을 수 없습니다." }, corsHeaders);
+    }
+    const pRow = post as Row;
+    const postAuthorId = pickString(pRow, "author_user_id");
+    const { data: comments } = await admin
+      .from("community_post_comments")
+      .select("author_user_id, author_display_name, content, created_at")
+      .eq("post_id", targetId)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    const cRows = (comments ?? []) as Row[];
+    const latest = cRows[0];
+    const commenterName = pickString(latest, "author_display_name") ?? "구성원";
+    const commentText = pickString(latest, "content") ?? "새 댓글이 달렸습니다.";
+    const recipientSet = new Set<string>();
+    if (postAuthorId && postAuthorId !== callerId) recipientSet.add(postAuthorId);
+    for (const c of cRows) {
+      const uid = pickString(c, "author_user_id");
+      if (uid && uid !== callerId) recipientSet.add(uid);
+    }
+    title = `[커뮤니티 댓글] ${commenterName}님이 댓글을 남겼어요`;
+    bodyText = commentText.slice(0, 180);
+    tab = "커뮤니티";
+    targetUserIds = Array.from(recipientSet);
+  } else if (event === "GALLERY_UPLOAD") {
+    const { data: media } = await admin
+      .from("media_assets")
+      .select("*")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!media) {
+      return json(404, { error: "앨범 미디어를 찾을 수 없습니다." }, corsHeaders);
+    }
+    const mRow = media as Row;
+    const homeschoolId = pickString(mRow, "homeschool_id") ?? "";
+    const classGroupId = pickString(mRow, "class_group_id");
+    const mediaType = (pickString(mRow, "media_type") ?? "PHOTO").toUpperCase();
+    const desc = pickString(mRow, "description") || pickString(mRow, "title") || "";
+    const { data: hs } = await admin
+      .from("homeschools")
+      .select("name")
+      .eq("id", homeschoolId)
+      .maybeSingle();
+    const hsName = pickString(hs as Row | null, "name") ?? "홈스쿨";
+    title = `[${hsName} 추억 앨범] 새 ${mediaType === "VIDEO" ? "동영상" : "사진"}이 올라왔어요`;
+    bodyText = (desc || "추억 앨범에서 새로 올라온 사진·영상을 확인해 보세요.").slice(0, 180);
+    tab = "앨범";
+    targetUserIds = classGroupId
+      ? await resolveClassGroupUserIds(admin, classGroupId, callerId)
+      : await resolveAllHomeschoolUserIds(admin, homeschoolId, callerId);
+  }
+
+  const pushSent = await sendDomainPush(admin, {
+    callerId,
+    userIds: targetUserIds,
+    title,
+    body: bodyText,
+    eventType: event,
+    rowId: targetId,
+    tab,
+  });
+
+  return json(
+    200,
+    {
+      accepted: true,
+      sent: pushSent,
+      push_sent: pushSent,
+      skipped_no_phone: 0,
+      skipped_no_account: 0,
+      message_id: targetId,
+    },
+    corsHeaders
+  );
+}
+
 async function sendDomainPush(
   admin: Admin,
   args: {
@@ -526,38 +1156,97 @@ async function sendDomainPush(
     body: string;
     eventType: string;
     rowId: string;
+    tab?: string;
   }
 ): Promise<number> {
   if (args.userIds.length === 0) return 0;
   try {
-    const { data: prefs } = await admin
+    let prefsRows: Row[] = [];
+    const { data: fullPrefs, error: prefsErr } = await admin
       .from("notification_prefs")
-      .select("user_id, push_enabled")
+      .select("*")
       .in("user_id", args.userIds);
-    const disabled = new Set(
-      (prefs ?? [])
-        .filter((row) => row.push_enabled === false)
-        .map((row) => row.user_id as string)
-    );
-    const allowed = args.userIds.filter((id) => !disabled.has(id));
+    if (!prefsErr && fullPrefs) {
+      prefsRows = fullPrefs as Row[];
+    } else {
+      const { data: basicPrefs } = await admin
+        .from("notification_prefs")
+        .select("user_id, push_enabled, quiet_hours_start, quiet_hours_end")
+        .in("user_id", args.userIds);
+      prefsRows = (basicPrefs ?? []) as Row[];
+    }
+
+    const prefCol = prefColumnForEvent(args.eventType);
+    const nowMinutes = nowMinutesInSeoul();
+    const disabled = new Set<string>();
+    const quietHoursUsers = new Set<string>();
+
+    for (const row of prefsRows) {
+      const uid = pickString(row, "user_id");
+      if (!uid) continue;
+      if (row.push_enabled === false) {
+        disabled.add(uid);
+        continue;
+      }
+      if (prefCol && row[prefCol] === false) {
+        disabled.add(uid);
+        continue;
+      }
+      if (isUserInQuietHours(row, nowMinutes)) {
+        quietHoursUsers.add(uid);
+      }
+    }
+
+    const allowed = [...new Set(args.userIds.filter((id) => !disabled.has(id)))];
     if (allowed.length === 0) return 0;
 
-    const { data: tokens } = await admin
-      .from("push_tokens")
-      .select("user_id, token, platform")
-      .in("user_id", allowed)
-      .is("revoked_at", null);
-    if (!tokens || tokens.length === 0) return 0;
+    // 방해금지 시간이 아닌 사용자에게만 실시간 기기 푸시(FCM)를 발송하고,
+    // 방해금지 시간 중인 사용자에게는 앱 내 알림함(inbox_only)으로만 조용히 기록한다.
+    const fcmEligibleUserIds = allowed.filter((id) => !quietHoursUsers.has(id));
 
-    const results = await sendFcmToTokens({
-      tokens: tokens as Array<{ user_id: string; token: string; platform: string }>,
-      payload: {
-        title: args.title,
-        body: args.body,
-        data: { event: args.eventType, id: args.rowId, tab: "시간표" }
-      }
-    });
-    const logs = results.map((result) => ({
+    const { data: tokens } = fcmEligibleUserIds.length > 0
+      ? await admin
+          .from("push_tokens")
+          .select("user_id, token, platform")
+          .in("user_id", fcmEligibleUserIds)
+          .is("revoked_at", null)
+      : { data: [] };
+
+    const activeTokens = (tokens ?? []) as Array<{
+      user_id: string;
+      token: string;
+      platform: string;
+    }>;
+    const usersWithTokens = new Set(activeTokens.map((t) => t.user_id));
+    const payloadData = {
+      event: args.eventType,
+      id: args.rowId,
+      tab: args.tab ?? "시간표"
+    };
+
+    const results = activeTokens.length > 0
+      ? await sendFcmToTokens({
+        tokens: activeTokens,
+        payload: {
+          title: args.title,
+          body: args.body,
+          data: payloadData
+        }
+      })
+      : [];
+
+    // 만료/삭제된 FCM 토큰(UNREGISTERED)은 즉시 폐기 처리하여 다음 발송 지연을 막는다.
+    const deadTokens = results
+      .filter((r) => r.unregistered && r.token)
+      .map((r) => r.token);
+    if (deadTokens.length > 0) {
+      await admin
+        .from("push_tokens")
+        .update({ revoked_at: new Date().toISOString() })
+        .in("token", deadTokens);
+    }
+
+    const fcmLogs = results.map((result) => ({
       requested_by: args.callerId,
       to_user_id: result.userId,
       channel: "push",
@@ -567,11 +1256,29 @@ async function sendDomainPush(
       event_type: args.eventType,
       title: args.title,
       body: args.body,
-      payload: { event: args.eventType, id: args.rowId, tab: "시간표" }
+      payload: payloadData
     }));
-    const { error } = await admin.from("notification_log").insert(logs);
-    if (error) console.error("[nest-notify] push log", error.message);
-    return results.filter((result) => result.ok).length;
+
+    const inboxOnlyUserIds = allowed.filter((id) => !usersWithTokens.has(id));
+    const inboxOnlyLogs = inboxOnlyUserIds.map((userId) => ({
+      requested_by: args.callerId,
+      to_user_id: userId,
+      channel: "push",
+      status: "inbox_only",
+      provider_message_id: null,
+      error: null,
+      event_type: args.eventType,
+      title: args.title,
+      body: args.body,
+      payload: payloadData
+    }));
+
+    const logs = [...fcmLogs, ...inboxOnlyLogs];
+    if (logs.length > 0) {
+      const { error } = await admin.from("notification_log").insert(logs);
+      if (error) console.error("[nest-notify] push log", error.message);
+    }
+    return results.filter((result) => result.ok).length + inboxOnlyUserIds.length;
   } catch (error) {
     console.error("[nest-notify] push", error);
     return 0;
@@ -1287,20 +1994,54 @@ async function pushToSelf(
   admin: ReturnType<typeof createAdminClient>,
   userId: string
 ): Promise<number> {
+  const title = "알림이 잘 오고 있어요";
+  const body = "이렇게 수업 변경·시작 전 안내를 보내드립니다.";
+  const payloadData = { event: "TEST", tab: "시간표" };
+
   const { data: tokens } = await admin
     .from("push_tokens")
     .select("user_id, token, platform")
     .eq("user_id", userId)
     .is("revoked_at", null);
-  if (!tokens || tokens.length === 0) return 0;
+
+  if (!tokens || tokens.length === 0) {
+    const { error } = await admin.from("notification_log").insert({
+      requested_by: userId,
+      to_user_id: userId,
+      channel: "push",
+      status: "inbox_only",
+      provider_message_id: null,
+      error: null,
+      event_type: "TEST",
+      title,
+      body,
+      payload: payloadData
+    });
+    if (error) console.error("[nest-notify] test inbox log", error.message);
+    return 0;
+  }
 
   const results = await sendFcmToTokens({
     tokens: tokens as Array<{ user_id: string; token: string; platform: string }>,
     payload: {
-      title: "알림이 잘 오고 있어요",
-      body: "이렇게 수업 변경·시작 전 안내를 보내드립니다.",
-      data: { event: "TEST", tab: "시간표" }
+      title,
+      body,
+      data: payloadData
     }
   });
+  const logs = results.map((result) => ({
+    requested_by: userId,
+    to_user_id: result.userId,
+    channel: "push",
+    status: result.ok ? "accepted" : "failed",
+    provider_message_id: result.name ?? null,
+    error: result.error ?? null,
+    event_type: "TEST",
+    title,
+    body,
+    payload: payloadData
+  }));
+  const { error } = await admin.from("notification_log").insert(logs);
+  if (error) console.error("[nest-notify] test push log", error.message);
   return results.filter((row) => row.ok).length;
 }

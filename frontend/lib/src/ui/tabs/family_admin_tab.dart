@@ -5,6 +5,7 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
+import '../widgets/course_schedule_quick_sheet.dart';
 import '../widgets/entity_visuals.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_3d_icon.dart';
@@ -12,6 +13,7 @@ import 'timetable/course_lesson_sheet.dart';
 import '../widgets/nest_section_header.dart';
 import '../widgets/nest_sheet.dart';
 import '../widgets/portfolio_generation_dialog.dart';
+import '../widgets/spouse_invite_sheet.dart';
 
 class FamilyAdminTab extends StatefulWidget {
   const FamilyAdminTab({
@@ -517,6 +519,16 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ),
               description: '카드를 클릭하면 가정 정보 수정으로 바로 이동합니다.',
               actions: [
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => showSpouseInviteSheet(
+                          context: context,
+                          controller: controller,
+                        ),
+                  icon: const Icon(Icons.family_restroom_outlined),
+                  label: const Text('엄마·아빠 초대'),
+                ),
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
                       ? null
@@ -531,6 +543,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            SpouseInviteBannerCard(controller: controller),
             const SizedBox(height: 10),
             if (families.isEmpty)
               _buildEmptyHint('등록된 가정이 없습니다. 가정 추가로 시작하세요.')
@@ -3040,6 +3054,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   ? '이 학기 시간표에 쓰는 과목만 보여줍니다. 지난 학기에만 쓰던 과목은 "전체"에서 볼 수 있습니다.'
                   : '과목 카드를 클릭하면 기본 수업 시간 수정과 삭제를 한 번에 처리할 수 있습니다.',
               actions: [
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => showCourseScheduleQuickSheet(
+                          context: context,
+                          controller: controller,
+                          initialMode: 0,
+                        ),
+                  icon: const Icon(Icons.auto_stories_outlined),
+                  label: const Text('템플릿·문장 추가'),
+                ),
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
                       ? null
@@ -3049,6 +3074,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            CourseScheduleQuickBanner(controller: controller),
             if (canScope) ...[
               const SizedBox(height: 10),
               _buildTermScopeToggle(

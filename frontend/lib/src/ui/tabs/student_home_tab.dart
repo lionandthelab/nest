@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/schedule_occurrence.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
@@ -49,6 +50,35 @@ class StudentHomeTab extends StatefulWidget {
 
 class _StudentHomeTabState extends State<StudentHomeTab> {
   bool _showAllAnnouncements = false;
+  bool _showFullTimetable = false;
+  bool _showSchoolSchedule = false;
+
+  String _teacherNameForOccurrence(
+    NestController controller,
+    Map<String, ChildClassBundle> bundles,
+    ResolvedOccurrence row,
+  ) {
+    for (final bundle in bundles.values) {
+      for (final a in bundle.assignments) {
+        if (a.classSessionId == row.session.id) {
+          final name = controller.findTeacherName(a.teacherProfileId).trim();
+          if (name.isNotEmpty && name != a.teacherProfileId) return name;
+        }
+      }
+    }
+    return '';
+  }
+
+  String _lessonLabelForOccurrence(
+    NestController controller,
+    ResolvedOccurrence row,
+  ) {
+    final lesson = controller.courseLessonOn(
+      courseId: row.session.courseId,
+      date: row.date,
+    );
+    return (lesson?.headline ?? '').trim();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +125,7 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
       DateTime.now(),
       forSessions: bundles.values.expand((bundle) => bundle.sessions),
     );
+    final childName = (child?.name ?? '').trim();
 
     final list = ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -108,10 +139,39 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             occurrences: occurrences,
             courseNameOf: controller.findCourseName,
             classNameOf: controller.findClassGroupName,
+            teacherNameOf: (row) =>
+                _teacherNameForOccurrence(controller, bundles, row),
+            lessonLabelOf: (row) => _lessonLabelForOccurrence(controller, row),
+            titleLabel: childName.isEmpty ? '나의 오늘 수업' : '$childName의 오늘 수업',
+            userId: controller.user?.id,
+            enableStyleSwitcher: true,
+            isFullTimetableExpanded: _showFullTimetable,
+            onToggleFullTimetable: () =>
+                setState(() => _showFullTimetable = !_showFullTimetable),
             onOpenTimetable: widget.onOpenTimetable,
           ),
         ),
         const SizedBox(height: 10),
+        if (_showFullTimetable && !noEnrollments) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LessonsTodaySection(
+                    controller: controller,
+                    childId: childId,
+                    bundles: bundles,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildUpcomingChanges(context, controller, bundles),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         TodayPersonalEvents(
           events: controller.personalEventsOn(DateTime.now(), childId: childId),
           onAdd: () => openPersonalEventForChild(
@@ -129,16 +189,41 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
           ),
         ),
         const SizedBox(height: 10),
+        if (noEnrollments) ...[
+          _buildNoticeCard(
+            context,
+            title: '반 배정 대기 중',
+            body:
+                '아직 반에 배정되지 않았어요. '
+                '관리 선생님이 반 배정을 마치면 시간표를 확인할 수 있습니다.',
+          ),
+          const SizedBox(height: 12),
+        ],
+        _buildAnnouncementBanner(controller),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 8,
-          runSpacing: 4,
+          runSpacing: 6,
           children: [
             if (widget.onOpenTimetable != null)
-              TextButton.icon(
+              OutlinedButton.icon(
                 onPressed: widget.onOpenTimetable,
-                icon: const Icon(Icons.event_busy_outlined, size: 18),
-                label: const Text('결석 신고 · 시간표'),
+                icon: const Icon(Icons.event_busy_outlined, size: 17),
+                label: const Text('결석 신고 · 전체 시간표'),
               ),
+            OutlinedButton.icon(
+              onPressed: () =>
+                  setState(() => _showSchoolSchedule = !_showSchoolSchedule),
+              icon: Icon(
+                _showSchoolSchedule
+                    ? Icons.expand_less_rounded
+                    : Icons.event_note_outlined,
+                size: 17,
+              ),
+              label: Text(
+                _showSchoolSchedule ? '출결 · 학사 일정 접기' : '출결 · 학사 일정 보기',
+              ),
+            ),
             TextButton.icon(
               onPressed: () {
                 showPortfolioGenerationDialog(
@@ -152,31 +237,12 @@ class _StudentHomeTabState extends State<StudentHomeTab> {
             ),
           ],
         ),
-        if (noEnrollments) ...[
-          _buildNoticeCard(
-            context,
-            title: '반 배정 대기 중',
-            body:
-                '아직 반에 배정되지 않았어요. '
-                '관리 선생님이 반 배정을 마치면 시간표를 확인할 수 있습니다.',
-          ),
+        if (_showSchoolSchedule) ...[
           const SizedBox(height: 12),
-        ],
-        _buildAnnouncementBanner(controller),
-        const SizedBox(height: 16),
-        if (!noEnrollments) ...[
-          LessonsTodaySection(
-            controller: controller,
-            childId: childId,
-            bundles: bundles,
-          ),
+          _buildMyAbsences(context, controller, childId, bundles),
           const SizedBox(height: 16),
-          _buildUpcomingChanges(context, controller, bundles),
-          const SizedBox(height: 16),
+          _buildHomeschoolSchedule(context, controller),
         ],
-        _buildMyAbsences(context, controller, childId, bundles),
-        const SizedBox(height: 16),
-        _buildHomeschoolSchedule(context, controller),
       ],
     );
     if (widget.onRefresh == null) return list;

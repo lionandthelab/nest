@@ -1201,4 +1201,111 @@ void main() {
       expect(copied.parentEvaluation, '부모 의견');
     });
   });
+
+  group('HomeschoolChatMessage & shared payloads', () {
+    test('HomeschoolChatMessage.fromMap parses attachments, schedule, and contact', () {
+      final msg = HomeschoolChatMessage.fromMap({
+        'id': 'chat-1',
+        'homeschool_id': 'hs-1',
+        'class_group_id': 'class-1',
+        'recipient_user_id': null,
+        'sender_user_id': 'user-1',
+        'sender_name': '김민지 선생님',
+        'sender_role': 'TEACHER',
+        'message_type': 'SCHEDULE',
+        'content': '내일 과학 수업 일정입니다.',
+        'attachments': [
+          {
+            'storage_path': 'chat/hs-1/user-1/123_photo.jpg',
+            'public_url': 'https://example.com/123_photo.jpg',
+            'file_name': 'photo.jpg',
+            'mime_type': 'image/jpeg',
+            'size_bytes': 102400,
+          },
+        ],
+        'metadata': {
+          'schedule_kind': 'CLASS_SESSION',
+          'title': '창의 과학 실험',
+          'date': '2026-10-21',
+          'day_label': '수요일',
+          'time_range': '10:00 - 10:50',
+          'location': '과학실',
+          'class_name': '소망반',
+          'teacher_name': '김민지',
+          'note': '보안경 지참',
+          'source_id': 'sess-1',
+        },
+        'created_at': '2026-10-20T04:00:00Z',
+      });
+
+      expect(msg.id, 'chat-1');
+      expect(msg.homeschoolId, 'hs-1');
+      expect(msg.classGroupId, 'class-1');
+      expect(msg.isClassRoom, isTrue);
+      expect(msg.isGeneralRoom, isFalse);
+      expect(msg.isDirectMessage, isFalse);
+      expect(msg.senderName, '김민지 선생님');
+      expect(msg.senderRole, 'TEACHER');
+      expect(msg.messageType, 'SCHEDULE');
+      expect(msg.attachments, hasLength(1));
+      expect(msg.attachments.first.isImage, isTrue);
+      expect(msg.attachments.first.isVideo, isFalse);
+      expect(msg.sharedSchedule, isNotNull);
+      expect(msg.sharedSchedule!.title, '창의 과학 실험');
+      expect(msg.sharedSchedule!.kindBadgeLabel, '수업 시간표');
+      expect(msg.sharedSchedule!.location, '과학실');
+      expect(msg.sharedContact, isNull);
+    });
+
+    test('HomeschoolChatMessage parses CONTACT metadata and direct message flags', () {
+      final msg = HomeschoolChatMessage.fromMap({
+        'id': 'chat-2',
+        'homeschool_id': 'hs-1',
+        'recipient_user_id': 'user-2',
+        'sender_user_id': 'user-1',
+        'sender_name': '박지훈 학부모',
+        'sender_role': 'PARENT',
+        'message_type': 'CONTACT',
+        'content': '[연락처 공유] 이수현 선생님',
+        'metadata': {
+          'contact_name': '이수현 선생님',
+          'contact_role': '음악 담당 교사',
+          'phone': '010-1234-5678',
+          'email': 'teacher@example.com',
+          'memo': '수요일 오후 상담 가능',
+          'user_id': 'user-teacher-1',
+        },
+        'created_at': '2026-10-20T05:00:00Z',
+      });
+
+      expect(msg.isDirectMessage, isTrue);
+      expect(msg.isGeneralRoom, isFalse);
+      expect(msg.sharedContact, isNotNull);
+      expect(msg.sharedContact!.contactName, '이수현 선생님');
+      expect(msg.sharedContact!.phone, '010-1234-5678');
+      expect(msg.sharedContact!.email, 'teacher@example.com');
+      expect(msg.sharedSchedule, isNull);
+    });
+
+    test('HomeschoolChatMessage.fromMap handles missing fields safely', () {
+      final msg = HomeschoolChatMessage.fromMap(const {});
+      expect(msg.id, '');
+      expect(msg.messageType, 'TEXT');
+      expect(msg.isGeneralRoom, isTrue);
+      expect(msg.attachments, isEmpty);
+      expect(msg.sharedSchedule, isNull);
+      expect(msg.sharedContact, isNull);
+    });
+
+    test('NotificationInboxItem.deepLinkTab maps CHAT_MESSAGE to 채팅', () {
+      final item = NotificationInboxItem.fromMap({
+        'id': 'notif-chat-1',
+        'event_type': 'CHAT_MESSAGE',
+        'title': '조이스쿨 채팅 · 김민지 선생님',
+        'body': '오늘 수업 사진 공유합니다!',
+        'created_at': '2026-10-20T05:00:00Z',
+      });
+      expect(item.deepLinkTab, '채팅');
+    });
+  });
 }

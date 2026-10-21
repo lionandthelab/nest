@@ -114,7 +114,7 @@ Future<void> _setMobileSize(WidgetTester tester) async {
 
 void main() {
   group('AdminHomeTab (모바일 폭)', () {
-    testWidgets('신학기 준비 체크리스트와 빠른 작업이 오버플로 없이 렌더된다', (tester) async {
+    testWidgets('아이가 없으면 아이 추가만 보이고 빠른 작업은 그대로다', (tester) async {
       await _setMobileSize(tester);
       final controller = _adminController();
 
@@ -125,7 +125,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('신학기 준비'), findsOneWidget);
+      expect(find.text('신학기 준비'), findsNothing);
+      expect(find.text('아이 추가'), findsWidgets);
       expect(find.text('가입 요청'), findsOneWidget);
       expect(find.text('아이 등록'), findsOneWidget);
       expect(find.text('미배정'), findsOneWidget);
@@ -156,28 +157,48 @@ void main() {
       expect(navigations, [(NewTermTabs.news, NewTermSections.events)]);
     });
 
-    testWidgets('체크리스트의 다음 단계는 학기가 있으면 가정·아이 등록이다', (tester) async {
+    testWidgets('아이가 있으면 아이 추가 안내를 숨긴다', (tester) async {
       await _setMobileSize(tester);
       final controller = _adminController();
-      final navigations = <(String, String?)>[];
+      controller.children = [
+        ChildProfile.fromMap({
+          'id': 'c-1',
+          'family_id': 'f-1',
+          'name': '하늘',
+          'birth_date': '2018-04-02',
+        }),
+      ];
 
       await tester.pumpWidget(
         _mobileApp(
-          AdminHomeTab(
-            controller: controller,
-            onNavigate: (tab, {section}) => navigations.add((tab, section)),
-          ),
+          AdminHomeTab(controller: controller, onNavigate: (_, {section}) {}),
         ),
       );
       await tester.pump();
 
-      final nextStepButton = find.textContaining('다음 단계: 가정·아이 등록');
-      expect(nextStepButton, findsOneWidget);
+      expect(find.text('아이 추가'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
 
-      await tester.tap(nextStepButton);
+    testWidgets('아이 추가를 누르면 이름과 생일을 묻는다', (tester) async {
+      await _setMobileSize(tester);
+      final controller = _adminController();
+
+      await tester.pumpWidget(
+        _mobileApp(
+          AdminHomeTab(controller: controller, onNavigate: (_, {section}) {}),
+        ),
+      );
       await tester.pump();
 
-      expect(navigations, [(NewTermTabs.termSetup, NewTermSections.family)]);
+      await tester.tap(find.widgetWithText(FilledButton, '아이 추가'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('아이 이름'), findsOneWidget);
+      expect(find.text('생일'), findsOneWidget);
+      expect(find.text('등록'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 

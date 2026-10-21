@@ -54,6 +54,8 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
   String? _managedClassLoadSignature;
   bool _isLoadingManagedClasses = false;
   Map<String, _TeacherClassBundle> _managedClassBundles = const {};
+  bool _showFullSessionBoard = false;
+  String? _activeToolSection;
 
   @override
   void dispose() {
@@ -80,6 +82,7 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
+        // ── 1순위: 선생님의 오늘 담당 수업 위젯 (4가지 위젯 스타일 선택 지원) ──
         TodayScheduleCard(
           occurrences: controller.occurrencesOn(
             DateTime.now(),
@@ -87,39 +90,129 @@ class _TeacherHubTabState extends State<TeacherHubTab> {
           ),
           courseNameOf: controller.findCourseName,
           classNameOf: controller.findClassGroupName,
+          lessonLabelOf: (row) =>
+              (controller
+                      .courseLessonOn(
+                        courseId: row.session.courseId,
+                        date: row.date,
+                      )
+                      ?.headline ??
+                  '')
+                  .trim(),
+          titleLabel: '선생님 오늘 담당 수업',
+          userId: controller.user?.id,
+          enableStyleSwitcher: true,
+          isFullTimetableExpanded: _showFullSessionBoard,
+          fullTimetableButtonLabel: _showFullSessionBoard
+              ? '담당 반 전체 시간표 접기'
+              : '담당 반 전체 시간표 보기',
+          onToggleFullTimetable: () =>
+              setState(() => _showFullSessionBoard = !_showFullSessionBoard),
           onOpenTimetable: widget.onOpenTimetable,
           emptyLabel: '오늘 담당 수업이 없어요',
         ),
         const SizedBox(height: 12),
-        if (controller.canAcknowledgeAbsence) ...[
-          _buildAbsenceInboxCard(controller, selectedBundle),
-          const SizedBox(height: 12),
-        ],
         if (_managedClassBundles.isNotEmpty) ...[
           _buildClassSelector(controller),
           const SizedBox(height: 12),
         ],
-        if (selectedBundle != null) ...[
+        // ── 추가 클릭 시 펼쳐지는 담당 반 전체 주간 시간표 보드 ──
+        if (_showFullSessionBoard && selectedBundle != null) ...[
           _buildSessionBoard(controller, selectedBundle),
           const SizedBox(height: 12),
         ],
-        // Class change notices (teacher/admin only)
-        if (controller.canManageClassSessionChanges) ...[
+        if (controller.canAcknowledgeAbsence) ...[
+          _buildAbsenceInboxCard(controller, selectedBundle),
+          const SizedBox(height: 12),
+        ],
+        // ── 교사 수업 관리 도구 선택 바 (클릭 시 해당 작성·조회 폼 펼침) ──
+        _buildTeacherToolSelectorBar(context, controller, selectedBundle),
+        const SizedBox(height: 12),
+        if (_activeToolSection == 'change' &&
+            controller.canManageClassSessionChanges) ...[
           _buildClassChangeCard(controller, selectedBundle),
           const SizedBox(height: 12),
         ],
-        // Teaching plan
-        _buildTeachingPlanCard(controller, selectedBundle),
-        const SizedBox(height: 12),
-        // Class announcements
-        _buildClassAnnouncementCard(controller, selectedBundle),
-        const SizedBox(height: 12),
-        // Activity notes
-        _buildChildStatusSection(controller, selectedBundle),
+        if (_activeToolSection == 'plan') ...[
+          _buildTeachingPlanCard(controller, selectedBundle),
+          const SizedBox(height: 12),
+        ],
+        if (_activeToolSection == 'announcement') ...[
+          _buildClassAnnouncementCard(controller, selectedBundle),
+          const SizedBox(height: 12),
+        ],
+        if (_activeToolSection == 'log') ...[
+          _buildChildStatusSection(controller, selectedBundle),
+        ],
       ],
     );
     if (widget.onRefresh == null) return list;
     return NestRefreshable(onRefresh: widget.onRefresh!, child: list);
+  }
+
+  Widget _buildTeacherToolSelectorBar(
+    BuildContext context,
+    NestController controller,
+    _TeacherClassBundle? selectedBundle,
+  ) {
+    final planCount = selectedBundle?.plans.length ?? 0;
+    final announceCount = selectedBundle?.announcements.length ?? 0;
+    final tools = <(String id, String label, IconData icon)>[
+      ('plan', '수업 계획 ($planCount)', Icons.menu_book_outlined),
+      ('announcement', '반 공지 ($announceCount)', Icons.campaign_outlined),
+      ('log', '학생 활동 기록', Icons.rate_review_outlined),
+      if (controller.canManageClassSessionChanges)
+        ('change', '휴강·보강 변경 공지', Icons.edit_calendar_outlined),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Nest3dIcon.teacher(size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '교사 수업 관리 도구',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (_activeToolSection != null)
+                  TextButton(
+                    onPressed: () => setState(() => _activeToolSection = null),
+                    child: const Text('도구 접기'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final tool in tools)
+                  ChoiceChip(
+                    avatar: Icon(tool.$3, size: 16),
+                    label: Text(tool.$2),
+                    selected: _activeToolSection == tool.$1,
+                    selectedColor: NestColors.dustyRose.withValues(alpha: 0.55),
+                    onSelected: (selected) {
+                      setState(() {
+                        _activeToolSection = selected ? tool.$1 : null;
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _syncManagedClassLoad(NestController controller) {

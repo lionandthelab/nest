@@ -128,6 +128,18 @@ class NotificationSettingsPanel extends StatelessWidget {
                 )
               : null,
         ),
+        if (prefs.hasQuietHours) ...[
+          const SizedBox(height: 6),
+          _QuietHoursPicker(
+            start: prefs.quietHoursStart ?? defaultQuietStart,
+            end: prefs.quietHoursEnd ?? defaultQuietEnd,
+            enabled: subEnabled,
+            onStartSelected: (start) =>
+                onChanged(prefs.copyWith(quietHoursStart: start)),
+            onEndSelected: (end) =>
+                onChanged(prefs.copyWith(quietHoursEnd: end)),
+          ),
+        ],
 
         if (onSendTest != null) ...[
           const SizedBox(height: 14),
@@ -141,6 +153,96 @@ class NotificationSettingsPanel extends StatelessWidget {
           ),
         ],
 
+        const SizedBox(height: 18),
+        const Divider(height: 1),
+        const SizedBox(height: 14),
+        _GranularSectionHeader(
+          prefs: prefs,
+          enabled: subEnabled,
+          onChanged: onChanged,
+        ),
+        const SizedBox(height: 8),
+        const _CategoryLabel('학사 · 출결 · 수업'),
+        _Tile(
+          icon: Icons.swap_horiz_outlined,
+          title: '수업 변경 · 보강 알림',
+          subtitle: '휴강·보강·시간 및 교실 변경 시 즉시 알림',
+          value: prefs.classChangeEnabled,
+          onChanged: subEnabled
+              ? (value) =>
+                    onChanged(prefs.copyWith(classChangeEnabled: value))
+              : null,
+        ),
+        _Tile(
+          icon: Icons.event_busy_outlined,
+          title: '결석 신고 · 확인 알림',
+          subtitle: '결석 신고 접수 및 담당 선생님 확인 시 알림',
+          value: prefs.absenceEnabled,
+          onChanged: subEnabled
+              ? (value) => onChanged(prefs.copyWith(absenceEnabled: value))
+              : null,
+        ),
+        _Tile(
+          icon: Icons.campaign_outlined,
+          title: '공지사항 알림',
+          subtitle: '홈스쿨 전체 및 반별 새 공지 등록 시 알림',
+          value: prefs.announcementEnabled,
+          onChanged: subEnabled
+              ? (value) =>
+                    onChanged(prefs.copyWith(announcementEnabled: value))
+              : null,
+        ),
+        _Tile(
+          icon: Icons.event_note_outlined,
+          title: '학사 일정 · 행사 알림',
+          subtitle: '새 학사 일정, 방학, 주요 행사 등록 시 알림',
+          value: prefs.academicEventEnabled,
+          onChanged: subEnabled
+              ? (value) =>
+                    onChanged(prefs.copyWith(academicEventEnabled: value))
+              : null,
+        ),
+        _Tile(
+          icon: Icons.menu_book_outlined,
+          title: '아이 활동 기록 · 수업 계획',
+          subtitle: '선생님이 남긴 관찰 기록 및 수업 계획 등록 시 알림',
+          value: prefs.studentLogEnabled,
+          onChanged: subEnabled
+              ? (value) =>
+                    onChanged(prefs.copyWith(studentLogEnabled: value))
+              : null,
+        ),
+
+        const SizedBox(height: 10),
+        const _CategoryLabel('소통 · 커뮤니티 · 앨범'),
+        _Tile(
+          icon: Icons.chat_bubble_outline,
+          title: '실시간 채팅 알림',
+          subtitle: '전체·반 채팅방 및 1:1 귓속말 새 메시지 알림',
+          value: prefs.chatEnabled,
+          onChanged: subEnabled
+              ? (value) => onChanged(prefs.copyWith(chatEnabled: value))
+              : null,
+        ),
+        _Tile(
+          icon: Icons.forum_outlined,
+          title: '커뮤니티 새 글 · 댓글',
+          subtitle: '커뮤니티 새 소식과 내 글의 댓글 알림',
+          value: prefs.communityEnabled,
+          onChanged: subEnabled
+              ? (value) => onChanged(prefs.copyWith(communityEnabled: value))
+              : null,
+        ),
+        _Tile(
+          icon: Icons.photo_library_outlined,
+          title: '추억 앨범 사진 · 영상',
+          subtitle: '아이가 태그된 사진이나 반 앨범 업로드 알림',
+          value: prefs.galleryEnabled,
+          onChanged: subEnabled
+              ? (value) => onChanged(prefs.copyWith(galleryEnabled: value))
+              : null,
+        ),
+
         const SizedBox(height: 12),
         Text(
           '알림은 기기 설정에서도 허용되어 있어야 옵니다. '
@@ -150,6 +252,193 @@ class NotificationSettingsPanel extends StatelessWidget {
             height: 1.4,
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _GranularSectionHeader extends StatelessWidget {
+  const _GranularSectionHeader({
+    required this.prefs,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final NotificationPrefs prefs;
+  final bool enabled;
+  final ValueChanged<NotificationPrefs> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '이벤트별 세부 알림',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: NestColors.deepWood,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: NestColors.roseMist.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${prefs.enabledEventCount}/${NotificationPrefs.totalEventCount} 켜짐',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '받고 싶은 소식만 골라 켜거나 모든 이벤트를 한 번에 켤 수 있어요.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: NestColors.deepWood.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            ActionChip(
+              avatar: const Icon(Icons.done_all, size: 15),
+              label: const Text('모든 알림 켜기'),
+              visualDensity: VisualDensity.compact,
+              onPressed: enabled
+                  ? () => onChanged(prefs.enableAllEvents())
+                  : null,
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.bolt_outlined, size: 15),
+              label: const Text('필수 알림만'),
+              visualDensity: VisualDensity.compact,
+              onPressed: enabled
+                  ? () => onChanged(prefs.enableEssentialEventsOnly())
+                  : null,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryLabel extends StatelessWidget {
+  const _CategoryLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 4, bottom: 2),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: NestColors.clay,
+        ),
+      ),
+    );
+  }
+}
+
+class _QuietHoursPicker extends StatelessWidget {
+  const _QuietHoursPicker({
+    required this.start,
+    required this.end,
+    required this.enabled,
+    required this.onStartSelected,
+    required this.onEndSelected,
+  });
+
+  final String start;
+  final String end;
+  final bool enabled;
+  final ValueChanged<String> onStartSelected;
+  final ValueChanged<String> onEndSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: NestColors.deepWood.withValues(alpha: 0.65),
+      fontWeight: FontWeight.w700,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, right: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('시작 시각', style: labelStyle),
+          const SizedBox(height: 4),
+          _StringChipRow(
+            choices: NotificationPrefs.quietStartChoices,
+            value: start,
+            enabled: enabled,
+            onSelected: onStartSelected,
+          ),
+          const SizedBox(height: 8),
+          Text('종료 시각', style: labelStyle),
+          const SizedBox(height: 4),
+          _StringChipRow(
+            choices: NotificationPrefs.quietEndChoices,
+            value: end,
+            enabled: enabled,
+            onSelected: onEndSelected,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StringChipRow extends StatelessWidget {
+  const _StringChipRow({
+    required this.choices,
+    required this.value,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final List<String> choices;
+  final String value;
+  final bool enabled;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < choices.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(
+            child: ChoiceChip(
+              label: SizedBox(
+                width: double.infinity,
+                child: Text(choices[i], textAlign: TextAlign.center),
+              ),
+              selected: choices[i] == value,
+              onSelected: enabled ? (_) => onSelected(choices[i]) : null,
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+            ),
+          ),
+        ],
       ],
     );
   }

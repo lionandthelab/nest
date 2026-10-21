@@ -589,7 +589,7 @@ Admin dashboard onboarding:
 **관리자 홈** (`tabs/admin_home_tab.dart`)
 
 - 학기 상태 줄 — 기간과 `개학까지 D-14` 카운트다운. 학기 이름/전환은 바로 위 `TermNavigatorBar`가 이미 하므로 중복을 피해 한 줄로만 덧붙인다.
-- **신학기 준비 체크리스트** — 진행률 + `다음 단계: …` 버튼. 단계 목록은 **기본으로 접혀 있다**. 9단계를 모두 펼치면 360px 폭에서 '빠른 작업'이 접히는 선 아래로 밀려난다.
+- **아이 추가** — 아이가 없을 때만 이름과 생일을 받는다. 가정이 없으면 연 사람 이름으로 만들고 보호자로 잇는다. 학기·과목·교실은 시작 때 이미 채워지므로 진행률 체크리스트는 홈에 두지 않는다.
 - **빠른 작업** 8칸 그리드(공지 / 학사일정 / 가정·아이 / 선생님 / 반 / 과목 / 시간표 / 멤버). 타일 최소 폭 150px 기준으로 열 수를 계산해 모바일 2열 · 데스크톱 4열.
 - 지표는 4칸 카드 그리드 → 한 줄 칩 스트립으로 축소하고, 자주 쓰지 않는 Drive 연결은 접힌 카드로 맨 아래.
 - `dashboard_tab.dart`는 **소속 없는 사용자의 온보딩 전용**이다. 메인은 우리 홈스쿨 개설, 참여는 접힌 서브다. 기존 `_DriveIntegrationCard` → `widgets/drive_integration_card.dart`, `빠른 초기 세팅` → `widgets/quick_bootstrap_card.dart`로 승격 이동.
@@ -602,7 +602,7 @@ Admin dashboard onboarding:
 
 **섹션 딥링크** (`ui/models/tab_section_request.dart`)
 
-- 체크리스트/빠른 작업은 탭뿐 아니라 **탭 안의 섹션**까지 지정해 이동한다(예: 학기 설정 탭의 `반`, 소식 탭의 `학사일정`).
+- 빠른 작업은 탭뿐 아니라 **탭 안의 섹션**까지 지정해 이동한다(예: 학기 설정 탭의 `반`, 소식 탭의 `학사일정`).
 - `HomePage`가 대상 탭 라벨 + `TabSectionRequest{section, nonce}`를 들고 있다가 해당 탭에만 넘긴다. `_buildTabs`는 매 빌드마다 새 위젯 인스턴스를 만들지만 State는 유지되므로, 같은 섹션을 연달아 요청해도 반응하도록 `nonce`로 요청을 구분하고 `didUpdateWidget`에서 처리한다.
 - 섹션 키는 `ui/models/new_term_checklist.dart`의 `NewTermSections`에 모여 있고, `FamilyAdminTab`의 설정 단위 키와 같은 값을 쓴다.
 
@@ -920,6 +920,67 @@ DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
   - `capture_portfolio_binder_shot_test.dart`를 통해 100% 한국어 데이터가 바인딩된 실제 앱 화면을 네이티브 렌더링하여 고화질 캡처.
   - 태블릿 디바이스 목업 및 데스크 환경의 1:1 쇼케이스 카드, 16:9 와이드 홍보 배너 제작.
 
+### 6.30 홈스쿨 실시간 채팅 · 원클릭 리치 공유 · 즉시 푸시 알림 (2026-10)
+
+- **배경 및 목적**: 홈스쿨 내에서 전체 단톡방, 반별 단톡방, 1:1 대화를 실시간으로 지원하고, 사진·동영상·문서 파일뿐 아니라 수업 스케줄과 구성원/교사 연락처를 원클릭 카드로 공유하며, 발송 즉시 FCM 푸시 알림 및 인앱 알림함(`notification_log`)으로 전달한다.
+- **채널 구조 (`HomeschoolChatView`)**:
+  - **전체 단톡방**: `class_group_id IS NULL` & `recipient_user_id IS NULL`
+  - **반별 단톡방**: `class_group_id = <선택 반>` & `recipient_user_id IS NULL`
+  - **1:1 대화**: `recipient_user_id = <상대방 user_id>` (발신자·수신자만 열람 가능)
+- **원클릭 리치 공유 5종**:
+  - `IMAGE` / `VIDEO` / `FILE`: `media` 스토리지 버킷의 `chat/{homeschool_id}/{message_seed}/` 경로로 업로드 후 메시지 버블 내 이미지 그리드(확대 뷰어 포함), 동영상 플레이어칩, 파일 다운로드칩으로 렌더링.
+  - `SCHEDULE` (`SharedScheduleInfo`): 시간표 수업(`CLASS_SESSION`), 학사일정(`ACADEMIC_EVENT`), 직접 입력(`CUSTOM_SCHEDULE`) 3가지 탭 시트에서 원클릭 공유. 수신자는 채팅 카드의 `[내 일정에 담기]` 버튼으로 즉시 개인/학사 일정에 추가 가능.
+  - `CONTACT` (`SharedContactInfo`): 홈스쿨 교사/구성원 목록(`DIRECTORY`) 또는 직접 입력(`CUSTOM`) 시트에서 원클릭 공유. 수신자는 채팅 카드에서 바로 `전화`, `문자`, `복사` 실행 가능.
+- **실시간 수신 & 즉시 푸시 알림**:
+  - Supabase Realtime(`postgres_changes` on `public.homeschool_chat_messages`) 구독으로 화면 새로고침 없이 즉시 메시지 도착 및 미읽음 뱃지(`unreadChatCount`) 갱신.
+  - 메시지 전송 직후 `nest-notify` Edge Function(`event: 'CHAT_MESSAGE'`)을 호출하여 홈스쿨 구성원(또는 1:1 수신자, 본인 제외)에게 FCM 백그라운드 푸시 및 `notification_log`(`tab: '채팅'`)를 즉시 발송.
+- **진입점**:
+  - 상단 글로벌 헤더의 채팅 바로가기 아이콘(`Nest3dIcon.community` + 미읽음 배지)
+  - 학부모·교사 `커뮤니티` 탭의 `실시간 채팅` 세그먼트(기본 활성)
+  - 관리자 `소식` 탭의 `채팅` 세그먼트 및 알림함(`CHAT_MESSAGE`) 딥링크
+
+### 6.31 역할별 '내 오늘 수업 먼저' 집중형 UX 및 4종 오늘 일정 위젯 (2026-10)
+
+- **배경 및 목적**: 학부모·선생님·학생이 앱(`홈` 및 `시간표`)에 접속했을 때 복잡한 전체 주간 격자나 학기 전체 달력 대신 **오늘 나와 관련된 수업 목록**만 가장 먼저 직관적으로 확인하고, 필요할 때만 추가 클릭(`[전체 시간표 보기]`, `[학사 일정 · 내 감독 보기]`)으로 전체 시간표 및 부수 정보를 펼쳐볼 수 있도록 정보 계층을 단순화했다.
+- **4종 멀티 스타일 오늘 일정 위젯 (`TodayScheduleCard` & `TodayWidgetStyle`)**:
+  - `TodayWidgetStyle.hero` (**포커스 위젯**): 지금/다음 수업 1개를 크게 강조하고 남은 수업을 아래에 요약 표시.
+  - `TodayWidgetStyle.timeline` (**타임라인 위젯**): 하루 전체 수업을 시간순 세로 타임라인으로 배치하고, 반·장소·담당 교사·당일 회차 진도(`CourseLesson.headline`)를 한눈에 표시.
+  - `TodayWidgetStyle.compact` (**심플목록 위젯**): 군더더기 없이 교시·시각·과목·장소만 한 줄씩 보여주는 미니멀 리스트.
+  - `TodayWidgetStyle.checklist` (**체크카드 위젯**): 오늘 수업을 하나씩 터치해 완료 체크(`NestCache` 날짜별 저장)하며 진도를 챙기는 인터랙티브 위젯.
+  - 위젯 상단 칩 바 및 미리보기 시트(`오늘 일정 위젯 스타일 선택`)에서 원클릭으로 스타일을 바꿀 수 있으며, 사용자별 선택값은 `NestCache`(`saveTodayWidgetStyle` / `loadTodayWidgetStyle`)에 영속 저장된다.
+- **역할별 홈 · 시간표 화면 단순화 및 온디맨드 확장**:
+  - **학부모 (`ParentHomeTab`, `ParentTimetableTab`)**:
+    - 홈 진입 시 선택된 자녀의 **오늘 수업 위젯**과 오늘 개인 일정, 한 줄 공지 배너만 노출하고, 중복 표시되던 수업 섹션과 전체 학사 일정·감독 시간표는 `[전체 시간표 보기]` 및 `[학사 일정 · 내 감독 보기]` 버튼 클릭 시 펼쳐지도록 구성.
+    - 시간표 탭 진입 시 복잡한 주간 격자 대신 **오늘(선택 요일) 내 아이 수업 카드**와 요일 빠른 선택 바(`월~금`)를 먼저 보여주고, `[전체 시간표 보기]` 클릭 시 주간 전체 격자 보드를 펼침.
+  - **학생 (`StudentHomeTab`, `StudentTimetableTab`)**:
+    - 홈과 시간표 탭 모두 **오늘 나의 수업**을 최상단에 직관적으로 배치하고, `[전체 시간표 보기]` 및 `[출결 · 학사 일정 보기]` 클릭 시 전체 주간 시간표와 출결·학사 일정을 확장 표시.
+  - **선생님 (`TeacherHubTab`)**:
+    - 최상단에 **선생님 오늘 담당 수업 위젯**(4종 스타일 전환 지원)과 미확인 결석 신고를 우선 배치하고, `[담당 반 전체 시간표 보기]` 및 `교사 수업 관리 도구`(`수업 계획`, `반 공지`, `학생 활동 기록`, `휴강·보강 변경 공지`) 칩을 클릭했을 때만 해당 보드/작성 폼이 펼쳐지도록 개선.
+
+### 6.32 전 도메인 이벤트 즉시 푸시 알림 파이프라인 및 이벤트별 세부 알림 설정 (2026-10)
+
+- **배경 및 목적**: 홈스쿨에서 일어나는 주요 학사·출결·소통 이벤트마다 관련 당사자(학부모·교사·학생·구성원)에게 즉시 푸시 알림이 전달되도록 파이프라인을 확장·강화하고, 사용자가 원하는 소식과 시간대를 세세하게 제어할 수 있는 설정 UI를 제공해 앱의 유입과 실사용성을 높였다.
+- **FCM 전송 신뢰성 강화 (`supabase/functions/_shared/fcm.ts` & `nest-notify`)**:
+  - Android: `priority: HIGH`와 함께 `notification` 블록에 `default_sound: true`, `default_vibrate_timings: true`, `notification_priority: PRIORITY_HIGH`를 명시하여 백그라운드/잠금 화면에서도 즉시 알림이 울리도록 보강.
+  - iOS (APNs): `apns-push-type: alert`, `apns-priority: 10`, `mutable-content: 1`, `content-available: 1` 헤더/페이로드를 포함해 APNs 배달 누락 방지.
+  - 만료 토큰 자동 회수: FCM v1 응답이 `404`/`410`/`UNREGISTERED`인 토큰을 즉시 `push_tokens.revoked_at`으로 마킹하여 죽은 토큰 재시도 방지.
+  - **조용한 시간 (`quiet_hours_start` ~ `quiet_hours_end`) KST 적용**: 수신자의 조용한 시간대에 발생한 도메인 이벤트는 기기 FCM 발송을 생략하고 `notification_log`에 `status: 'inbox_only'`로 기록하여, 밤·새벽에 기기를 깨우지 않으면서도 다음 날 인앱 알림함(🔔)에서 놓치지 않고 확인할 수 있게 처리.
+- **전 도메인 이벤트 자동 푸시 발송 (`nest-notify` & `NestController`)**:
+  - `CLASS_CHANGE` (`class_change_enabled`): 휴강·보강·시간/교실 변경 등록 및 수정 시 해당 반 학생·보호자에게 즉시 푸시 발송 (`channel: 'push'`, 문자 발송용 `notified_at`은 소비하지 않음).
+  - `ABSENCE` (`absence_enabled`): 학부모·학생이 결석 신고 제출 시 담당 교사에게 즉시 푸시 발송.
+  - `ABSENCE_ACK` (`absence_enabled`): 담당 교사가 결석 신고를 확인(`acknowledgeAbsenceReport`)하면 신고한 학부모·해당 학생에게 즉시 확인 완료 푸시 발송.
+  - `ANNOUNCEMENT` (`announcement_enabled`): 전체 공지 또는 반별 공지 등록 시 홈스쿨 구성원(또는 해당 반 학생·보호자·교사)에게 즉시 푸시 발송.
+  - `ACADEMIC_EVENT` (`academic_event_enabled`): 학사 일정·방학·행사 등록 시 홈스쿨 구성원에게 즉시 푸시 발송 (`publish_announcement = true`인 경우 공지 트리거와 중복되지 않도록 자동 조정).
+  - `STUDENT_LOG` (`student_log_enabled`): 교사가 아동 활동·관찰 기록 등록 시 해당 아동의 보호자와 학생 본인에게 즉시 푸시 발송.
+  - `TEACHING_PLAN` (`student_log_enabled`): 교사가 수업 계획 등록 시 해당 수업 반의 보호자와 학생에게 즉시 푸시 발송.
+  - `COMMUNITY_POST` / `COMMUNITY_COMMENT` (`community_enabled`): 커뮤니티 새 게시글(전체/반별) 등록 시 대상 구성원에게, 댓글 등록 시 게시글 작성자 및 기존 댓글 참여자에게 즉시 푸시 발송.
+  - `GALLERY_UPLOAD` (`gallery_enabled`): 추억 앨범 사진·영상 업로드 완료 시 태그된 아동의 보호자(또는 해당 반/홈스쿨 구성원)에게 대표 1건의 푸시 발송.
+  - `CHAT_MESSAGE` (`chat_enabled`): 전체·반 단톡방 및 1:1 귓속말 메시지 전송 시 즉시 푸시 발송.
+- **세부 알림 설정 UI (`NotificationPrefs` & `NotificationSettingsPanel`)**:
+  - 전체 푸시 마스터 스위치, 아침 오늘 일정 시각 선택(`6:30`, `7:00`, `7:30`, `8:00`), 수업 전 알림 리드타임 선택(`10분`, `20분`, `30분`, `60분`), 조용한 시간 시작/종료 시각 칩 선택(`21:00~00:00` / `06:00~09:00`), 내 기기 테스트 알림 보내기 제공.
+  - **이벤트별 세부 알림 섹션**: 활성 개수 배지(`8/8 켜짐`), 원클릭 빠른 프리셋(`모든 알림 켜기`, `필수 알림만`), 그리고 `학사 · 출결 · 수업` 5종 + `소통 · 커뮤니티 · 앨범` 3종 총 8개 카테고리별 개별 토글 스위치 제공.
+  - 인앱 알림함(`NotificationInboxSheet`) 및 `NotificationInboxItem.deepLinkTab`에서 모든 신규 이벤트 아이콘과 탭 딥링크(`시간표`, `홈`, `채팅`, `커뮤니티`, `앨범`) 지원.
+
 ## 7. Database and RLS Notes
 
 ### 7.1 Core Membership Security
@@ -1094,6 +1155,31 @@ Migration `20261009020000_homeschool_join_code_on_create.sql`:
 
 - `assign_homeschool_join_code` — 홈스쿨 INSERT 전에 `join_code`가 비어 있으면 `gen_join_code()`로 채운다
 - 이미 만들어진 홈스쿨 중 코드가 없는 행도 같은 함수로 백필한다
+
+### 7.12 Homeschool Real-Time Chat (2026-10)
+
+Migration `20261020133000_homeschool_chat.sql`:
+
+- `homeschool_chat_messages` 테이블 생성:
+  - 컬럼: `id`, `homeschool_id`, `class_group_id`, `recipient_user_id`, `sender_user_id`, `sender_name`, `sender_role`, `message_type` (`TEXT`, `IMAGE`, `VIDEO`, `SCHEDULE`, `CONTACT`, `FILE`), `content`, `attachments` (JSONB), `metadata` (JSONB), `created_at`, `updated_at`
+  - RLS: 홈스쿨 구성원(`is_homeschool_member`) SELECT 허용(단, 1:1 메시지는 발신자·수신자만 조회), 본인 발신 INSERT 허용, 본인 UPDATE 허용, 본인 또는 관리자/스태프 DELETE 허용
+  - `media_object_homeschool()` 함수를 확장해 `chat/{homeschool_id}/...` 스토리지 경로의 홈스쿨 격리 지원
+  - `supabase_realtime` publication에 `public.homeschool_chat_messages` 등록
+
+### 7.13 Granular Notification Preferences (2026-10)
+
+Migration `20261022023000_granular_notification_prefs.sql`:
+
+- `public.notification_prefs` 테이블에 이벤트별 세부 수신 설정 컬럼 8종 추가 (모두 `boolean not null default true`):
+  - `class_change_enabled` (수업 변경 · 보강 알림)
+  - `absence_enabled` (결석 신고 · 확인 알림)
+  - `announcement_enabled` (공지사항 알림)
+  - `academic_event_enabled` (학사 일정 · 행사 알림)
+  - `student_log_enabled` (아이 활동 기록 · 수업 계획 알림)
+  - `chat_enabled` (실시간 채팅 알림)
+  - `community_enabled` (커뮤니티 새 글 · 댓글 알림)
+  - `gallery_enabled` (추억 앨범 사진 · 영상 업로드 알림)
+- 프론트엔드 `legacyNotificationPrefsPayload`는 마이그레이션 미적용 서버(`42703 undefined_column`)에서도 기본 알림 설정 저장이 실패하지 않도록 신규 컬럼을 자동 폴백 제거한다.
 
 
 ## 8. Environment Variables

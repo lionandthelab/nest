@@ -122,6 +122,11 @@
 			<string>UIInterfaceOrientationLandscapeLeft</string>
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>fetch</string>
+			<string>remote-notification</string>
+		</array>
 		<!-- lion_auth:begin -->
 		<key>GIDClientID</key>
 		<string>875114759372-2n9lulvdd9jmkatpugh8ilievvr1vfnn.apps.googleusercontent.com</string>

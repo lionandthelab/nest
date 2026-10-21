@@ -133,8 +133,15 @@ void main() {
     testWidgets('주간판이 ${size.width.toInt()}폭에서 예외 없이 그려진다', (tester) async {
       await _pump(tester, size);
 
-      // 요일 머리글이 실제로 나와야 격자가 그려진 것이다.
+      // 기본 진입 시 오늘/요일별 집중 수업 카드와 요일 선택 바가 먼저 그려진다.
       expect(find.textContaining('월'), findsWidgets);
+      expect(find.text('전체 시간표 보기'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // '전체 시간표 보기' 클릭 시 주간 전체 격자 보드가 펼쳐진다.
+      await tester.tap(find.text('전체 시간표 보기'));
+      await tester.pumpAndSettle();
+      expect(find.text('전체 시간표 접기'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

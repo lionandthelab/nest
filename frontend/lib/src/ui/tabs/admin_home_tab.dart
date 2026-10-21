@@ -5,14 +5,16 @@ import '../../models/nest_models.dart';
 import '../../state/nest_controller.dart';
 import '../models/new_term_checklist.dart';
 import '../nest_theme.dart';
-import '../widgets/admin_self_setup_card.dart';
+import '../widgets/course_schedule_quick_sheet.dart';
 import '../widgets/drive_integration_card.dart';
+import '../widgets/nest_sheet.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
 import '../widgets/homeschool_tips_card.dart';
 import '../widgets/nest_motion.dart';
 import '../widgets/quick_bootstrap_card.dart';
+import '../widgets/spouse_invite_sheet.dart';
 import '../widgets/term_navigator_bar.dart';
 import 'dashboard_tab.dart' show PendingInvitesCard;
 
@@ -23,7 +25,7 @@ import 'dashboard_tab.dart' show PendingInvitesCard;
 /// 이 화면은 세 덩어리로 다시 짰다.
 ///
 /// 1. 학기 상태 헤더 — 지금 보고 있는 학기와 개학까지 남은 날
-/// 2. 신학기 준비 체크리스트 — 남은 단계를 눌러 해당 화면으로 바로 이동
+/// 2. 아이가 없으면 아이 추가 — 첫날 꼭 해야 하는 설정은 이것뿐이다
 /// 3. 빠른 작업 — 공지/학사일정/반/시간표 등 자주 쓰는 진입점 (큰 탭 타깃)
 ///
 /// 그 아래에 처리 대기 알림과 요약을 붙이고, 자주 쓰지 않는 Drive 설정은
@@ -48,21 +50,6 @@ class AdminHomeTab extends StatelessWidget {
     final pendingJoinRequests = controller.joinRequests
         .where((request) => request.isPending)
         .length;
-
-    final checklist = buildNewTermChecklist(
-      hasTerm: controller.selectedTermId != null,
-      familyCount: controller.families.length,
-      childCount: controller.children.length,
-      teacherCount: controller.teacherProfiles.length,
-      classGroupCount: controller.classGroups.length,
-      enrollmentCount: controller.classEnrollments.length,
-      courseCount: controller.courses.length,
-      classroomCount: controller.classrooms.length,
-      timeSlotCount: controller.timeSlots.length,
-      sessionCount: controller.sessions.length,
-      academicEventCount: controller.academicEvents.length,
-      announcementCount: controller.allAnnouncements.length,
-    );
 
     final booting =
         controller.isBusy &&
@@ -128,21 +115,13 @@ class AdminHomeTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          // 로딩 중엔 가정·선생님 목록이 비어 있어 버튼이 잠깐 번쩍인다.
-          if (!booting)
-            AdminSelfSetupCard(
-              controller: controller,
-              margin: const EdgeInsets.only(bottom: 12),
+          if (!booting && controller.children.isEmpty) ...[
+            NestAppear(
+              index: 2,
+              child: _AddChildPrompt(controller: controller),
             ),
-          NestAppear(
-            index: 2,
-            child: _NewTermChecklistCard(
-              checklist: checklist,
-              controller: controller,
-              onNavigate: onNavigate,
-            ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
           NestAppear(
             index: 3,
             child: _QuickActionsCard(
@@ -417,260 +396,168 @@ class _HeaderShell extends StatelessWidget {
   }
 }
 
-// ── 신학기 준비 체크리스트 ──────────────────────────────────────
+// ── 아이 추가 ─────────────────────────────────────────────────
 
-class _NewTermChecklistCard extends StatefulWidget {
-  const _NewTermChecklistCard({
-    required this.checklist,
-    required this.controller,
-    required this.onNavigate,
-  });
+class _AddChildPrompt extends StatelessWidget {
+  const _AddChildPrompt({required this.controller});
 
-  final NewTermChecklist checklist;
   final NestController controller;
-  final void Function(String tabLabel, {String? section}) onNavigate;
-
-  @override
-  State<_NewTermChecklistCard> createState() => _NewTermChecklistCardState();
-}
-
-class _NewTermChecklistCardState extends State<_NewTermChecklistCard> {
-  /// 단계 목록은 기본으로 접어둔다. 9단계를 모두 펼치면 모바일 첫 화면에서
-  /// '빠른 작업'이 접히는 선 아래로 밀려나므로, 평소에는 진행률과 "다음 단계"
-  /// 버튼만 보여주고 전체 로드맵은 눌러서 편다.
-  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final checklist = widget.checklist;
-    final next = checklist.nextStep;
-    final remaining = checklist.remainingSteps.length;
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Row(
-                children: [
-                  Icon(
-                    checklist.isComplete
-                        ? Icons.verified_outlined
-                        : Icons.checklist_rtl,
-                    size: 20,
-                    color: NestColors.clay,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '신학기 준비',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${checklist.completedCount}/${checklist.totalCount}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: NestColors.deepWood.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: _expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: const Icon(Icons.expand_more),
-                  ),
-                ],
+            Text(
+              '아이 추가',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                value: checklist.progress,
-                color: checklist.isComplete
-                    ? NestColors.mutedSage
-                    : NestColors.dustyRose,
-                backgroundColor: NestColors.roseMist,
+            const SizedBox(height: 6),
+            Text(
+              '이름과 생일만 있으면 돼요. 가정은 알아서 만들어 둡니다.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: NestColors.deepWood.withValues(alpha: 0.72),
               ),
             ),
-            if (!_expanded) ...[
-              const SizedBox(height: 8),
-              Text(
-                checklist.isComplete
-                    ? (remaining == 0
-                          ? '이번 학기 준비가 모두 끝났습니다.'
-                          : '필수 단계를 모두 마쳤습니다. 선택 단계 $remaining개가 남아 있어요.')
-                    : '남은 단계 $remaining개 · 눌러서 전체 보기',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: NestColors.deepWood.withValues(alpha: 0.7),
-                ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton.icon(
+                onPressed: controller.isBusy
+                    ? null
+                    : () => _showAddChildSheet(context, controller),
+                icon: const Icon(Icons.child_care_outlined, size: 18),
+                label: const Text('아이 추가'),
               ),
-            ],
-            if (_expanded) ...[
-              const SizedBox(height: 12),
-              ...checklist.steps.map(
-                (step) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _ChecklistTile(
-                    step: step,
-                    onTap: step.enabled ? () => _openStep(step) : null,
-                  ),
-                ),
-              ),
-            ],
-            if (next != null) ...[
-              const SizedBox(height: 4),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: FilledButton.icon(
-                  onPressed: widget.controller.isBusy
-                      ? null
-                      : () => _openStep(next),
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  label: Text(
-                    '다음 단계: ${next.title}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
-
-  void _openStep(NewTermStep step) {
-    // 학기 만들기는 탭 이동 없이 학기 편집 다이얼로그를 바로 연다.
-    if (step.id == 'term') {
-      showTermEditorDialog(context, widget.controller);
-      return;
-    }
-    final tab = step.targetTab;
-    if (tab == null) return;
-    widget.onNavigate(tab, section: step.targetSection);
-  }
 }
 
-class _ChecklistTile extends StatelessWidget {
-  const _ChecklistTile({required this.step, required this.onTap});
+Future<void> _showAddChildSheet(
+  BuildContext context,
+  NestController controller,
+) async {
+  final nameController = TextEditingController();
+  var birthDate = DateTime(
+    DateTime.now().year - 6,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
+  var saving = false;
 
-  final NewTermStep step;
-  final VoidCallback? onTap;
+  String formatBirth(DateTime value) => DateFormat('yyyy-MM-dd').format(value);
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final done = step.state == NewTermStepState.done;
-    final blocked = step.state == NewTermStepState.blocked;
+  try {
+    await showNestSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> pickBirth() async {
+              final now = DateTime.now();
+              final picked = await showDatePicker(
+                context: sheetContext,
+                initialDate: birthDate,
+                firstDate: DateTime(now.year - 20),
+                lastDate: now,
+              );
+              if (picked == null) return;
+              setSheetState(() => birthDate = picked);
+            }
 
-    return NestPressable(
-      enabled: onTap != null,
-      onPressed: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Material(
-        color: blocked ? NestColors.creamyWhite : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: done
-                  ? NestColors.mutedSage.withValues(alpha: 0.55)
-                  : NestColors.roseMist,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                done
-                    ? Icons.check_circle
-                    : blocked
-                    ? Icons.lock_outline
-                    : Icons.radio_button_unchecked,
-                size: 20,
-                color: done
-                    ? NestColors.mutedSage
-                    : NestColors.deepWood.withValues(
-                        alpha: blocked ? 0.3 : 0.5,
+            Future<void> save() async {
+              if (saving) return;
+              final name = nameController.text.trim();
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(
+                  sheetContext,
+                ).showSnackBar(const SnackBar(content: Text('아이 이름을 입력하세요.')));
+                return;
+              }
+              setSheetState(() => saving = true);
+              try {
+                await controller.addMyChild(
+                  name: name,
+                  birthDate: formatBirth(birthDate),
+                );
+                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+              } catch (error) {
+                final message = error is StateError
+                    ? error.message
+                    : controller.statusMessage;
+                if (sheetContext.mounted) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        message.trim().isEmpty ? '아이를 등록하지 못했어요.' : message,
                       ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            step.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: NestColors.deepWood.withValues(
-                                alpha: blocked ? 0.5 : 1,
-                              ),
-                              decoration: done
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                              decorationColor: NestColors.deepWood.withValues(
-                                alpha: 0.4,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (step.optional) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            '선택',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 11,
-                              color: NestColors.clay,
-                            ),
-                          ),
-                        ],
-                      ],
                     ),
-                    if (!done) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        blocked ? '앞 단계를 먼저 끝내주세요.' : step.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: NestColors.deepWood.withValues(
-                            alpha: blocked ? 0.4 : 0.65,
-                          ),
-                        ),
+                  );
+                  setSheetState(() => saving = false);
+                }
+              }
+            }
+
+            return NestSheet(
+              title: '아이 추가',
+              isBusy: saving,
+              actions: [
+                OutlinedButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(sheetContext).pop(),
+                  child: const Text('닫기'),
+                ),
+                FilledButton(
+                  onPressed: saving ? null : save,
+                  child: const Text('등록'),
+                ),
+              ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: '아이 이름',
+                      hintText: '예: 하늘',
+                    ),
+                    onSubmitted: (_) => save(),
+                  ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: saving ? null : pickBirth,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: '생일',
+                        suffixIcon: Icon(Icons.event_outlined),
                       ),
-                    ],
-                  ],
-                ),
+                      child: Text(formatBirth(birthDate)),
+                    ),
+                  ),
+                ],
               ),
-              if (onTap != null)
-                Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: NestColors.deepWood.withValues(alpha: 0.35),
-                ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
+  } finally {
+    nameController.dispose();
   }
 }
 
@@ -800,6 +687,47 @@ class _QuickActionsCard extends StatelessWidget {
                       .toList(),
                 );
               },
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => showSpouseInviteSheet(
+                          context: context,
+                          controller: controller,
+                        ),
+                  icon: const Icon(Icons.family_restroom_outlined, size: 18),
+                  label: const Text('엄마·아빠 초대하기'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => showCourseScheduleQuickSheet(
+                          context: context,
+                          controller: controller,
+                          initialMode: 0,
+                        ),
+                  icon: const Icon(Icons.auto_stories_outlined, size: 18),
+                  label: const Text('템플릿으로 수업 추가'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => showCourseScheduleQuickSheet(
+                          context: context,
+                          controller: controller,
+                          initialMode: 1,
+                        ),
+                  icon: const Icon(Icons.edit_note_outlined, size: 18),
+                  label: const Text('문장으로 수업 추가'),
+                ),
+              ],
             ),
           ],
         ),

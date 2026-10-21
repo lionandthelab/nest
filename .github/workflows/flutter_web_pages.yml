@@ -61,6 +61,10 @@ jobs:
           --dart-define=LION_KAKAO_JS_KEY=db129c862ec8fab23fe7cb85089eaa79
           --dart-define=LION_NAVER_CLIENT_ID=Z1lpn0C9AFZ3BiXgLuno
           --dart-define=LION_NAVER_WEB_REDIRECT_URI=https://nestapp.life/
+          --dart-define=LION_FCM_WEB_API_KEY=AIzaSyDX4h-Xsmtbc0fgmWnBRVCs4U6LEIuXj5M
+          --dart-define=LION_FCM_WEB_APP_ID=1:62668430721:web:c28341e74a628675e45c80
+          --dart-define=LION_FCM_WEB_SENDER_ID=62668430721
+          --dart-define=LION_FCM_WEB_PROJECT_ID=nest-lionandthelab
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4

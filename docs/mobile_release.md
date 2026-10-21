@@ -228,6 +228,7 @@ version: MAJOR.MINOR.PATCH+BUILD
 | 2026-10-02 | 2.1.1 | 28 | Android | Closed (alpha) | 공지 첨부 미리보기, 학기 학습 포트폴리오. 프로덕션 트랙은 Play precondition으로 거절되어 비공개 트랙에 올림 |
 | 2026-10-02 | 2.1.1 | 28 | iOS | App Store 심사 제출 완료 | 승인 시 자동 출시. 공지 첨부 미리보기, 학기 학습 포트폴리오 |
 | 2026-10-07 | 2.1.2 | 29 | Android + iOS | Closed (alpha) / App Store 심사 제출 | 학부모 뷰 아이 선택 복구(가정·보호자 로드), 아이 미연동 칩 → 등록 요청 |
+| 2026-10-19 | 2.1.4 | 31 | Android + iOS | Internal + Closed (alpha) / App Store 심사 제출 | 토스형 단계별 인라인 온보딩 애니메이션·레이턴시 최적화, 배우자 초대·시간표 템플릿·문장 파서, 평일 9~18시 기본 시간슬롯, 백그라운드 수업 푸시 알림 |
 
 ## 7) Signing Configuration Reminders
 

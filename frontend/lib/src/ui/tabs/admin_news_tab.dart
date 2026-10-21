@@ -8,6 +8,7 @@ import '../models/new_term_checklist.dart';
 import '../models/tab_section_request.dart';
 import '../nest_theme.dart';
 import '../widgets/announcement_attachments.dart';
+import '../widgets/homeschool_chat_view.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_sheet.dart';
@@ -38,6 +39,7 @@ class AdminNewsTab extends StatefulWidget {
 class _AdminNewsTabState extends State<AdminNewsTab> {
   static const _noticeSection = NewTermSections.notices;
   static const _eventSection = NewTermSections.events;
+  static const _chatSection = NewTermSections.chat;
 
   String _section = _noticeSection;
 
@@ -58,7 +60,9 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
 
   void _applySectionRequest(TabSectionRequest? request) {
     if (request == null) return;
-    if (request.section == _noticeSection || request.section == _eventSection) {
+    if (request.section == _noticeSection ||
+        request.section == _eventSection ||
+        request.section == _chatSection) {
       _section = request.section;
     }
   }
@@ -85,6 +89,20 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
       );
     }
 
+    if (_section == _chatSection) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: _buildSectionSwitcher(context),
+          ),
+          Expanded(
+            child: HomeschoolChatView(controller: controller),
+          ),
+        ],
+      );
+    }
+
     return NestRefreshable(
       onRefresh: () => controller.refreshAll(),
       child: ListView(
@@ -106,6 +124,7 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
     final controller = widget.controller;
     final noticeCount = controller.allAnnouncements.length;
     final eventCount = controller.academicEvents.length;
+    final chatCount = controller.chatMessages.length;
 
     return SizedBox(
       width: double.infinity,
@@ -113,7 +132,7 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
         segments: [
           ButtonSegment<String>(
             value: _noticeSection,
-            icon: const Icon(Icons.campaign_outlined, size: 18),
+            icon: const Icon(Icons.campaign_outlined, size: 17),
             label: Text(
               noticeCount == 0 ? '공지사항' : '공지사항 $noticeCount',
               maxLines: 1,
@@ -122,9 +141,18 @@ class _AdminNewsTabState extends State<AdminNewsTab> {
           ),
           ButtonSegment<String>(
             value: _eventSection,
-            icon: const Icon(Icons.event_note_outlined, size: 18),
+            icon: const Icon(Icons.event_note_outlined, size: 17),
             label: Text(
               eventCount == 0 ? '학사일정' : '학사일정 $eventCount',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          ButtonSegment<String>(
+            value: _chatSection,
+            icon: const Icon(Icons.chat_bubble_outline, size: 17),
+            label: Text(
+              chatCount == 0 ? '채팅' : '채팅 $chatCount',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

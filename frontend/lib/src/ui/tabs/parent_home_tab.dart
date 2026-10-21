@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/schedule_occurrence.dart';
 import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
-import '../widgets/nest_empty_state.dart';
-import '../widgets/nest_refresh.dart';
-import '../widgets/nest_skeleton.dart';
 import '../widgets/announcement_attachments.dart';
 import '../widgets/homeschool_tips_card.dart';
 import '../widgets/nest_3d_icon.dart';
+import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_motion.dart';
+import '../widgets/nest_refresh.dart';
+import '../widgets/nest_skeleton.dart';
+import '../widgets/portfolio_generation_dialog.dart';
+import '../widgets/schedule_personal_section.dart';
 import '../widgets/today_personal_events.dart';
 import '../widgets/today_schedule_card.dart';
-import '../widgets/schedule_personal_section.dart';
-import '../widgets/portfolio_generation_dialog.dart';
 import 'lessons_today_section.dart';
 import 'self_study/supervision_schedule_view.dart';
 
@@ -43,6 +44,42 @@ class ParentHomeTab extends StatefulWidget {
 
 class _ParentHomeTabState extends State<ParentHomeTab> {
   bool _showAllAnnouncements = false;
+  bool _showFullTimetable = false;
+  bool _showSchoolSchedule = false;
+
+  String _selectedChildName(NestController controller) {
+    final id = widget.selectedChildId;
+    if (id == null || id.isEmpty) return '';
+    final child = controller.myChildren.where((c) => c.id == id).firstOrNull;
+    return (child?.name ?? '').trim();
+  }
+
+  String _teacherNameForOccurrence(
+    NestController controller,
+    Map<String, ChildClassBundle> bundles,
+    ResolvedOccurrence row,
+  ) {
+    for (final bundle in bundles.values) {
+      for (final a in bundle.assignments) {
+        if (a.classSessionId == row.session.id) {
+          final name = controller.findTeacherName(a.teacherProfileId).trim();
+          if (name.isNotEmpty && name != a.teacherProfileId) return name;
+        }
+      }
+    }
+    return '';
+  }
+
+  String _lessonLabelForOccurrence(
+    NestController controller,
+    ResolvedOccurrence row,
+  ) {
+    final lesson = controller.courseLessonOn(
+      courseId: row.session.courseId,
+      date: row.date,
+    );
+    return (lesson?.headline ?? '').trim();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,21 +94,48 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
       DateTime.now(),
       forSessions: todaySessions,
     );
+    final childName = _selectedChildName(controller);
+    final todayTitle = childName.isEmpty
+        ? '내 아이 오늘 수업'
+        : '$childName의 오늘 수업';
 
     final list = ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
+        // ── 1순위: 내 아이의 오늘 수업 위젯 (다양한 위젯 스타일 전환 지원) ──
         NestAppear(
           index: 0,
           child: TodayScheduleCard(
             occurrences: occurrences,
             courseNameOf: controller.findCourseName,
             classNameOf: controller.findClassGroupName,
+            teacherNameOf: (row) =>
+                _teacherNameForOccurrence(controller, bundles, row),
+            lessonLabelOf: (row) => _lessonLabelForOccurrence(controller, row),
+            titleLabel: todayTitle,
+            userId: controller.user?.id,
+            enableStyleSwitcher: true,
+            isFullTimetableExpanded: _showFullTimetable,
+            onToggleFullTimetable: () =>
+                setState(() => _showFullTimetable = !_showFullTimetable),
             onOpenTimetable: widget.onOpenTimetable,
           ),
         ),
         const SizedBox(height: 10),
+
+        // ── 추가 클릭 시 펼쳐지는 우리 아이 전체 주간 시간표 및 상세 진도 ──
+        if (_showFullTimetable) ...[
+          _buildExpandedChildTimetableSection(
+            context,
+            controller: controller,
+            bundles: bundles,
+            noEnrollments: noEnrollments,
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // ── 오늘 아이 개인 일정 (방과후·학원 등 오늘 일정만 간결하게) ──
         if (widget.selectedChildId != null) ...[
           TodayPersonalEvents(
             events: controller.personalEventsOn(
@@ -94,29 +158,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
           ),
           const SizedBox(height: 10),
         ],
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            if (widget.onOpenTimetable != null)
-              TextButton.icon(
-                onPressed: widget.onOpenTimetable,
-                icon: const Icon(Icons.event_busy_outlined, size: 18),
-                label: const Text('결석 신고 · 시간표'),
-              ),
-            TextButton.icon(
-              onPressed: () {
-                showPortfolioGenerationDialog(
-                  context,
-                  controller: controller,
-                  initialChildId: widget.selectedChildId,
-                );
-              },
-              icon: const Nest3dIcon.portfolio(size: 18),
-              label: const Text('학기 학습 포트폴리오 (PDF)'),
-            ),
-          ],
-        ),
+
         if (noEnrollments)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -152,39 +194,21 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
             ),
           ),
 
-        // ── Announcement banner ──
+        // ── 공지 배너 (최근 1건 한 줄 요약) ──
         _buildAnnouncementBanner(controller),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
-        // ── 오늘(또는 다음) 수업 + 그 날 진도 ──
-        // 학부모 홈에는 지금까지 시간표가 없어서, 아이가 무슨 수업을 무슨 내용으로
-        // 하는지 보려면 시간표 탭의 작은 격자 셀을 눌러야 했다.
-        //
-        // 로딩 중에는 섹션을 띄우지 않는다. 번들이 아직 비어 있는 상태로 그리면
-        // "반이 배정되면 …" 안내가 잠깐 떴다가 사라져 배정이 없는 것처럼 보인다.
-        if (widget.isLoadingChildClasses && bundles.isEmpty) ...[
-          const NestSkeletonCard(lines: 3),
-          const SizedBox(height: 16),
-        ] else if (!noEnrollments && bundles.isNotEmpty) ...[
-          LessonsTodaySection(
-            controller: controller,
-            childId: widget.selectedChildId,
-            bundles: bundles,
-          ),
-          const SizedBox(height: 16),
+        // ── 빠른 액션 및 부수 정보(학사 일정·감독 시간표) 온디맨드 펼침 바 ──
+        _buildSecondaryActionsBar(context, controller),
+
+        if (_showSchoolSchedule) ...[
+          const SizedBox(height: 12),
+          _buildMySupervision(controller),
+          _buildHomeschoolSchedule(controller),
+          const SizedBox(height: 12),
+          const HomeschoolTipsCard(density: HomeschoolTipsDensity.compact),
         ],
-
-        // ── 내 감독 시간표 (감독을 맡은 학부모만) ──
-        _buildMySupervision(controller),
-
-        // ── Homeschool full schedule ──
-        _buildHomeschoolSchedule(controller),
-        const SizedBox(height: 16),
-        const NestAppear(
-          index: 3,
-          child: HomeschoolTipsCard(density: HomeschoolTipsDensity.compact),
-        ),
       ],
     );
 
@@ -192,11 +216,192 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
     return NestRefreshable(onRefresh: widget.onRefresh!, child: list);
   }
 
+  Widget _buildExpandedChildTimetableSection(
+    BuildContext context, {
+    required NestController controller,
+    required Map<String, ChildClassBundle> bundles,
+    required bool noEnrollments,
+  }) {
+    final allSessions = bundles.values
+        .expand((b) => b.sessions)
+        .toList(growable: false);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Nest3dIcon.studyBooks(size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '우리 아이 주간 전체 시간표 · 진도',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _showFullTimetable = false),
+                  child: const Text('접기'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (widget.isLoadingChildClasses && bundles.isEmpty)
+              const NestSkeletonCard(lines: 3)
+            else if (allSessions.isEmpty)
+              Text(
+                '등록된 주간 시간표가 없습니다.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.65),
+                ),
+              )
+            else ...[
+              _buildCompactWeeklyByDay(context, controller, allSessions),
+              if (!noEnrollments && bundles.isNotEmpty) ...[
+                const Divider(height: 24),
+                LessonsTodaySection(
+                  controller: controller,
+                  childId: widget.selectedChildId,
+                  bundles: bundles,
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactWeeklyByDay(
+    BuildContext context,
+    NestController controller,
+    List<ClassSession> allSessions,
+  ) {
+    const dayLabels = <int, String>{
+      1: '월요일',
+      2: '화요일',
+      3: '수요일',
+      4: '목요일',
+      5: '금요일',
+      6: '토요일',
+      0: '일요일',
+    };
+
+    final grouped = <int, List<(ClassSession, TimeSlot)>>{};
+    for (final session in allSessions) {
+      final slot = controller.findTimeSlot(session.timeSlotId);
+      if (slot == null) continue;
+      grouped.putIfAbsent(slot.dayOfWeek, () => []).add((session, slot));
+    }
+    for (final list in grouped.values) {
+      list.sort((a, b) => a.$2.startTime.compareTo(b.$2.startTime));
+    }
+
+    final orderedDays = [1, 2, 3, 4, 5, 6, 0]
+        .where((d) => (grouped[d] ?? const []).isNotEmpty)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final day in orderedDays)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  dayLabels[day] ?? '$day요일',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: NestColors.clay,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final item in grouped[day]!)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: NestColors.creamyWhite,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: NestColors.roseMist),
+                        ),
+                        child: Text(
+                          '${shortTimeLabel(item.$2.startTime)} ${controller.findCourseName(item.$1.courseId)}',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSecondaryActionsBar(
+    BuildContext context,
+    NestController controller,
+  ) {
+    final eventCount = controller.academicEvents.length;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        if (widget.onOpenTimetable != null)
+          OutlinedButton.icon(
+            onPressed: widget.onOpenTimetable,
+            icon: const Icon(Icons.event_busy_outlined, size: 17),
+            label: const Text('결석 신고 · 전체 시간표'),
+          ),
+        OutlinedButton.icon(
+          onPressed: () =>
+              setState(() => _showSchoolSchedule = !_showSchoolSchedule),
+          icon: Icon(
+            _showSchoolSchedule
+                ? Icons.expand_less_rounded
+                : Icons.event_note_outlined,
+            size: 17,
+          ),
+          label: Text(
+            _showSchoolSchedule
+                ? '학사 일정 · 내 감독 접기'
+                : eventCount > 0
+                ? '학사 일정 · 내 감독 보기 ($eventCount)'
+                : '학사 일정 · 내 감독 보기',
+          ),
+        ),
+        TextButton.icon(
+          onPressed: () {
+            showPortfolioGenerationDialog(
+              context,
+              controller: controller,
+              initialChildId: widget.selectedChildId,
+            );
+          },
+          icon: const Nest3dIcon.portfolio(size: 18),
+          label: const Text('학기 학습 포트폴리오 (PDF)'),
+        ),
+      ],
+    );
+  }
+
   // ── 내 감독 시간표 ──
-  //
-  // 감독 선생님이 대부분 학부모라, 학부모 뷰에서도 자기 감독 자습을 볼 수 있게
-  // 한다. 계정이 교사 프로필과 연결되어(currentUserTeacherProfiles) 실제 감독
-  // 배정이 있는 경우에만 카드가 나타난다. 연결 안 됐거나 감독이 없으면 숨김.
   Widget _buildMySupervision(NestController controller) {
     if (controller.selectedSelfStudyPlan == null) {
       return const SizedBox.shrink();
@@ -240,7 +445,6 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
                 ),
               ),
               const SizedBox(height: 12),
-              // 여러 교사 프로필이 연결된 경우 각 이름을 헤더로 구분한다.
               for (final p in withDuty)
                 SupervisionScheduleView(
                   controller: controller,
@@ -301,7 +505,6 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
       );
     }
 
-    // Show only the latest announcement as a banner
     final latest = announcements.first;
     final when = latest.createdAt == null
         ? ''
@@ -346,8 +549,6 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
                 ),
               ),
               const SizedBox(width: 8),
-              // 반 이름이 길어도 이 칸이 줄을 밀어내지 않게 상한을 둔다.
-              // Flexible 로 두면 제목과 폭을 반씩 나눠 가져 제목이 먼저 접힌다.
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 96),
                 child: Text(

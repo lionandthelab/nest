@@ -78,6 +78,7 @@ class _NestAppRootState extends State<NestAppRoot> {
           final needsNotif =
               controller.isBootstrapped &&
               controller.isLoggedIn &&
+              controller.memberships.isNotEmpty &&
               controller.needsNotifOnboarding;
 
           // 브라우저 로그인에서 돌아와 계정을 읽는 동안. 로그인 화면을 그대로

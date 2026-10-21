@@ -211,6 +211,44 @@ class NestCache {
     return prefs.getString('nest.cache.$userId._albumViewMode');
   }
 
+  /// Save the user's preferred Today schedule widget style.
+  static Future<void> saveTodayWidgetStyle({
+    required String userId,
+    required String style,
+  }) async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    await prefs.setString('nest.cache.$userId._todayWidgetStyle', style);
+  }
+
+  /// Load the user's preferred Today schedule widget style.
+  static String? loadTodayWidgetStyle({required String userId}) {
+    final prefs = _prefs;
+    if (prefs == null) return null;
+    return prefs.getString('nest.cache.$userId._todayWidgetStyle');
+  }
+
+  /// Save checked items for the checklist-style Today widget on a given date.
+  static Future<void> saveTodayChecklist({
+    required String dateKey,
+    required Set<String> checkedKeys,
+  }) async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    await prefs.setStringList(
+      'nest.cache._todayChecklist.$dateKey',
+      checkedKeys.toList(),
+    );
+  }
+
+  /// Load checked items for the checklist-style Today widget on a given date.
+  static Set<String> loadTodayChecklist({required String dateKey}) {
+    final prefs = _prefs;
+    if (prefs == null) return <String>{};
+    final list = prefs.getStringList('nest.cache._todayChecklist.$dateKey');
+    return list != null ? list.toSet() : <String>{};
+  }
+
   /// Clear all cache (e.g. on logout).
   static Future<void> clearAll() async {
     final prefs = _prefs;

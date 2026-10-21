@@ -336,7 +336,11 @@ class _HomePageState extends State<HomePage> {
         ),
         _TabSpec(
           label: '커뮤니티',
-          page: CommunityFeedTab(controller: controller, title: '커뮤니티'),
+          page: CommunityFeedTab(
+            controller: controller,
+            title: '커뮤니티',
+            sectionRequest: _sectionRequestFor('커뮤니티'),
+          ),
         ),
       ];
     }
@@ -373,7 +377,11 @@ class _HomePageState extends State<HomePage> {
         ),
         _TabSpec(
           label: '커뮤니티',
-          page: CommunityFeedTab(controller: controller, title: '커뮤니티'),
+          page: CommunityFeedTab(
+            controller: controller,
+            title: '커뮤니티',
+            sectionRequest: _sectionRequestFor('커뮤니티'),
+          ),
         ),
       ];
     }
@@ -411,7 +419,11 @@ class _HomePageState extends State<HomePage> {
     tabs.add(
       _TabSpec(
         label: '커뮤니티',
-        page: CommunityFeedTab(controller: controller, title: '커뮤니티'),
+        page: CommunityFeedTab(
+          controller: controller,
+          title: '커뮤니티',
+          sectionRequest: _sectionRequestFor('커뮤니티'),
+        ),
       ),
     );
 
@@ -761,6 +773,15 @@ class _HomePageState extends State<HomePage> {
   /// 지정한 탭으로 이동한다. [section]을 주면 그 탭 안의 세그먼트/설정 단위까지
   /// 함께 연다(예: 소식 탭의 '학사일정', 학기 설정 탭의 '반').
   void _navigateToTabLabel(String label, {String? section}) {
+    if (label.trim() == '채팅') {
+      if (widget.controller.isAdminLike) {
+        _navigateToTabLabel(NewTermTabs.news, section: NewTermSections.chat);
+      } else {
+        _navigateToTabLabel('커뮤니티', section: NewTermSections.chat);
+      }
+      return;
+    }
+
     final tabs = _buildTabs(
       widget.controller,
       isMobileLike: MediaQuery.sizeOf(context).width < 1080,
@@ -1508,6 +1529,38 @@ class _MobileScaffoldState extends State<_MobileScaffold> {
             ),
           ),
           const SizedBox(width: 4),
+          if (controller.memberships.isNotEmpty) ...[
+            Tooltip(
+              message: '홈스쿨 채팅',
+              child: NestPressable(
+                onPressed: () {
+                  controller.markChatRead();
+                  widget.onOpenInboxItem(
+                    const NotificationInboxItem(
+                      id: 'chat-shortcut',
+                      eventType: 'CHAT_MESSAGE',
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  width: 38,
+                  height: 44,
+                  child: Center(
+                    child: Badge(
+                      isLabelVisible: controller.unreadChatCount > 0,
+                      label: Text(
+                        controller.unreadChatCount > 9
+                            ? '9+'
+                            : '${controller.unreadChatCount}',
+                      ),
+                      child: const Nest3dIcon.community(size: 25),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 2),
+          ],
           Tooltip(
             message: '알림',
             child: NestPressable(

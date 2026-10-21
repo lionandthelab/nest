@@ -9,6 +9,7 @@ import '../config/app_config.dart';
 import '../models/nest_models.dart';
 import '../services/album_organizer.dart';
 import '../services/auth_validation.dart';
+import '../services/course_schedule_quick_adder.dart';
 import '../services/download_helper.dart';
 import '../services/local_planner.dart';
 import '../services/media_thumbnailer.dart';
@@ -678,6 +679,17 @@ class NestController extends ChangeNotifier {
       unawaited(handleExternalAuthSession(authState.session));
     });
 
+    NestPush.onForegroundMessage = (message) {
+      inboxOpenedThisSession = false;
+      unawaited(loadNotificationInbox());
+      final title = message.title?.trim() ?? '';
+      final body = message.body?.trim() ?? '';
+      if (title.isNotEmpty || body.isNotEmpty) {
+        _setStatus([title, body].where((s) => s.isNotEmpty).join(' · '));
+        notifyListeners();
+      }
+    };
+
     if (isLoggedIn) {
       unawaited(NestPush.onSignedIn(user!.id));
       // If cache was restored, show UI immediately, then refresh in background.
@@ -1300,11 +1312,43 @@ class NestController extends ChangeNotifier {
 
         memberships = await _repository.fetchMemberships(userId: user!.id);
         currentRole = _resolveViewRole(selectedHomeschoolId);
-        notifyListeners();
 
-        await _loadTermAndBelow(includeScheduleExtras: false);
+        if (result.term != null &&
+            result.classGroup != null &&
+            result.timeSlots.isNotEmpty) {
+          terms = [result.term!];
+          classGroups = [result.classGroup!];
+          courses = result.courses;
+          timeSlots = result.timeSlots;
+          classrooms = result.classrooms;
+          allTermSessions = [];
+          allTermSessionTeacherAssignments = [];
+          sessions = [];
+          sessionTeacherAssignments = [];
+          proposals = [];
+          proposalSessionsById = const {};
+          _termScheduleLoaded = true;
+        } else {
+          await _loadTermAndBelow(includeScheduleExtras: false);
+        }
+
+        // 홈스쿨 개설 온보딩을 마친 사용자는 기본 수업 알림(30분 전)을 바로 활성화해
+        // 개설 직후 별도 전체화면 알림 온보딩 시트가 다시 가로막지 않도록 한다.
+        if (notificationPrefs.notifOnboardedAt == null) {
+          final onboardedPrefs = notificationPrefs.copyWith(
+            pushEnabled: true,
+            classReminderEnabled: true,
+            morningDigestEnabled: true,
+            notifOnboardedAt: DateTime.now(),
+          );
+          notificationPrefs = onboardedPrefs;
+          notificationPrefsLoaded = true;
+          unawaited(_repository.upsertNotificationPrefs(onboardedPrefs));
+        }
+
         _ensureRoleViewTargetSelection();
         _setStatus('우리집 홈스쿨을 열었어요');
+        notifyListeners();
       });
       unawaited(_loadRoleScopedContext());
       unawaited(_loadDeferredContext());
@@ -1942,6 +1986,12 @@ class NestController extends ChangeNotifier {
 
       pendingMediaFile = null;
       await loadGalleryItems();
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'GALLERY_UPLOAD',
+          id: mediaAssetId,
+        ),
+      );
       _setStatus('업로드 완료');
     });
   }
@@ -2012,6 +2062,7 @@ class NestController extends ChangeNotifier {
     final queue = List<AlbumUploadTask>.from(albumUploads);
     var next = 0;
     var failed = 0;
+    String? lastUploadedAssetId;
 
     Future<void> worker() async {
       while (true) {
@@ -2036,7 +2087,7 @@ class NestController extends ChangeNotifier {
             );
           }
 
-          await _uploadOneAlbumFile(
+          final uploadedId = await _uploadOneAlbumFile(
             homeschoolId: homeschoolId,
             uploaderUserId: currentUser.id,
             file: task.file,
@@ -2048,6 +2099,9 @@ class NestController extends ChangeNotifier {
             description: description,
             childIds: childIds,
           );
+          if (uploadedId.isNotEmpty) {
+            lastUploadedAssetId = uploadedId;
+          }
 
           _updateUploadTask(
             task.localId,
@@ -2082,6 +2136,14 @@ class NestController extends ChangeNotifier {
 
     await loadAlbumPage(reset: true);
     unawaited(loadAlbumSummaries());
+    if (lastUploadedAssetId != null && lastUploadedAssetId!.isNotEmpty) {
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'GALLERY_UPLOAD',
+          id: lastUploadedAssetId!,
+        ),
+      );
+    }
 
     // 실패한 건만 남겨 사용자가 무엇이 빠졌는지 볼 수 있게 한다.
     albumUploads = albumUploads
@@ -2090,7 +2152,7 @@ class NestController extends ChangeNotifier {
     _notifyAlbum();
   }
 
-  Future<void> _uploadOneAlbumFile({
+  Future<String> _uploadOneAlbumFile({
     required String homeschoolId,
     required String uploaderUserId,
     required PendingMediaFile file,
@@ -2168,6 +2230,7 @@ class NestController extends ChangeNotifier {
         childIds: childIds,
       );
     }
+    return mediaAssetId;
   }
 
   /// 원본을 관리자 Drive에 올린다. 못 올리면 null — 호출부가 Supabase로
@@ -2882,11 +2945,17 @@ class NestController extends ChangeNotifier {
   /// 직접 한 번 받아보게 해야 신뢰하고 켜 둔다.
   Future<void> sendTestPush() async {
     await _runBusy('테스트 알림을 보내는 중...', () async {
+      final uid = user?.id;
+      if (uid != null && uid.isNotEmpty) {
+        await NestPush.onSignedIn(uid);
+      }
       final sent = await _repository.sendTestPush();
+      inboxOpenedThisSession = false;
+      await loadNotificationInbox();
       _setStatus(
         sent > 0
-            ? '테스트 알림을 보냈습니다. 잠시 후 도착합니다.'
-            : '이 기기에 등록된 알림 토큰이 없습니다. 휴대폰의 알림 권한을 확인해 주세요.',
+            ? '테스트 알림을 보냈습니다. 잠시 후 도착하며 상단 알림함(🔔)에서도 확인할 수 있습니다.'
+            : '상단 알림함(🔔)에 시험 알림을 보냈습니다. 기기 푸시는 브라우저/휴대폰 알림 권한 허용 시 함께 도착합니다.',
       );
     }, blockUi: false);
   }
@@ -2920,11 +2989,20 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> updateNotificationPrefs(NotificationPrefs prefs) async {
-    await _runBusy('알림 설정을 저장하는 중...', () async {
+    notificationPrefs = prefs;
+    notificationPrefsLoaded = true;
+    _setStatus('알림 설정을 저장했습니다.');
+    notifyListeners();
+
+    final uid = user?.id;
+    if (prefs.pushEnabled && uid != null && uid.isNotEmpty) {
+      unawaited(NestPush.onSignedIn(uid));
+    }
+    try {
       await _repository.upsertNotificationPrefs(prefs);
-      notificationPrefs = prefs;
-      _setStatus('알림 설정을 저장했습니다.');
-    }, blockUi: false);
+    } catch (_) {
+      // Optimistic state is retained so onboarding transitions never hang.
+    }
   }
 
   void markInboxOpened() {
@@ -3858,7 +3936,7 @@ class NestController extends ChangeNotifier {
     if (homeschoolId == null || userId == null) {
       throw StateError('홈스쿨/사용자 정보가 없습니다.');
     }
-    await _repository.createAcademicEvent(
+    final createdId = await _repository.createAcademicEvent(
       homeschoolId: homeschoolId,
       termId: selectedTermId,
       title: title,
@@ -3874,6 +3952,14 @@ class NestController extends ChangeNotifier {
     );
     _setStatus(publishAnnouncement ? '학사 일정과 공지를 올렸습니다.' : '학사 일정이 추가되었습니다.');
     await Future.wait([loadAcademicEvents(), loadAnnouncements()]);
+    if (createdId != null && createdId.isNotEmpty) {
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'ACADEMIC_EVENT',
+          id: createdId,
+        ),
+      );
+    }
   }
 
   Future<void> updateAcademicEvent({
@@ -4745,6 +4831,13 @@ class NestController extends ChangeNotifier {
         throw StateError('수업 변경 공지 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
       }
       await loadClassSessionChanges();
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'CLASS_CHANGE',
+          id: created.id,
+          channel: 'push',
+        ),
+      );
       _setStatus('수업 변경을 등록했습니다. 알림 보내기로 학생·학부모에게 전달하세요.');
     });
     return created;
@@ -4786,6 +4879,14 @@ class NestController extends ChangeNotifier {
         throw StateError('수업 변경 공지 기능이 아직 서버에 반영되지 않았습니다. 관리자에게 문의하세요.');
       }
       await loadClassSessionChanges();
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'CLASS_CHANGE',
+          id: updated.id,
+          channel: 'push',
+          force: true,
+        ),
+      );
       // 내용이 바뀌면 서버가 notified_at 을 지우므로 다시 발송할 수 있다.
       _setStatus('수업 변경을 수정했습니다. 알림을 다시 보낼 수 있습니다.');
     });
@@ -5002,6 +5103,13 @@ class NestController extends ChangeNotifier {
         throw StateError(translated);
       }
       await loadAbsenceReports();
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'ABSENCE',
+          id: created.id,
+          channel: 'push',
+        ),
+      );
       _setStatus('결석을 신고했습니다. 담당 교사에게 알림을 보낼 수 있습니다.');
     });
     return created;
@@ -5055,6 +5163,12 @@ class NestController extends ChangeNotifier {
         throw StateError(translated);
       }
       await loadAbsenceReports();
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'ABSENCE_ACK',
+          id: updated.id,
+        ),
+      );
       _setStatus('결석 신고를 확인했습니다.');
     });
     return updated;
@@ -5315,6 +5429,12 @@ class NestController extends ChangeNotifier {
       pendingCommunityMediaFile = null;
       await loadGalleryItems();
       await loadCommunityFeed();
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'COMMUNITY_POST',
+          id: postId,
+        ),
+      );
       _setStatus('커뮤니티 게시글이 등록되었습니다.');
     });
   }
@@ -5390,6 +5510,12 @@ class NestController extends ChangeNotifier {
         communityCommentsByPost,
       )..[postId] = comments;
 
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'COMMUNITY_COMMENT',
+          id: postId,
+        ),
+      );
       _setStatus('댓글을 등록했습니다.');
     });
   }
@@ -6220,41 +6346,33 @@ class NestController extends ChangeNotifier {
     });
   }
 
-  // ── 관리자 빠른 설정: 나도 이 홈스쿨의 가정·학부모·선생님으로 ──
-
-  /// 내가 보호자로 연결된 가정이 있는지.
-  bool get hasOwnFamily {
-    final me = user?.id;
-    if (me == null) return false;
-    final familyIds = families.map((f) => f.id).toSet();
-    return familyGuardianUserIdsByFamily.entries.any(
-      (entry) => familyIds.contains(entry.key) && entry.value.contains(me),
-    );
-  }
-
-  bool get isSelfParent {
-    final homeschoolId = selectedHomeschoolId;
-    if (homeschoolId == null) return false;
-    if (rolesForHomeschool(homeschoolId).contains('PARENT')) return true;
-    // 가정 연결이 부여한 역할은 홈스쿨 멤버 목록에 먼저 반영된다.
-    final me = user?.id;
-    return homeschoolMemberships.any(
-      (row) =>
-          row.userId == me && row.role == 'PARENT' && row.status == 'ACTIVE',
-    );
-  }
-
-  bool get hasSelfTeacherProfile {
-    final me = user?.id;
-    if (me == null) return false;
-    return teacherProfiles.any((profile) => profile.userId == me);
-  }
+  // ── 첫 아이 등록: 가정이 없으면 내 이름으로 만든다 ──
 
   String get _selfName {
     final real = myRealName.trim();
     if (real.isNotEmpty) return real;
     final current = user;
     return current == null ? '관리자' : _authorDisplayName(current);
+  }
+
+  /// 첫 아이를 등록한다. 가정이 없으면 내 이름으로 만들고 나를 보호자로 잇는다.
+  Future<ChildProfile> addMyChild({
+    required String name,
+    required String birthDate,
+  }) async {
+    if (families.isEmpty) {
+      await createMyFamily();
+    }
+    final familyId = families.firstOrNull?.id;
+    if (familyId == null || familyId.isEmpty) {
+      throw StateError('가정을 만들지 못했습니다.');
+    }
+    return createChild(
+      familyId: familyId,
+      name: name,
+      birthDate: birthDate,
+      profileNote: '',
+    );
   }
 
   /// 내 이름으로 가정을 만들고 나를 보호자로 잇는다(학부모 역할도 함께).
@@ -6266,8 +6384,7 @@ class NestController extends ChangeNotifier {
     final existing = families
         .where((f) => f.familyName.trim() == name)
         .firstOrNull;
-    final family =
-        existing ?? await createFamily(familyName: name, note: '');
+    final family = existing ?? await createFamily(familyName: name, note: '');
     await upsertFamilyGuardian(
       familyId: family.id,
       userId: me,
@@ -6278,36 +6395,474 @@ class NestController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> registerSelfAsParent() async {
+  /// 내 가정(내가 보호자로 속한 가정, 없으면 첫 번째 가정)을 찾거나 새로 만든다.
+  Future<Family> ensureMyFamily({String myGuardianType = 'GUARDIAN'}) async {
     final me = user?.id;
     if (me == null) throw StateError('로그인이 필요합니다.');
-    await grantMembershipRole(targetUserId: me, role: 'PARENT');
-  }
-
-  /// 나를 선생님 명단에 올리고, 선생님 화면으로도 볼 수 있게 역할을 준다.
-  Future<void> registerSelfAsTeacher() async {
-    final me = user?.id;
-    if (me == null) throw StateError('로그인이 필요합니다.');
-    if (!hasSelfTeacherProfile) {
-      await createTeacherProfile(
-        displayName: _selfName,
-        teacherType: 'PARENT_TEACHER',
+    for (final entry in familyGuardianUserIdsByFamily.entries) {
+      if (entry.value.contains(me)) {
+        final found = families.where((f) => f.id == entry.key).firstOrNull;
+        if (found != null) return found;
+      }
+    }
+    if (families.isEmpty) {
+      await createMyFamily();
+    }
+    final family = families.firstOrNull;
+    if (family == null) {
+      throw StateError('가정을 준비하지 못했습니다.');
+    }
+    final guardians = familyGuardianUserIdsByFamily[family.id] ?? const [];
+    if (!guardians.contains(me)) {
+      await upsertFamilyGuardian(
+        familyId: family.id,
         userId: me,
+        guardianType: myGuardianType,
       );
     }
-    final homeschoolId = selectedHomeschoolId;
-    if (homeschoolId != null &&
-        !rolesForHomeschool(homeschoolId).contains('TEACHER')) {
-      await grantMembershipRole(targetUserId: me, role: 'TEACHER');
-    }
+    return family;
   }
 
-  Future<void> addDefaultClassroom() {
-    return createClassroom(
-      name: NestRepository.defaultClassroomName,
-      capacity: 20,
-      note: '',
+  /// 배우자(엄마/아빠)에게 이메일 초대장을 보낸다.
+  /// 내 가정이 아직 없으면 자동으로 먼저 준비해 둔다.
+  Future<void> inviteSpouseByEmail({
+    required String email,
+    required String guardianType,
+    bool grantAdminRole = true,
+  }) async {
+    if (!canManageMemberships || user == null) {
+      throw StateError('홈스쿨 관리자 권한이 필요합니다.');
+    }
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+    final normalizedEmail = _normalizeNullable(email)?.toLowerCase();
+    if (normalizedEmail == null || !_looksLikeEmail(normalizedEmail)) {
+      throw StateError('배우자의 이메일 주소를 정확히 입력해 주세요.');
+    }
+
+    final myType = guardianType == 'FATHER'
+        ? 'MOTHER'
+        : (guardianType == 'MOTHER' ? 'FATHER' : 'GUARDIAN');
+    await ensureMyFamily(myGuardianType: myType);
+
+    final spouseLabel = guardianType == 'FATHER'
+        ? '아빠'
+        : (guardianType == 'MOTHER' ? '엄마' : '공동 양육자');
+
+    await _runBusy('$spouseLabel에게 초대장을 보내는 중...', () async {
+      final expiresAt = DateTime.now().toUtc().add(const Duration(days: 14));
+      await _repository.createHomeschoolInvite(
+        homeschoolId: homeschoolId,
+        inviteEmail: normalizedEmail,
+        role: 'PARENT',
+        invitedByUserId: user!.id,
+        expiresAt: expiresAt,
+      );
+      if (grantAdminRole) {
+        try {
+          await _repository.createHomeschoolInvite(
+            homeschoolId: homeschoolId,
+            inviteEmail: normalizedEmail,
+            role: 'HOMESCHOOL_ADMIN',
+            invitedByUserId: user!.id,
+            expiresAt: expiresAt,
+          );
+        } catch (_) {
+          // 동일 이메일 중복 초대 제한 등이 있을 때는 학부모 초대만 유지한다.
+        }
+      }
+      await loadHomeschoolInvites();
+      await loadPendingInvites();
+      _setStatus(
+        '$normalizedEmail ($spouseLabel)에게 초대장을 보냈어요! 로그인하면 바로 수락할 수 있어요.',
+      );
+    });
+  }
+
+  /// 이미 가입 요청을 보냈거나 멤버로 합류한 배우자를 내 가정의 엄마/아빠로 한 번에 연결한다.
+  Future<void> connectSpouseToMyFamily({
+    required String spouseUserId,
+    required String guardianType,
+    String? joinRequestId,
+    bool grantAdminRole = true,
+  }) async {
+    if (!canManageFamilies) {
+      throw StateError('관리자 권한이 필요합니다.');
+    }
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+
+    final myType = guardianType == 'FATHER'
+        ? 'MOTHER'
+        : (guardianType == 'MOTHER' ? 'FATHER' : 'GUARDIAN');
+    final family = await ensureMyFamily(myGuardianType: myType);
+
+    if (joinRequestId != null && joinRequestId.isNotEmpty) {
+      await approveJoinRequest(
+        requestId: joinRequestId,
+        role: 'PARENT',
+        familyId: family.id,
+      );
+    }
+
+    await upsertFamilyGuardian(
+      familyId: family.id,
+      userId: spouseUserId,
+      guardianType: guardianType,
     );
+
+    if (grantAdminRole && canManageMemberships) {
+      final alreadyAdmin = homeschoolMemberships.any(
+        (m) =>
+            m.userId == spouseUserId &&
+            m.role == 'HOMESCHOOL_ADMIN' &&
+            m.status == 'ACTIVE',
+      );
+      if (!alreadyAdmin) {
+        try {
+          await grantMembershipRole(
+            targetUserId: spouseUserId,
+            role: 'HOMESCHOOL_ADMIN',
+          );
+        } catch (_) {}
+      }
+    }
+
+    final spouseLabel = guardianType == 'FATHER'
+        ? '아빠'
+        : (guardianType == 'MOTHER' ? '엄마' : '배우자');
+    _setStatus('${family.familyName}에 $spouseLabel 계정을 연결했습니다.');
+    notifyListeners();
+  }
+
+  /// 현재 학기에 기본 교시(평일 09:00~18:00, 50분 수업·10분 휴식)를 보장한다.
+  Future<void> ensureDefaultTimeSlots() async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final termId = selectedTermId;
+    if (termId == null || termId.isEmpty) {
+      throw StateError('학기를 먼저 선택하세요.');
+    }
+    await _runBusy('기본 시간표 틀(9시~18시, 50분/10분)을 준비하는 중...', () async {
+      await _repository.ensureDefaultTimeSlots(termId: termId);
+      await _loadTimetableAssets();
+      _setStatus('기본 시간 슬롯(09:00~18:00 · 50분 수업/10분 휴식)이 준비되었습니다.');
+    });
+  }
+
+  /// 템플릿 또는 자연어 문장으로 과목을 일괄 생성하고, 선택 시 시간표에 바로 배치한다.
+  Future<({int createdCourses, int createdSessions, int skippedSessions})>
+  applyCourseAndScheduleQuickAdd({
+    required List<CourseTemplateItem> coursesToEnsure,
+    List<TemplateSlotPlacement> placements = const [],
+    bool placeOnTimetable = true,
+  }) async {
+    if (!isAdminLike) {
+      throw StateError('관리자/스태프 권한이 필요합니다.');
+    }
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      throw StateError('홈스쿨을 먼저 선택하세요.');
+    }
+    if (coursesToEnsure.isEmpty && placements.isEmpty) {
+      throw StateError('추가할 과목이나 시간표 문장을 입력해 주세요.');
+    }
+
+    var createdCourses = 0;
+    var createdSessions = 0;
+    var skippedSessions = 0;
+
+    await _runBusy('과목과 시간표를 한 번에 구성하는 중...', () async {
+      final termId = selectedTermId;
+
+      // 1) 시간표 배치가 필요하면 기본 타임슬롯(09:00~18:00) 및 반이 있는지 확인/생성
+      if (placeOnTimetable &&
+          placements.isNotEmpty &&
+          termId != null &&
+          termId.isNotEmpty) {
+        if (timeSlots.isEmpty) {
+          try {
+            await _repository.ensureDefaultTimeSlots(termId: termId);
+            timeSlots = await _repository.fetchTimeSlots(termId: termId);
+          } catch (_) {}
+        }
+        if (selectedClassGroupId == null || selectedClassGroupId!.isEmpty) {
+          if (classGroups.isNotEmpty) {
+            selectedClassGroupId = classGroups.first.id;
+          } else {
+            try {
+              final createdGroup = await _repository.createClassGroup(
+                termId: termId,
+                name: '우리집반',
+                capacity: 10,
+              );
+              await _loadClassGroups();
+              selectedClassGroupId = createdGroup.id;
+            } catch (_) {}
+          }
+        }
+      }
+
+      // 2) 필요한 과목 이름 전체 수집 후 미등록 과목 생성
+      final existingByLower = <String, Course>{
+        for (final c in courses) c.name.trim().toLowerCase(): c,
+      };
+      final neededItems = <String, CourseTemplateItem>{};
+      for (final item in coursesToEnsure) {
+        final key = item.name.trim().toLowerCase();
+        if (key.isNotEmpty) {
+          neededItems.putIfAbsent(key, () => item);
+        }
+      }
+      for (final p in placements) {
+        final key = p.courseName.trim().toLowerCase();
+        if (key.isNotEmpty) {
+          neededItems.putIfAbsent(
+            key,
+            () => CourseTemplateItem(name: p.courseName.trim()),
+          );
+        }
+      }
+
+      final missingCourseItems =
+          <({String key, String name, int defaultDurationMin})>[];
+      for (final entry in neededItems.entries) {
+        if (!existingByLower.containsKey(entry.key)) {
+          missingCourseItems.add((
+            key: entry.key,
+            name: entry.value.name.trim(),
+            defaultDurationMin: entry.value.defaultDurationMin.clamp(20, 300),
+          ));
+        }
+      }
+
+      if (missingCourseItems.isNotEmpty) {
+        try {
+          final batchCreated = await _repository.upsertCoursesBatch(
+            homeschoolId: homeschoolId,
+            items: missingCourseItems
+                .map(
+                  (e) => (
+                    name: e.name,
+                    defaultDurationMin: e.defaultDurationMin,
+                  ),
+                )
+                .toList(),
+          );
+          for (final created in batchCreated) {
+            existingByLower[created.name.trim().toLowerCase()] = created;
+          }
+          createdCourses += batchCreated.length;
+        } catch (_) {
+          for (final item in missingCourseItems) {
+            try {
+              final created = await _repository.createCourse(
+                homeschoolId: homeschoolId,
+                name: item.name,
+                defaultDurationMin: item.defaultDurationMin,
+              );
+              existingByLower[item.key] = created;
+              createdCourses += 1;
+            } catch (_) {}
+          }
+        }
+        courses = existingByLower.values.toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+      } else if (courses.isEmpty) {
+        await _loadTimetableAssets();
+        for (final c in courses) {
+          existingByLower[c.name.trim().toLowerCase()] = c;
+        }
+      }
+
+      // 3) 시간표 배치 실행 (단일 배치 INSERT 우선, 충돌 시 개별 폴백)
+      final classGroupId = selectedClassGroupId;
+      final currentUserId = user?.id;
+      if (placeOnTimetable &&
+          placements.isNotEmpty &&
+          classGroupId != null &&
+          classGroupId.isNotEmpty &&
+          currentUserId != null) {
+        final occupiedSlotIds = sessions
+            .where((s) => s.classGroupId == classGroupId)
+            .map((s) => s.timeSlotId)
+            .toSet();
+
+        final batchPayloads =
+            <
+              ({
+                String classGroupId,
+                String courseId,
+                String timeSlotId,
+                String title,
+                String createdByUserId,
+              })
+            >[];
+
+        for (final placement in placements) {
+          final course =
+              existingByLower[placement.courseName.trim().toLowerCase()];
+          if (course == null) continue;
+
+          final slot = matchTimeSlotForPlacement(
+            timeSlots: timeSlots,
+            dayOfWeek: placement.dayOfWeek,
+            startTime: placement.startTime,
+          );
+          if (slot == null) {
+            skippedSessions += 1;
+            continue;
+          }
+          if (occupiedSlotIds.contains(slot.id)) {
+            skippedSessions += 1;
+            continue;
+          }
+
+          occupiedSlotIds.add(slot.id);
+          batchPayloads.add((
+            classGroupId: classGroupId,
+            courseId: course.id,
+            timeSlotId: slot.id,
+            title: '${course.name} 수업',
+            createdByUserId: currentUserId,
+          ));
+        }
+
+        if (batchPayloads.isNotEmpty) {
+          try {
+            final insertedSessions = await _repository.createSessionsBatch(
+              items: batchPayloads,
+            );
+            createdSessions += insertedSessions.length;
+            allTermSessions = [...allTermSessions, ...insertedSessions];
+            _syncSelectedSessionsFromTermPack();
+          } catch (_) {
+            for (final payload in batchPayloads) {
+              try {
+                final created = await _repository.createSessionAndReturn(
+                  classGroupId: payload.classGroupId,
+                  courseId: payload.courseId,
+                  timeSlotId: payload.timeSlotId,
+                  title: payload.title,
+                  createdByUserId: payload.createdByUserId,
+                );
+                createdSessions += 1;
+                allTermSessions = [...allTermSessions, created];
+              } catch (_) {
+                skippedSessions += 1;
+              }
+            }
+            _syncSelectedSessionsFromTermPack();
+          }
+          unawaited(_loadSessions());
+          unawaited(loadSessionTeacherAssignments());
+          unawaited(loadTeachingPlans());
+        }
+      }
+
+      final parts = <String>[];
+      if (createdCourses > 0) {
+        parts.add('과목 $createdCourses개 추가');
+      }
+      if (createdSessions > 0) {
+        parts.add('시간표 $createdSessions교시 배치');
+      }
+      if (skippedSessions > 0) {
+        parts.add('중복/빈슬롯 없음 $skippedSessions건 건너뜀');
+      }
+      _setStatus(
+        parts.isEmpty ? '이미 등록된 과목·시간표입니다.' : '${parts.join(' · ')} 완료!',
+      );
+    });
+
+    return (
+      createdCourses: createdCourses,
+      createdSessions: createdSessions,
+      skippedSessions: skippedSessions,
+    );
+  }
+
+  /// 온보딩 중 첫 아이 이름을 함께 입력한 경우, 가정·보호자·아이·반 배정을
+  /// UI 블로킹 없이 빠르게 한 번에 등록한다.
+  Future<ChildProfile?> registerFirstChildOnboarding({
+    required String childName,
+    String? birthDate,
+  }) async {
+    final trimmedName = childName.trim();
+    final homeschoolId = selectedHomeschoolId;
+    final me = user?.id;
+    if (trimmedName.isEmpty || homeschoolId == null || me == null) {
+      return null;
+    }
+
+    try {
+      final familyName = '$_selfName 가정';
+      var family = families
+          .where((f) => f.familyName.trim() == familyName)
+          .firstOrNull;
+      if (family == null) {
+        family = await _repository.createFamily(
+          homeschoolId: homeschoolId,
+          familyName: familyName,
+          note: '',
+        );
+        families = [...families, family];
+      }
+
+      try {
+        await _repository.grantMembershipRole(
+          homeschoolId: homeschoolId,
+          userId: me,
+          role: 'PARENT',
+        );
+      } catch (_) {}
+
+      try {
+        await _repository.upsertFamilyGuardian(
+          familyId: family.id,
+          userId: me,
+          guardianType: 'GUARDIAN',
+        );
+      } catch (_) {}
+
+      final defaultBirth =
+          birthDate ??
+          '${DateTime.now().year - 8}-03-01';
+      final createdChild = await _repository.createChild(
+        familyId: family.id,
+        name: trimmedName,
+        birthDate: defaultBirth,
+        profileNote: '',
+      );
+      children = [...children, createdChild];
+
+      final targetGroupId =
+          selectedClassGroupId ?? classGroups.firstOrNull?.id;
+      if (targetGroupId != null &&
+          targetGroupId.isNotEmpty &&
+          createdChild.id.isNotEmpty) {
+        try {
+          await _repository.upsertClassEnrollment(
+            classGroupId: targetGroupId,
+            childId: createdChild.id,
+          );
+        } catch (_) {}
+      }
+
+      notifyListeners();
+      unawaited(loadFamilies());
+      unawaited(loadFamilyGuardians());
+      unawaited(loadChildren());
+      unawaited(loadClassEnrollments());
+      return createdChild;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Family> createFamily({
@@ -6555,6 +7110,17 @@ class NestController extends ChangeNotifier {
         birthDate: birthDate.trim(),
         profileNote: profileNote,
       );
+      if (classGroups.length == 1 && created.id.isNotEmpty) {
+        try {
+          await _repository.upsertClassEnrollment(
+            classGroupId: classGroups.first.id,
+            childId: created.id,
+          );
+          await loadClassEnrollments();
+        } catch (_) {
+          // 단일 반 자동 배정 실패 시 아이 등록 자체는 성공으로 유지한다.
+        }
+      }
       await loadChildren();
       await loadStudentActivityLogs();
       await _logAudit(
@@ -7236,7 +7802,7 @@ class NestController extends ChangeNotifier {
     }
 
     await _runBusy('수업 계획을 등록하는 중...', () async {
-      await _repository.createTeachingPlan(
+      final planId = await _repository.createTeachingPlan(
         classSessionId: classSessionId,
         teacherProfileId: teacherProfileId,
         objectives: trimmedObjectives,
@@ -7244,6 +7810,14 @@ class NestController extends ChangeNotifier {
         activities: activities,
       );
       await loadTeachingPlans();
+      if (planId != null && planId.isNotEmpty) {
+        unawaited(
+          _repository.notifyDomainEvent(
+            event: 'TEACHING_PLAN',
+            id: planId,
+          ),
+        );
+      }
       _setStatus('수업 계획을 등록했습니다.');
     });
   }
@@ -7265,7 +7839,7 @@ class NestController extends ChangeNotifier {
     }
 
     await _runBusy('아동 활동 기록을 등록하는 중...', () async {
-      await _repository.createStudentActivityLog(
+      final logId = await _repository.createStudentActivityLog(
         childId: childId,
         classSessionId: classSessionId,
         recordedByTeacherId: teacherProfileId,
@@ -7273,6 +7847,14 @@ class NestController extends ChangeNotifier {
         content: trimmedContent,
       );
       await loadStudentActivityLogs();
+      if (logId != null && logId.isNotEmpty) {
+        unawaited(
+          _repository.notifyDomainEvent(
+            event: 'STUDENT_LOG',
+            id: logId,
+          ),
+        );
+      }
       _setStatus('아동 활동 기록을 등록했습니다.');
     });
   }
@@ -7314,6 +7896,12 @@ class NestController extends ChangeNotifier {
         files: attachments,
       );
       await loadAnnouncements();
+      unawaited(
+        _repository.notifyDomainEvent(
+          event: 'ANNOUNCEMENT',
+          id: announcementId,
+        ),
+      );
       await _logAudit(
         actionType: 'ANNOUNCEMENT_CREATE',
         resourceType: 'announcements',
@@ -8268,7 +8856,8 @@ class NestController extends ChangeNotifier {
       ),
     );
 
-    final homeschool = memberships
+    final homeschool =
+        memberships
             .where((m) => m.homeschoolId == term.homeschoolId)
             .map((m) => m.homeschool)
             .firstOrNull ??
@@ -8294,13 +8883,16 @@ class NestController extends ChangeNotifier {
     // 반 세션의 담당 교사 배정 조회
     TeacherProfile? mainTeacher;
     if (classGroup != null) {
-      final allSessions =
-          allTermSessions.isNotEmpty ? allTermSessions : sessions;
-      final groupSessions =
-          allSessions.where((s) => s.classGroupId == classGroup.id).toList();
+      final allSessions = allTermSessions.isNotEmpty
+          ? allTermSessions
+          : sessions;
+      final groupSessions = allSessions
+          .where((s) => s.classGroupId == classGroup.id)
+          .toList();
       final groupSessionIds = groupSessions.map((s) => s.id).toSet();
       final groupAssignments = assignmentsForSessionIds(groupSessionIds);
-      final mainTeacherId = groupAssignments
+      final mainTeacherId =
+          groupAssignments
               .where((a) => a.assignmentRole == 'MAIN')
               .map((a) => a.teacherProfileId)
               .firstOrNull ??
@@ -8323,7 +8915,9 @@ class NestController extends ChangeNotifier {
           final d = e.eventDate;
           return !d.isBefore(termStart) && !d.isAfter(termEnd);
         })
-        .map((e) => DateTime(e.eventDate.year, e.eventDate.month, e.eventDate.day))
+        .map(
+          (e) => DateTime(e.eventDate.year, e.eventDate.month, e.eventDate.day),
+        )
         .toSet();
 
     var weekdays = 0;
@@ -8344,14 +8938,19 @@ class NestController extends ChangeNotifier {
       if (r.childId != childId || r.isCanceled) return false;
       final d = r.occurrenceDate;
       return !d.isBefore(termStart) && !d.isAfter(termEnd);
-    }).toList()
-      ..sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
+    }).toList()..sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
 
     final absentDays = childAbsences
-        .map((r) => '${r.occurrenceDate.year}-${r.occurrenceDate.month}-${r.occurrenceDate.day}')
+        .map(
+          (r) =>
+              '${r.occurrenceDate.year}-${r.occurrenceDate.month}-${r.occurrenceDate.day}',
+        )
         .toSet()
         .length;
-    final attendedDays = (totalSchoolDays - absentDays).clamp(0, totalSchoolDays);
+    final attendedDays = (totalSchoolDays - absentDays).clamp(
+      0,
+      totalSchoolDays,
+    );
 
     // 수강 과목 및 수업
     final allSessions = allTermSessions.isNotEmpty ? allTermSessions : sessions;
@@ -8359,30 +8958,33 @@ class NestController extends ChangeNotifier {
         ? allSessions.where((s) => s.classGroupId == classGroup.id).toList()
         : allSessions;
     final courseIds = groupSessions.map((s) => s.courseId).toSet();
-    final childCourses = courses.where((c) => courseIds.contains(c.id)).toList();
+    final childCourses = courses
+        .where((c) => courseIds.contains(c.id))
+        .toList();
 
     // 수업 진도(CourseLesson)
     final childLessons = courseLessons.where((l) {
       if (courseIds.isNotEmpty && !courseIds.contains(l.courseId)) return false;
-      return !l.lessonDate.isBefore(termStart) && !l.lessonDate.isAfter(termEnd);
-    }).toList()
-      ..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
+      return !l.lessonDate.isBefore(termStart) &&
+          !l.lessonDate.isAfter(termEnd);
+    }).toList()..sort((a, b) => a.lessonDate.compareTo(b.lessonDate));
 
     // 학생 활동 및 관찰 기록(StudentActivityLog)
     final logs = studentActivityLogs.where((l) => l.childId == childId).toList()
-      ..sort((a, b) =>
-          (b.recordedAt ?? DateTime(0)).compareTo(a.recordedAt ?? DateTime(0)));
+      ..sort(
+        (a, b) => (b.recordedAt ?? DateTime(0)).compareTo(
+          a.recordedAt ?? DateTime(0),
+        ),
+      );
 
     // 학사 행사(AcademicEvent)
     final events = academicEvents.where((e) {
       if (e.termId == termId) return true;
       return !e.eventDate.isBefore(termStart) && !e.eventDate.isAfter(termEnd);
-    }).toList()
-      ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
+    }).toList()..sort((a, b) => a.eventDate.compareTo(b.eventDate));
 
     // 자습 계획(SelfStudyPlan)
-    final studyPlans =
-        selfStudyPlans.where((p) => p.termId == termId).toList();
+    final studyPlans = selfStudyPlans.where((p) => p.termId == termId).toList();
 
     // 사진 갤러리 비동기 조회
     final photos = await _repository.fetchPortfolioPhotos(
@@ -8432,7 +9034,6 @@ class NestController extends ChangeNotifier {
   Future<Uint8List> downloadMediaBytes({required String storagePath}) {
     return _repository.downloadMediaBytes(storagePath: storagePath);
   }
-
 
   String findClassGroupName(String? classGroupId) {
     if (classGroupId == null || classGroupId.isEmpty) {
@@ -9134,6 +9735,13 @@ class NestController extends ChangeNotifier {
     courses = results[0] as List<Course>;
     classrooms = results[1] as List<Classroom>;
     timeSlots = results[2] as List<TimeSlot>;
+
+    if (timeSlots.isEmpty && isAdminLike && !isSelectedTermReadOnly) {
+      try {
+        await _repository.ensureDefaultTimeSlots(termId: termId);
+        timeSlots = await _repository.fetchTimeSlots(termId: termId);
+      } catch (_) {}
+    }
   }
 
   Future<void> _loadSessions() async {
@@ -9986,10 +10594,351 @@ class NestController extends ChangeNotifier {
     }
   }
 
+  // ── Homeschool Chat State & Actions ──
+
+  List<HomeschoolChatMessage> chatMessages = const [];
+  bool isLoadingChat = false;
+  bool isSendingChatMessage = false;
+  int unreadChatCount = 0;
+  String? _loadedChatHomeschoolId;
+  RealtimeChannel? _chatRealtimeChannel;
+
+  void markChatRead() {
+    if (unreadChatCount == 0) return;
+    unreadChatCount = 0;
+    notifyListeners();
+  }
+
+  Future<void> ensureChatMessages({bool force = false}) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      chatMessages = const [];
+      _loadedChatHomeschoolId = null;
+      return;
+    }
+    if (!force &&
+        _loadedChatHomeschoolId == homeschoolId &&
+        chatMessages.isNotEmpty) {
+      _ensureChatRealtimeSubscription(homeschoolId);
+      return;
+    }
+    await refreshChatMessages();
+  }
+
+  Future<void> refreshChatMessages() async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty) {
+      chatMessages = const [];
+      _loadedChatHomeschoolId = null;
+      notifyListeners();
+      return;
+    }
+
+    isLoadingChat = true;
+    notifyListeners();
+    try {
+      final fetched = await _repository.fetchChatMessages(
+        homeschoolId: homeschoolId,
+      );
+      chatMessages = fetched;
+      _loadedChatHomeschoolId = homeschoolId;
+      _ensureChatRealtimeSubscription(homeschoolId);
+    } catch (error) {
+      debugPrint('[Chat] refreshChatMessages error: $error');
+    } finally {
+      isLoadingChat = false;
+      notifyListeners();
+    }
+  }
+
+  void _ensureChatRealtimeSubscription(String homeschoolId) {
+    if (user == null) return;
+    if (_chatRealtimeChannel != null &&
+        _loadedChatHomeschoolId == homeschoolId) {
+      return;
+    }
+    final oldChannel = _chatRealtimeChannel;
+    _chatRealtimeChannel = null;
+    if (oldChannel != null) {
+      unawaited(_repository.unsubscribeChannel(oldChannel));
+    }
+
+    try {
+      _chatRealtimeChannel = _repository.subscribeToChatMessages(
+        homeschoolId: homeschoolId,
+        onInsert: (message) {
+          // 1:1 메시지인 경우 당사자가 아니면 무시
+          if (message.isDirectMessage &&
+              message.senderUserId != user?.id &&
+              message.recipientUserId != user?.id) {
+            return;
+          }
+          final exists = chatMessages.any((m) => m.id == message.id);
+          if (!exists) {
+            chatMessages = [...chatMessages, message];
+            if (message.senderUserId != user?.id) {
+              unreadChatCount += 1;
+            }
+            notifyListeners();
+          }
+        },
+        onDelete: (messageId) {
+          final before = chatMessages.length;
+          chatMessages = chatMessages
+              .where((m) => m.id != messageId)
+              .toList(growable: false);
+          if (chatMessages.length != before) {
+            notifyListeners();
+          }
+        },
+      );
+    } catch (error) {
+      debugPrint('[Chat] realtime subscription skipped: $error');
+    }
+  }
+
+  String _currentSenderDisplayName() {
+    final uid = user?.id;
+    final fromDir = findMemberName(uid);
+    final at = fromDir.indexOf('@');
+    final cleanedDir = (at >= 0 ? fromDir.substring(0, at) : fromDir).trim();
+    if (cleanedDir.isNotEmpty && cleanedDir != '-') {
+      return cleanedDir;
+    }
+    if (user != null) {
+      return _authorDisplayName(user!);
+    }
+    return '구성원';
+  }
+
+  Future<List<PendingMediaFile>> pickChatImages() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return const [];
+    }
+    return result.files
+        .where((file) => file.bytes != null)
+        .map(
+          (file) => PendingMediaFile(
+            name: file.name,
+            mimeType: _guessMimeType(file.name),
+            bytes: file.bytes!,
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<PendingMediaFile>> pickChatVideos() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return const [];
+    }
+    return result.files
+        .where((file) => file.bytes != null)
+        .map(
+          (file) => PendingMediaFile(
+            name: file.name,
+            mimeType: _guessMimeType(file.name),
+            bytes: file.bytes!,
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<PendingMediaFile>> pickChatFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return const [];
+    }
+    return result.files
+        .where((file) => file.bytes != null)
+        .map(
+          (file) => PendingMediaFile(
+            name: file.name,
+            mimeType: _guessMimeType(file.name),
+            bytes: file.bytes!,
+          ),
+        )
+        .toList();
+  }
+
+  Future<HomeschoolChatMessage> sendChatMessage({
+    required String content,
+    String? classGroupId,
+    String? recipientUserId,
+    List<PendingMediaFile> files = const [],
+  }) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty || user == null) {
+      throw StateError('홈스쿨에 로그인된 상태에서만 채팅을 보낼 수 있습니다.');
+    }
+
+    final trimmed = content.trim();
+    if (trimmed.isEmpty && files.isEmpty) {
+      throw StateError('메시지 또는 공유할 파일을 입력해 주세요.');
+    }
+
+    isSendingChatMessage = true;
+    notifyListeners();
+    try {
+      final seed = '${DateTime.now().millisecondsSinceEpoch}_${user!.id.substring(0, 6)}';
+      final uploaded = <ChatAttachment>[];
+      for (final file in files) {
+        final attachment = await _repository.uploadChatAttachment(
+          homeschoolId: homeschoolId,
+          messageSeed: seed,
+          file: file,
+        );
+        uploaded.add(attachment);
+      }
+
+      var messageType = 'TEXT';
+      if (uploaded.isNotEmpty) {
+        if (uploaded.every((a) => a.isImage)) {
+          messageType = 'IMAGE';
+        } else if (uploaded.any((a) => a.isVideo)) {
+          messageType = 'VIDEO';
+        } else {
+          messageType = 'FILE';
+        }
+      }
+
+      final created = await _repository.insertChatMessage(
+        homeschoolId: homeschoolId,
+        classGroupId: classGroupId,
+        recipientUserId: recipientUserId,
+        senderUserId: user!.id,
+        senderName: _currentSenderDisplayName(),
+        senderRole: currentRole ?? 'PARENT',
+        messageType: messageType,
+        content: trimmed,
+        metadata: {
+          if (uploaded.isNotEmpty)
+            'attachments': uploaded.map((a) => a.toMap()).toList(),
+        },
+      );
+
+      if (!chatMessages.any((m) => m.id == created.id)) {
+        chatMessages = [...chatMessages, created];
+      }
+      unawaited(_repository.notifyChatMessage(created.id));
+      return created;
+    } finally {
+      isSendingChatMessage = false;
+      notifyListeners();
+    }
+  }
+
+  Future<HomeschoolChatMessage> sendScheduleChatMessage({
+    required SharedScheduleInfo schedule,
+    String caption = '',
+    String? classGroupId,
+    String? recipientUserId,
+  }) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty || user == null) {
+      throw StateError('홈스쿨에 로그인된 상태에서만 일정을 공유할 수 있습니다.');
+    }
+
+    isSendingChatMessage = true;
+    notifyListeners();
+    try {
+      final created = await _repository.insertChatMessage(
+        homeschoolId: homeschoolId,
+        classGroupId: classGroupId,
+        recipientUserId: recipientUserId,
+        senderUserId: user!.id,
+        senderName: _currentSenderDisplayName(),
+        senderRole: currentRole ?? 'PARENT',
+        messageType: 'SCHEDULE',
+        content: caption.trim().isEmpty ? schedule.title : caption.trim(),
+        metadata: schedule.toMap(),
+      );
+
+      if (!chatMessages.any((m) => m.id == created.id)) {
+        chatMessages = [...chatMessages, created];
+      }
+      unawaited(_repository.notifyChatMessage(created.id));
+      return created;
+    } finally {
+      isSendingChatMessage = false;
+      notifyListeners();
+    }
+  }
+
+  Future<HomeschoolChatMessage> sendContactChatMessage({
+    required SharedContactInfo contact,
+    String caption = '',
+    String? classGroupId,
+    String? recipientUserId,
+  }) async {
+    final homeschoolId = selectedHomeschoolId;
+    if (homeschoolId == null || homeschoolId.isEmpty || user == null) {
+      throw StateError('홈스쿨에 로그인된 상태에서만 연락처를 공유할 수 있습니다.');
+    }
+
+    isSendingChatMessage = true;
+    notifyListeners();
+    try {
+      final created = await _repository.insertChatMessage(
+        homeschoolId: homeschoolId,
+        classGroupId: classGroupId,
+        recipientUserId: recipientUserId,
+        senderUserId: user!.id,
+        senderName: _currentSenderDisplayName(),
+        senderRole: currentRole ?? 'PARENT',
+        messageType: 'CONTACT',
+        content: caption.trim().isEmpty ? contact.contactName : caption.trim(),
+        metadata: contact.toMap(),
+      );
+
+      if (!chatMessages.any((m) => m.id == created.id)) {
+        chatMessages = [...chatMessages, created];
+      }
+      unawaited(_repository.notifyChatMessage(created.id));
+      return created;
+    } finally {
+      isSendingChatMessage = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteChatMessage(HomeschoolChatMessage message) async {
+    final storagePaths = message.attachments
+        .map((a) => a.storagePath)
+        .where((p) => p.isNotEmpty)
+        .toList();
+    await _repository.deleteChatMessage(
+      messageId: message.id,
+      storagePaths: storagePaths,
+    );
+    chatMessages = chatMessages
+        .where((m) => m.id != message.id)
+        .toList(growable: false);
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _authSubscription?.cancel();
     _signInReturnTimeout?.cancel();
+    final ch = _chatRealtimeChannel;
+    _chatRealtimeChannel = null;
+    if (ch != null) {
+      unawaited(_repository.unsubscribeChannel(ch));
+    }
     super.dispose();
   }
 }
@@ -10069,11 +11018,20 @@ String _guessMimeType(String fileName) {
   if (lower.endsWith('.heic')) {
     return 'image/heic';
   }
-  if (lower.endsWith('.mp4')) {
+  if (lower.endsWith('.webp')) {
+    return 'image/webp';
+  }
+  if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) {
     return 'video/mp4';
   }
   if (lower.endsWith('.mov')) {
     return 'video/quicktime';
+  }
+  if (lower.endsWith('.webm')) {
+    return 'video/webm';
+  }
+  if (lower.endsWith('.avi')) {
+    return 'video/x-msvideo';
   }
   if (lower.endsWith('.pdf')) {
     return 'application/pdf';

@@ -3,114 +3,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:nest_frontend/src/models/nest_models.dart';
+import 'package:nest_frontend/src/services/course_schedule_quick_adder.dart';
 import 'package:nest_frontend/src/services/nest_repository.dart';
 import 'package:nest_frontend/src/state/nest_controller.dart';
-import 'package:nest_frontend/src/ui/models/admin_self_setup.dart';
 import 'package:nest_frontend/src/ui/nest_theme.dart';
-import 'package:nest_frontend/src/ui/widgets/admin_self_setup_card.dart';
+import 'package:nest_frontend/src/ui/widgets/course_schedule_quick_sheet.dart';
+import 'package:nest_frontend/src/ui/widgets/spouse_invite_sheet.dart';
 
-NestController _admin({List<String> extraRoles = const []}) {
+NestController _testController() {
   final client = SupabaseClient(
     'http://localhost',
     'test-key',
     authOptions: const AuthClientOptions(autoRefreshToken: false),
   );
   final controller = NestController(repository: NestRepository(client));
-  controller.user = User(
-    id: 'u-1',
-    appMetadata: const {},
-    userMetadata: const {'real_name': '김하늘'},
-    aud: 'authenticated',
-    createdAt: '2026-09-24T00:00:00Z',
-  );
   controller.currentRole = 'HOMESCHOOL_ADMIN';
   controller.selectedHomeschoolId = 'hs-1';
   controller.selectedTermId = 't-1';
   controller.memberships = [
-    for (final role in ['HOMESCHOOL_ADMIN', ...extraRoles])
-      Membership.fromMap({
-        'user_id': 'u-1',
-        'homeschool_id': 'hs-1',
-        'role': role,
-        'status': 'ACTIVE',
-        'homeschools': {'id': 'hs-1', 'name': '하늘 홈스쿨'},
-      }),
-  ];
-  controller.terms = [
-    Term.fromMap({
-      'id': 't-1',
+    Membership.fromMap({
+      'user_id': 'u-1',
       'homeschool_id': 'hs-1',
-      'name': '2026 가을학기',
-      'status': 'DRAFT',
+      'role': 'HOMESCHOOL_ADMIN',
+      'status': 'ACTIVE',
+      'homeschools': {
+        'id': 'hs-1',
+        'name': '우리집 홈스쿨',
+        'timezone': 'Asia/Seoul',
+        'join_code': 'AB12CD',
+      },
     }),
   ];
   return controller;
 }
 
-Future<void> _pumpCard(WidgetTester tester, NestController controller) async {
-  tester.view.physicalSize = const Size(360, 800);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  await tester.pumpWidget(
-    MaterialApp(
-      theme: NestTheme.light(),
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: AdminSelfSetupCard(controller: controller),
-        ),
-      ),
-    ),
-  );
-  await tester.pump();
-}
-
 void main() {
-  group('관리자 빠른 설정 판단', () {
-    test('새 홈스쿨이면 가정·학부모·선생님·교실을 모두 권한다', () {
-      expect(
-        pendingSelfSetupActions(
-          hasOwnFamily: false,
-          isParent: false,
-          hasTeacherProfile: false,
-          hasTerm: true,
-          classroomCount: 0,
-        ),
-        [
-          SelfSetupAction.family,
-          SelfSetupAction.parent,
-          SelfSetupAction.teacher,
-          SelfSetupAction.classroom,
-        ],
-      );
-    });
-
-    test('이미 된 항목은 다시 권하지 않는다', () {
-      expect(
-        pendingSelfSetupActions(
-          hasOwnFamily: true,
-          isParent: true,
-          hasTeacherProfile: true,
-          hasTerm: true,
-          classroomCount: 1,
-        ),
-        isEmpty,
-      );
-    });
-
-    test('학기가 없으면 교실은 권하지 않는다 (교실은 학기 소속)', () {
-      expect(
-        pendingSelfSetupActions(
-          hasOwnFamily: true,
-          isParent: true,
-          hasTeacherProfile: true,
-          hasTerm: false,
-          classroomCount: 0,
-        ),
-        isEmpty,
-      );
-    });
-  });
-
   test('새 학기 틀을 만들 때 교실 "집"이 하나 들어간다', () {
     final rows = NestRepository.bootstrapClassroomRows(termId: 't-1');
     expect(rows, hasLength(1));
@@ -118,73 +45,105 @@ void main() {
     expect(rows.single['name'], '집');
   });
 
-  group('빠른 설정 카드', () {
-    testWidgets('새 관리자에게 네 버튼을 바로 보여 준다', (tester) async {
-      await _pumpCard(tester, _admin());
+  test('기본 타임슬롯은 평일(월~금) 09:00~18:00 (50분 수업, 10분 쉬는시간) 9교시×5일=45개로 생성된다', () {
+    expect(NestRepository.defaultTimeSlotPeriods, hasLength(9));
+    expect(NestRepository.defaultTimeSlotPeriods.first, ('09:00', '09:50'));
+    expect(NestRepository.defaultTimeSlotPeriods.last, ('17:00', '17:50'));
 
-      expect(find.text('우리 가정 만들기'), findsOneWidget);
-      expect(find.text('학부모로 등록'), findsOneWidget);
-      expect(find.text('선생님으로 등록'), findsOneWidget);
-      expect(find.text("'집' 교실 추가"), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    final rows = NestRepository.bootstrapTimeSlotRows(termId: 't-1');
+    expect(rows, hasLength(45));
+    expect(rows.first['term_id'], 't-1');
+    expect(rows.first['day_of_week'], 1);
+    expect(rows.first['start_time'], '09:00');
+    expect(rows.first['end_time'], '09:50');
+    expect(rows.last['day_of_week'], 5);
+    expect(rows.last['start_time'], '17:00');
+    expect(rows.last['end_time'], '17:50');
+  });
 
-    testWidgets('내 가정·학부모·선생님·교실이 있으면 카드가 사라진다', (tester) async {
-      final controller = _admin(extraRoles: ['PARENT']);
-      controller.families = [
-        Family.fromMap({
-          'id': 'f-1',
-          'homeschool_id': 'hs-1',
-          'family_name': '김하늘 가정',
-        }),
-      ];
-      controller.familyGuardianUserIdsByFamily = const {
-        'f-1': ['u-1'],
-      };
-      controller.teacherProfiles = [
-        TeacherProfile.fromMap({
-          'id': 'tp-1',
-          'homeschool_id': 'hs-1',
-          'user_id': 'u-1',
-          'display_name': '김하늘',
-          'teacher_type': 'PARENT_TEACHER',
-        }),
-      ];
-      controller.classrooms = [
-        Classroom.fromMap({'id': 'c-1', 'term_id': 't-1', 'name': '집'}),
-      ];
+  test('자연어 문장으로 과목과 시간표 배치를 파싱하고 예시 문장이 모두 정상 해석된다', () {
+    expect(kCourseScheduleTemplates.length, greaterThanOrEqualTo(6));
+    expect(kCourseScheduleExampleSentences, isNotEmpty);
 
-      await _pumpCard(tester, controller);
+    for (final example in kCourseScheduleExampleSentences) {
+      final parsed = parseCourseScheduleSentence(example.sentence);
+      expect(parsed.courses, isNotEmpty);
+    }
+    expect(
+      parseCourseScheduleSentence(
+        kCourseScheduleExampleSentences.first.sentence,
+      ).placements,
+      isNotEmpty,
+    );
 
-      expect(find.text('우리 가정 만들기'), findsNothing);
-      expect(find.text('선생님으로 등록'), findsNothing);
-      expect(find.byType(Card), findsNothing);
-    });
+    final custom = parseCourseScheduleSentence(
+      '월수금 9시 국어, 10시 수학 / 화목 오후 2시 미술 60분',
+    );
+    expect(
+      custom.courses.map((c) => c.name).toList(),
+      containsAll(['국어', '수학', '미술']),
+    );
+    final artCourse = custom.courses.firstWhere((c) => c.name == '미술');
+    expect(artCourse.defaultDurationMin, 60);
 
-    // 가정 연결은 학부모 역할을 서버에서 부여하고 홈스쿨 멤버 목록만 다시
-    // 읽는다. 그 목록에 내가 학부모로 있으면 버튼이 남아 있으면 안 된다.
-    testWidgets('홈스쿨 멤버 목록에 내가 학부모로 있으면 버튼을 뺀다', (tester) async {
-      final controller = _admin();
-      controller.homeschoolMemberships = [
-        Membership.fromMap({
-          'user_id': 'u-1',
-          'homeschool_id': 'hs-1',
-          'role': 'PARENT',
-          'status': 'ACTIVE',
-        }),
-      ];
+    // 월수금 9시 국어(3) + 월수금 10시 수학(3) + 화목 14시 미술(2) = 8개 시간표 배치
+    expect(custom.placements, hasLength(8));
 
-      await _pumpCard(tester, controller);
+    final slots = NestRepository.bootstrapTimeSlotRows(termId: 't-1')
+        .asMap()
+        .entries
+        .map(
+          (entry) => TimeSlot(
+            id: 'slot-${entry.key}',
+            termId: 't-1',
+            dayOfWeek: entry.value['day_of_week'] as int,
+            startTime: entry.value['start_time'] as String,
+            endTime: entry.value['end_time'] as String,
+          ),
+        )
+        .toList();
 
-      expect(find.text('학부모로 등록'), findsNothing);
-    });
+    final artThu = custom.placements.firstWhere(
+      (p) => p.courseName == '미술' && p.dayOfWeek == 4,
+    );
+    final matchedArtThu = matchTimeSlotForPlacement(
+      timeSlots: slots,
+      dayOfWeek: artThu.dayOfWeek,
+      startTime: artThu.startTime,
+    );
+    expect(matchedArtThu, isNotNull);
+    expect(matchedArtThu!.startTime, '14:00');
+  });
 
-    testWidgets('학부모 역할만 있으면 그 버튼만 빠진다', (tester) async {
-      await _pumpCard(tester, _admin(extraRoles: ['PARENT']));
+  testWidgets('엄마·아빠 초대 배너 및 시트, 템플릿·문장 수업 추가 시트가 렌더링된다', (tester) async {
+    final controller = _testController();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: NestTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                SpouseInviteBannerCard(controller: controller),
+                CourseScheduleQuickBanner(controller: controller),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
-      expect(find.text('학부모로 등록'), findsNothing);
-      expect(find.text('우리 가정 만들기'), findsOneWidget);
-      expect(find.text('선생님으로 등록'), findsOneWidget);
-    });
+    expect(find.textContaining('엄마면 아빠, 아빠면 엄마를 초대해'), findsOneWidget);
+    expect(find.textContaining('템플릿·문장으로 수업 한 번에 추가'), findsOneWidget);
+
+    await tester.tap(find.text('문장으로 수업 추가'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('예시 문장 (누르면 입력창에 바로 채워져요)'), findsOneWidget);
+    expect(
+      find.text(kCourseScheduleExampleSentences.first.label),
+      findsOneWidget,
+    );
   });
 }
+

@@ -32,6 +32,7 @@ class NewTermSections {
   static const selfStudy = 'SELF_STUDY';
   static const notices = 'NOTICES';
   static const events = 'EVENTS';
+  static const chat = 'CHAT';
 }
 
 enum NewTermStepState {

@@ -12,11 +12,21 @@ class BootstrapResult {
     required this.homeschoolId,
     required this.termId,
     required this.classGroupId,
+    this.term,
+    this.classGroup,
+    this.courses = const [],
+    this.timeSlots = const [],
+    this.classrooms = const [],
   });
 
   final String homeschoolId;
   final String termId;
   final String classGroupId;
+  final Term? term;
+  final ClassGroup? classGroup;
+  final List<Course> courses;
+  final List<TimeSlot> timeSlots;
+  final List<Classroom> classrooms;
 }
 
 class StorageUploadResult {
@@ -1130,20 +1140,25 @@ class NestRepository {
     return _asRows(data).map(TeachingPlan.fromMap).toList();
   }
 
-  Future<void> createTeachingPlan({
+  Future<String?> createTeachingPlan({
     required String classSessionId,
     required String teacherProfileId,
     required String objectives,
     required String materials,
     required String activities,
-  }) {
-    return client.from('teaching_plans').insert({
-      'class_session_id': classSessionId,
-      'teacher_profile_id': teacherProfileId,
-      'objectives': objectives.trim(),
-      'materials': materials.trim(),
-      'activities': activities.trim(),
-    });
+  }) async {
+    final row = await client
+        .from('teaching_plans')
+        .insert({
+          'class_session_id': classSessionId,
+          'teacher_profile_id': teacherProfileId,
+          'objectives': objectives.trim(),
+          'materials': materials.trim(),
+          'activities': activities.trim(),
+        })
+        .select('id')
+        .maybeSingle();
+    return _asMap(row)['id'] as String?;
   }
 
   Future<List<StudentActivityLog>> fetchStudentActivityLogs({
@@ -1165,20 +1180,25 @@ class NestRepository {
     return _asRows(data).map(StudentActivityLog.fromMap).toList();
   }
 
-  Future<void> createStudentActivityLog({
+  Future<String?> createStudentActivityLog({
     required String childId,
     required String? classSessionId,
     required String recordedByTeacherId,
     required String activityType,
     required String content,
-  }) {
-    return client.from('student_activity_logs').insert({
-      'child_id': childId,
-      'class_session_id': _normalizeNullable(classSessionId),
-      'recorded_by_teacher_id': recordedByTeacherId,
-      'activity_type': activityType,
-      'content': content.trim(),
-    });
+  }) async {
+    final row = await client
+        .from('student_activity_logs')
+        .insert({
+          'child_id': childId,
+          'class_session_id': _normalizeNullable(classSessionId),
+          'recorded_by_teacher_id': recordedByTeacherId,
+          'activity_type': activityType,
+          'content': content.trim(),
+        })
+        .select('id')
+        .maybeSingle();
+    return _asMap(row)['id'] as String?;
   }
 
   Future<List<Announcement>> fetchAnnouncements({
@@ -1370,7 +1390,7 @@ class NestRepository {
     }
   }
 
-  Future<void> createAcademicEvent({
+  Future<String?> createAcademicEvent({
     required String homeschoolId,
     required String? termId,
     required String title,
@@ -1403,7 +1423,12 @@ class NestRepository {
       });
     }
     try {
-      await client.from('academic_events').insert(row);
+      final inserted = await client
+          .from('academic_events')
+          .insert(row)
+          .select('id')
+          .maybeSingle();
+      return _asMap(inserted)['id'] as String?;
     } on PostgrestException catch (error) {
       if (_academicEventExtrasSupported && error.code == '42703') {
         _academicEventExtrasSupported = false;
@@ -1412,8 +1437,12 @@ class NestRepository {
         row.remove('end_time');
         row.remove('publish_announcement');
         row.remove('show_on_timetable');
-        await client.from('academic_events').insert(row);
-        return;
+        final inserted = await client
+            .from('academic_events')
+            .insert(row)
+            .select('id')
+            .maybeSingle();
+        return _asMap(inserted)['id'] as String?;
       }
       rethrow;
     }
@@ -1726,7 +1755,7 @@ class NestRepository {
     return '$y-$m-$d';
   }
 
-  /// 새 학기를 만든다. 상태는 항상 DRAFT로 시작한다(운영 전 초안).
+  /// 새 학기를 만든다. 상태는 바로 수업/알림 운영이 가능하도록 ACTIVE로 시작한다.
   /// RLS는 HOMESCHOOL_ADMIN/STAFF만 INSERT를 허용한다.
   Future<Term> createTerm({
     required String homeschoolId,
@@ -1741,12 +1770,26 @@ class NestRepository {
           'name': name,
           'start_date': _termDate(startDate),
           'end_date': _termDate(endDate),
-          'status': 'DRAFT',
+          'status': 'ACTIVE',
         })
         .select(_termColumns)
         .single();
 
-    return Term.fromMap(_asMap(created));
+    final term = Term.fromMap(_asMap(created));
+    if (term.id.isNotEmpty) {
+      try {
+        await ensureDefaultTimeSlots(termId: term.id);
+        await client
+            .from('classrooms')
+            .upsert(
+              bootstrapClassroomRows(termId: term.id),
+              onConflict: 'term_id,name',
+            );
+      } catch (_) {
+        // 기본 시간 슬롯·교실 시딩 실패 시 학기 생성 결과는 그대로 반환한다.
+      }
+    }
+    return term;
   }
 
   /// 학기 메타데이터(이름/기간/상태)를 수정한다. null 필드는 변경하지 않는다.
@@ -1849,6 +1892,29 @@ class NestRepository {
         .single();
 
     return Course.fromMap(_asMap(row));
+  }
+
+  Future<List<Course>> upsertCoursesBatch({
+    required String homeschoolId,
+    required List<({String name, int defaultDurationMin})> items,
+  }) async {
+    if (items.isEmpty) return const [];
+    final rows = await client
+        .from('courses')
+        .upsert(
+          items
+              .map(
+                (item) => {
+                  'homeschool_id': homeschoolId,
+                  'name': item.name.trim(),
+                  'default_duration_min': item.defaultDurationMin,
+                },
+              )
+              .toList(),
+          onConflict: 'homeschool_id,name',
+        )
+        .select('id, homeschool_id, name, default_duration_min');
+    return _asRows(rows).map(Course.fromMap).toList();
   }
 
   Future<Course> updateCourse({
@@ -2219,58 +2285,89 @@ class NestRepository {
           'name': termName,
           'start_date': startDate,
           'end_date': endDate,
-          'status': 'DRAFT',
+          'status': 'ACTIVE',
         })
-        .select('id')
+        .select(_termColumns)
         .single();
 
-    final termId = _asMap(createdTerm)['id'] as String;
+    final termMap = _asMap(createdTerm);
+    final termId = termMap['id'] as String;
+    final hydratedTerm = Term.fromMap(termMap);
 
     late final String classGroupId;
+    ClassGroup? hydratedClassGroup;
+    var hydratedCourses = const <Course>[];
+    var hydratedTimeSlots = const <TimeSlot>[];
+    var hydratedClassrooms = const <Classroom>[];
+
     await Future.wait([
       () async {
         final createdClassGroup = await client
             .from('class_groups')
             .insert({'term_id': termId, 'name': className, 'capacity': 12})
-            .select('id')
+            .select('id, term_id, name, capacity')
             .single();
-        classGroupId = _asMap(createdClassGroup)['id'] as String;
+        final cgMap = _asMap(createdClassGroup);
+        classGroupId = cgMap['id'] as String;
+        hydratedClassGroup = ClassGroup.fromMap(cgMap);
       }(),
       if (courseNames.isNotEmpty)
-        client
-            .from('courses')
-            .upsert(
-              courseNames
-                  .map(
-                    (name) => {
-                      'homeschool_id': homeschoolId,
-                      'name': name,
-                      'default_duration_min': 50,
-                    },
-                  )
-                  .toList(),
-              onConflict: 'homeschool_id,name',
-            )
+        () async {
+          final rows = await client
+              .from('courses')
+              .upsert(
+                courseNames
+                    .map(
+                      (name) => {
+                        'homeschool_id': homeschoolId,
+                        'name': name,
+                        'default_duration_min': 50,
+                      },
+                    )
+                    .toList(),
+                onConflict: 'homeschool_id,name',
+              )
+              .select('id, homeschool_id, name, default_duration_min');
+          hydratedCourses = _asRows(rows).map(Course.fromMap).toList();
+        }()
       else
         Future<void>.value(),
-      client
-          .from('time_slots')
-          .upsert(
-            _defaultTimeSlots(termId: termId),
-            onConflict: 'term_id,day_of_week,start_time,end_time',
-          ),
-      client
-          .from('classrooms')
-          .upsert(
-            bootstrapClassroomRows(termId: termId),
-            onConflict: 'term_id,name',
-          ),
+      () async {
+        final rows = await client
+            .from('time_slots')
+            .upsert(
+              _defaultTimeSlots(termId: termId),
+              onConflict: 'term_id,day_of_week,start_time,end_time',
+            )
+            .select('id, term_id, day_of_week, start_time, end_time');
+        final list = _asRows(rows).map(TimeSlot.fromMap).toList()
+          ..sort((a, b) {
+            final cmp = a.dayOfWeek.compareTo(b.dayOfWeek);
+            return cmp != 0 ? cmp : a.startTime.compareTo(b.startTime);
+          });
+        hydratedTimeSlots = list;
+      }(),
+      () async {
+        final rows = await client
+            .from('classrooms')
+            .upsert(
+              bootstrapClassroomRows(termId: termId),
+              onConflict: 'term_id,name',
+            )
+            .select('id, term_id, name, capacity, note');
+        hydratedClassrooms = _asRows(rows).map(Classroom.fromMap).toList();
+      }(),
     ]);
 
     return BootstrapResult(
       homeschoolId: homeschoolId,
       termId: termId,
       classGroupId: classGroupId,
+      term: hydratedTerm,
+      classGroup: hydratedClassGroup,
+      courses: hydratedCourses,
+      timeSlots: hydratedTimeSlots,
+      classrooms: hydratedClassrooms,
     );
   }
 
@@ -2402,6 +2499,74 @@ class NestRepository {
       sourceType: 'MANUAL',
       location: location,
     );
+  }
+
+  Future<List<ClassSession>> createSessionsBatch({
+    required List<
+      ({
+        String classGroupId,
+        String courseId,
+        String timeSlotId,
+        String title,
+        String createdByUserId,
+      })
+    >
+    items,
+  }) async {
+    if (items.isEmpty) return const [];
+    final basePayloads = items
+        .map(
+          (item) => {
+            'class_group_id': item.classGroupId,
+            'course_id': item.courseId,
+            'time_slot_id': item.timeSlotId,
+            'title': item.title,
+            'source_type': 'MANUAL',
+            'status': 'PLANNED',
+            'created_by_user_id': item.createdByUserId,
+          },
+        )
+        .toList();
+
+    if (_classSessionLocationSupported == false) {
+      final legacyRows = await client
+          .from('class_sessions')
+          .insert(basePayloads)
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+          );
+      return _asRows(
+        legacyRows,
+      ).map((r) => ClassSession.fromMap({...r, 'location': null})).toList();
+    }
+
+    final withLocation = basePayloads
+        .map((p) => {...p, 'location': '미정'})
+        .toList();
+    try {
+      final rows = await client
+          .from('class_sessions')
+          .insert(withLocation)
+          .select(
+            'id, class_group_id, course_id, time_slot_id, title, source_type, status, location',
+          );
+      _classSessionLocationSupported = true;
+      return _asRows(rows).map(ClassSession.fromMap).toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingLocationColumn(error)) {
+        _classSessionLocationSupported = false;
+        final legacyRows = await client
+            .from('class_sessions')
+            .insert(basePayloads)
+            .select(
+              'id, class_group_id, course_id, time_slot_id, title, source_type, status',
+            );
+        return _asRows(
+          legacyRows,
+        ).map((r) => ClassSession.fromMap({...r, 'location': null})).toList();
+      }
+      rethrow;
+    }
   }
 
   Future<ClassSession> createSessionAndReturn({
@@ -3280,6 +3445,25 @@ class NestRepository {
       channel: channel,
       force: force,
     );
+  }
+
+  /// 도메인 이벤트에 대한 푸시 알림을 백그라운드에서 best-effort 로 발송한다.
+  /// 네트워크/서버 미배포 상태에서도 본래 도메인 동작이 실패하지 않도록 예외를 삼킨다.
+  Future<void> notifyDomainEvent({
+    required String event,
+    required String id,
+    String channel = 'push',
+    bool force = false,
+  }) async {
+    if (id.trim().isEmpty) return;
+    try {
+      await client.functions.invoke(
+        'nest-notify',
+        body: {'event': event, 'id': id.trim(), 'channel': channel, 'force': force},
+      );
+    } catch (error) {
+      debugPrint('[Notify] notifyDomainEvent($event) skipped/failed: $error');
+    }
   }
 
   Future<NotifyResult> _invokeNestNotify({
@@ -4165,18 +4349,26 @@ class NestRepository {
     ];
   }
 
-  List<Map<String, dynamic>> _defaultTimeSlots({required String termId}) {
-    const days = <int>[1, 2, 3, 4, 5];
-    const times = <(String start, String end)>[
-      ('09:30', '10:20'),
-      ('10:30', '11:20'),
-      ('11:30', '12:20'),
-      ('13:30', '14:20'),
-    ];
+  /// 새 학기 틀에 기본으로 넣는 평일 시간 슬롯 (09:00 ~ 18:00, 50분 수업 · 10분 휴식).
+  static const defaultTimeSlotPeriods = <(String start, String end)>[
+    ('09:00', '09:50'),
+    ('10:00', '10:50'),
+    ('11:00', '11:50'),
+    ('12:00', '12:50'),
+    ('13:00', '13:50'),
+    ('14:00', '14:50'),
+    ('15:00', '15:50'),
+    ('16:00', '16:50'),
+    ('17:00', '17:50'),
+  ];
 
+  static List<Map<String, dynamic>> bootstrapTimeSlotRows({
+    required String termId,
+    List<int> days = const <int>[1, 2, 3, 4, 5],
+  }) {
     final rows = <Map<String, dynamic>>[];
     for (final day in days) {
-      for (final time in times) {
+      for (final time in defaultTimeSlotPeriods) {
         rows.add({
           'term_id': termId,
           'day_of_week': day,
@@ -4187,6 +4379,18 @@ class NestRepository {
     }
 
     return rows;
+  }
+
+  List<Map<String, dynamic>> _defaultTimeSlots({required String termId}) =>
+      bootstrapTimeSlotRows(termId: termId);
+
+  Future<void> ensureDefaultTimeSlots({required String termId}) async {
+    await client
+        .from('time_slots')
+        .upsert(
+          bootstrapTimeSlotRows(termId: termId),
+          onConflict: 'term_id,day_of_week,start_time,end_time',
+        );
   }
 
   /// 학기별 아동 종합의견/평가 조회
@@ -4276,6 +4480,162 @@ class NestRepository {
       debugPrint('[Portfolio] fetchPortfolioPhotos error: $e');
       return const [];
     }
+  }
+
+  // ── Homeschool Chat (실시간 채팅 · 미디어/스케줄/연락처 공유 · 푸시 알림) ──
+
+  Future<List<HomeschoolChatMessage>> fetchChatMessages({
+    required String homeschoolId,
+    int limit = 150,
+  }) async {
+    try {
+      final data = await client
+          .from('homeschool_chat_messages')
+          .select()
+          .eq('homeschool_id', homeschoolId)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      final rows = _asRows(data).map(HomeschoolChatMessage.fromMap).toList();
+      return rows.reversed.toList();
+    } on PostgrestException catch (error) {
+      if (_isMissingSchemaObject(error, 'homeschool_chat_messages')) {
+        return const [];
+      }
+      rethrow;
+    }
+  }
+
+  Future<ChatAttachment> uploadChatAttachment({
+    required String homeschoolId,
+    required String messageSeed,
+    required PendingMediaFile file,
+  }) async {
+    final ext = file.name.contains('.')
+        ? file.name.substring(file.name.lastIndexOf('.'))
+        : '';
+    final uniqueName =
+        '${DateTime.now().millisecondsSinceEpoch}_${file.name.hashCode.abs()}$ext';
+    final storagePath = 'chat/$homeschoolId/$messageSeed/$uniqueName';
+
+    await client.storage
+        .from('media')
+        .uploadBinary(
+          storagePath,
+          file.bytes,
+          fileOptions: FileOptions(contentType: file.mimeType),
+        );
+
+    final publicUrl = client.storage.from('media').getPublicUrl(storagePath);
+    return ChatAttachment(
+      storagePath: storagePath,
+      fileName: file.name,
+      mimeType: file.mimeType,
+      sizeBytes: file.bytes.length,
+      publicUrl: publicUrl,
+    );
+  }
+
+  Future<HomeschoolChatMessage> insertChatMessage({
+    required String homeschoolId,
+    String? classGroupId,
+    String? recipientUserId,
+    required String senderUserId,
+    required String senderName,
+    required String senderRole,
+    required String messageType,
+    required String content,
+    Map<String, dynamic> metadata = const {},
+  }) async {
+    final payload = <String, dynamic>{
+      'homeschool_id': homeschoolId,
+      if (classGroupId != null && classGroupId.trim().isNotEmpty)
+        'class_group_id': classGroupId.trim(),
+      if (recipientUserId != null && recipientUserId.trim().isNotEmpty)
+        'recipient_user_id': recipientUserId.trim(),
+      'sender_user_id': senderUserId,
+      'sender_name': senderName,
+      'sender_role': senderRole,
+      'message_type': messageType,
+      'content': content,
+      'metadata': metadata,
+    };
+
+    final row = await client
+        .from('homeschool_chat_messages')
+        .insert(payload)
+        .select()
+        .single();
+    return HomeschoolChatMessage.fromMap(_asMap(row));
+  }
+
+  Future<void> deleteChatMessage({
+    required String messageId,
+    List<String> storagePaths = const [],
+  }) async {
+    if (storagePaths.isNotEmpty) {
+      try {
+        await client.storage.from('media').remove(storagePaths);
+      } catch (_) {
+        // best-effort cleanup
+      }
+    }
+    await client.from('homeschool_chat_messages').delete().eq('id', messageId);
+  }
+
+  Future<void> notifyChatMessage(String messageId) async {
+    try {
+      await client.functions.invoke(
+        'nest-notify',
+        body: {'event': 'CHAT_MESSAGE', 'id': messageId},
+      );
+    } catch (error) {
+      debugPrint('[Chat] notifyChatMessage skipped/failed: $error');
+    }
+  }
+
+  RealtimeChannel subscribeToChatMessages({
+    required String homeschoolId,
+    required void Function(HomeschoolChatMessage message) onInsert,
+    required void Function(String messageId) onDelete,
+  }) {
+    final channel = client.channel('homeschool-chat-$homeschoolId');
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'homeschool_chat_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'homeschool_id',
+            value: homeschoolId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            if (record.isNotEmpty) {
+              onInsert(HomeschoolChatMessage.fromMap(record));
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'homeschool_chat_messages',
+          callback: (payload) {
+            final id = payload.oldRecord['id'];
+            if (id is String && id.isNotEmpty) {
+              onDelete(id);
+            }
+          },
+        )
+        .subscribe();
+    return channel;
+  }
+
+  Future<void> unsubscribeChannel(RealtimeChannel? channel) async {
+    if (channel == null) return;
+    try {
+      await client.removeChannel(channel);
+    } catch (_) {}
   }
 }
 
@@ -4383,7 +4743,15 @@ Map<String, dynamic> legacyNotificationPrefsPayload(
   return {...payload}
     ..remove('class_reminder_lead_min')
     ..remove('morning_digest_min')
-    ..remove('notif_onboarded_at');
+    ..remove('notif_onboarded_at')
+    ..remove('class_change_enabled')
+    ..remove('absence_enabled')
+    ..remove('announcement_enabled')
+    ..remove('academic_event_enabled')
+    ..remove('student_log_enabled')
+    ..remove('chat_enabled')
+    ..remove('community_enabled')
+    ..remove('gallery_enabled');
 }
 
 bool _isMissingSchemaObject(PostgrestException error, String name) {

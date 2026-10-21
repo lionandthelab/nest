@@ -12,15 +12,30 @@ import 'package:nest_frontend/src/services/nest_repository.dart';
 
 void main() {
   test('기본 페이로드에는 새 컬럼이 들어간다', () {
-    const prefs = NotificationPrefs(classReminderLeadMin: 20);
+    const prefs = NotificationPrefs(
+      classReminderLeadMin: 20,
+      chatEnabled: false,
+      galleryEnabled: false,
+    );
     final map = prefs.toMap();
     expect(map['class_reminder_lead_min'], 20);
+    expect(map['class_change_enabled'], isTrue);
+    expect(map['absence_enabled'], isTrue);
+    expect(map['announcement_enabled'], isTrue);
+    expect(map['academic_event_enabled'], isTrue);
+    expect(map['student_log_enabled'], isTrue);
+    expect(map['chat_enabled'], isFalse);
+    expect(map['community_enabled'], isTrue);
+    expect(map['gallery_enabled'], isFalse);
     expect(map.containsKey('quiet_hours_start'), isTrue);
   });
 
   test('폴백 페이로드는 마이그레이션 전 컬럼만 남긴다', () {
     const prefs = NotificationPrefs(
       classReminderLeadMin: 60,
+      chatEnabled: false,
+      communityEnabled: false,
+      galleryEnabled: false,
       quietHoursStart: '22:00',
       quietHoursEnd: '07:00',
     );
@@ -28,6 +43,14 @@ void main() {
 
     expect(legacy.containsKey('class_reminder_lead_min'), isFalse);
     expect(legacy.containsKey('notif_onboarded_at'), isFalse);
+    expect(legacy.containsKey('class_change_enabled'), isFalse);
+    expect(legacy.containsKey('absence_enabled'), isFalse);
+    expect(legacy.containsKey('announcement_enabled'), isFalse);
+    expect(legacy.containsKey('academic_event_enabled'), isFalse);
+    expect(legacy.containsKey('student_log_enabled'), isFalse);
+    expect(legacy.containsKey('chat_enabled'), isFalse);
+    expect(legacy.containsKey('community_enabled'), isFalse);
+    expect(legacy.containsKey('gallery_enabled'), isFalse);
     // 원래 있던 컬럼은 그대로 저장돼야 한다.
     expect(legacy['push_enabled'], isTrue);
     expect(legacy['morning_digest_enabled'], isTrue);
@@ -40,5 +63,44 @@ void main() {
     final original = const NotificationPrefs(classReminderLeadMin: 10).toMap();
     legacyNotificationPrefsPayload(original);
     expect(original['class_reminder_lead_min'], 10);
+  });
+
+  test('NotificationInboxItem deepLinkTab maps all domain events', () {
+    expect(
+      const NotificationInboxItem(id: '1', eventType: 'ABSENCE_ACK').deepLinkTab,
+      '시간표',
+    );
+    expect(
+      const NotificationInboxItem(id: '2', eventType: 'ACADEMIC_EVENT').deepLinkTab,
+      '시간표',
+    );
+    expect(
+      const NotificationInboxItem(id: '3', eventType: 'TEACHING_PLAN').deepLinkTab,
+      '시간표',
+    );
+    expect(
+      const NotificationInboxItem(id: '4', eventType: 'ANNOUNCEMENT').deepLinkTab,
+      '홈',
+    );
+    expect(
+      const NotificationInboxItem(id: '5', eventType: 'STUDENT_LOG').deepLinkTab,
+      '홈',
+    );
+    expect(
+      const NotificationInboxItem(id: '6', eventType: 'COMMUNITY_POST').deepLinkTab,
+      '커뮤니티',
+    );
+    expect(
+      const NotificationInboxItem(id: '7', eventType: 'COMMUNITY_COMMENT').deepLinkTab,
+      '커뮤니티',
+    );
+    expect(
+      const NotificationInboxItem(id: '8', eventType: 'GALLERY_UPLOAD').deepLinkTab,
+      '앨범',
+    );
+    expect(
+      const NotificationInboxItem(id: '9', eventType: 'CHAT_MESSAGE').deepLinkTab,
+      '채팅',
+    );
   });
 }

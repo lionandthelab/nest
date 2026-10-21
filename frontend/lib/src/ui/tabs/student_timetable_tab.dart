@@ -40,6 +40,11 @@ class StudentTimetableTab extends StatefulWidget {
 class _StudentTimetableTabState extends State<StudentTimetableTab> {
   String _pane = 'class';
   DateTime _weekStart = nestMondayOf(DateTime.now());
+  int _selectedDayOfWeek = (DateTime.now().weekday >= 1 &&
+          DateTime.now().weekday <= 5)
+      ? DateTime.now().weekday
+      : 1;
+  bool _showFullWeeklyBoard = false;
 
   @override
   Widget build(BuildContext context) {
@@ -109,20 +114,32 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
             builder: (context) {
               try {
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ScheduleWeekBar(
-                      weekMonday: _weekStart,
-                      onChanged: (next) =>
-                          setState(() => _weekStart = nestMondayOf(next)),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildWeeklyScheduleBoard(controller, bundles, childId),
-                    PersonalWeekList(
+                    // 1순위: 오늘(선택 요일) 내 수업만 직관적으로 보여주는 집중 뷰
+                    _buildFocusedDayScheduleCard(
+                      context,
                       controller: controller,
+                      bundles: bundles,
                       childId: childId,
-                      weekMonday: _weekStart,
-                      sessions: bundles.values.expand((b) => b.sessions),
                     ),
+                    const SizedBox(height: 12),
+                    // 추가 클릭 시 펼쳐지는 전체 주간 시간표 보드
+                    if (_showFullWeeklyBoard) ...[
+                      ScheduleWeekBar(
+                        weekMonday: _weekStart,
+                        onChanged: (next) =>
+                            setState(() => _weekStart = nestMondayOf(next)),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildWeeklyScheduleBoard(controller, bundles, childId),
+                      PersonalWeekList(
+                        controller: controller,
+                        childId: childId,
+                        weekMonday: _weekStart,
+                        sessions: bundles.values.expand((b) => b.sessions),
+                      ),
+                    ],
                   ],
                 );
               } catch (e, st) {
@@ -141,6 +158,228 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
             },
           ),
       ],
+    );
+  }
+
+  Widget _buildFocusedDayScheduleCard(
+    BuildContext context, {
+    required NestController controller,
+    required Map<String, ChildClassBundle> bundles,
+    required String childId,
+  }) {
+    final entries = _collectScheduleEntries(controller, bundles);
+    final slotById = {for (final slot in controller.timeSlots) slot.id: slot};
+    final dayEntries = <(_StudentScheduleEntry, TimeSlot)>[];
+    for (final entry in entries) {
+      final slot = slotById[entry.session.timeSlotId];
+      if (slot == null) continue;
+      if (slot.dayOfWeek == _selectedDayOfWeek) {
+        dayEntries.add((entry, slot));
+      }
+    }
+    dayEntries.sort((a, b) => a.$2.startTime.compareTo(b.$2.startTime));
+
+    final todayDow = DateTime.now().weekday % 7;
+
+    return Card(
+      color: NestColors.roseMist.withValues(alpha: 0.28),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedDayOfWeek == todayDow
+                            ? '오늘 나의 수업 (${_dayLabel(_selectedDayOfWeek)}요일)'
+                            : '${_dayLabel(_selectedDayOfWeek)}요일 나의 수업',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '수업을 누르면 진도표 확인과 결석 신고를 할 수 있어요.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.65),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => setState(
+                    () => _showFullWeeklyBoard = !_showFullWeeklyBoard,
+                  ),
+                  icon: Icon(
+                    _showFullWeeklyBoard
+                        ? Icons.expand_less_rounded
+                        : Icons.grid_view_rounded,
+                    size: 17,
+                  ),
+                  label: Text(_showFullWeeklyBoard ? '전체 시간표 접기' : '전체 시간표 보기'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final day in const [1, 2, 3, 4, 5])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        label: Text(
+                          day == todayDow
+                              ? '${_dayLabel(day)} (오늘)'
+                              : '${_dayLabel(day)}요일',
+                        ),
+                        selected: _selectedDayOfWeek == day,
+                        selectedColor: NestColors.dustyRose.withValues(
+                          alpha: 0.55,
+                        ),
+                        backgroundColor: NestColors.creamyWhite,
+                        onSelected: (_) =>
+                            setState(() => _selectedDayOfWeek = day),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (dayEntries.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: NestColors.creamyWhite,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_dayLabel(_selectedDayOfWeek)}요일에는 배정된 정규 수업이 없습니다.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: NestColors.deepWood.withValues(alpha: 0.7),
+                  ),
+                ),
+              )
+            else
+              for (var i = 0; i < dayEntries.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(
+                    bottom: i == dayEntries.length - 1 ? 0 : 8,
+                  ),
+                  child: _buildFocusedDayClassRow(
+                    context,
+                    controller: controller,
+                    entry: dayEntries[i].$1,
+                    slot: dayEntries[i].$2,
+                    periodIndex: i + 1,
+                    childId: childId,
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFocusedDayClassRow(
+    BuildContext context, {
+    required NestController controller,
+    required _StudentScheduleEntry entry,
+    required TimeSlot slot,
+    required int periodIndex,
+    required String childId,
+  }) {
+    final courseName = controller.findCourseName(entry.session.courseId);
+    final teacherLabel = _teacherLabelForSession(
+      controller: controller,
+      sessionId: entry.session.id,
+      assignments: entry.assignments,
+    );
+    final location = (entry.session.location ?? '').trim();
+    final meta = <String>[
+      entry.className,
+      if (location.isNotEmpty) location,
+      if (teacherLabel.isNotEmpty && teacherLabel != '-') teacherLabel,
+    ].join(' · ');
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _showCellDetailModal(
+        context,
+        controller: controller,
+        entry: entry,
+        childId: childId,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: NestColors.creamyWhite,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: NestColors.roseMist),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: NestColors.roseMist.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    '$periodIndex교시',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: NestColors.clay,
+                    ),
+                  ),
+                  Text(
+                    _shortTime(slot.startTime),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: NestColors.deepWood,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    courseName,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_shortTime(slot.startTime)}–${_shortTime(slot.endTime)}'
+                    '${meta.isNotEmpty ? ' · $meta' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.65),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: NestColors.deepWood.withValues(alpha: 0.45),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

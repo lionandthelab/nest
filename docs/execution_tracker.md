@@ -95,9 +95,14 @@ Last updated: 2026-10-02
 | 2026-10-02 | 공지 첨부를 소식 카드에서 바로 미리보기: 이미지는 카드에 표시 후 확대, PDF·텍스트는 앱 안 뷰어, 학부모 소식 탭에도 첨부 표시 | 완료 | `flutter analyze`, `flutter test` (438/438 통과) |
 | 2026-10-03 | 전체 앱 3D 클레이모피즘 에셋 확장 모델링(신규 11종 Blender Headless 렌더링, 총 20종 풀 스위트 완성) + `Nest3dIcon` 20종 전용 생성자 및 `forTab` 팩토리 구현 + 하단 독바/사이드 레일/헤더 벨·설정/빈 상태 UI 3D 전면 연동 + 3D 아이콘 전수 단위 테스트(`nest_3d_icon_test.dart`) 추가 | 완료 | `flutter analyze`, `flutter test` (440/440 통과), Blender Cycles Headless 일괄 렌더링 검증 |
 | 2026-10-09 | 학기 만들기 시트가 Material 없이 열려 입력칸이 죽던 문제 수정. 홈스쿨 생성 실패를 알림으로 표시. 신규 홈스쿨 참여 코드 자동 발급 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` (447/447), iPhone 16 시뮬레이터에서 학기 생성·수정·삭제, 가정 생성·삭제, 시간표/소식/앨범/시스템 탭 확인 |
+| 2026-10-19 | 1인 홈스쿨 온보딩·운영 UX 개선: (1) 엄마↔아빠 배우자 초대 및 가정 보호자+공동 관리자 원클릭 연결(`SpouseInviteSheet`/`SpouseInviteBannerCard`), (2) 6종 추천 템플릿 및 예시 문장 기반 자연어 과목·시간표 일괄 추가(`CourseScheduleQuickSheet`/`parseCourseScheduleSentence`), (3) 기본 타임슬롯(평일 09:00~18:00, 50분 수업/10분 쉬는시간, 9교시×5일=45슬롯) 자동 시드(`ensureDefaultTimeSlots`) | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` (446/446 통과) |
+| 2026-10-20 | 홈스쿨 실시간 채팅(`HomeschoolChatView`, 전체/반별/1:1 채널) + 미디어·문서·수업 스케줄·연락처 원클릭 공유 시트 + 실시간 배지 및 `CHAT_MESSAGE` 푸시 알림 연동 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` (450/450 통과) |
+| 2026-10-21 | 학부모·선생님·학생 '내 오늘 수업 먼저' 집중형 홈/시간표 UX 단순화 + 4종 오늘 일정 위젯(`TodayScheduleCard`: 포커스·타임라인·심플목록·체크카드) 및 `[전체 시간표 보기]` 토글 구현 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` (456/456 통과) |
+| 2026-10-22 | 전 도메인 이벤트(수업변경·결석신고/확인·공지·학사일정·아이활동기록·수업계획·채팅·커뮤니티 글/댓글·앨범 업로드) 자동 푸시 알림 발송(`nest-notify`) + FCM Android/iOS 알림 신뢰성/만료토큰 정리/조용한 시간(`inbox_only`) 강화 + 이벤트별 세부 알림 설정 UI(`NotificationSettingsPanel` 8종 스위치·프리셋·조용한 시간 시각 선택) | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
 
 
 ## Next Batch
 
 1. 다국어(i18n) 범위 정의 및 적용(현재 제외)
 2. 결제/정산 도메인 설계 및 구현(현재 제외)
+

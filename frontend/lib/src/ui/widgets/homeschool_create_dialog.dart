@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../services/course_schedule_quick_adder.dart';
 import '../../state/nest_controller.dart';
 import '../models/homeschool_start_tips.dart';
 import '../nest_theme.dart';
@@ -32,6 +33,7 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
   late final TextEditingController _courseController;
   _Step _step = _Step.form;
   bool _submitting = false;
+  bool _showTermDetails = false;
 
   @override
   void initState() {
@@ -102,6 +104,12 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
 
+    final rawCourseInput = _courseController.text.trim();
+    final parsedSentence = parseCourseScheduleSentence(rawCourseInput);
+    final resolvedCoursesCsv = parsedSentence.courses.isNotEmpty
+        ? parsedSentence.courses.map((c) => c.name).join(', ')
+        : rawCourseInput;
+
     setState(() => _submitting = true);
     try {
       await widget.controller.bootstrapFrame(
@@ -110,8 +118,17 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
         startDate: _startDateController.text,
         endDate: _endDateController.text,
         className: _classController.text,
-        coursesCsv: _courseController.text,
+        coursesCsv: resolvedCoursesCsv,
       );
+      if (parsedSentence.hasPlacements) {
+        try {
+          await widget.controller.applyCourseAndScheduleQuickAdd(
+            coursesToEnsure: parsedSentence.courses,
+            placements: parsedSentence.placements,
+            placeOnTimetable: true,
+          );
+        } catch (_) {}
+      }
       if (!mounted) return;
       NestHaptics.success();
       unawaited(widget.controller.loadDriveIntegration());
@@ -290,72 +307,170 @@ class _HomeschoolCreateDialogState extends State<HomeschoolCreateDialog> {
                                   ),
                                   const SizedBox(height: 12),
                                   TextFormField(
-                                    controller: _termController,
+                                    controller: _courseController,
+                                    onChanged: (_) => setState(() {}),
                                     decoration: _field(
-                                      label: '첫 학기',
-                                      hint: '예: 2026 가을 학기',
+                                      label: '과목 또는 시간표 문장',
+                                      hint:
+                                          '예: 월수금 9시 국어, 10시 수학, 화목 10시 영어',
+                                      helper:
+                                          '평일 9시~18시(50분 수업·10분 휴식) 기본 시간표가 함께 만들어집니다.',
                                     ),
-                                    validator: (value) =>
-                                        (value == null || value.trim().isEmpty)
-                                        ? '학기 이름을 적어 주세요.'
-                                        : null,
                                   ),
-                                  const SizedBox(height: 12),
-                                  Row(
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
                                     children: [
-                                      Expanded(
-                                        child: TextFormField(
-                                          controller: _startDateController,
-                                          readOnly: true,
-                                          onTap: () =>
-                                              _pickDate(_startDateController),
-                                          decoration: _field(
-                                            label: '시작일',
-                                            suffix: const Icon(
-                                              Icons.event_outlined,
-                                            ),
-                                          ),
-                                          validator: _validateDate,
+                                      for (final ex
+                                          in kCourseScheduleExampleSentences)
+                                        ActionChip(
+                                          visualDensity: VisualDensity.compact,
+                                          label: Text('예시: ${ex.label}'),
+                                          onPressed: () {
+                                            NestHaptics.tap();
+                                            setState(() {
+                                              _courseController.text =
+                                                  ex.sentence;
+                                            });
+                                          },
                                         ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: TextFormField(
-                                          controller: _endDateController,
-                                          readOnly: true,
-                                          onTap: () =>
-                                              _pickDate(_endDateController),
-                                          decoration: _field(
-                                            label: '종료일',
-                                            suffix: const Icon(
-                                              Icons.event_outlined,
-                                            ),
-                                          ),
-                                          validator: _validateDate,
-                                        ),
-                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
-                                  TextFormField(
-                                    controller: _classController,
-                                    decoration: _field(
-                                      label: '반 이름',
-                                      hint: '예: 우리 반',
+                                  const SizedBox(height: 10),
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(10),
+                                    onTap: () {
+                                      NestHaptics.tap();
+                                      setState(
+                                        () => _showTermDetails =
+                                            !_showTermDetails,
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 6,
+                                        horizontal: 4,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.tune_rounded,
+                                            size: 16,
+                                            color: NestColors.deepWood
+                                                .withValues(alpha: 0.7),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              '기본 학기·반: ${_termController.text} · ${_classController.text} (09:00~18:00 슬롯)',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color: NestColors.deepWood
+                                                        .withValues(
+                                                          alpha: 0.72,
+                                                        ),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ),
+                                          Icon(
+                                            _showTermDetails
+                                                ? Icons.expand_less_rounded
+                                                : Icons.expand_more_rounded,
+                                            size: 18,
+                                            color: NestColors.deepWood
+                                                .withValues(alpha: 0.7),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    validator: (value) =>
-                                        (value == null || value.trim().isEmpty)
-                                        ? '반 이름을 적어 주세요.'
-                                        : null,
                                   ),
-                                  const SizedBox(height: 12),
-                                  TextFormField(
-                                    controller: _courseController,
-                                    decoration: _field(
-                                      label: '과목',
-                                      hint: '예: 국어, 수학, 영어',
-                                      helper: '콤마로 나누면 됩니다. 나중에 더 넣어도 돼요.',
-                                    ),
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeOutCubic,
+                                    child: !_showTermDetails
+                                        ? const SizedBox.shrink()
+                                        : Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 10,
+                                            ),
+                                            child: Column(
+                                              children: [
+                                                TextFormField(
+                                                  controller: _termController,
+                                                  decoration: _field(
+                                                    label: '첫 학기',
+                                                    hint: '예: 2026 가을 학기',
+                                                  ),
+                                                  validator: (value) =>
+                                                      (value == null ||
+                                                          value.trim().isEmpty)
+                                                      ? '학기 이름을 적어 주세요.'
+                                                      : null,
+                                                ),
+                                                const SizedBox(height: 12),
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: TextFormField(
+                                                        controller:
+                                                            _startDateController,
+                                                        readOnly: true,
+                                                        onTap: () => _pickDate(
+                                                          _startDateController,
+                                                        ),
+                                                        decoration: _field(
+                                                          label: '시작일',
+                                                          suffix: const Icon(
+                                                            Icons
+                                                                .event_outlined,
+                                                          ),
+                                                        ),
+                                                        validator:
+                                                            _validateDate,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Expanded(
+                                                      child: TextFormField(
+                                                        controller:
+                                                            _endDateController,
+                                                        readOnly: true,
+                                                        onTap: () => _pickDate(
+                                                          _endDateController,
+                                                        ),
+                                                        decoration: _field(
+                                                          label: '종료일',
+                                                          suffix: const Icon(
+                                                            Icons
+                                                                .event_outlined,
+                                                          ),
+                                                        ),
+                                                        validator:
+                                                            _validateDate,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 12),
+                                                TextFormField(
+                                                  controller: _classController,
+                                                  decoration: _field(
+                                                    label: '반 이름',
+                                                    hint: '예: 우리 반',
+                                                  ),
+                                                  validator: (value) =>
+                                                      (value == null ||
+                                                          value.trim().isEmpty)
+                                                      ? '반 이름을 적어 주세요.'
+                                                      : null,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                   ),
                                   const SizedBox(height: 20),
                                   if (isNarrow)

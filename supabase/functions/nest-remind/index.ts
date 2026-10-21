@@ -155,7 +155,7 @@ async function loadOccurrences(
   const { data: terms, error: termErr } = await admin
     .from("terms")
     .select("id")
-    .eq("status", "ACTIVE")
+    .neq("status", "ARCHIVED")
     .lte("start_date", date)
     .gte("end_date", date);
   if (termErr) throw termErr;
@@ -332,24 +332,35 @@ async function pushToUsers(
   eventType: string,
   extra: Record<string, string>,
 ): Promise<number> {
-  if (userIds.length === 0) return 0;
+  const uniqueUserIds = [...new Set(userIds.filter((id) => id.length > 0))];
+  if (uniqueUserIds.length === 0) return 0;
+
   const { data: tokens } = await admin
     .from("push_tokens")
     .select("user_id, token, platform")
-    .in("user_id", userIds)
+    .in("user_id", uniqueUserIds)
     .is("revoked_at", null);
-  if (!tokens || tokens.length === 0) return 0;
 
-  const results = await sendFcmToTokens({
-    tokens: tokens as Array<{ user_id: string; token: string; platform: string }>,
-    payload: {
-      title,
-      body,
-      data: { event: eventType, tab: "시간표", ...extra },
-    },
-  });
+  const activeTokens = (tokens ?? []) as Array<{
+    user_id: string;
+    token: string;
+    platform: string;
+  }>;
+  const usersWithTokens = new Set(activeTokens.map((t) => t.user_id));
+  const payloadData = { event: eventType, tab: "시간표", ...extra };
 
-  const logs = results.map((result) => ({
+  const results = activeTokens.length > 0
+    ? await sendFcmToTokens({
+      tokens: activeTokens,
+      payload: {
+        title,
+        body,
+        data: payloadData,
+      },
+    })
+    : [];
+
+  const fcmLogs = results.map((result) => ({
     requested_by: null,
     to_user_id: result.userId,
     channel: "push",
@@ -359,11 +370,29 @@ async function pushToUsers(
     event_type: eventType,
     title,
     body,
-    payload: { event: eventType, tab: "시간표", ...extra },
+    payload: payloadData,
   }));
-  const { error } = await admin.from("notification_log").insert(logs);
-  if (error) console.error("[nest-remind] log", error.message);
-  return results.filter((result) => result.ok).length;
+
+  const inboxOnlyUserIds = uniqueUserIds.filter((id) => !usersWithTokens.has(id));
+  const inboxOnlyLogs = inboxOnlyUserIds.map((userId) => ({
+    requested_by: null,
+    to_user_id: userId,
+    channel: "push",
+    status: "inbox_only",
+    provider_message_id: null,
+    error: null,
+    event_type: eventType,
+    title,
+    body,
+    payload: payloadData,
+  }));
+
+  const logs = [...fcmLogs, ...inboxOnlyLogs];
+  if (logs.length > 0) {
+    const { error } = await admin.from("notification_log").insert(logs);
+    if (error) console.error("[nest-remind] log", error.message);
+  }
+  return results.filter((result) => result.ok).length + inboxOnlyUserIds.length;
 }
 
 async function sendMorningDigest(
