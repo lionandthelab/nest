@@ -191,7 +191,7 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.widgetWithText(FilledButton, '아이 추가'));
+      await tester.tap(find.text('아이 추가').last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
