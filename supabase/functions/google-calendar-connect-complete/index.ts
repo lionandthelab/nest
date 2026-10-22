@@ -1,6 +1,16 @@
 import { corsHeaders } from "../_shared/cors.ts";
-import { calendarRedirectUri } from "../_shared/google_calendar.ts";
+import {
+  calendarFeedUrl,
+  calendarGoogleSubscribeUrl,
+  calendarRedirectUri,
+} from "../_shared/google_calendar.ts";
 import { createAdminClient, json, requireUser } from "../_shared/supabase.ts";
+
+function generateFeedToken(userId: string): string {
+  const random = crypto.randomUUID().replaceAll("-", "");
+  const prefix = userId.replaceAll("-", "").slice(0, 12);
+  return `${prefix}_${random}`;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -20,13 +30,58 @@ Deno.serve(async (req) => {
       redirect_mode?: string;
     };
 
-    if (!payload.homeschool_id || !payload.code) {
-      return json(400, { error: "homeschool_id and code are required" }, corsHeaders);
+    if (!payload.homeschool_id) {
+      return json(400, { error: "homeschool_id is required" }, corsHeaders);
+    }
+
+    if (!payload.code || payload.code === "instant_feed") {
+      const { data: existing } = await admin
+        .from("calendar_integrations")
+        .select("calendar_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const existingCalId = String(existing?.calendar_id || "");
+      const feedToken = existingCalId.startsWith("feed:")
+        ? existingCalId.slice(5)
+        : generateFeedToken(user.id);
+
+      const { error } = await admin.from("calendar_integrations").upsert(
+        {
+          user_id: user.id,
+          homeschool_id: payload.homeschool_id,
+          provider: "GOOGLE",
+          status: "CONNECTED",
+          google_email: user.email || null,
+          google_access_token: null,
+          google_refresh_token: null,
+          google_token_expires_at: null,
+          oauth_scope: "ical_feed",
+          calendar_id: `feed:${feedToken}`,
+          last_synced_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+      if (error) throw new Error(error.message);
+
+      return json(
+        200,
+        {
+          connected: true,
+          google_email: user.email || null,
+          feed_url: calendarFeedUrl(feedToken),
+          google_subscribe_url: calendarGoogleSubscribeUrl(feedToken),
+          has_refresh_token: true,
+        },
+        corsHeaders
+      );
     }
 
     const stored = await exchangeAndStore({
       admin,
       userId: user.id,
+      userEmail: user.email || null,
       homeschoolId: payload.homeschool_id,
       code: payload.code,
       redirectUri: calendarRedirectUri(payload.redirect_mode ?? "web"),
@@ -45,6 +100,7 @@ Deno.serve(async (req) => {
 export async function exchangeAndStore(args: {
   admin: ReturnType<typeof createAdminClient>;
   userId: string;
+  userEmail: string | null;
   homeschoolId: string;
   code: string;
   redirectUri: string;
@@ -78,19 +134,7 @@ export async function exchangeAndStore(args: {
   const expiresIn = Number(tokenJson.expires_in || 3600);
   if (!accessToken) throw new Error("access_token missing");
 
-  let email: string | null = null;
-  try {
-    const info = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (info.ok) {
-      const body = await info.json();
-      email = typeof body.email === "string" ? body.email : null;
-    }
-  } catch {
-    // email is optional
-  }
-
+  const email = args.userEmail;
   const { error } = await args.admin.from("calendar_integrations").upsert(
     {
       user_id: args.userId,
@@ -103,6 +147,7 @@ export async function exchangeAndStore(args: {
       google_token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
       oauth_scope: tokenJson.scope || "https://www.googleapis.com/auth/calendar.events",
       calendar_id: "primary",
+      last_synced_at: new Date().toISOString(),
     },
     { onConflict: "user_id" }
   );

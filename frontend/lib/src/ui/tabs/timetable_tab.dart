@@ -64,7 +64,9 @@ class _TimetableTabState extends State<TimetableTab> {
   String _controllerSignature = '';
   bool _isDraftDirty = false;
   bool _isApplyingDraft = false;
-  bool _paletteOpen = true;
+  // null 이면 데스크톱(>=1220px)에서는 열림, 모바일/태블릿에서는 접힘으로 시작해
+  // 작은 화면에서 팔레트가 시간표 격자를 화면 아래로 밀어내지 않게 한다.
+  bool? _paletteOpen;
 
   // Read-only view (teachers / non-admin): toggle between the schedule grid and
   // the "빈 강의실 찾기" picker.
@@ -118,18 +120,6 @@ class _TimetableTabState extends State<TimetableTab> {
     return ListView(
       children: [
         _buildClassContextCard(controller),
-        const SizedBox(height: 8),
-        CourseScheduleQuickBanner(
-          controller: controller,
-          onApplied: () {
-            if (!mounted) return;
-            setState(() {
-              _loadDraftFromController(controller);
-            });
-          },
-        ),
-        const SizedBox(height: 8),
-        _buildTimeSlotManagerBar(controller),
         const SizedBox(height: 8),
         _buildBoardCard(controller),
       ],
@@ -350,79 +340,6 @@ class _TimetableTabState extends State<TimetableTab> {
     );
   }
 
-  Widget _buildTimeSlotManagerBar(NestController controller) {
-    final slots = controller.timeSlots.toList()
-      ..sort((a, b) {
-        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-        if (day != 0) return day;
-        return a.startTime.compareTo(b.startTime);
-      });
-    final daySet = slots.map((s) => s.dayOfWeek).toSet();
-    final periodSet = slots.map((s) => '${s.startTime}-${s.endTime}').toSet();
-    final locked = controller.isBusy || controller.isSelectedTermReadOnly;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            Icon(Icons.grid_on_outlined, size: 20, color: NestColors.clay),
-            const SizedBox(width: 8),
-            Text(
-              '교시 설정',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(width: 8),
-            Chip(
-              label: Text('${daySet.length}요일 · ${periodSet.length}교시'),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            const Spacer(),
-            if (slots.isEmpty)
-              FilledButton.tonalIcon(
-                onPressed: locked
-                    ? null
-                    : () async {
-                        await _tryAction(
-                          () => controller.ensureDefaultTimeSlots(),
-                        );
-                        if (!mounted) return;
-                        _showMessage(controller.statusMessage);
-                        setState(() {});
-                      },
-                icon: const Icon(Icons.auto_fix_high, size: 16),
-                label: const Text('기본 교시(09~18시) 생성'),
-              ),
-            // 교시를 잘못 설정(예: 29교시)했을 때, 현재 상태에서 값을 추론하지 않고
-            // 깨끗한 기본값(평일 09:00~18:00 · 50분 교시 · 10분 쉬는시간)으로 편집기를 열어 재설정한다.
-            if (slots.isNotEmpty)
-              TextButton.icon(
-                onPressed: locked
-                    ? null
-                    : () => _openTimeSlotEditorDialog(
-                        controller,
-                        resetToDefaults: true,
-                      ),
-                icon: const Icon(Icons.restart_alt, size: 18),
-                label: const Text('초기화'),
-                style: TextButton.styleFrom(foregroundColor: NestColors.clay),
-              ),
-            TextButton.icon(
-              onPressed: locked
-                  ? null
-                  : () => _openTimeSlotEditorDialog(controller),
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('편집'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _openTimeSlotEditorDialog(
     NestController controller, {
     bool resetToDefaults = false,
@@ -521,6 +438,22 @@ class _TimetableTabState extends State<TimetableTab> {
 
               return NestSheet(
                 title: resetToDefaults ? '교시 설정 초기화' : '교시/요일 설정',
+                destructiveAction: TextButton.icon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () {
+                          setDialogState(() {
+                            dayStartCtrl.text = '09:00';
+                            dayEndCtrl.text = '18:00';
+                            durationCtrl.text = '50';
+                            breakCtrl.text = '10';
+                            selectedDays = <int>{1, 2, 3, 4, 5};
+                          });
+                        },
+                  icon: const Icon(Icons.restart_alt, size: 16),
+                  label: const Text('기본값 복원'),
+                  style: TextButton.styleFrom(foregroundColor: NestColors.clay),
+                ),
                 actions: [
                   OutlinedButton(
                     onPressed: () => Navigator.of(dialogContext).pop(),
@@ -725,9 +658,6 @@ class _TimetableTabState extends State<TimetableTab> {
     final classGroups = controller.classGroups.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     final selectedClassId = controller.selectedClassGroupId;
-    final selectedClass = classGroups
-        .where((row) => row.id == selectedClassId)
-        .firstOrNull;
 
     final sessionCount = _draftSessions.length;
     final teacherCount = _draftAssignments.values
@@ -736,65 +666,178 @@ class _TimetableTabState extends State<TimetableTab> {
         .toSet()
         .length;
 
+    final slots = controller.timeSlots;
+    final daySet = slots.map((s) => s.dayOfWeek).toSet();
+    final periodSet = slots.map((s) => '${s.startTime}-${s.endTime}').toSet();
+    final locked = controller.isBusy || controller.isSelectedTermReadOnly;
+    final compact = MediaQuery.sizeOf(context).width < 600;
+
+    final compactBtnStyle = ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+      iconSize: const WidgetStatePropertyAll(15),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.1),
+      ),
+    );
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compact ? 12 : 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Wrap(
-              spacing: 12,
-              runSpacing: 8,
+              spacing: 8,
+              runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text('시간표 관리', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  '시간표 관리',
+                  style: compact
+                      ? Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w800,
+                        )
+                      : Theme.of(context).textTheme.titleLarge,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: NestColors.roseMist.withValues(alpha: 0.75),
+                  ),
+                  child: Text(
+                    '수업 $sessionCount · 교사 $teacherCount',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: NestColors.deepWood,
+                    ),
+                  ),
+                ),
                 FilledButton.tonalIcon(
+                  style: compactBtnStyle,
+                  onPressed: locked
+                      ? null
+                      : () async {
+                          final added = await showCourseScheduleQuickSheet(
+                            context: context,
+                            controller: controller,
+                          );
+                          if (added == true && mounted) {
+                            setState(() {
+                              _loadDraftFromController(controller);
+                            });
+                          }
+                        },
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text('빠른 채우기'),
+                ),
+                if (slots.isEmpty)
+                  FilledButton.tonalIcon(
+                    style: compactBtnStyle,
+                    onPressed: locked
+                        ? null
+                        : () async {
+                            await _tryAction(
+                              () => controller.ensureDefaultTimeSlots(),
+                            );
+                            if (!mounted) return;
+                            _showMessage(controller.statusMessage);
+                            setState(() {});
+                          },
+                    icon: const Icon(Icons.auto_fix_high),
+                    label: const Text('기본 교시 생성'),
+                  )
+                else
+                  OutlinedButton.icon(
+                    style: compactBtnStyle,
+                    onPressed: locked
+                        ? null
+                        : () => _openTimeSlotEditorDialog(controller),
+                    icon: const Icon(Icons.schedule_outlined),
+                    label: Text(
+                      '교시 (${daySet.length}일·${periodSet.length}교시)',
+                    ),
+                  ),
+                OutlinedButton.icon(
+                  style: compactBtnStyle,
                   onPressed: controller.isBusy
                       ? null
                       : _openTimetableExportDialog,
-                  icon: const Icon(Icons.file_download_outlined, size: 18),
+                  icon: const Icon(Icons.file_download_outlined),
                   label: const Text('시간표 내보내기'),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              '반을 전환하면 해당 반 시간표를 바로 편집할 수 있습니다.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SelectFieldCard(
-              label: '편집 중인 반',
-              hintText: '반 선택',
-              icon: Icons.groups_2_outlined,
-              enabled: !controller.isBusy,
-              value: selectedClass?.name,
-              helpText: selectedClass == null
-                  ? '반을 선택하세요.'
-                  : '수업 $sessionCount개 · 배정 교사 $teacherCount명',
-              onTap: () => _openClassPicker(controller, classGroups),
-            ),
-            if (classGroups.isNotEmpty) ...[
-              const SizedBox(height: 10),
+            if (classGroups.isEmpty)
+              Text(
+                '등록된 반이 없습니다. 학기 설정에서 반을 먼저 추가하세요.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: NestColors.deepWood.withValues(alpha: 0.72),
+                ),
+              )
+            else
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: classGroups
-                    .take(8)
-                    .map(
-                      (group) => ChoiceChip(
-                        label: Text(group.name),
-                        selected: group.id == selectedClassId,
-                        onSelected: controller.isBusy
-                            ? null
-                            : (_) => _switchClassGroup(controller, group.id),
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ...classGroups.take(10).map((group) {
+                    final selected = group.id == selectedClassId;
+                    return ChoiceChip(
+                      label: Text(
+                        group.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                        ),
                       ),
-                    )
-                    .toList(),
+                      selected: selected,
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      onSelected: controller.isBusy
+                          ? null
+                          : (_) => _switchClassGroup(controller, group.id),
+                    );
+                  }),
+                  if (classGroups.length > 10)
+                    ActionChip(
+                      avatar: const Icon(Icons.search, size: 14),
+                      label: Text(
+                        '전체 ${classGroups.length}반',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onPressed: controller.isBusy
+                          ? null
+                          : () => _openClassPicker(controller, classGroups),
+                    ),
+                ],
               ),
-            ],
           ],
         ),
       ),
@@ -902,41 +945,60 @@ class _TimetableTabState extends State<TimetableTab> {
     // Per-class editing controls (undo/redo/commit/palette/exports) only make
     // sense in the editable build mode — both read-only modes hide them.
     final perClass = _viewMode == _TimetableViewMode.perClass;
+    final isWidePaletteDefault = MediaQuery.sizeOf(context).width >= 1220;
+    final paletteOpen = _paletteOpen ?? isWidePaletteDefault;
 
     final undoButton = IconButton(
-      icon: const Icon(Icons.undo),
+      icon: const Icon(Icons.undo, size: 18),
+      visualDensity: VisualDensity.compact,
       tooltip: '실행 취소 (Ctrl+Z)',
       onPressed: historyEnabled && _canUndo ? _undo : null,
     );
     final redoButton = IconButton(
-      icon: const Icon(Icons.redo),
+      icon: const Icon(Icons.redo, size: 18),
+      visualDensity: VisualDensity.compact,
       tooltip: '다시 실행 (Ctrl+Shift+Z)',
       onPressed: historyEnabled && _canRedo ? _redo : null,
     );
     final paletteButton = IconButton(
       icon: Icon(
-        _paletteOpen ? Icons.view_sidebar_outlined : Icons.view_sidebar,
+        paletteOpen ? Icons.view_sidebar_outlined : Icons.view_sidebar,
+        size: 18,
       ),
-      tooltip: _paletteOpen ? '팔레트 접기' : '팔레트 열기',
-      onPressed: () => setState(() => _paletteOpen = !_paletteOpen),
+      visualDensity: VisualDensity.compact,
+      tooltip: paletteOpen ? '팔레트 접기' : '팔레트 열기',
+      onPressed: () => setState(() => _paletteOpen = !paletteOpen),
+    );
+
+    final compactActionStyle = ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+      iconSize: const WidgetStatePropertyAll(15),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.1),
+      ),
     );
 
     final viewModeToggle = SegmentedButton<_TimetableViewMode>(
       segments: const [
         ButtonSegment(
           value: _TimetableViewMode.perClass,
-          label: Text('반 빌드'),
-          icon: Icon(Icons.dashboard_customize_outlined, size: 16),
+          label: Text('반 빌드', maxLines: 1, softWrap: false),
+          icon: Icon(Icons.dashboard_customize_outlined, size: 15),
         ),
         ButtonSegment(
           value: _TimetableViewMode.wholeSchool,
-          label: Text('전교 보기'),
-          icon: Icon(Icons.school_outlined, size: 16),
+          label: Text('전교 보기', maxLines: 1, softWrap: false),
+          icon: Icon(Icons.school_outlined, size: 15),
         ),
         ButtonSegment(
           value: _TimetableViewMode.emptyRoom,
           label: Text('빈 강의실', maxLines: 1, softWrap: false),
-          icon: Icon(Icons.meeting_room_outlined, size: 16),
+          icon: Icon(Icons.meeting_room_outlined, size: 15),
         ),
       ],
       selected: {_viewMode},
@@ -973,47 +1035,47 @@ class _TimetableTabState extends State<TimetableTab> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      '시간표 메인 보드',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: viewModeToggle,
                     ),
                   ),
-                  // Per-class-only controls hidden in the read-only modes.
                   if (perClass) ...[undoButton, redoButton, paletteButton],
                 ],
               ),
-              const SizedBox(height: 8),
-              viewModeToggle,
               if (wholeSchool) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 axisToggle,
               ] else if (perClass) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     ElevatedButton.icon(
+                      style: compactActionStyle,
                       onPressed: canCommit ? _commitDraftChanges : null,
-                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      icon: const Icon(Icons.check_circle_outline),
                       label: const Text('수정 확정'),
                     ),
                     FilledButton.tonalIcon(
-                      onPressed: controller.isBusy || _isApplyingDraft
-                          ? null
-                          : () => _openRoomUtilizationExportDialog(controller),
-                      icon: const Icon(Icons.meeting_room_outlined, size: 18),
-                      label: const Text('교실 상황표 내보내기'),
-                    ),
-                    FilledButton.tonalIcon(
+                      style: compactActionStyle,
                       onPressed: controller.isBusy
                           ? null
                           : () => showFamilyEnrollmentDialog(
                               context,
                               widget.controller,
                             ),
-                      icon: const Icon(Icons.family_restroom, size: 18),
+                      icon: const Icon(Icons.family_restroom),
                       label: const Text('가정·학생 배정'),
+                    ),
+                    FilledButton.tonalIcon(
+                      style: compactActionStyle,
+                      onPressed: controller.isBusy || _isApplyingDraft
+                          ? null
+                          : () => _openRoomUtilizationExportDialog(controller),
+                      icon: const Icon(Icons.meeting_room_outlined),
+                      label: const Text('교실 상황표'),
                     ),
                   ],
                 ),
@@ -1110,7 +1172,9 @@ class _TimetableTabState extends State<TimetableTab> {
           return board;
         }
 
-        final showSidePalette = _paletteOpen && constraints.maxWidth >= 1220;
+        final isWidePalette = constraints.maxWidth >= 1220;
+        final paletteOpen = _paletteOpen ?? isWidePalette;
+        final showSidePalette = paletteOpen && isWidePalette;
 
         final Widget editableArea;
         if (showSidePalette) {
@@ -1132,7 +1196,7 @@ class _TimetableTabState extends State<TimetableTab> {
         } else {
           editableArea = Column(
             children: [
-              if (_paletteOpen) ...[
+              if (paletteOpen) ...[
                 _buildPalettePanel(controller),
                 const SizedBox(height: 12),
               ],
@@ -1875,144 +1939,129 @@ class _TimetableTabState extends State<TimetableTab> {
         : null;
     final roomValue = rooms.contains(_composeRoom) ? _composeRoom : null;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.tonalIcon(
-              onPressed: locked
-                  ? null
-                  : () async {
-                      final added = await showCourseScheduleQuickSheet(
-                        context: context,
-                        controller: controller,
-                      );
-                      if (added == true && mounted) {
-                        setState(() {
-                          _loadDraftFromController(controller);
-                        });
-                      }
-                    },
-              icon: const Icon(Icons.auto_awesome, size: 18),
-              label: const Text('템플릿·문장으로 한 번에 추가'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(
-                Icons.dashboard_customize_outlined,
-                size: 20,
-                color: NestColors.dustyRose,
-              ),
-              const SizedBox(width: 8),
-              Text('수업 카드 조립', style: Theme.of(context).textTheme.titleSmall),
-            ],
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String?>(
-            initialValue: courseValue,
-            isDense: true,
-            decoration: const InputDecoration(labelText: '과목', isDense: true),
-            items: [
-              const DropdownMenuItem<String?>(
-                value: null,
-                child: Text('과목 선택'),
-              ),
-              ...courses.map(
-                (course) => DropdownMenuItem<String?>(
-                  value: course.id,
-                  child: Text(course.name),
-                ),
-              ),
-            ],
-            onChanged: locked
-                ? null
-                : (value) {
-                    setState(() {
-                      _composeCourseId = value;
-                      _composedCard = null;
-                    });
-                  },
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String?>(
-            initialValue: teacherValue,
-            isDense: true,
-            decoration: const InputDecoration(
-              labelText: '주강사 (선택)',
+    return ExpansionTile(
+      leading: Icon(
+        Icons.dashboard_customize_outlined,
+        size: 20,
+        color: NestColors.dustyRose,
+      ),
+      title: Text('수업 카드 조립', style: Theme.of(context).textTheme.titleSmall),
+      subtitle: const Text('과목·강사·장소를 묶어 한 번에 드래그'),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+      childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<String?>(
+              initialValue: courseValue,
               isDense: true,
-            ),
-            items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('미지정')),
-              ...teachers.map(
-                (teacher) => DropdownMenuItem<String?>(
-                  value: teacher.id,
-                  child: Text(teacher.displayName),
+              decoration: const InputDecoration(labelText: '과목', isDense: true),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('과목 선택'),
                 ),
-              ),
-            ],
-            onChanged: locked
-                ? null
-                : (value) {
-                    setState(() {
-                      _composeTeacherId = value;
-                      _composedCard = null;
-                    });
-                  },
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String?>(
-            initialValue: roomValue,
-            isDense: true,
-            decoration: const InputDecoration(
-              labelText: '장소 (선택)',
-              isDense: true,
-            ),
-            items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('미지정')),
-              ...rooms.map(
-                (room) =>
-                    DropdownMenuItem<String?>(value: room, child: Text(room)),
-              ),
-            ],
-            onChanged: locked
-                ? null
-                : (value) {
-                    setState(() {
-                      _composeRoom = value;
-                      _composedCard = null;
-                    });
-                  },
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-              onPressed: (locked || courseValue == null)
+                ...courses.map(
+                  (course) => DropdownMenuItem<String?>(
+                    value: course.id,
+                    child: Text(course.name),
+                  ),
+                ),
+              ],
+              onChanged: locked
                   ? null
-                  : () {
+                  : (value) {
                       setState(() {
-                        _composedCard = ComposedSessionPayload(
-                          courseId: courseValue,
-                          teacherProfileId: teacherValue,
-                          location: roomValue,
-                        );
+                        _composeCourseId = value;
+                        _composedCard = null;
                       });
                     },
-              icon: const Icon(Icons.add_box_outlined, size: 18),
-              label: const Text('카드 만들기'),
             ),
-          ),
-          if (_composedCard != null) ...[
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String?>(
+              initialValue: teacherValue,
+              isDense: true,
+              decoration: const InputDecoration(
+                labelText: '주강사 (선택)',
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('미지정'),
+                ),
+                ...teachers.map(
+                  (teacher) => DropdownMenuItem<String?>(
+                    value: teacher.id,
+                    child: Text(teacher.displayName),
+                  ),
+                ),
+              ],
+              onChanged: locked
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _composeTeacherId = value;
+                        _composedCard = null;
+                      });
+                    },
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String?>(
+              initialValue: roomValue,
+              isDense: true,
+              decoration: const InputDecoration(
+                labelText: '장소 (선택)',
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('미지정'),
+                ),
+                ...rooms.map(
+                  (room) => DropdownMenuItem<String?>(
+                    value: room,
+                    child: Text(room),
+                  ),
+                ),
+              ],
+              onChanged: locked
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _composeRoom = value;
+                        _composedCard = null;
+                      });
+                    },
+            ),
             const SizedBox(height: 10),
-            _buildComposedCardChip(controller, _composedCard!, locked),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: (locked || courseValue == null)
+                    ? null
+                    : () {
+                        setState(() {
+                          _composedCard = ComposedSessionPayload(
+                            courseId: courseValue,
+                            teacherProfileId: teacherValue,
+                            location: roomValue,
+                          );
+                        });
+                      },
+                icon: const Icon(Icons.add_box_outlined, size: 18),
+                label: const Text('카드 만들기'),
+              ),
+            ),
+            if (_composedCard != null) ...[
+              const SizedBox(height: 10),
+              _buildComposedCardChip(controller, _composedCard!, locked),
+            ],
           ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -2846,18 +2895,24 @@ class _TimetableTabState extends State<TimetableTab> {
       builder: (context, constraints) {
         const gap = 6.0;
         const boardPadding = 10.0;
-        final periodWidth = fitToWidth ? 40.0 : 108.0;
-        final minDayColumnWidth = fitToWidth ? 44.0 : 188.0;
-        final maxDayColumnWidth = fitToWidth ? 200.0 : 320.0;
-        final slotMinHeight = fitToWidth ? 52.0 : 156.0;
-
+        const borderWidth = 2.0; // Border.all(width: 1) 좌우 합계
         final availableWidth = constraints.maxWidth;
-        // 보드 Container가 좌우로 boardPadding을 먹으므로, 실제 열이 놓이는
-        // 내부 폭 기준으로 계산해야 fit 모드에서 가로 오버플로가 나지 않는다.
-        final innerWidth = (availableWidth - boardPadding * 2).clamp(
-          0.0,
-          double.infinity,
-        );
+        final isNarrowMobile = availableWidth < 600;
+        final periodWidth = fitToWidth
+            ? 40.0
+            : (isNarrowMobile ? 74.0 : 108.0);
+        final minDayColumnWidth = fitToWidth
+            ? 44.0
+            : (isNarrowMobile ? 140.0 : 188.0);
+        final maxDayColumnWidth = fitToWidth ? 200.0 : 320.0;
+        final slotMinHeight = fitToWidth
+            ? 52.0
+            : (isNarrowMobile ? 128.0 : 156.0);
+
+        // 보드 Container가 좌우로 boardPadding + 테두리(2px)를 먹으므로, 실제 열이 놓이는
+        // 내부 폭 기준으로 계산해야 가로 오버플로가 나지 않는다.
+        final innerWidth = (availableWidth - boardPadding * 2 - borderWidth)
+            .clamp(0.0, double.infinity);
         final usable = (innerWidth - periodWidth - (dayOrder.length + 1) * gap)
             .clamp(0.0, double.infinity);
 
@@ -2878,7 +2933,7 @@ class _TimetableTabState extends State<TimetableTab> {
         // 0.5px 여유로 부동소수 오차에 의한 불필요한 스크롤 전환을 막는다.
         final shouldScroll = gridWidth > innerWidth + 0.5;
         final renderWidth = shouldScroll
-            ? gridWidth + (boardPadding * 2)
+            ? gridWidth + (boardPadding * 2) + borderWidth
             : availableWidth;
 
         Widget grid = Container(

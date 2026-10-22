@@ -1200,6 +1200,9 @@ class CalendarIntegration {
 
   bool get isConnected => status == 'CONNECTED';
 
+  String? get feedToken =>
+      calendarId.startsWith('feed:') ? calendarId.substring(5) : null;
+
   factory CalendarIntegration.fromMap(Map<String, dynamic> map) {
     return CalendarIntegration(
       id: (map['id'] as String?) ?? '',

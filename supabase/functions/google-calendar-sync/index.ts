@@ -1,5 +1,9 @@
 import { corsHeaders } from "../_shared/cors.ts";
-import { refreshCalendarToken } from "../_shared/google_calendar.ts";
+import {
+  calendarFeedUrl,
+  calendarGoogleSubscribeUrl,
+  refreshCalendarToken,
+} from "../_shared/google_calendar.ts";
 import { createAdminClient, json, requireUser } from "../_shared/supabase.ts";
 
 type PersonalRow = {
@@ -22,6 +26,12 @@ type AcademicRow = {
   end_time: string | null;
 };
 
+function generateFeedToken(userId: string): string {
+  const random = crypto.randomUUID().replaceAll("-", "");
+  const prefix = userId.replaceAll("-", "").slice(0, 12);
+  return `${prefix}_${random}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -41,6 +51,27 @@ Deno.serve(async (req) => {
     };
 
     if (payload.action === "disconnect") {
+      const { data: existing } = await admin
+        .from("calendar_integrations")
+        .select("calendar_id, google_refresh_token, google_access_token")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const oldToken =
+        (existing?.google_refresh_token as string | null) ||
+        (existing?.google_access_token as string | null);
+      if (oldToken && !String(existing?.calendar_id || "").startsWith("feed:")) {
+        try {
+          await fetch("https://oauth2.googleapis.com/revoke", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ token: oldToken }),
+          });
+        } catch (_) {
+          // best-effort
+        }
+      }
+
       await admin
         .from("calendar_integrations")
         .delete()
@@ -48,14 +79,77 @@ Deno.serve(async (req) => {
       return json(200, { disconnected: true }, corsHeaders);
     }
 
-    if (!payload.homeschool_id || !payload.child_id) {
-      return json(400, { error: "homeschool_id and child_id are required" }, corsHeaders);
+    if (payload.action === "connect") {
+      if (!payload.homeschool_id) {
+        return json(400, { error: "homeschool_id is required" }, corsHeaders);
+      }
+
+      const { data: existing } = await admin
+        .from("calendar_integrations")
+        .select("calendar_id, google_refresh_token, google_access_token")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const oldToken =
+        (existing?.google_refresh_token as string | null) ||
+        (existing?.google_access_token as string | null);
+      if (oldToken && !String(existing?.calendar_id || "").startsWith("feed:")) {
+        try {
+          await fetch("https://oauth2.googleapis.com/revoke", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ token: oldToken }),
+          });
+        } catch (_) {
+          // best-effort
+        }
+      }
+
+      const existingCalId = String(existing?.calendar_id || "");
+      const feedToken = existingCalId.startsWith("feed:")
+        ? existingCalId.slice(5)
+        : generateFeedToken(user.id);
+
+      const nowIso = new Date().toISOString();
+      const { error: upsertErr } = await admin.from("calendar_integrations").upsert(
+        {
+          user_id: user.id,
+          homeschool_id: payload.homeschool_id,
+          provider: "GOOGLE",
+          status: "CONNECTED",
+          google_email: user.email || null,
+          google_access_token: null,
+          google_refresh_token: null,
+          google_token_expires_at: null,
+          oauth_scope: "ical_feed",
+          calendar_id: `feed:${feedToken}`,
+          last_synced_at: nowIso,
+        },
+        { onConflict: "user_id" }
+      );
+
+      if (upsertErr) {
+        return json(400, { error: upsertErr.message }, corsHeaders);
+      }
+
+      return json(
+        200,
+        {
+          connected: true,
+          google_email: user.email || null,
+          calendar_id: `feed:${feedToken}`,
+          feed_url: calendarFeedUrl(feedToken),
+          google_subscribe_url: calendarGoogleSubscribeUrl(feedToken),
+          last_synced_at: nowIso,
+        },
+        corsHeaders
+      );
     }
 
     const { data: integration, error: integErr } = await admin
       .from("calendar_integrations")
       .select(
-        "id, user_id, google_access_token, google_refresh_token, google_token_expires_at, calendar_id"
+        "id, user_id, homeschool_id, google_access_token, google_refresh_token, google_token_expires_at, calendar_id"
       )
       .eq("user_id", user.id)
       .eq("status", "CONNECTED")
@@ -63,6 +157,57 @@ Deno.serve(async (req) => {
 
     if (integErr || !integration) {
       return json(400, { error: "Google 캘린더가 연결되어 있지 않습니다." }, corsHeaders);
+    }
+
+    const homeschoolId =
+      payload.homeschool_id || (integration.homeschool_id as string | null) || "";
+    if (!homeschoolId) {
+      return json(400, { error: "홈스쿨 정보가 필요합니다." }, corsHeaders);
+    }
+
+    const calIdRaw = String(integration.calendar_id || "primary");
+    const isFeedMode =
+      calIdRaw.startsWith("feed:") || !integration.google_refresh_token;
+
+    if (isFeedMode) {
+      const feedToken = calIdRaw.startsWith("feed:")
+        ? calIdRaw.slice(5)
+        : generateFeedToken(user.id);
+      const nextCalId = `feed:${feedToken}`;
+      const nowIso = new Date().toISOString();
+
+      await admin
+        .from("calendar_integrations")
+        .update({
+          homeschool_id: homeschoolId,
+          calendar_id: nextCalId,
+          last_synced_at: nowIso,
+        })
+        .eq("id", integration.id);
+
+      const [{ count: academicCount }, { count: personalCount }] = await Promise.all([
+        admin
+          .from("academic_events")
+          .select("id", { count: "exact", head: true })
+          .eq("homeschool_id", homeschoolId),
+        admin
+          .from("personal_events")
+          .select("id", { count: "exact", head: true })
+          .eq("homeschool_id", homeschoolId)
+          .eq("owner_user_id", user.id),
+      ]);
+
+      return json(
+        200,
+        {
+          pushed: (academicCount || 0) + (personalCount || 0),
+          pulled: 0,
+          feed_url: calendarFeedUrl(feedToken),
+          google_subscribe_url: calendarGoogleSubscribeUrl(feedToken),
+          last_synced_at: nowIso,
+        },
+        corsHeaders
+      );
     }
 
     const access = await refreshCalendarToken(admin, integration);
@@ -76,18 +221,20 @@ Deno.serve(async (req) => {
       access,
       calendarId,
       userId: user.id,
-      homeschoolId: payload.homeschool_id,
-      childId: payload.child_id,
+      homeschoolId,
+      childId: payload.child_id || null,
     });
 
-    const pulled = await pullGoogleEvents({
-      admin,
-      access,
-      calendarId,
-      userId: user.id,
-      homeschoolId: payload.homeschool_id,
-      childId: payload.child_id,
-    });
+    const pulled = payload.child_id
+      ? await pullGoogleEvents({
+          admin,
+          access,
+          calendarId,
+          userId: user.id,
+          homeschoolId,
+          childId: payload.child_id,
+        })
+      : 0;
 
     await admin
       .from("calendar_integrations")
@@ -110,14 +257,20 @@ async function pushNestEvents(args: {
   calendarId: string;
   userId: string;
   homeschoolId: string;
-  childId: string;
+  childId: string | null;
 }) {
-  const { data: personals } = await args.admin
+  let personalsQuery = args.admin
     .from("personal_events")
     .select("id, title, notes, starts_at, ends_at, source, google_event_id")
-    .eq("child_id", args.childId)
+    .eq("homeschool_id", args.homeschoolId)
     .eq("owner_user_id", args.userId)
     .eq("source", "NEST");
+
+  if (args.childId) {
+    personalsQuery = personalsQuery.eq("child_id", args.childId);
+  }
+
+  const { data: personals } = await personalsQuery;
 
   const { data: academics } = await args.admin
     .from("academic_events")
@@ -163,9 +316,13 @@ async function pushNestEvents(args: {
       : {
           summary: `[둥지] ${row.title}`,
           description: row.description || "Nest 학사일정",
-          start: { dateTime: `${startDate}T${normalizeClock(row.start_time)}` },
+          start: {
+            dateTime: `${startDate}T${normalizeClock(row.start_time)}+09:00`,
+            timeZone: "Asia/Seoul",
+          },
           end: {
-            dateTime: `${endDate}T${normalizeClock(row.end_time || row.start_time)}`,
+            dateTime: `${endDate}T${normalizeClock(row.end_time || row.start_time)}+09:00`,
+            timeZone: "Asia/Seoul",
           },
         };
     await upsertGoogleEvent({

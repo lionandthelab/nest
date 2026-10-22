@@ -48,7 +48,7 @@ supabase functions deploy nest-remind --project-ref "$PROJECT_REF"
 supabase functions deploy google-calendar-connect-start --project-ref "$PROJECT_REF"
 supabase functions deploy google-calendar-connect-complete --project-ref "$PROJECT_REF"
 supabase functions deploy google-calendar-sync --project-ref "$PROJECT_REF"
-supabase functions deploy google-calendar-oauth --project-ref "$PROJECT_REF"
+supabase functions deploy google-calendar-oauth --project-ref "$PROJECT_REF" --no-verify-jwt
 supabase functions deploy naver-oauth-bridge --project-ref "$PROJECT_REF" --no-verify-jwt
 
 echo "Done."

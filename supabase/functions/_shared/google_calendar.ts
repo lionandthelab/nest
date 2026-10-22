@@ -3,11 +3,14 @@ import { createAdminClient } from "./supabase.ts";
 export type CalendarRow = {
   id: string;
   user_id: string;
+  homeschool_id?: string | null;
   google_access_token: string | null;
   google_refresh_token: string | null;
   google_token_expires_at: string | null;
   calendar_id: string | null;
 };
+
+export const CALENDAR_APP_INTENT = "calendar_app";
 
 export async function refreshCalendarToken(
   admin: ReturnType<typeof createAdminClient>,
@@ -52,14 +55,33 @@ export async function refreshCalendarToken(
   return access;
 }
 
-export function calendarRedirectUri(mode: string | undefined) {
-  if (mode === "web") {
-    return Deno.env.get("GOOGLE_REDIRECT_URI") || "";
-  }
-  return (
-    Deno.env.get("GOOGLE_CALENDAR_REDIRECT_URI") ||
-    `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-calendar-oauth`
-  );
+/// Google Cloud 콘솔에 등록된 단일 리디렉션 URI(callback.html)를 웹/앱 공통으로 사용한다.
+export function calendarRedirectUri(_mode?: string) {
+  return Deno.env.get("GOOGLE_REDIRECT_URI") || "";
+}
+
+export function calendarOauthFunctionUrl() {
+  return `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-calendar-oauth`;
+}
+
+export function calendarFeedUrl(token: string) {
+  return `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-calendar-oauth?token=${encodeURIComponent(token)}`;
+}
+
+export function calendarGoogleSubscribeUrl(token: string) {
+  const httpsUrl = calendarFeedUrl(token);
+  const webcalUrl = httpsUrl.replace(/^https?:\/\//i, "webcal://");
+  return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`;
+}
+
+export function calendarDonePageUrl(ok: boolean, reason?: string) {
+  const base = Deno.env.get("NEST_WEB_ORIGIN") || "https://nestapp.life";
+  const params = new URLSearchParams({
+    status: ok ? "ok" : "error",
+    target: "calendar",
+  });
+  if (reason) params.set("reason", reason.slice(0, 200));
+  return `${base}/oauth/google/connected.html?${params.toString()}`;
 }
 
 export function encodeState(payload: Record<string, unknown>) {

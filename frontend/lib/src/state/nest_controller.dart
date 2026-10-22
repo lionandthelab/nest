@@ -2613,17 +2613,31 @@ class NestController extends ChangeNotifier {
     const timeout = Duration(minutes: 3);
     const interval = Duration(milliseconds: 700);
     final deadline = DateTime.now().add(timeout);
+    var ticks = 0;
 
     while (DateTime.now().isBefore(deadline)) {
       final result = await _oauthBridge.consumeResult();
       if (result != null) {
         return result;
       }
+      ticks += 1;
+      if (ticks % 3 == 0) {
+        await loadDriveIntegration();
+        if (driveIntegration?.isConnected == true) {
+          return <String, dynamic>{'success': true};
+        }
+      }
       // If the admin closed/abandoned the popup, stop waiting the full timeout.
       // callback.html writes its result ~1s before it self-closes, so one final
       // read still catches a just-completed flow.
       if (_oauthBridge.isPopupClosed) {
-        return await _oauthBridge.consumeResult();
+        final finalResult = await _oauthBridge.consumeResult();
+        if (finalResult != null) return finalResult;
+        await loadDriveIntegration();
+        if (driveIntegration?.isConnected == true) {
+          return <String, dynamic>{'success': true};
+        }
+        return null;
       }
       await Future<void>.delayed(interval);
     }
@@ -4136,6 +4150,19 @@ class NestController extends ChangeNotifier {
     _notifyIfIdle();
   }
 
+  String? get calendarFeedUrl {
+    final token = calendarIntegration?.feedToken;
+    if (token == null || token.isEmpty) return null;
+    return '${AppConfig.supabaseUrl}/functions/v1/google-calendar-oauth?token=${Uri.encodeComponent(token)}';
+  }
+
+  String? get calendarGoogleSubscribeUrl {
+    final httpsUrl = calendarFeedUrl;
+    if (httpsUrl == null || httpsUrl.isEmpty) return null;
+    final webcalUrl = httpsUrl.replaceFirst(RegExp(r'^https?://'), 'webcal://');
+    return 'https://calendar.google.com/calendar/r?cid=${Uri.encodeComponent(webcalUrl)}';
+  }
+
   Future<String?> connectGoogleCalendar() async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null || homeschoolId.isEmpty) {
@@ -4147,84 +4174,32 @@ class NestController extends ChangeNotifier {
     }
 
     try {
-      if (_oauthBridge.supported) {
-        await _oauthBridge.stashContext(
+      await _runBusy('Google 캘린더를 연결하는 중...', () async {
+        await _repository.connectGoogleCalendarInstant(
           homeschoolId: homeschoolId,
-          rootFolderId: '',
-          folderPolicy: 'CALENDAR',
-          supabaseUrl: AppConfig.supabaseUrl,
-          supabaseAnonKey: AppConfig.supabaseAnonKey,
-          accessToken: accessToken,
-          intent: 'calendar',
         );
-        final authUrl = await _repository.calendarConnectStart(
-          homeschoolId: homeschoolId,
-          redirectMode: 'web',
-        );
-        if (authUrl == null || authUrl.isEmpty) {
-          return 'Google 인증 주소를 받지 못했습니다.';
-        }
-        await _oauthBridge.openPopup(authUrl);
-        final result = await _pollOauthResult();
-        if (result == null || result['success'] != true) {
-          final error = result?['error'];
-          return error is String && error.isNotEmpty
-              ? 'Google 캘린더 연결 실패: $error'
-              : 'Google 캘린더 연결이 끝나지 않았습니다.';
-        }
         await loadCalendarIntegration();
-        return null;
-      }
-
-      final authUrl = await _repository.calendarConnectStart(
-        homeschoolId: homeschoolId,
-        redirectMode: 'app',
-      );
-      if (authUrl == null || authUrl.isEmpty) {
-        return 'Google 인증 주소를 받지 못했습니다.';
-      }
-      final launched = await launchUrl(
-        Uri.parse(authUrl),
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched) {
-        return '브라우저를 열 수 없습니다.';
-      }
-      await _pollCalendarConnected();
-      return calendarIntegration?.isConnected == true
-          ? null
-          : '브라우저에서 Google 로그인을 마친 뒤, 여기서 다시 새로고침해 주세요.';
+        _setStatus('Google 캘린더를 연결했습니다.');
+      });
+      return null;
     } catch (error) {
       return error.toString().replaceFirst('Exception: ', '');
-    } finally {
-      await _oauthBridge.clearContext();
     }
   }
 
-  Future<void> _pollCalendarConnected() async {
-    const timeout = Duration(minutes: 3);
-    const interval = Duration(seconds: 2);
-    final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(interval);
-      await loadCalendarIntegration();
-      if (calendarIntegration?.isConnected == true) {
-        return;
-      }
-    }
-  }
-
-  Future<String?> syncGoogleCalendar({required String childId}) async {
+  Future<String?> syncGoogleCalendar({String? childId}) async {
     final homeschoolId = selectedHomeschoolId;
     if (homeschoolId == null) return '홈스쿨을 먼저 선택하세요.';
     if (calendarIntegration?.isConnected != true) {
       return '먼저 Google 캘린더를 연결하세요.';
     }
+    final effectiveChildId =
+        childId ?? activeStudentChildId ?? myChildren.firstOrNull?.id;
     try {
       await _runBusy('캘린더를 맞추는 중...', () async {
         await _repository.syncGoogleCalendar(
           homeschoolId: homeschoolId,
-          childId: childId,
+          childId: effectiveChildId,
         );
         await Future.wait([loadPersonalEvents(), loadCalendarIntegration()]);
         _setStatus('Google 캘린더와 맞췄습니다.');

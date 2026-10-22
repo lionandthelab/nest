@@ -65,6 +65,13 @@
       // 무엇을 다시 해야 하는지로만 바꿔 보여 준다 — 내부 코드를 그대로
       // 노출해 봐야 도움이 되지 않는다.
       var params = new URLSearchParams(location.search);
+      var isCalendar = params.get('target') === 'calendar';
+      if (isCalendar) {
+        document.title = 'Nest · Google 캘린더 연결';
+        document.getElementById('title').textContent = 'Google 캘린더가 연결되었습니다';
+        document.querySelector('.hint').textContent =
+          '학사일정·시간표·개인 일정이 캘린더와 연동됩니다.';
+      }
       if (params.get('status') === 'error') {
         var reason = params.get('reason') || '';
         document.getElementById('mark').className = 'mark bad';
@@ -78,6 +85,9 @@
               : '앱으로 돌아가 다시 연결해 주세요.';
         document.querySelector('.hint').textContent = '';
       }
+      setTimeout(function () {
+        try { window.close(); } catch (_) {}
+      }, 1500);
     </script>
   </body>
 </html>

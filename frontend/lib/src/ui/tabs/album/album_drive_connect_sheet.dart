@@ -148,6 +148,10 @@ class _DriveConnectSheetState extends State<_DriveConnectSheet> {
     ],
     _Step.connecting => const [],
     _Step.done => [
+      OutlinedButton(
+        onPressed: _connect,
+        child: const Text('계정 다시 연결'),
+      ),
       FilledButton(
         onPressed: () => Navigator.of(context).pop(true),
         child: const Text('완료'),

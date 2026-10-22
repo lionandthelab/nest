@@ -8,6 +8,7 @@ import 'package:nest_frontend/src/services/nest_repository.dart';
 import 'package:nest_frontend/src/state/nest_controller.dart';
 import 'package:nest_frontend/src/ui/nest_theme.dart';
 import 'package:nest_frontend/src/ui/tabs/family_admin_tab.dart';
+import 'package:nest_frontend/src/ui/tabs/timetable_tab.dart';
 import 'package:nest_frontend/src/ui/widgets/nest_sheet.dart';
 import 'package:nest_frontend/src/ui/widgets/term_navigator_bar.dart';
 
@@ -228,5 +229,46 @@ void main() {
     expect(find.text('학기 이름'), findsOneWidget);
     expect(find.text('만들기'), findsOneWidget);
     expect(tester.getRect(find.text('만들기')).bottom, lessThanOrEqualTo(844));
+  });
+
+  testWidgets('시간표 설정 화면이 360폭 모바일에서 단순화된 상단 바와 함께 넘침 없이 그려진다', (tester) async {
+    final controller = _adminController();
+    controller.selectedClassGroupId = 'g-1';
+    controller.timeSlots = [
+      TimeSlot.fromMap({
+        'id': 'ts-1',
+        'term_id': 't-1',
+        'day_of_week': 1,
+        'start_time': '09:00:00',
+        'end_time': '09:50:00',
+      }),
+    ];
+
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: NestTheme.light(),
+        locale: const Locale('ko'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ko'), Locale('en')],
+        home: Scaffold(body: TimetableTab(controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('시간표 관리'), findsOneWidget);
+    expect(find.text('빠른 채우기'), findsOneWidget);
+    expect(find.text('시간표 내보내기'), findsOneWidget);
+    expect(find.text('수정 확정'), findsOneWidget);
+    // 모바일에서는 팔레트가 기본 접힘 상태여서 시간표 격자가 바로 보인다.
+    expect(find.text('과목 팔레트'), findsNothing);
   });
 }

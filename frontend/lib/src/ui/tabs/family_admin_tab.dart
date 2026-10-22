@@ -165,6 +165,16 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     );
   }
 
+  EdgeInsets _cardPadding(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    return EdgeInsets.all(compact ? 12 : 16);
+  }
+
+  double _entityTileWidth(BuildContext context, [double wideWidth = 290]) {
+    final width = MediaQuery.sizeOf(context).width;
+    return width < 640 ? double.infinity : wideWidth;
+  }
+
   Widget _buildTermSetupHeaderCard(NestController controller) {
     final familyDone =
         controller.families.isNotEmpty && controller.children.isNotEmpty;
@@ -186,156 +196,242 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         .toSet()
         .length;
 
-    Widget stepChip({
-      required int order,
-      required String title,
-      required bool done,
-      required String key,
-    }) {
-      final selected = _setupUnit == key;
-      return ChoiceChip(
-        label: Text('$order. $title'),
-        selected: selected,
-        onSelected: controller.isBusy
-            ? null
-            : (_) {
-                setState(() {
-                  _setupUnit = key;
-                });
-              },
-        avatar: done
-            ? const Icon(Icons.check_circle, size: 16)
-            : Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                size: 16,
-              ),
-      );
-    }
+    final stats = [
+      _SetupStat(
+        title: '가정',
+        value: controller.families.length,
+        unit: '가정',
+        subtitle: '운영 중인 가정',
+        icon: Icons.home_work_outlined,
+        accent: const Color(0xFFE8A87C),
+      ),
+      _SetupStat(
+        title: '아이',
+        value: controller.children.length,
+        unit: '명',
+        subtitle: '전체 아동',
+        icon: Icons.child_friendly_outlined,
+        accent: const Color(0xFF7BC8A4),
+      ),
+      _SetupStat(
+        title: '학부모',
+        value: guardianCount,
+        unit: '명',
+        subtitle: '연결된 보호자',
+        icon: Icons.family_restroom_outlined,
+        accent: const Color(0xFF85B8E0),
+      ),
+      _SetupStat(
+        title: '선생님',
+        value: controller.teacherProfiles.length,
+        unit: '명',
+        subtitle: '배정 가능한 교사',
+        icon: Icons.school_outlined,
+        accent: const Color(0xFFC49BD6),
+      ),
+      _SetupStat(
+        title: '반',
+        value: controller.classGroups.length,
+        unit: '반',
+        subtitle: '운영 클래스',
+        icon: Icons.groups_2_outlined,
+        accent: const Color(0xFFE8C170),
+      ),
+      _SetupStat(
+        title: '과목',
+        value: controller.courses.length,
+        unit: '개',
+        subtitle: '등록 과목',
+        icon: Icons.menu_book_outlined,
+        accent: const Color(0xFF6EC5C5),
+      ),
+      _SetupStat(
+        title: '교실',
+        value: controller.classrooms.length,
+        unit: '개',
+        subtitle: '사용 교실',
+        icon: Icons.meeting_room_outlined,
+        accent: const Color(0xFFE09090),
+      ),
+    ];
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('학기 설정', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              '가정, 선생님, 반, 과목, 교실을 단위별로 설정한 뒤 시간표 탭에서 배치하세요.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 600;
+
+        Widget stepChip({
+          required int order,
+          required String title,
+          required bool done,
+          required String key,
+        }) {
+          final selected = _setupUnit == key;
+          return ChoiceChip(
+            label: Text(
+              '$order. $title',
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                fontSize: compact ? 12 : 13,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
-            _buildSetupSummaryGrid(
-              stats: [
-                _SetupStat(
-                  title: '가정',
-                  value: controller.families.length,
-                  unit: '가정',
-                  subtitle: '운영 중인 가정',
-                  icon: Icons.home_work_outlined,
-                  accent: const Color(0xFFE8A87C),
-                ),
-                _SetupStat(
-                  title: '아이',
-                  value: controller.children.length,
-                  unit: '명',
-                  subtitle: '전체 아동',
-                  icon: Icons.child_friendly_outlined,
-                  accent: const Color(0xFF7BC8A4),
-                ),
-                _SetupStat(
-                  title: '학부모',
-                  value: guardianCount,
-                  unit: '명',
-                  subtitle: '연결된 보호자',
-                  icon: Icons.family_restroom_outlined,
-                  accent: const Color(0xFF85B8E0),
-                ),
-                _SetupStat(
-                  title: '선생님',
-                  value: controller.teacherProfiles.length,
-                  unit: '명',
-                  subtitle: '배정 가능한 교사',
-                  icon: Icons.school_outlined,
-                  accent: const Color(0xFFC49BD6),
-                ),
-                _SetupStat(
-                  title: '반',
-                  value: controller.classGroups.length,
-                  unit: '반',
-                  subtitle: '운영 클래스',
-                  icon: Icons.groups_2_outlined,
-                  accent: const Color(0xFFE8C170),
-                ),
-                _SetupStat(
-                  title: '과목',
-                  value: controller.courses.length,
-                  unit: '개',
-                  subtitle: '등록 과목',
-                  icon: Icons.menu_book_outlined,
-                  accent: const Color(0xFF6EC5C5),
-                ),
-                _SetupStat(
-                  title: '교실',
-                  value: controller.classrooms.length,
-                  unit: '개',
-                  subtitle: '사용 교실',
-                  icon: Icons.meeting_room_outlined,
-                  accent: const Color(0xFFE09090),
-                ),
-              ],
+            selected: selected,
+            showCheckmark: false,
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            labelPadding: EdgeInsets.symmetric(horizontal: compact ? 3 : 6),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 5 : 8,
+              vertical: compact ? 2 : 4,
             ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                value: completed / 5,
-                color: NestColors.dustyRose,
-                backgroundColor: NestColors.roseMist,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '완료 $completed / 5',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            onSelected: controller.isBusy
+                ? null
+                : (_) {
+                    setState(() {
+                      _setupUnit = key;
+                    });
+                  },
+            avatar: done
+                ? Icon(Icons.check_circle, size: compact ? 13 : 16)
+                : Icon(
+                    selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    size: compact ? 13 : 16,
+                  ),
+          );
+        }
+
+        final chips = [
+          stepChip(order: 1, title: '가정', done: familyDone, key: 'FAMILY'),
+          stepChip(order: 2, title: '선생님', done: teacherDone, key: 'TEACHER'),
+          stepChip(order: 3, title: '반', done: classDone, key: 'CLASS'),
+          stepChip(order: 4, title: '과목', done: courseDone, key: 'COURSE'),
+          stepChip(
+            order: 5,
+            title: '교실',
+            done: classroomDone,
+            key: 'CLASSROOM',
+          ),
+        ];
+
+        return Card(
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 12 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                stepChip(
-                  order: 1,
-                  title: '가정',
-                  done: familyDone,
-                  key: 'FAMILY',
+                Row(
+                  children: [
+                    Text(
+                      '학기 설정',
+                      style: compact
+                          ? Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w800,
+                            )
+                          : Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    Text(
+                      '완료 $completed / 5',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: NestColors.deepWood.withValues(alpha: 0.78),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: compact ? 64 : 100,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          minHeight: 6,
+                          value: completed / 5,
+                          color: NestColors.dustyRose,
+                          backgroundColor: NestColors.roseMist,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                stepChip(
-                  order: 2,
-                  title: '선생님',
-                  done: teacherDone,
-                  key: 'TEACHER',
-                ),
-                stepChip(order: 3, title: '반', done: classDone, key: 'CLASS'),
-                stepChip(
-                  order: 4,
-                  title: '과목',
-                  done: courseDone,
-                  key: 'COURSE',
-                ),
-                stepChip(
-                  order: 5,
-                  title: '교실',
-                  done: classroomDone,
-                  key: 'CLASSROOM',
+                if (!compact) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '가정, 선생님, 반, 과목, 교실을 단위별로 설정한 뒤 시간표 탭에서 배치하세요.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: NestColors.deepWood.withValues(alpha: 0.72),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSetupSummaryGrid(stats: stats),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < stats.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 6),
+                          _buildCompactStatPill(stats[i]),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+                SizedBox(height: compact ? 8 : 10),
+                Wrap(
+                  spacing: compact ? 5 : 8,
+                  runSpacing: compact ? 5 : 8,
+                  children: chips,
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactStatPill(_SetupStat stat) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: NestColors.roseMist),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            stat.icon,
+            size: 13,
+            color: HSLColor.fromColor(
+              stat.accent,
+            ).withLightness(0.36).toColor(),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            stat.title,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: NestColors.deepWood,
+            ),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            '${stat.value}',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: NestColors.deepWood,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -506,7 +602,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: _cardPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -517,7 +613,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 unit: '가정',
                 icon: Icons.home_work_outlined,
               ),
-              description: '카드를 클릭하면 가정 정보 수정으로 바로 이동합니다.',
+              description: '카드를 눌러 가정 정보와 보호자 계정을 수정합니다.',
               actions: [
                 FilledButton.tonalIcon(
                   onPressed: controller.isBusy
@@ -543,22 +639,20 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            SpouseInviteBannerCard(controller: controller),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (families.isEmpty)
               _buildEmptyHint('등록된 가정이 없습니다. 가정 추가로 시작하세요.')
             else
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: 8,
+                runSpacing: 8,
                 children: families.map((family) {
                   final childCount = controller
                       .childrenForFamily(family.id)
                       .length;
                   final selected = _selectedFamilyId == family.id;
                   return InkWell(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     onTap: controller.isBusy
                         ? null
                         : () {
@@ -571,7 +665,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             );
                           },
                     child: SizedBox(
-                      width: 300,
+                      width: _entityTileWidth(context, 300),
                       child: LabeledEntityTile(
                         title: family.familyName,
                         subtitle:
@@ -580,7 +674,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         icon: Icons.home_outlined,
                         trailing: Icon(
                           selected ? Icons.check_circle : Icons.edit_outlined,
-                          size: 18,
+                          size: 17,
                           color: selected
                               ? NestColors.mutedSage
                               : NestColors.deepWood.withValues(alpha: 0.6),
@@ -610,23 +704,30 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     }
 
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 6,
+      runSpacing: 6,
       children: families.map((family) {
         final selected = family.id == selectedFamilyId;
         final childCount = controller.childrenForFamily(family.id).length;
         return ChoiceChip(
           label: Text(
             '${family.familyName} ($childCount)',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 15,
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-              color: Colors.black,
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              color: NestColors.deepWood,
             ),
           ),
           selected: selected,
+          showCheckmark: false,
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           onSelected: controller.isBusy ? null : (_) => onSelect(family.id),
-          avatar: const Icon(Icons.home_outlined, size: 18),
+          avatar: const Icon(Icons.home_outlined, size: 15),
         );
       }).toList(),
     );
@@ -645,7 +746,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: _cardPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -656,7 +757,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 unit: '명',
                 icon: Icons.child_friendly_outlined,
               ),
-              description: '가정을 선택하고 카드를 클릭하면 아이 정보를 바로 수정할 수 있습니다.',
+              description: '가정을 선택하고 카드를 눌러 아이 정보를 수정합니다.',
               actions: [
                 if (controller.children.isNotEmpty)
                   FilledButton.tonalIcon(
@@ -668,7 +769,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             initialChildId: familyChildren.firstOrNull?.id ??
                                 controller.children.first.id,
                           ),
-                    icon: const Nest3dIcon.portfolio(size: 18),
+                    icon: const Nest3dIcon.portfolio(size: 16),
                     label: const Text('포트폴리오 생성'),
                   ),
                 ElevatedButton.icon(
@@ -684,7 +785,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (controller.families.isEmpty)
               _buildEmptyHint('먼저 가정을 등록하세요.')
             else ...[
@@ -701,21 +802,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   });
                 },
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               if (selectedFamily == null)
                 _buildEmptyHint('가정을 선택하세요.')
               else if (familyChildren.isEmpty)
                 _buildEmptyHint('선택한 가정에 등록된 아이가 없습니다. 아이 추가를 눌러주세요.')
               else
                 Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: familyChildren.map((child) {
                     final birthLabel = child.birthDate == null
                         ? '생일 미입력'
                         : DateFormat('yyyy-MM-dd').format(child.birthDate!);
                     return InkWell(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                       onTap: controller.isBusy
                           ? null
                           : () => _openChildEditorDialog(
@@ -723,7 +824,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                               initial: child,
                             ),
                       child: SizedBox(
-                        width: 290,
+                        width: _entityTileWidth(context, 290),
                         child: LabeledEntityTile(
                           title: child.name,
                           subtitle:
@@ -734,7 +835,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             child.hasAccount
                                 ? Icons.verified_user_outlined
                                 : Icons.edit_outlined,
-                            size: 18,
+                            size: 17,
                           ),
                         ),
                       ),
@@ -1750,7 +1851,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: _cardPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1761,7 +1862,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 unit: '반',
                 icon: Icons.groups_2_outlined,
               ),
-              description: '반 카드를 클릭하면 반 정보 수정과 아이 복수 배정을 한 번에 처리할 수 있습니다.',
+              description: '반 카드를 눌러 반 정보 수정과 아이 배정을 처리합니다.',
               actions: [
                 ElevatedButton.icon(
                   onPressed:
@@ -1773,20 +1874,20 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (classGroups.isEmpty)
               _buildEmptyHint('현재 학기에 등록된 반이 없습니다. 반 추가로 시작하세요.')
             else
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: 8,
+                runSpacing: 8,
                 children: classGroups.map((classGroup) {
                   final enrolledCount = controller
                       .enrolledChildIdsForClassGroup(classGroup.id)
                       .length;
                   final selected = _selectedClassGroupId == classGroup.id;
                   return InkWell(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     onTap:
                         controller.isBusy || controller.isSelectedTermReadOnly
                         ? null
@@ -1800,7 +1901,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             );
                           },
                     child: SizedBox(
-                      width: 310,
+                      width: _entityTileWidth(context, 310),
                       child: LabeledEntityTile(
                         title: classGroup.name,
                         subtitle:
@@ -1808,7 +1909,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         icon: Icons.groups_2_outlined,
                         trailing: Icon(
                           selected ? Icons.check_circle : Icons.edit_outlined,
-                          size: 18,
+                          size: 17,
                           color: selected
                               ? NestColors.mutedSage
                               : NestColors.deepWood.withValues(alpha: 0.62),
@@ -2148,18 +2249,24 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     required ValueChanged<bool> onChanged,
   }) {
     return Wrap(
-      spacing: 8,
+      spacing: 6,
       runSpacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         ChoiceChip(
-          label: Text('이 학기 $termCount$unit'),
+          label: Text('이 학기 $termCount$unit', style: const TextStyle(fontSize: 12)),
           selected: !showAll,
+          showCheckmark: false,
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           onSelected: (_) => onChanged(false),
         ),
         ChoiceChip(
-          label: Text('전체 $totalCount$unit'),
+          label: Text('전체 $totalCount$unit', style: const TextStyle(fontSize: 12)),
           selected: showAll,
+          showCheckmark: false,
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           onSelected: (_) => onChanged(true),
         ),
       ],
@@ -2180,7 +2287,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: _cardPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2192,8 +2299,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 icon: Icons.school_outlined,
               ),
               description: canScope
-                  ? '이 학기 시간표에 배정된 선생님만 보여줍니다. 지난 학기에만 맡았던 선생님은 "전체"에서 볼 수 있습니다.'
-                  : '카드를 클릭하면 선생님 정보 수정, 기존 계정 연결/해제, 불가 시간 설정을 한 번에 처리할 수 있습니다.',
+                  ? '이 학기 시간표에 배정된 선생님만 보여줍니다.'
+                  : '카드를 눌러 선생님 정보, 계정 연결, 불가 시간을 수정합니다.',
               actions: [
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
@@ -2205,7 +2312,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ],
             ),
             if (canScope) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               _buildTermScopeToggle(
                 showAll: showAll,
                 termCount: inTerm.length,
@@ -2214,13 +2321,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 onChanged: (value) => setState(() => _teacherShowAll = value),
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (teachers.isEmpty)
               _buildEmptyHint('등록된 선생님이 없습니다. 선생님 추가로 시작하세요.')
             else
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: 8,
+                runSpacing: 8,
                 children: teachers.map((teacher) {
                   final blockCount = controller.memberUnavailabilityBlocks
                       .where(
@@ -2233,7 +2340,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       ? '계정 미연결'
                       : '계정 연결됨';
                   return InkWell(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     onTap: controller.isBusy
                         ? null
                         : () => _openTeacherEditorDialog(
@@ -2241,13 +2348,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             initial: teacher,
                           ),
                     child: SizedBox(
-                      width: 290,
+                      width: _entityTileWidth(context, 290),
                       child: LabeledEntityTile(
                         title: teacher.displayName,
                         subtitle:
                             '${_teacherTypeLabel(teacher.teacherType)} · $linkedLabel · 불가시간 $blockCount건',
                         icon: Icons.school_outlined,
-                        trailing: const Icon(Icons.edit_outlined, size: 18),
+                        trailing: const Icon(Icons.edit_outlined, size: 17),
                       ),
                     ),
                   );
@@ -3000,7 +3107,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
   }) {
     final label = '${NumberFormat.decimalPattern().format(value)}$unit';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         color: NestColors.roseMist.withValues(alpha: 0.78),
@@ -3011,13 +3118,14 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
         children: [
           Icon(
             icon,
-            size: 14,
+            size: 13,
             color: NestColors.deepWood.withValues(alpha: 0.72),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 3),
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              fontSize: 11.5,
               fontWeight: FontWeight.w700,
               color: NestColors.deepWood,
             ),
@@ -3039,7 +3147,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: _cardPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -3051,8 +3159,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 icon: Icons.menu_book_outlined,
               ),
               description: canScope
-                  ? '이 학기 시간표에 쓰는 과목만 보여줍니다. 지난 학기에만 쓰던 과목은 "전체"에서 볼 수 있습니다.'
-                  : '과목 카드를 클릭하면 기본 수업 시간 수정과 삭제를 한 번에 처리할 수 있습니다.',
+                  ? '이 학기 시간표에 쓰는 과목만 보여줍니다.'
+                  : '과목 카드를 눌러 기본 수업 시간과 회차 진도를 관리합니다.',
               actions: [
                 FilledButton.tonalIcon(
                   onPressed: controller.isBusy
@@ -3062,8 +3170,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           controller: controller,
                           initialMode: 0,
                         ),
-                  icon: const Icon(Icons.auto_stories_outlined),
-                  label: const Text('템플릿·문장 추가'),
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  label: const Text('빠른 추가'),
                 ),
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
@@ -3074,10 +3182,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            CourseScheduleQuickBanner(controller: controller),
             if (canScope) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               _buildTermScopeToggle(
                 showAll: showAll,
                 termCount: inTerm.length,
@@ -3086,13 +3192,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 onChanged: (value) => setState(() => _courseShowAll = value),
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (courses.isEmpty)
               _buildEmptyHint('등록된 과목이 없습니다. 과목 추가로 시작하세요.')
             else
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: 8,
+                runSpacing: 8,
                 children: courses.map((course) {
                   final usedInTerm = usedIds.contains(course.id);
                   final lessonCount = controller
@@ -3100,7 +3206,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       .length;
                   final selected = _selectedCourseId == course.id;
                   return InkWell(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     onTap: controller.isBusy
                         ? null
                         : () {
@@ -3113,18 +3219,18 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             );
                           },
                     child: SizedBox(
-                      width: 290,
+                      width: _entityTileWidth(context, 290),
                       child: LabeledEntityTile(
                         title: course.name,
                         subtitle: [
                           '기본 ${course.defaultDurationMin}분',
-                          if (usedInTerm) '이 학기 시간표 사용중',
+                          if (usedInTerm) '이 학기 사용중',
                           if (lessonCount > 0) '회차 $lessonCount건',
                         ].join(' · '),
                         icon: Icons.menu_book_outlined,
                         trailing: Icon(
                           selected ? Icons.check_circle : Icons.edit_outlined,
-                          size: 18,
+                          size: 17,
                           color: selected
                               ? NestColors.mutedSage
                               : NestColors.deepWood.withValues(alpha: 0.62),
@@ -3372,7 +3478,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: _cardPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -3383,7 +3489,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 unit: '개',
                 icon: Icons.meeting_room_outlined,
               ),
-              description: '교실 카드를 클릭하면 수용 인원/메모 수정과 삭제를 한 번에 처리할 수 있습니다.',
+              description: '교실 카드를 눌러 수용 인원과 메모를 수정합니다.',
               actions: [
                 ElevatedButton.icon(
                   onPressed:
@@ -3396,13 +3502,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (classrooms.isEmpty)
               _buildEmptyHint('등록된 교실이 없습니다. 교실 추가로 시작하세요.')
             else
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: 8,
+                runSpacing: 8,
                 children: classrooms.map((classroom) {
                   final used = controller.allTermSessions.any(
                     (session) =>
@@ -3410,7 +3516,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   );
                   final selected = _selectedClassroomId == classroom.id;
                   return InkWell(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     onTap:
                         controller.isBusy || controller.isSelectedTermReadOnly
                         ? null
@@ -3424,7 +3530,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                             );
                           },
                     child: SizedBox(
-                      width: 290,
+                      width: _entityTileWidth(context, 290),
                       child: LabeledEntityTile(
                         title: classroom.name,
                         subtitle:
@@ -3432,7 +3538,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                         icon: Icons.meeting_room_outlined,
                         trailing: Icon(
                           selected ? Icons.check_circle : Icons.edit_outlined,
-                          size: 18,
+                          size: 17,
                           color: selected
                               ? NestColors.mutedSage
                               : NestColors.deepWood.withValues(alpha: 0.62),

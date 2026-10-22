@@ -88,15 +88,20 @@ class LabeledEntityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final dense = compact || isMobile;
+
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          // 휴대폰 폭에서 이름이 "초등 통합…"처럼 잘리지 않도록 두 줄까지 쓴다.
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontSize: dense ? 13 : null,
+            fontWeight: FontWeight.w700,
+            height: 1.2,
+          ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -105,9 +110,11 @@ class LabeledEntityTile extends StatelessWidget {
           Text(
             subtitle!,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: dense ? 11.5 : null,
+              height: 1.2,
               color: NestColors.deepWood.withValues(alpha: 0.72),
             ),
-            maxLines: compact ? 2 : 3,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -117,12 +124,12 @@ class LabeledEntityTile extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? 10 : 12,
-        vertical: compact ? 8 : 10,
+        horizontal: dense ? 10 : 12,
+        vertical: dense ? 7 : 10,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: NestColors.roseMist),
       ),
       child: Row(
@@ -131,11 +138,11 @@ class LabeledEntityTile extends StatelessWidget {
             label: title,
             icon: icon,
             imageUrl: imageUrl,
-            size: compact ? 30 : 36,
+            size: dense ? 28 : 36,
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: dense ? 8 : 10),
           Expanded(child: content),
-          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+          if (trailing != null) ...[const SizedBox(width: 6), trailing!],
         ],
       ),
     );

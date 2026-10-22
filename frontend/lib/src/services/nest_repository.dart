@@ -1668,13 +1668,26 @@ class NestRepository {
     return _asMap(response.data);
   }
 
-  Future<Map<String, dynamic>> syncGoogleCalendar({
+  Future<Map<String, dynamic>> connectGoogleCalendarInstant({
     required String homeschoolId,
-    required String childId,
   }) async {
     final response = await client.functions.invoke(
       'google-calendar-sync',
-      body: {'homeschool_id': homeschoolId, 'child_id': childId},
+      body: {'action': 'connect', 'homeschool_id': homeschoolId},
+    );
+    return _asMap(response.data);
+  }
+
+  Future<Map<String, dynamic>> syncGoogleCalendar({
+    required String homeschoolId,
+    String? childId,
+  }) async {
+    final response = await client.functions.invoke(
+      'google-calendar-sync',
+      body: {
+        'homeschool_id': homeschoolId,
+        if (childId != null && childId.isNotEmpty) 'child_id': childId,
+      },
     );
     return _asMap(response.data);
   }
@@ -3774,10 +3787,19 @@ class NestRepository {
     return authUrl is String && authUrl.isNotEmpty ? authUrl : null;
   }
 
-  /// Drive 연결을 끊는다. 토큰은 지우고 행은 남겨 두어, 예전에 올린 사진의
-  /// drive_file_id가 가리키던 통합 기록이 사라지지 않게 한다.
-  Future<void> disconnectDrive({required String homeschoolId}) {
-    return client
+  /// Drive 연결을 끊는다. 서버에서 기존 OAuth 토큰을 Google에 revoke 요청한 뒤
+  /// 토큰 컬럼을 비워, 재연결 시 이전 오염된 스코프가 남지 않게 한다.
+  Future<void> disconnectDrive({required String homeschoolId}) async {
+    try {
+      await client.functions.invoke(
+        'google-drive-connect-start',
+        body: {'homeschool_id': homeschoolId, 'action': 'disconnect'},
+      );
+      return;
+    } catch (_) {
+      // 엣지 함수 호출 실패 시 DB 직접 업데이트로 폴백한다.
+    }
+    await client
         .from('drive_integrations')
         .update({
           'status': 'DISCONNECTED',
