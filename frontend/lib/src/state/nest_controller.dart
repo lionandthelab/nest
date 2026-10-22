@@ -7389,6 +7389,7 @@ class NestController extends ChangeNotifier {
     required String displayName,
     required String teacherType,
     String? userId,
+    String phone = '',
   }) async {
     if (!canManageTeacherAssignments) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
@@ -7411,6 +7412,7 @@ class NestController extends ChangeNotifier {
         displayName: trimmedName,
         teacherType: teacherType,
         userId: _normalizeNullable(userId),
+        phone: phone.trim(),
       );
       await loadTeacherProfiles();
 
@@ -7518,6 +7520,7 @@ class NestController extends ChangeNotifier {
     required String displayName,
     required String teacherType,
     String? userId,
+    String? phone,
   }) async {
     if (!canManageTeacherAssignments) {
       throw StateError('관리자/스태프 권한이 필요합니다.');
@@ -7540,6 +7543,7 @@ class NestController extends ChangeNotifier {
         displayName: trimmedName,
         teacherType: teacherType,
         userId: _normalizeNullable(userId),
+        phone: phone,
       );
       await loadTeacherProfiles();
 

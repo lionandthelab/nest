@@ -11,7 +11,6 @@ import '../widgets/nest_sheet.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
 import '../widgets/nest_skeleton.dart';
-import '../widgets/homeschool_tips_card.dart';
 import '../widgets/nest_motion.dart';
 import '../widgets/quick_bootstrap_card.dart';
 import '../widgets/spouse_invite_sheet.dart';
@@ -145,8 +144,6 @@ class AdminHomeTab extends StatelessWidget {
           _UpcomingEventsCard(controller: controller, onNavigate: onNavigate),
           const SizedBox(height: 12),
           _RecentNoticesCard(controller: controller, onNavigate: onNavigate),
-          const SizedBox(height: 12),
-          const HomeschoolTipsCard(density: HomeschoolTipsDensity.compact),
           const SizedBox(height: 12),
           DriveIntegrationCard(controller: controller),
           const SizedBox(height: 24),
@@ -567,14 +564,18 @@ class _QuickAction {
   const _QuickAction({
     required this.icon,
     required this.label,
-    required this.tab,
+    this.tab,
     this.section,
+    this.isCourseEntry = false,
+    this.isSpouseInvite = false,
   });
 
   final IconData icon;
   final String label;
-  final String tab;
+  final String? tab;
   final String? section;
+  final bool isCourseEntry;
+  final bool isSpouseInvite;
 }
 
 class _QuickActionsCard extends StatelessWidget {
@@ -619,6 +620,7 @@ class _QuickActionsCard extends StatelessWidget {
       label: '과목',
       tab: NewTermTabs.termSetup,
       section: NewTermSections.course,
+      isCourseEntry: true,
     ),
     _QuickAction(
       icon: Icons.calendar_view_week_outlined,
@@ -631,7 +633,93 @@ class _QuickActionsCard extends StatelessWidget {
       label: '멤버·권한',
       tab: NewTermTabs.system,
     ),
+    _QuickAction(
+      icon: Icons.family_restroom_outlined,
+      label: '엄마·아빠 초대하기',
+      isSpouseInvite: true,
+    ),
   ];
+
+  void _handleActionTap(BuildContext context, _QuickAction action) {
+    if (action.isSpouseInvite) {
+      showSpouseInviteSheet(context: context, controller: controller);
+      return;
+    }
+    if (action.isCourseEntry) {
+      _showCourseQuickActionSheet(context);
+      return;
+    }
+    if (action.tab != null) {
+      onNavigate(action.tab!, section: action.section);
+    }
+  }
+
+  Future<void> _showCourseQuickActionSheet(BuildContext context) {
+    return showNestSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return NestSheet(
+          title: '과목 · 수업 추가',
+          subtitle: '수업을 추가할 방법을 선택하거나 과목 목록을 관리하세요.',
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(sheetContext).pop(),
+              child: const Text('닫기'),
+            ),
+          ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _QuickActionTile(
+                action: const _QuickAction(
+                  icon: Icons.auto_stories_outlined,
+                  label: '템플릿으로 수업 추가',
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  showCourseScheduleQuickSheet(
+                    context: context,
+                    controller: controller,
+                    initialMode: 0,
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              _QuickActionTile(
+                action: const _QuickAction(
+                  icon: Icons.edit_note_outlined,
+                  label: '문장으로 수업 추가',
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  showCourseScheduleQuickSheet(
+                    context: context,
+                    controller: controller,
+                    initialMode: 1,
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              _QuickActionTile(
+                action: const _QuickAction(
+                  icon: Icons.menu_book_outlined,
+                  label: '과목 직접 추가 · 관리',
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onNavigate(
+                    NewTermTabs.termSetup,
+                    section: NewTermSections.course,
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -677,57 +765,13 @@ class _QuickActionsCard extends StatelessWidget {
                             action: action,
                             onTap: controller.isBusy
                                 ? null
-                                : () => onNavigate(
-                                    action.tab,
-                                    section: action.section,
-                                  ),
+                                : () => _handleActionTap(context, action),
                           ),
                         ),
                       )
                       .toList(),
                 );
               },
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonalIcon(
-                  onPressed: controller.isBusy
-                      ? null
-                      : () => showSpouseInviteSheet(
-                          context: context,
-                          controller: controller,
-                        ),
-                  icon: const Icon(Icons.family_restroom_outlined, size: 18),
-                  label: const Text('엄마·아빠 초대하기'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: controller.isBusy
-                      ? null
-                      : () => showCourseScheduleQuickSheet(
-                          context: context,
-                          controller: controller,
-                          initialMode: 0,
-                        ),
-                  icon: const Icon(Icons.auto_stories_outlined, size: 18),
-                  label: const Text('템플릿으로 수업 추가'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: controller.isBusy
-                      ? null
-                      : () => showCourseScheduleQuickSheet(
-                          context: context,
-                          controller: controller,
-                          initialMode: 1,
-                        ),
-                  icon: const Icon(Icons.edit_note_outlined, size: 18),
-                  label: const Text('문장으로 수업 추가'),
-                ),
-              ],
             ),
           ],
         ),

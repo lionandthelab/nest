@@ -155,6 +155,18 @@ void main() {
       await tester.pump();
 
       expect(navigations, [(NewTermTabs.news, NewTermSections.events)]);
+
+      // 빠른 작업에 엄마·아빠 초대하기 타일이 통일되어 있고, 과목을 누르면 수업 추가 2가지 방법이 나온다.
+      expect(find.text('엄마·아빠 초대하기'), findsOneWidget);
+      expect(find.text('우리집 홈스쿨, 이렇게 시작해요'), findsNothing);
+
+      await tester.tap(find.text('과목'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('템플릿으로 수업 추가'), findsOneWidget);
+      expect(find.text('문장으로 수업 추가'), findsOneWidget);
+      expect(find.text('과목 직접 추가 · 관리'), findsOneWidget);
     });
 
     testWidgets('아이가 있으면 아이 추가 안내를 숨긴다', (tester) async {
@@ -244,6 +256,10 @@ void main() {
       expect(find.text('학사일정 추가'), findsOneWidget);
       expect(find.text('개학식'), findsOneWidget);
       expect(find.text('다가오는 일정'), findsOneWidget);
+      // 달력이 일요일(일)부터 시작하는지 확인
+      final sunX = tester.getTopLeft(find.text('일')).dx;
+      final monX = tester.getTopLeft(find.text('월')).dx;
+      expect(sunX, lessThan(monX));
       expect(tester.takeException(), isNull);
     });
 

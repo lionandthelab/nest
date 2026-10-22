@@ -584,7 +584,7 @@ class _TimetableTabState extends State<TimetableTab> {
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children: [1, 2, 3, 4, 5, 6, 0].map((day) {
+                      children: [0, 1, 2, 3, 4, 5, 6].map((day) {
                         final active = selectedDays.contains(day);
                         return FilterChip(
                           label: Text(_dayLabel(day)),

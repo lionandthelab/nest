@@ -513,6 +513,8 @@ class TeacherProfile {
   final String bio;
   final DateTime? createdAt;
 
+  String get phone => bio.trim();
+
   bool get isParentTeacher => teacherType == 'PARENT_TEACHER';
 
   factory TeacherProfile.fromMap(Map<String, dynamic> map) {

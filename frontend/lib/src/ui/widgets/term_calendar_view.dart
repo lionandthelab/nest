@@ -65,7 +65,7 @@ class _TermCalendarViewState extends State<TermCalendarView> {
   Widget build(BuildContext context) {
     final first = DateTime(_month.year, _month.month, 1);
     final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
-    final leading = first.weekday - 1; // Monday-first
+    final leading = first.weekday % 7; // Sunday-first (0 = 일 … 6 = 토)
     final cells = leading + daysInMonth;
     final rows = ((cells + 6) ~/ 7);
 
@@ -101,7 +101,7 @@ class _TermCalendarViewState extends State<TermCalendarView> {
         ),
         const SizedBox(height: 4),
         Row(
-          children: const ['월', '화', '수', '목', '금', '토', '일']
+          children: const ['일', '월', '화', '수', '목', '금', '토']
               .map(
                 (label) => Expanded(
                   child: Center(

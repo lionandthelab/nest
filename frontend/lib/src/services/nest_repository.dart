@@ -967,6 +967,7 @@ class NestRepository {
     required String displayName,
     required String teacherType,
     String? userId,
+    String phone = '',
   }) async {
     final row = await client
         .from('teacher_profiles')
@@ -976,7 +977,7 @@ class NestRepository {
           'display_name': displayName.trim(),
           'teacher_type': teacherType,
           'specialties': const <String>[],
-          'bio': '',
+          'bio': phone.trim(),
         })
         .select(
           'id, homeschool_id, user_id, display_name, teacher_type, specialties, bio, created_at',
@@ -991,6 +992,7 @@ class NestRepository {
     required String displayName,
     required String teacherType,
     String? userId,
+    String? phone,
   }) async {
     final row = await client
         .from('teacher_profiles')
@@ -998,6 +1000,7 @@ class NestRepository {
           'display_name': displayName.trim(),
           'teacher_type': teacherType,
           'user_id': _normalizeNullable(userId),
+          if (phone != null) 'bio': phone.trim(),
         })
         .eq('id', teacherProfileId)
         .select(

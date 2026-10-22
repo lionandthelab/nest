@@ -8,7 +8,6 @@ import '../../services/course_schedule_quick_adder.dart';
 import '../../state/nest_controller.dart';
 import '../models/homeschool_start_tips.dart';
 import '../nest_theme.dart';
-import '../widgets/homeschool_tips_card.dart';
 import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_motion.dart';
 
@@ -247,9 +246,7 @@ class _DashboardTabState extends State<DashboardTab> {
           child: _buildTossProgressiveOnboardingCard(theme, controller),
         ),
         const SizedBox(height: 16),
-        const NestAppear(index: 2, child: HomeschoolTipsCard()),
-        const SizedBox(height: 16),
-        NestAppear(index: 3, child: _buildJoinExistingCard(theme, controller)),
+        NestAppear(index: 2, child: _buildJoinExistingCard(theme, controller)),
       ],
     );
   }

@@ -7,7 +7,6 @@ import '../../state/nest_controller.dart';
 import '../models/child_class_bundle.dart';
 import '../nest_theme.dart';
 import '../widgets/announcement_attachments.dart';
-import '../widgets/homeschool_tips_card.dart';
 import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_motion.dart';
@@ -206,8 +205,6 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
           const SizedBox(height: 12),
           _buildMySupervision(controller),
           _buildHomeschoolSchedule(controller),
-          const SizedBox(height: 12),
-          const HomeschoolTipsCard(density: HomeschoolTipsDensity.compact),
         ],
       ],
     );
@@ -302,7 +299,7 @@ class _ParentHomeTabState extends State<ParentHomeTab> {
       list.sort((a, b) => a.$2.startTime.compareTo(b.$2.startTime));
     }
 
-    final orderedDays = [1, 2, 3, 4, 5, 6, 0]
+    final orderedDays = [0, 1, 2, 3, 4, 5, 6]
         .where((d) => (grouped[d] ?? const []).isNotEmpty)
         .toList();
 

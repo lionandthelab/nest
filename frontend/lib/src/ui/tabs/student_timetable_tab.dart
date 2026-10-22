@@ -532,7 +532,7 @@ class _StudentTimetableTabState extends State<StudentTimetableTab> {
     for (final s in slots) {
       byDay.putIfAbsent(s.dayOfWeek, () => []).add(s);
     }
-    const order = [1, 2, 3, 4, 5, 6, 0];
+    const order = [0, 1, 2, 3, 4, 5, 6];
     final planName = controller.selectedSelfStudyPlan?.name ?? '자습';
 
     final children = <Widget>[

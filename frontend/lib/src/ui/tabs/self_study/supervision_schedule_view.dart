@@ -65,7 +65,7 @@ class SupervisionScheduleView extends StatelessWidget {
         for (final c in cards) {
           byDay.putIfAbsent(c.day, () => []).add(c);
         }
-        const order = [1, 2, 3, 4, 5, 6, 0];
+        const order = [0, 1, 2, 3, 4, 5, 6];
 
         final children = <Widget>[];
         if (showHeader) {

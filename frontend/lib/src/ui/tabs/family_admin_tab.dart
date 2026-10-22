@@ -2300,7 +2300,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
               ),
               description: canScope
                   ? '이 학기 시간표에 배정된 선생님만 보여줍니다.'
-                  : '카드를 눌러 선생님 정보, 계정 연결, 불가 시간을 수정합니다.',
+                  : '카드를 눌러 선생님 이름, 연락처, 계정 연결을 수정합니다.',
               actions: [
                 ElevatedButton.icon(
                   onPressed: controller.isBusy
@@ -2329,13 +2329,9 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 spacing: 8,
                 runSpacing: 8,
                 children: teachers.map((teacher) {
-                  final blockCount = controller.memberUnavailabilityBlocks
-                      .where(
-                        (block) =>
-                            block.ownerKind == 'TEACHER_PROFILE' &&
-                            block.ownerId == teacher.id,
-                      )
-                      .length;
+                  final phoneLabel = teacher.phone.isEmpty
+                      ? '연락처 미등록'
+                      : teacher.phone;
                   final linkedLabel = teacher.userId == null
                       ? '계정 미연결'
                       : '계정 연결됨';
@@ -2352,7 +2348,7 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       child: LabeledEntityTile(
                         title: teacher.displayName,
                         subtitle:
-                            '${_teacherTypeLabel(teacher.teacherType)} · $linkedLabel · 불가시간 $blockCount건',
+                            '${_teacherTypeLabel(teacher.teacherType)} · $phoneLabel · $linkedLabel',
                         icon: Icons.school_outlined,
                         trailing: const Icon(Icons.edit_outlined, size: 17),
                       ),
@@ -2373,14 +2369,13 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
     final nameController = TextEditingController(
       text: initial?.displayName ?? '',
     );
+    final phoneController = TextEditingController(
+      text: initial?.phone ?? '',
+    );
     final accountQueryController = TextEditingController();
-    final startController = TextEditingController(text: '09:00');
-    final endController = TextEditingController(text: '10:00');
-    final noteController = TextEditingController();
 
     var teacherType = initial?.teacherType ?? 'GUEST_TEACHER';
     var linkAccount = initial?.userId != null;
-    var selectedDay = 1;
     var editingTeacher = initial;
     HomeschoolMemberDirectoryEntry? selectedAccount = initial?.userId == null
         ? null
@@ -2397,25 +2392,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                 accountQueryController.text,
                 maxResults: 8,
               );
-              // 캐스케이드(..sort)를 삼항식 전체에 걸면 "선생님 추가"처럼
-              // const 빈 목록이 고른 쪽에서도 정렬을 시도해 터진다.
-              // 정렬은 실제 목록을 만든 쪽에만 붙인다.
-              final blocks = editingTeacher == null
-                  ? const <MemberUnavailabilityBlock>[]
-                  : (controller.memberUnavailabilityBlocks
-                        .where(
-                          (block) =>
-                              block.ownerKind == 'TEACHER_PROFILE' &&
-                              block.ownerId == editingTeacher!.id,
-                        )
-                        .toList()
-                      ..sort((a, b) {
-                        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-                        if (day != 0) {
-                          return day;
-                        }
-                        return a.startTime.compareTo(b.startTime);
-                      }));
 
               Future<void> saveTeacher() async {
                 if (nameController.text.trim().isEmpty || isSaving) {
@@ -2436,15 +2412,17 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                       displayName: nameController.text,
                       teacherType: teacherType,
                       userId: linkAccount ? selectedAccount?.userId : null,
+                      phone: phoneController.text,
                     );
                     editingTeacher = created;
-                    _showMessage('선생님을 생성했습니다. 이어서 불가 시간을 설정하세요.');
+                    _showMessage('선생님을 등록했습니다.');
                   } else {
                     final updated = await controller.updateTeacherProfile(
                       teacherProfileId: editingTeacher!.id,
                       displayName: nameController.text,
                       teacherType: teacherType,
                       userId: linkAccount ? selectedAccount?.userId : null,
+                      phone: phoneController.text,
                     );
                     editingTeacher = updated;
                     _showMessage('선생님 정보를 저장했습니다.');
@@ -2453,51 +2431,16 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                   if (mounted) {
                     setState(() {});
                   }
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
                 } catch (error) {
                   _showActionError(controller, error);
-                } finally {
                   if (context.mounted) {
                     setDialogState(() {
                       isSaving = false;
                     });
                   }
-                }
-              }
-
-              Future<void> addUnavailability() async {
-                final teacher = editingTeacher;
-                if (teacher == null) {
-                  _showMessage('먼저 선생님 정보를 저장하세요.');
-                  return;
-                }
-                try {
-                  await controller.createMemberUnavailabilityBlock(
-                    ownerKind: 'TEACHER_PROFILE',
-                    ownerId: teacher.id,
-                    dayOfWeek: selectedDay,
-                    startTime: startController.text,
-                    endTime: endController.text,
-                    note: noteController.text,
-                  );
-                  noteController.clear();
-                  if (context.mounted) {
-                    setDialogState(() {});
-                  }
-                } catch (error) {
-                  _showActionError(controller, error);
-                }
-              }
-
-              Future<void> removeUnavailability(String blockId) async {
-                try {
-                  await controller.deleteMemberUnavailabilityBlock(
-                    blockId: blockId,
-                  );
-                  if (context.mounted) {
-                    setDialogState(() {});
-                  }
-                } catch (error) {
-                  _showActionError(controller, error);
                 }
               }
 
@@ -2591,6 +2534,16 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(labelText: '표시 이름'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: '연락처',
+                        hintText: '예: 010-1234-5678',
+                        prefixIcon: Icon(Icons.phone_outlined, size: 18),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     SegmentedButton<String>(
@@ -2719,107 +2672,6 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                                 },
                         ),
                     ],
-                    const SizedBox(height: 10),
-                    if (editingTeacher == null)
-                      _buildEmptyHint(
-                        '선생님 정보를 먼저 저장하면 이 아래에서 불가 시간을 바로 설정할 수 있습니다.',
-                      )
-                    else ...[
-                      Text(
-                        '불가 시간 설정',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: List.generate(7, (day) {
-                          return ChoiceChip(
-                            label: Text(_dayLabel(day)),
-                            selected: selectedDay == day,
-                            onSelected: controller.isBusy || isSaving
-                                ? null
-                                : (_) {
-                                    setDialogState(() {
-                                      selectedDay = day;
-                                    });
-                                  },
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: startController,
-                              decoration: const InputDecoration(
-                                labelText: '시작 (HH:MM)',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: endController,
-                              decoration: const InputDecoration(
-                                labelText: '종료 (HH:MM)',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: noteController,
-                        decoration: const InputDecoration(labelText: '메모'),
-                        minLines: 1,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        onPressed: controller.isBusy || isSaving
-                            ? null
-                            : addUnavailability,
-                        icon: const Icon(Icons.block),
-                        label: const Text('불가 시간 추가'),
-                      ),
-                      const SizedBox(height: 10),
-                      if (blocks.isEmpty)
-                        const NestEmptyState(
-                          icon: Icons.event_busy_outlined,
-                          title: '등록된 불가 시간이 없습니다.',
-                        )
-                      else
-                        ...blocks.map((block) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: NestColors.roseMist),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${_dayLabel(block.dayOfWeek)} ${_shortTime(block.startTime)}-${_shortTime(block.endTime)}'
-                                      '${block.note.trim().isEmpty ? '' : ' · ${block.note.trim()}'}',
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed: controller.isBusy || isSaving
-                                        ? null
-                                        : () => removeUnavailability(block.id),
-                                    icon: const Icon(Icons.delete_outline),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                    ],
                   ],
                 ),
               );
@@ -2829,10 +2681,8 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       );
     } finally {
       nameController.dispose();
+      phoneController.dispose();
       accountQueryController.dispose();
-      startController.dispose();
-      endController.dispose();
-      noteController.dispose();
     }
   }
 
@@ -3170,10 +3020,21 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
                           controller: controller,
                           initialMode: 0,
                         ),
-                  icon: const Icon(Icons.auto_awesome_outlined),
-                  label: const Text('빠른 추가'),
+                  icon: const Icon(Icons.auto_stories_outlined),
+                  label: const Text('템플릿으로 수업 추가'),
                 ),
-                ElevatedButton.icon(
+                FilledButton.tonalIcon(
+                  onPressed: controller.isBusy
+                      ? null
+                      : () => showCourseScheduleQuickSheet(
+                          context: context,
+                          controller: controller,
+                          initialMode: 1,
+                        ),
+                  icon: const Icon(Icons.edit_note_outlined),
+                  label: const Text('문장으로 수업 추가'),
+                ),
+                FilledButton.tonalIcon(
                   onPressed: controller.isBusy
                       ? null
                       : () => _openCourseEditorDialog(controller: controller),
@@ -3776,34 +3637,11 @@ class _FamilyAdminTabState extends State<FamilyAdminTab> {
       await widget.controller.loadChildren();
       await widget.controller.loadClassEnrollments();
       await widget.controller.loadTeacherProfiles();
-      await widget.controller.loadMemberUnavailabilityBlocks();
       await widget.controller.loadHomeschoolMemberDirectory();
       _showMessage('가정/아이/배정 목록을 갱신했습니다.');
     } catch (_) {
       _showMessage(widget.controller.statusMessage);
     }
-  }
-
-  String _dayLabel(int dayOfWeek) {
-    const labels = <int, String>{
-      0: 'Sun',
-      1: 'Mon',
-      2: 'Tue',
-      3: 'Wed',
-      4: 'Thu',
-      5: 'Fri',
-      6: 'Sat',
-    };
-    return labels[dayOfWeek] ?? '$dayOfWeek';
-  }
-
-  String _shortTime(String value) {
-    final parsed = DateFormat('HH:mm:ss').tryParse(value);
-    if (parsed == null) {
-      final fallback = DateFormat('HH:mm').tryParse(value);
-      return fallback == null ? value : DateFormat('HH:mm').format(fallback);
-    }
-    return DateFormat('HH:mm').format(parsed);
   }
 
   void _showMessage(String text) {

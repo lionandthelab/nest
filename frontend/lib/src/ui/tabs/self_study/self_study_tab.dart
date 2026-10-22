@@ -24,7 +24,7 @@ class SelfStudyTab extends StatefulWidget {
 }
 
 class _SelfStudyTabState extends State<SelfStudyTab> {
-  static const _dayOrder = [1, 2, 3, 4, 5, 6, 0]; // 월~일
+  static const _dayOrder = [0, 1, 2, 3, 4, 5, 6]; // 일~토
 
   NestController get controller => widget.controller;
 

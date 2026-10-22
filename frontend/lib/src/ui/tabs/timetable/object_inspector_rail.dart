@@ -287,6 +287,9 @@ class _ObjectInspectorRailState extends State<ObjectInspectorRail> {
   // ---------------------------------------------------------------------------
 
   Widget _buildTeacherBody(NestController controller, String teacherId) {
+    final teacher = controller.teacherProfiles
+        .where((t) => t.id == teacherId)
+        .firstOrNull;
     final sessionIds = controller.allTermSessionTeacherAssignments
         .where((row) => row.teacherProfileId == teacherId)
         .map((row) => row.classSessionId)
@@ -297,21 +300,14 @@ class _ObjectInspectorRailState extends State<ObjectInspectorRail> {
       ..sort((a, b) => _slotSortKey(controller, a.timeSlotId)
           .compareTo(_slotSortKey(controller, b.timeSlotId)));
 
-    final blocks = controller.memberUnavailabilityBlocks
-        .where((b) => b.ownerKind == 'TEACHER_PROFILE' && b.ownerId == teacherId)
-        .toList()
-      ..sort((a, b) {
-        final day = a.dayOfWeek.compareTo(b.dayOfWeek);
-        if (day != 0) return day;
-        return a.startTime.compareTo(b.startTime);
-      });
+    final phoneLabel = (teacher?.phone ?? '').isEmpty ? '미등록' : teacher!.phone;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle(context, '개요'),
+        _kvRow(context, '연락처', phoneLabel),
         _kvRow(context, '주간 수업', '${sessions.length}개'),
-        _kvRow(context, '불가 시간', '${blocks.length}개'),
         const SizedBox(height: 12),
         _sectionTitle(context, '담당 세션'),
         if (sessions.isEmpty)
@@ -321,18 +317,6 @@ class _ObjectInspectorRailState extends State<ObjectInspectorRail> {
             final collides = _teacherSessionCollides(controller, teacherId, s);
             return _sessionTile(controller, s, showClass: true, warn: collides);
           }),
-        const SizedBox(height: 12),
-        _sectionTitle(context, '불가 시간'),
-        if (blocks.isEmpty)
-          _mutedText(context, '등록된 불가 시간이 없습니다.')
-        else
-          ...blocks.map(
-            (b) => _kvRow(
-              context,
-              '${_dayLabel(b.dayOfWeek)}요일',
-              '${_shortTime(b.startTime)}-${_shortTime(b.endTime)}',
-            ),
-          ),
       ],
     );
   }

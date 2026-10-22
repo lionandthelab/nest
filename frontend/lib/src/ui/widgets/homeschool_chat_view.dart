@@ -1881,8 +1881,8 @@ class _ShareContactSheetState extends State<_ShareContactSheet> {
         SharedContactInfo(
           contactName: teacher.displayName.trim(),
           contactRole: '선생님',
+          phone: teacher.phone,
           email: memberEntry?.email ?? '',
-          memo: teacher.bio,
           userId: teacher.userId ?? '',
         ),
       );
