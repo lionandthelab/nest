@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/nest_models.dart';
+import '../../services/course_schedule_quick_adder.dart';
 import '../../state/nest_controller.dart';
 import '../models/new_term_checklist.dart';
 import '../nest_theme.dart';
 import '../widgets/course_schedule_quick_sheet.dart';
 import '../widgets/drive_integration_card.dart';
+import '../widgets/nest_3d_icon.dart';
 import '../widgets/nest_sheet.dart';
 import '../widgets/nest_empty_state.dart';
 import '../widgets/nest_refresh.dart';
@@ -118,6 +120,18 @@ class AdminHomeTab extends StatelessWidget {
             NestAppear(
               index: 2,
               child: _AddChildPrompt(controller: controller),
+            ),
+            const SizedBox(height: 12),
+          ] else if (!booting &&
+              controller.selectedTerm != null &&
+              controller.allTermSessions.isEmpty &&
+              controller.sessions.isEmpty) ...[
+            NestAppear(
+              index: 2,
+              child: _FirstTimetablePrompt(
+                controller: controller,
+                onNavigate: onNavigate,
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -403,24 +417,66 @@ class _AddChildPrompt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasTimetable =
+        controller.allTermSessions.isNotEmpty || controller.sessions.isNotEmpty;
+
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: NestColors.dustyRose.withValues(alpha: 0.45)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '아이 추가',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '이름과 생일만 있으면 돼요. 가정은 알아서 만들어 둡니다.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: NestColors.deepWood.withValues(alpha: 0.72),
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: NestColors.roseMist.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          hasTimetable
+                              ? '첫 시작 1 / 1 · 우리 아이 연결'
+                              : '첫 시작 1 / 2 · 아이 등록 → 첫 시간표',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: NestColors.deepWood,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '아이 추가',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '이름과 생일만 적으면 가정 생성부터 우리 반 배정까지 자동으로 끝납니다.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.74),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Nest3dIcon.family(size: 44),
+              ],
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -433,6 +489,216 @@ class _AddChildPrompt extends StatelessWidget {
                 icon: const Icon(Icons.child_care_outlined, size: 18),
                 label: const Text('아이 추가'),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirstTimetablePrompt extends StatefulWidget {
+  const _FirstTimetablePrompt({
+    required this.controller,
+    required this.onNavigate,
+  });
+
+  final NestController controller;
+  final void Function(String tabLabel, {String? section}) onNavigate;
+
+  @override
+  State<_FirstTimetablePrompt> createState() => _FirstTimetablePromptState();
+}
+
+class _FirstTimetablePromptState extends State<_FirstTimetablePrompt> {
+  String _selectedTemplateId = kCourseScheduleTemplates.first.id;
+
+  CourseScheduleTemplate get _selectedTemplate =>
+      kCourseScheduleTemplates.firstWhere(
+        (t) => t.id == _selectedTemplateId,
+        orElse: () => kCourseScheduleTemplates.first,
+      );
+
+  Future<void> _applySelectedTemplate() async {
+    final template = _selectedTemplate;
+    try {
+      final result = await widget.controller.applyCourseAndScheduleQuickAdd(
+        coursesToEnsure: template.courses,
+        placements: template.placements,
+        placeOnTimetable: true,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '첫 시간표 완성! 수업 ${result.createdSessions}교시를 배치했어요.',
+          ),
+          action: SnackBarAction(
+            label: '시간표 보기',
+            onPressed: () => widget.onNavigate(
+              NewTermTabs.timetable,
+              section: NewTermSections.timetable,
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      final msg = widget.controller.statusMessage.trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg.isEmpty ? '시간표를 배치하지 못했어요.' : msg),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final controller = widget.controller;
+    final template = _selectedTemplate;
+    final childSummary = controller.children.length == 1
+        ? '${controller.children.first.name} 어린이 등록 완료!'
+        : '아이 ${controller.children.length}명 등록 완료!';
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: NestColors.dustyRose.withValues(alpha: 0.45)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: NestColors.mutedSage.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '첫 시작 2 / 2 · $childSummary',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: NestColors.deepWood,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '첫 시간표 만들기',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '아직 배정된 수업이 없어요. 추천 템플릿으로 1초 만에 채우거나 한 줄 문장으로 바로 만들어 보세요.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: NestColors.deepWood.withValues(alpha: 0.74),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Nest3dIcon.calendar(size: 44),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < kCourseScheduleTemplates.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    ChoiceChip(
+                      visualDensity: VisualDensity.compact,
+                      selected:
+                          kCourseScheduleTemplates[i].id == _selectedTemplateId,
+                      label: Text(kCourseScheduleTemplates[i].title),
+                      onSelected: controller.isBusy
+                          ? null
+                          : (_) => setState(
+                              () => _selectedTemplateId =
+                                  kCourseScheduleTemplates[i].id,
+                            ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: NestColors.creamyWhite,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: NestColors.roseMist),
+              ),
+              child: Text(
+                '${template.title} · 과목 ${template.courses.length}개 · 주 ${template.placements.length}교시 자동 배치',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: NestColors.deepWood,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton.icon(
+                onPressed: controller.isBusy ? null : _applySelectedTemplate,
+                icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                label: const Text('추천 시간표 1초 적용'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => showCourseScheduleQuickSheet(
+                            context: context,
+                            controller: controller,
+                            initialMode: 0,
+                          ),
+                    icon: const Icon(Icons.auto_stories_outlined, size: 16),
+                    label: const Text('템플릿 상세'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => showCourseScheduleQuickSheet(
+                            context: context,
+                            controller: controller,
+                            initialMode: 1,
+                          ),
+                    icon: const Icon(Icons.edit_note_outlined, size: 16),
+                    label: const Text('문장으로 입력'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

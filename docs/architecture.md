@@ -981,6 +981,19 @@ DB 폴링을 쓴다(캘린더와 같은 구조). 두 가지 함정:
   - **이벤트별 세부 알림 섹션**: 활성 개수 배지(`8/8 켜짐`), 원클릭 빠른 프리셋(`모든 알림 켜기`, `필수 알림만`), 그리고 `학사 · 출결 · 수업` 5종 + `소통 · 커뮤니티 · 앨범` 3종 총 8개 카테고리별 개별 토글 스위치 제공.
   - 인앱 알림함(`NotificationInboxSheet`) 및 `NotificationInboxItem.deepLinkTab`에서 모든 신규 이벤트 아이콘과 탭 딥링크(`시간표`, `홈`, `채팅`, `커뮤니티`, `앨범`) 지원.
 
+### 6.33 신규·업데이트 사용자 푸시 권한 팝업, 온보딩 퍼널 강화 및 E2E 자동 정리 (2026-11)
+
+- **신규·업데이트 사용자 공통 푸시 권한 점검 및 팝업 (`PushPermissionDialog`, `NestPush`, `LionMessagingController`)**:
+  - 콜드 스타트 시 맥락 없는 시스템 권한 창 호출을 막고(`autoRegisterOnSignIn: false`), `FirebaseMessaging.getNotificationSettings()` 기반 `PushPermissionStatus` 점검 API를 `lion_auth`에 도입했다.
+  - 이미 OS 권한이 허용(`authorized`)되고 `pushEnabled == true`인 사용자는 앱 실행·복귀 시 조용히 `push_tokens`(`app_version` 포함)를 갱신(`syncTokenIfPermitted`)한다.
+  - 과거 버전에서 `notifOnboardedAt`가 기록된 업데이트 사용자라도 OS 권한이 미허용(`notDetermined`/`denied`)이거나 `pushEnabled == false`이면 `HomePage` 진입 시 `PushPermissionDialog`를 노출하여 원클릭으로 권한 요청 또는 기기 알림 설정 화면 이동을 안내한다.
+- **첫 아이 등록 → 첫 시간표 개설 온보딩 퍼널 강화 (`DashboardTab`, `AdminHomeTab`)**:
+  - `DashboardTab`의 우리집 홈스쿨 개설 1단계(1초 즉시 시작)와 2단계 최상단에 모두 `첫 아이 이름 (선택)` 입력란을 제공해 개설과 동시에 가정·첫 아이·기본 시간표가 함께 연결되도록 개선했다.
+  - `AdminHomeTab` 상단에 `첫 시작 1/2 · 아이 추가`(`_AddChildPrompt`)와 `첫 시작 2/2 · 첫 시간표 만들기`(`_FirstTimetablePrompt`: 추천 시간표 1초 적용, 템플릿 상세, 문장 입력)를 순차 배치해 빈 학기 이탈을 방지한다.
+- **원격 E2E 테스트 데이터 자동 삭제 (`scripts/cleanup_e2e_data.mjs`, `scripts/e2e_remote.mjs`)**:
+  - `e2e_remote.mjs`의 `finally` 블록 및 `SIGINT`/`SIGTERM` 핸들러, 그리고 `.github/workflows/remote_e2e.yml`의 `if: always()` 단계에서 생성된 E2E 홈스쿨(`terms` → `families` → `teacher_profiles` → `homeschools` 순 자식 우선 삭제)과 임시 Auth 계정을 즉시 정리한다.
+  - 비-E2E 멤버 포함 여부를 사전 검증해 실제 사용자 홈스쿨과 영구 QA 계정(`qa-*@lionandthelab.com`, `admin@nest.local`, `*@joy.app`)을 보호한다.
+
 ## 7. Database and RLS Notes
 
 ### 7.1 Core Membership Security

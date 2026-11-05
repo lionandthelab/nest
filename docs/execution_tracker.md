@@ -1,6 +1,6 @@
 # Nest Execution Tracker
 
-Last updated: 2026-10-02
+Last updated: 2026-11-05
 
 ## Scope
 
@@ -99,6 +99,7 @@ Last updated: 2026-10-02
 | 2026-10-20 | 홈스쿨 실시간 채팅(`HomeschoolChatView`, 전체/반별/1:1 채널) + 미디어·문서·수업 스케줄·연락처 원클릭 공유 시트 + 실시간 배지 및 `CHAT_MESSAGE` 푸시 알림 연동 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` (450/450 통과) |
 | 2026-10-21 | 학부모·선생님·학생 '내 오늘 수업 먼저' 집중형 홈/시간표 UX 단순화 + 4종 오늘 일정 위젯(`TodayScheduleCard`: 포커스·타임라인·심플목록·체크카드) 및 `[전체 시간표 보기]` 토글 구현 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` (456/456 통과) |
 | 2026-10-22 | 전 도메인 이벤트(수업변경·결석신고/확인·공지·학사일정·아이활동기록·수업계획·채팅·커뮤니티 글/댓글·앨범 업로드) 자동 푸시 알림 발송(`nest-notify`) + FCM Android/iOS 알림 신뢰성/만료토큰 정리/조용한 시간(`inbox_only`) 강화 + 이벤트별 세부 알림 설정 UI(`NotificationSettingsPanel` 8종 스위치·프리셋·조용한 시간 시각 선택) | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` |
+| 2026-11-05 | 신규·업데이트 사용자 공통 푸시 권한 안내 팝업(`PushPermissionDialog`, `lion_auth` OS 권한 상태 점검·토큰 자동 동기화·`app_version` 기록) + 온보딩 첫 아이 등록·첫 시간표 2단계 가이드 강화(`DashboardTab`, `AdminHomeTab`) + 원격 E2E 테스트 데이터 자동 삭제(`cleanup_e2e_data.mjs`, `e2e_remote.mjs`, `remote_e2e.yml`) 및 누적 E2E 데이터 전량 정리 | 완료 | `flutter analyze --no-fatal-infos --no-fatal-warnings`, `flutter test` (463/463 통과), `node scripts/e2e_remote.mjs` 자동 정리 검증 |
 
 
 ## Next Batch

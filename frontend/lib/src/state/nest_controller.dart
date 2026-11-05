@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:lion_auth/lion_auth.dart' show PushPermissionStatus;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
@@ -22,10 +23,25 @@ import '../services/self_study_planner.dart';
 import '../services/web_oauth_bridge.dart';
 
 class NestController extends ChangeNotifier {
-  NestController({required NestRepository repository})
-    : _repository = repository;
+  NestController({
+    required NestRepository repository,
+    this.pushStatusInspector,
+    this.pushPermissionRequester,
+  }) : _repository = repository;
 
   final NestRepository _repository;
+
+  /// 테스트에서 OS 푸시 권한 상태 조회를 주입하기 위한 훅.
+  Future<({PushPermissionStatus status, bool hasToken})> Function(
+    String userId,
+  )?
+  pushStatusInspector;
+
+  /// 테스트에서 OS 푸시 권한 요청 + 토큰 등록을 주입하기 위한 훅.
+  Future<({PushPermissionStatus status, bool hasToken})> Function(
+    String userId,
+  )?
+  pushPermissionRequester;
 
   StreamSubscription<AuthState>? _authSubscription;
 
@@ -1350,6 +1366,7 @@ class NestController extends ChangeNotifier {
         _setStatus('우리집 홈스쿨을 열었어요');
         notifyListeners();
       });
+      unawaited(refreshPushPermissionState());
       unawaited(_loadRoleScopedContext());
       unawaited(_loadDeferredContext());
       unawaited(_persistToCache());
@@ -2841,6 +2858,7 @@ class NestController extends ChangeNotifier {
       } else {
         _setStatus('소속 홈스쿨이 없습니다. 시작하기에서 우리집 홈스쿨을 만들거나 참여하세요.');
       }
+      await loadNotificationPrefs();
       notifyListeners();
       return;
     }
@@ -2937,9 +2955,34 @@ class NestController extends ChangeNotifier {
   /// 한 번 더 권하는 편이 맞다.
   bool notifNudgeDismissed = false;
 
+  /// 기기의 실제 OS/브라우저 푸시 권한 상태.
+  PushPermissionStatus pushPermissionStatus = PushPermissionStatus.unsupported;
+  bool hasActivePushToken = false;
+  bool pushPermissionChecked = false;
+  bool pushPromptDismissedThisSession = false;
+
   /// 첫 알림 온보딩(전체화면)을 띄울 차례인지.
   bool get needsNotifOnboarding =>
       notificationPrefsLoaded && notificationPrefs.needsNotifOnboarding;
+
+  /// 첫 설치뿐 아니라 앱 업데이트 후에도 푸시 권한이 허용되지 않았거나
+  /// 푸시 알림이 꺼져 있으면 홈에서 권한 안내 팝업을 띄울지 여부.
+  bool get shouldShowPushPermissionPopup {
+    if (!isLoggedIn || !notificationPrefsLoaded || !pushPermissionChecked) {
+      return false;
+    }
+    if (pushPromptDismissedThisSession) {
+      return false;
+    }
+    if (memberships.isNotEmpty && needsNotifOnboarding) {
+      return false;
+    }
+    if (pushPermissionStatus == PushPermissionStatus.unsupported) {
+      return false;
+    }
+    return !notificationPrefs.pushEnabled ||
+        pushPermissionStatus != PushPermissionStatus.authorized;
+  }
 
   /// 홈 상단에 알림 권유 배너를 띄울 차례인지.
   bool get showsNotifNudge =>
@@ -2952,6 +2995,87 @@ class NestController extends ChangeNotifier {
     _notifyIfIdle();
   }
 
+  void dismissPushPermissionPopup() {
+    pushPromptDismissedThisSession = true;
+    _notifyIfIdle();
+  }
+
+  Future<void> refreshPushPermissionState() async {
+    final uid = user?.id;
+    if (uid == null || uid.isEmpty) {
+      pushPermissionStatus = PushPermissionStatus.unsupported;
+      hasActivePushToken = false;
+      pushPermissionChecked = false;
+      return;
+    }
+    try {
+      final inspector = pushStatusInspector ?? NestPush.inspectAndSyncIfPermitted;
+      final result = await inspector(uid);
+      pushPermissionStatus = result.status;
+      hasActivePushToken = result.hasToken;
+    } catch (_) {
+      pushPermissionStatus = PushPermissionStatus.unsupported;
+      hasActivePushToken = false;
+    }
+    pushPermissionChecked = true;
+    _notifyIfIdle();
+  }
+
+  /// 푸시 권한 안내 팝업에서 '알림 켜기'를 눌렀을 때 OS 권한 요청과 토큰 등록까지 수행한다.
+  Future<PushPermissionStatus> enablePushFromPermissionPopup() async {
+    final uid = user?.id;
+    final nextPrefs = notificationPrefs.copyWith(
+      pushEnabled: true,
+      morningDigestEnabled:
+          notificationPrefs.morningDigestEnabled ||
+              notificationPrefs.classReminderEnabled
+          ? notificationPrefs.morningDigestEnabled
+          : true,
+      classReminderEnabled:
+          notificationPrefs.morningDigestEnabled ||
+              notificationPrefs.classReminderEnabled
+          ? notificationPrefs.classReminderEnabled
+          : true,
+      notifOnboardedAt: notificationPrefs.notifOnboardedAt ?? DateTime.now(),
+    );
+    notificationPrefs = nextPrefs;
+    notificationPrefsLoaded = true;
+    notifNudgeDismissed = false;
+    pushPromptDismissedThisSession = true;
+    notifyListeners();
+
+    unawaited(
+      _repository.upsertNotificationPrefs(nextPrefs).catchError((_) {}),
+    );
+
+    if (uid == null || uid.isEmpty) {
+      return PushPermissionStatus.unsupported;
+    }
+
+    final requester =
+        pushPermissionRequester ?? NestPush.requestPermissionAndRegister;
+    final result = await requester(uid);
+    pushPermissionStatus = result.status;
+    hasActivePushToken = result.hasToken;
+    pushPermissionChecked = true;
+    if (result.status == PushPermissionStatus.authorized) {
+      _setStatus('푸시 알림이 켜졌어요.');
+    }
+    notifyListeners();
+    return result.status;
+  }
+
+  Future<bool> openDeviceNotificationSettings() async {
+    if (kIsWeb) return false;
+    try {
+      final uri = Uri.parse('app-settings:');
+      if (await canLaunchUrl(uri)) {
+        return await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+    return false;
+  }
+
   /// 본인 기기로 확인용 푸시를 보낸다.
   ///
   /// 알림은 "켰는데 안 오는" 고장이 가장 흔하다. 기기 권한·토큰 등록·방해 금지
@@ -2961,7 +3085,12 @@ class NestController extends ChangeNotifier {
     await _runBusy('테스트 알림을 보내는 중...', () async {
       final uid = user?.id;
       if (uid != null && uid.isNotEmpty) {
-        await NestPush.onSignedIn(uid);
+        final requester =
+            pushPermissionRequester ?? NestPush.requestPermissionAndRegister;
+        final result = await requester(uid);
+        pushPermissionStatus = result.status;
+        hasActivePushToken = result.hasToken;
+        pushPermissionChecked = true;
       }
       final sent = await _repository.sendTestPush();
       inboxOpenedThisSession = false;
@@ -2986,6 +3115,7 @@ class NestController extends ChangeNotifier {
       notificationPrefs = const NotificationPrefs();
     }
     notificationPrefsLoaded = true;
+    await refreshPushPermissionState();
     _notifyIfIdle();
   }
 
@@ -3003,14 +3133,28 @@ class NestController extends ChangeNotifier {
   }
 
   Future<void> updateNotificationPrefs(NotificationPrefs prefs) async {
+    final wasOnboarding = !notificationPrefs.hasSeenNotifOnboarding &&
+        prefs.hasSeenNotifOnboarding;
     notificationPrefs = prefs;
     notificationPrefsLoaded = true;
+    if (wasOnboarding) {
+      pushPromptDismissedThisSession = true;
+    }
     _setStatus('알림 설정을 저장했습니다.');
     notifyListeners();
 
     final uid = user?.id;
     if (prefs.pushEnabled && uid != null && uid.isNotEmpty) {
-      unawaited(NestPush.onSignedIn(uid));
+      final requester =
+          pushPermissionRequester ?? NestPush.requestPermissionAndRegister;
+      unawaited(
+        requester(uid).then((result) {
+          pushPermissionStatus = result.status;
+          hasActivePushToken = result.hasToken;
+          pushPermissionChecked = true;
+          _notifyIfIdle();
+        }).catchError((_) {}),
+      );
     }
     try {
       await _repository.upsertNotificationPrefs(prefs);
@@ -6331,6 +6475,7 @@ class NestController extends ChangeNotifier {
   }
 
   /// 첫 아이를 등록한다. 가정이 없으면 내 이름으로 만들고 나를 보호자로 잇는다.
+  /// 반이 하나뿐인 가정형 홈스쿨이면 `createChild`에서 해당 반에 자동 배정된다.
   Future<ChildProfile> addMyChild({
     required String name,
     required String birthDate,
@@ -10478,6 +10623,12 @@ class NestController extends ChangeNotifier {
     _termScheduleLoaded = false;
     inboxOpenedThisSession = false;
     notificationPrefs = const NotificationPrefs();
+    notificationPrefsLoaded = false;
+    notifNudgeDismissed = false;
+    pushPermissionStatus = PushPermissionStatus.unsupported;
+    hasActivePushToken = false;
+    pushPermissionChecked = false;
+    pushPromptDismissedThisSession = false;
     notificationInbox = [];
     memberships = [];
     homeschoolMemberships = [];

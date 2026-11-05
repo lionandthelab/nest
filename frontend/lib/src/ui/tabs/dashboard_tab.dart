@@ -493,6 +493,17 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
           ],
         ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _childNameController,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _goToStep2(),
+          decoration: const InputDecoration(
+            labelText: '첫 아이 이름 (선택)',
+            hintText: '예: 하준 (적어 두면 가정과 우리 반에 바로 배정돼요)',
+            prefixIcon: Icon(Icons.child_care_rounded),
+          ),
+        ),
         const SizedBox(height: 18),
         NestPressable(
           child: SizedBox(
@@ -581,6 +592,19 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 첫 아이 이름 입력 — 시간표와 함께 바로 반에 배정되도록 상단에 배치
+        TextField(
+          controller: _childNameController,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _startHomeschoolInline(),
+          decoration: const InputDecoration(
+            labelText: '첫 아이 이름 (선택)',
+            hintText: '예: 하준 (적어 두면 가정과 우리 반에 바로 배정돼요)',
+            prefixIcon: Icon(Icons.child_care_rounded),
           ),
         ),
         const SizedBox(height: 16),
@@ -771,19 +795,6 @@ class _DashboardTabState extends State<DashboardTab> {
                     ),
                   ],
                 ),
-        ),
-        const SizedBox(height: 14),
-
-        // 첫 아이 이름 입력 (선택)
-        TextField(
-          controller: _childNameController,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _startHomeschoolInline(),
-          decoration: const InputDecoration(
-            labelText: '첫 아이 이름 (선택)',
-            hintText: '예: 하준 (적어 두면 가정과 우리 반에 바로 배정돼요)',
-            prefixIcon: Icon(Icons.child_care_rounded),
-          ),
         ),
         const SizedBox(height: 12),
 

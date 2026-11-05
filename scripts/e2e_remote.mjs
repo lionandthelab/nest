@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { cleanupE2eData } from "./cleanup_e2e_data.mjs";
+
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://avursvhmilcsssabqtkx.supabase.co";
 const ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,17 +29,69 @@ const report = {
   ids: {}
 };
 
-main()
-  .then(async () => {
-    report.finishedAt = new Date().toISOString();
-    console.log(JSON.stringify(report, null, 2));
-  })
-  .catch((err) => {
-    report.finishedAt = new Date().toISOString();
-    report.failed = err.message;
-    console.error(JSON.stringify(report, null, 2));
+let cleanupPromise = null;
+async function teardownRunResources() {
+  if (cleanupPromise) return cleanupPromise;
+  cleanupPromise = (async () => {
+    try {
+      const specificHomeschoolIds = [report.ids.homeschoolId].filter(Boolean);
+      const specificUserIds = [
+        report.ids.userId,
+        report.ids.invitedUserId,
+      ].filter(Boolean);
+
+      // 이번 실행에서 만든 리소스는 즉시 삭제하고, 이전 비정상 종료로 1시간 이상 남은
+      // 고아 E2E 리소스도 함께 청소한다.
+      const cleaned = await cleanupE2eData({
+        supabaseUrl: SUPABASE_URL,
+        serviceRoleKey: SERVICE_ROLE_KEY,
+        maxAgeMs: 60 * 60 * 1000,
+        specificHomeschoolIds,
+        specificUserIds,
+        dryRun: false,
+      });
+      report.cleanup = {
+        deletedHomeschools: cleaned.deletedHomeschools,
+        deletedUsers: cleaned.deletedUsers,
+        errors: cleaned.errors,
+      };
+    } catch (cleanupErr) {
+      report.cleanup = {
+        error:
+          cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+      };
+    }
+  })();
+  return cleanupPromise;
+}
+
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, async () => {
+    await teardownRunResources();
     process.exit(1);
   });
+}
+
+runWithCleanup();
+
+async function runWithCleanup() {
+  let exitCode = 0;
+  try {
+    await main();
+  } catch (err) {
+    exitCode = 1;
+    report.failed = err instanceof Error ? err.message : String(err);
+  } finally {
+    await teardownRunResources();
+    report.finishedAt = new Date().toISOString();
+    if (exitCode === 0) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.error(JSON.stringify(report, null, 2));
+      process.exit(exitCode);
+    }
+  }
+}
 
 async function main() {
   const adminUser = await step("create_admin_user", async () => {

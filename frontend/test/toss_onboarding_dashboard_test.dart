@@ -145,4 +145,35 @@ void main() {
       expect(controller.lastPlacementCount, greaterThan(0));
     },
   );
+
+  testWidgets(
+    'DashboardTab Step 1 child name input + 1-click quick start registers child and first timetable together',
+    (tester) async {
+      final controller = _FakeProgressiveOnboardingController();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: Scaffold(body: DashboardTab(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, '첫 아이 이름 (선택)'),
+        '서윤',
+      );
+      await tester.pump();
+
+      final quickButton = find.text('기본 시간표(9시~18시)로 1초 만에 바로 열기');
+      await tester.ensureVisible(quickButton);
+      await tester.tap(quickButton);
+      await tester.pumpAndSettle();
+
+      expect(controller.bootstrapCalled, isTrue);
+      expect(controller.quickAddCalled, isTrue);
+      expect(controller.lastPlacementCount, greaterThan(0));
+      expect(controller.childRegistered, isTrue);
+      expect(controller.lastChildName, '서윤');
+    },
+  );
 }

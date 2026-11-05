@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lion_auth/lion_auth.dart' show PushPermissionStatus;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:nest_frontend/src/models/nest_models.dart';
@@ -189,6 +190,9 @@ void main() {
       await tester.pump();
 
       expect(find.text('아이 추가'), findsNothing);
+      // 아이가 등록됐지만 아직 수업이 0개면 첫 시간표 만들기 카드가 이어서 안내한다.
+      expect(find.text('첫 시간표 만들기'), findsOneWidget);
+      expect(find.text('추천 시간표 1초 적용'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -450,6 +454,58 @@ void main() {
       expect(find.text('아침 오늘 일정'), findsOneWidget);
       expect(find.text('수업 전 알림'), findsOneWidget);
       expect(find.text('조용한 시간'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('업데이트 사용자라도 OS 푸시 권한이 없으면 HomePage 진입 시 권한 팝업이 뜬다', (
+      tester,
+    ) async {
+      await _setMobileSize(tester);
+      var permissionRequested = false;
+      final controller = _adminController()
+        ..user = const User(
+          id: 'u-1',
+          appMetadata: {},
+          userMetadata: {},
+          aud: 'authenticated',
+          createdAt: '2026-01-01T00:00:00Z',
+        )
+        ..notificationPrefsLoaded = true
+        ..notificationPrefs = NotificationPrefs(
+          pushEnabled: true,
+          notifOnboardedAt: DateTime(2026, 9, 16),
+        )
+        ..pushPermissionStatus = PushPermissionStatus.notDetermined
+        ..pushPermissionChecked = true
+        ..pushPermissionRequester = (_) async {
+          permissionRequested = true;
+          return (status: PushPermissionStatus.authorized, hasToken: true);
+        };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ko', 'KR'),
+          supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: HomePage(controller: controller),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('수업·공지 알림을 놓치지 마세요'), findsOneWidget);
+      expect(find.text('푸시 알림 켜기'), findsOneWidget);
+
+      await tester.tap(find.text('푸시 알림 켜기'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(permissionRequested, isTrue);
+      expect(find.text('수업·공지 알림을 놓치지 마세요'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

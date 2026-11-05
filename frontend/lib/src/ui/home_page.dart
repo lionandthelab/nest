@@ -50,13 +50,53 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  bool _isShowingPushPermissionDialog = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentIndex = widget.initialTab;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.controller.isLoggedIn) {
+      unawaited(widget.controller.refreshPushPermissionState());
+    }
+  }
+
+  void _maybePresentPushPermissionDialog() {
+    if (_isShowingPushPermissionDialog ||
+        !widget.controller.shouldShowPushPermissionPopup) {
+      return;
+    }
+    _isShowingPushPermissionDialog = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !widget.controller.shouldShowPushPermissionPopup) {
+        _isShowingPushPermissionDialog = false;
+        return;
+      }
+      try {
+        await showPushPermissionDialog(
+          context: context,
+          controller: widget.controller,
+        );
+      } finally {
+        if (widget.controller.shouldShowPushPermissionPopup) {
+          widget.controller.dismissPushPermissionPopup();
+        }
+        _isShowingPushPermissionDialog = false;
+      }
+    });
   }
 
   bool _hasUnsavedScheduleChanges = false;
@@ -138,6 +178,7 @@ class _HomePageState extends State<HomePage> {
 
           final width = MediaQuery.sizeOf(context).width;
           final desktopLike = width >= 1080;
+          _maybePresentPushPermissionDialog();
           final tabs = _buildTabs(
             widget.controller,
             isMobileLike: !desktopLike,

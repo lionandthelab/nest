@@ -34,3 +34,7 @@ jobs:
       - name: Run remote E2E script
         if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: node scripts/e2e_remote.mjs
+
+      - name: Cleanup stale E2E test data
+        if: ${{ always() && env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: node scripts/cleanup_e2e_data.mjs --execute --max-age-minutes=15

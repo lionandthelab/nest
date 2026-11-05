@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:lion_auth/lion_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _vapidKey = String.fromEnvironment('LION_FCM_WEB_VAPID_KEY');
@@ -69,11 +70,24 @@ class NestPush {
       registerLionPushBackgroundHandler();
     }
 
+    String? appVersion;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final ver = info.version.trim();
+      final build = info.buildNumber.trim();
+      if (ver.isNotEmpty) {
+        appVersion = build.isEmpty ? ver : '$ver+$build';
+      }
+    } catch (_) {}
+
     messaging = LionMessagingController(
       config: LionMessagingConfig(
         fcm: FcmOptions(
           vapidKey: _vapidKey.isEmpty ? null : _vapidKey,
-          autoRegisterOnSignIn: true,
+          appVersion: appVersion,
+          // 시스템 권한 요청은 홈 진입 시 안내 팝업 버튼 클릭(사용자 제스처)으로 수행하고,
+          // 이미 권한이 허용된 기기는 syncTokenIfPermitted 로 조용히 토큰만 갱신한다.
+          autoRegisterOnSignIn: false,
         ),
       ),
       backend: SupabaseLionMessagingBackend(Supabase.instance.client),
@@ -85,22 +99,65 @@ class NestPush {
       await messaging!.initialize();
       final currentUserId = Supabase.instance.client.auth.currentUser?.id;
       if (firebaseReady && currentUserId != null && currentUserId.isNotEmpty) {
-        await messaging!.onSignedIn(currentUserId);
+        await messaging!.syncTokenIfPermitted(currentUserId);
       }
     } catch (error) {
       debugPrint('[NestPush] init failed: $error');
     }
   }
 
+  /// 로그인/복귀 시 이미 권한이 허용된 기기면 토큰만 조용히 동기화한다.
   static Future<void> onSignedIn(String userId) async {
     await initialize();
     final controller = messaging;
     if (controller == null || !firebaseReady) return;
     try {
-      await controller.onSignedIn(userId);
+      await controller.syncTokenIfPermitted(userId);
     } catch (error) {
-      debugPrint('[NestPush] register failed: $error');
+      debugPrint('[NestPush] sync failed: $error');
     }
+  }
+
+  /// 현재 푸시 권한 상태를 조회하고, 이미 허용된 상태라면 토큰 동기화까지 마친 뒤 반환한다.
+  static Future<({PushPermissionStatus status, bool hasToken})>
+  inspectAndSyncIfPermitted(String userId) async {
+    await initialize();
+    final controller = messaging;
+    if (controller == null || !firebaseReady || !controller.pushSupported) {
+      return (status: PushPermissionStatus.unsupported, hasToken: false);
+    }
+    try {
+      final status = await controller.checkPermissionStatus();
+      if (status == PushPermissionStatus.authorized) {
+        await controller.syncTokenIfPermitted(userId);
+      }
+      return (
+        status: controller.permissionStatus,
+        hasToken: (controller.currentToken ?? '').isNotEmpty,
+      );
+    } catch (error) {
+      debugPrint('[NestPush] inspect failed: $error');
+      return (status: PushPermissionStatus.unsupported, hasToken: false);
+    }
+  }
+
+  /// 사용자 버튼 클릭 시 OS 푸시 권한 팝업을 띄우고 토큰을 `push_tokens` 에 등록한다.
+  static Future<({PushPermissionStatus status, bool hasToken})>
+  requestPermissionAndRegister(String userId) async {
+    await initialize();
+    final controller = messaging;
+    if (controller == null || !firebaseReady || !controller.pushSupported) {
+      return (status: PushPermissionStatus.unsupported, hasToken: false);
+    }
+    try {
+      await controller.registerPush(userId: userId);
+    } catch (error) {
+      debugPrint('[NestPush] request/register failed: $error');
+    }
+    return (
+      status: controller.permissionStatus,
+      hasToken: (controller.currentToken ?? '').isNotEmpty,
+    );
   }
 
   static Future<void> onSignedOut() async {

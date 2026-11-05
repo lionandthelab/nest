@@ -5,6 +5,7 @@
 // 알림 안내가 막아서는 꼴이라 반드시 "읽어왔는지"를 같이 봐야 한다.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lion_auth/lion_auth.dart' show PushPermissionStatus;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:nest_frontend/src/models/nest_models.dart';
@@ -74,6 +75,78 @@ void main() {
         notifOnboardedAt: DateTime(2026, 9, 16),
       );
       expect(controller.showsNotifNudge, isFalse);
+    });
+  });
+
+  group('푸시 권한 팝업 (신규 설치 + 기존 앱 업데이트 사용자)', () {
+    const fakeUser = User(
+      id: 'u-1',
+      appMetadata: {},
+      userMetadata: {},
+      aud: 'authenticated',
+      createdAt: '2026-01-01T00:00:00Z',
+    );
+
+    test('이미 온보딩을 마친 업데이트 사용자라도 OS 푸시 권한이 미허용이면 팝업을 띄운다', () async {
+      final controller = _controller()
+        ..user = fakeUser
+        ..notificationPrefsLoaded = true
+        ..notificationPrefs = NotificationPrefs(
+          pushEnabled: true,
+          notifOnboardedAt: DateTime(2026, 9, 16),
+        )
+        ..pushStatusInspector = (_) async => (
+          status: PushPermissionStatus.notDetermined,
+          hasToken: false,
+        );
+
+      await controller.refreshPushPermissionState();
+      expect(controller.shouldShowPushPermissionPopup, isTrue);
+    });
+
+    test('푸시 알림이 꺼져 있는 사용자에게도 팝업을 띄우고, 켜기를 누르면 권한 요청 후 닫힌다', () async {
+      var requested = false;
+      final controller = _controller()
+        ..user = fakeUser
+        ..notificationPrefsLoaded = true
+        ..notificationPrefs = NotificationPrefs(
+          pushEnabled: false,
+          notifOnboardedAt: DateTime(2026, 9, 16),
+        );
+      controller.pushStatusInspector = (_) async => (
+        status: PushPermissionStatus.notDetermined,
+        hasToken: false,
+      );
+      controller.pushPermissionRequester = (_) async {
+        requested = true;
+        return (status: PushPermissionStatus.authorized, hasToken: true);
+      };
+
+      await controller.refreshPushPermissionState();
+      expect(controller.shouldShowPushPermissionPopup, isTrue);
+
+      final result = await controller.enablePushFromPermissionPopup();
+      expect(requested, isTrue);
+      expect(result, PushPermissionStatus.authorized);
+      expect(controller.notificationPrefs.pushEnabled, isTrue);
+      expect(controller.shouldShowPushPermissionPopup, isFalse);
+    });
+
+    test('이미 OS 권한이 허용되어 있고 푸시가 켜져 있으면 팝업을 띄우지 않는다', () async {
+      final controller = _controller()
+        ..user = fakeUser
+        ..notificationPrefsLoaded = true
+        ..notificationPrefs = NotificationPrefs(
+          pushEnabled: true,
+          notifOnboardedAt: DateTime(2026, 9, 16),
+        )
+        ..pushStatusInspector = (_) async => (
+          status: PushPermissionStatus.authorized,
+          hasToken: true,
+        );
+
+      await controller.refreshPushPermissionState();
+      expect(controller.shouldShowPushPermissionPopup, isFalse);
     });
   });
 }
